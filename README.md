@@ -190,3 +190,10 @@ src/shared/   Config, Skins, Util
 | Wolverine: nobody left alive | +100 |
 | Reboot a terminal | +15 |
 All in `Skins.Rewards` (`src/shared/Skins.lua`).
+
+### Monetization setup (Creator Dashboard > your experience > Monetization)
+| Item | Type | Price | Paste ID into |
+|---|---|---|---|
+| Become Wolverine next round (re-buyable) | Developer Product | 80 | `Config.GuaranteedWolverineProductId` |
+| 2x Wolverine chance (forever) | Pass | 250 | `Config.DoubleChanceGamepassId` |
+| Coin packs (500 / 1,200 / 3,000 / 7,000) | Developer Products | 49 / 99 / 199 / 399 | `Config.CoinPacks[n].ProductId` |

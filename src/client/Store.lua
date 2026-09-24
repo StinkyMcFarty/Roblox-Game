@@ -155,7 +155,7 @@ MarketplaceService.PromptProductPurchaseFinished:Connect(function(userId, produc
 	end
 end)
 
-local storeButton = Shop.DockButton("STORE", "💰", K.Green, 4)
+local storeButton = Shop.DockButton("STORE", "💰", K.Green, 5)
 storeButton.Activated:Connect(function()
 	message.TextColor3 = Color3.fromRGB(190, 190, 200)
 	window.Toggle()
@@ -165,7 +165,7 @@ end)
 -- AFK toggle
 ---------------------------------------------------------------------------
 
-local afkButton, afkLabel = Shop.DockButton("AFK: OFF", "💤", Color3.fromRGB(120, 124, 140), 5)
+local afkButton, afkLabel = Shop.DockButton("AFK: OFF", "💤", Color3.fromRGB(120, 124, 140), 6)
 
 local banner = new("TextLabel", {
 	AnchorPoint = Vector2.new(0.5, 0),

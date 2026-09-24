@@ -182,6 +182,7 @@ function PlayerData.Load(player)
 	end
 	cache[player] = data
 	publish(player)
+	task.spawn(PlayerData.CheckPasses, player)
 
 	-- Daily login reward
 	local since = os.time() - data.LastClaim
@@ -308,8 +309,34 @@ end
 
 local function weight(player)
 	local d = cache[player]
-	return 1 + (d and d.Pity or 0) * Config.WolverinePityWeight
+	local w = 1 + (d and d.Pity or 0) * Config.WolverinePityWeight
+	if player:GetAttribute("DoubleChance") then
+		w *= 2 -- 2x Wolverine chance game pass
+	end
+	return w
 end
+
+-- 2x chance game pass: checked on join, granted instantly when bought in-game
+function PlayerData.CheckPasses(player)
+	local id = Config.DoubleChanceGamepassId
+	if id == 0 then
+		return
+	end
+	local ok, owns = pcall(function()
+		return MarketplaceService:UserOwnsGamePassAsync(player.UserId, id)
+	end)
+	if ok and owns and player.Parent then
+		player:SetAttribute("DoubleChance", true)
+		PlayerData.PublishChances()
+	end
+end
+MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, purchased)
+	if purchased and passId == Config.DoubleChanceGamepassId and Config.DoubleChanceGamepassId ~= 0 then
+		player:SetAttribute("DoubleChance", true)
+		PlayerData.PublishChances()
+		fx(player, "Announce", { Text = "2X WOLVERINE CHANCE unlocked!", Color = Color3.fromRGB(255, 205, 30), Duration = 4 })
+	end
+end)
 
 function PlayerData.PublishChances()
 	local list = {}

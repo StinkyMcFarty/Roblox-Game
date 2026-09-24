@@ -102,6 +102,11 @@ Config.Fart = {
 -- your experience > Monetization > Developer Products, then paste its ID here.
 Config.GuaranteedWolverineProductId = 0
 
+-- Game Pass: doubles your chance of being picked as Wolverine every round.
+-- Creator Dashboard > your experience > Monetization > Passes: create a pass
+-- priced 250 Robux, then paste its ID here.
+Config.DoubleChanceGamepassId = 0
+
 -- Coin packs (Store button). For each pack create a Developer Product in the
 -- Creator Dashboard (Monetization > Developer Products) at the Robux price
 -- below, then paste its ID into ProductId. Bigger packs give a bonus.

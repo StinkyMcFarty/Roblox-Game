@@ -19,6 +19,7 @@ local gui = new("ScreenGui", { Name = "DailyUI", ResetOnSpawn = false, ZIndexBeh
 
 local dailyButton = Shop.DockButton("DAILY", "🎁", K.Green, 2)
 local buyButton, buyLabel = Shop.DockButton("BECOME WOLVERINE", "👑", K.Red, 3)
+local passButton, passLabel = Shop.DockButton("2X CHANCE  R$250", "🎲", K.Purple, 4)
 buyLabel.Text = "BECOME WOLVERINE  R$80"
 
 -- Wolverine odds pill
@@ -195,6 +196,39 @@ buyButton.Activated:Connect(function()
 		return
 	end
 	MarketplaceService:PromptProductPurchase(player, Config.GuaranteedWolverineProductId)
+end)
+
+-- 2x Wolverine chance game pass
+local function showPass()
+	if player:GetAttribute("DoubleChance") then
+		passLabel.Text = "2X CHANCE  OWNED"
+		UIKit.Recolor(passButton, K.Green)
+	end
+end
+player:GetAttributeChangedSignal("DoubleChance"):Connect(showPass)
+showPass()
+task.spawn(function()
+	if Config.DoubleChanceGamepassId ~= 0 and not player:GetAttribute("DoubleChance") then
+		local ok, info = pcall(function()
+			return MarketplaceService:GetProductInfo(Config.DoubleChanceGamepassId, Enum.InfoType.GamePass)
+		end)
+		if ok and info and info.PriceInRobux and not player:GetAttribute("DoubleChance") then
+			passLabel.Text = "2X CHANCE  R$" .. info.PriceInRobux
+		end
+	end
+end)
+passButton.Activated:Connect(function()
+	if player:GetAttribute("DoubleChance") then
+		return
+	end
+	if Config.DoubleChanceGamepassId == 0 then
+		passLabel.Text = "NOT SET UP"
+		task.delay(2, function()
+			passLabel.Text = "2X CHANCE  R$250"
+		end)
+		return
+	end
+	MarketplaceService:PromptGamePassPurchase(player, Config.DoubleChanceGamepassId)
 end)
 
 for _, attr in { "Challenges", "LoginStreak", "WolverineChance", "GuaranteedTokens" } do

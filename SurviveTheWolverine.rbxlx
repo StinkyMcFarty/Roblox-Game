@@ -145,6 +145,11 @@ Config.Fart = {
 -- your experience > Monetization > Developer Products, then paste its ID here.
 Config.GuaranteedWolverineProductId = 0
 
+-- Game Pass: doubles your chance of being picked as Wolverine every round.
+-- Creator Dashboard > your experience > Monetization > Passes: create a pass
+-- priced 250 Robux, then paste its ID here.
+Config.DoubleChanceGamepassId = 0
+
 -- Coin packs (Store button). For each pack create a Developer Product in the
 -- Creator Dashboard (Monetization > Developer Products) at the Robux price
 -- below, then paste its ID into ProductId. Bigger packs give a bonus.
@@ -8429,6 +8434,7 @@ function PlayerData.Load(player)
 	end
 	cache[player] = data
 	publish(player)
+	task.spawn(PlayerData.CheckPasses, player)
 
 	-- Daily login reward
 	local since = os.time() - data.LastClaim
@@ -8555,8 +8561,34 @@ end
 
 local function weight(player)
 	local d = cache[player]
-	return 1 + (d and d.Pity or 0) * Config.WolverinePityWeight
+	local w = 1 + (d and d.Pity or 0) * Config.WolverinePityWeight
+	if player:GetAttribute("DoubleChance") then
+		w *= 2 -- 2x Wolverine chance game pass
+	end
+	return w
 end
+
+-- 2x chance game pass: checked on join, granted instantly when bought in-game
+function PlayerData.CheckPasses(player)
+	local id = Config.DoubleChanceGamepassId
+	if id == 0 then
+		return
+	end
+	local ok, owns = pcall(function()
+		return MarketplaceService:UserOwnsGamePassAsync(player.UserId, id)
+	end)
+	if ok and owns and player.Parent then
+		player:SetAttribute("DoubleChance", true)
+		PlayerData.PublishChances()
+	end
+end
+MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, purchased)
+	if purchased and passId == Config.DoubleChanceGamepassId and Config.DoubleChanceGamepassId ~= 0 then
+		player:SetAttribute("DoubleChance", true)
+		PlayerData.PublishChances()
+		fx(player, "Announce", { Text = "2X WOLVERINE CHANCE unlocked!", Color = Color3.fromRGB(255, 205, 30), Duration = 4 })
+	end
+end)
 
 function PlayerData.PublishChances()
 	local list = {}
@@ -12590,6 +12622,7 @@ local gui = new("ScreenGui", { Name = "DailyUI", ResetOnSpawn = false, ZIndexBeh
 
 local dailyButton = Shop.DockButton("DAILY", "🎁", K.Green, 2)
 local buyButton, buyLabel = Shop.DockButton("BECOME WOLVERINE", "👑", K.Red, 3)
+local passButton, passLabel = Shop.DockButton("2X CHANCE  R$250", "🎲", K.Purple, 4)
 buyLabel.Text = "BECOME WOLVERINE  R$80"
 
 -- Wolverine odds pill
@@ -12766,6 +12799,39 @@ buyButton.Activated:Connect(function()
 		return
 	end
 	MarketplaceService:PromptProductPurchase(player, Config.GuaranteedWolverineProductId)
+end)
+
+-- 2x Wolverine chance game pass
+local function showPass()
+	if player:GetAttribute("DoubleChance") then
+		passLabel.Text = "2X CHANCE  OWNED"
+		UIKit.Recolor(passButton, K.Green)
+	end
+end
+player:GetAttributeChangedSignal("DoubleChance"):Connect(showPass)
+showPass()
+task.spawn(function()
+	if Config.DoubleChanceGamepassId ~= 0 and not player:GetAttribute("DoubleChance") then
+		local ok, info = pcall(function()
+			return MarketplaceService:GetProductInfo(Config.DoubleChanceGamepassId, Enum.InfoType.GamePass)
+		end)
+		if ok and info and info.PriceInRobux and not player:GetAttribute("DoubleChance") then
+			passLabel.Text = "2X CHANCE  R$" .. info.PriceInRobux
+		end
+	end
+end)
+passButton.Activated:Connect(function()
+	if player:GetAttribute("DoubleChance") then
+		return
+	end
+	if Config.DoubleChanceGamepassId == 0 then
+		passLabel.Text = "NOT SET UP"
+		task.delay(2, function()
+			passLabel.Text = "2X CHANCE  R$250"
+		end)
+		return
+	end
+	MarketplaceService:PromptGamePassPurchase(player, Config.DoubleChanceGamepassId)
 end)
 
 for _, attr in { "Challenges", "LoginStreak", "WolverineChance", "GuaranteedTokens" } do
@@ -16385,7 +16451,7 @@ MarketplaceService.PromptProductPurchaseFinished:Connect(function(userId, produc
 	end
 end)
 
-local storeButton = Shop.DockButton("STORE", "💰", K.Green, 4)
+local storeButton = Shop.DockButton("STORE", "💰", K.Green, 5)
 storeButton.Activated:Connect(function()
 	message.TextColor3 = Color3.fromRGB(190, 190, 200)
 	window.Toggle()
@@ -16395,7 +16461,7 @@ end)
 -- AFK toggle
 ---------------------------------------------------------------------------
 
-local afkButton, afkLabel = Shop.DockButton("AFK: OFF", "💤", Color3.fromRGB(120, 124, 140), 5)
+local afkButton, afkLabel = Shop.DockButton("AFK: OFF", "💤", Color3.fromRGB(120, 124, 140), 6)
 
 local banner = new("TextLabel", {
 	AnchorPoint = Vector2.new(0.5, 0),
