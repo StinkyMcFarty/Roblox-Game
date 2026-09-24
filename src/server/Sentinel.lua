@@ -15,6 +15,7 @@ local Status = require(script.Parent.Status)
 local Posture = require(script.Parent.Posture)
 local Wolverine = require(script.Parent.Wolverine)
 local Combat = require(script.Parent.Combat)
+local Costumes = require(script.Parent.Costumes)
 local PlayerData = require(script.Parent.PlayerData)
 local Skins = require(ReplicatedStorage.Shared.Skins)
 
@@ -140,31 +141,6 @@ end
 -- Suit up / power down
 ---------------------------------------------------------------------------
 
-local function gear(char, anchor, size, color, material, offset)
-	local folder = char:FindFirstChild("SentinelGear")
-	if not folder then
-		folder = Instance.new("Folder")
-		folder.Name = "SentinelGear"
-		folder.Parent = char
-	end
-	local p = Instance.new("Part")
-	p.Size = size
-	p.Color = color
-	p.Material = material or Enum.Material.Metal
-	p.CanCollide = false
-	p.CanQuery = false
-	p.CanTouch = false
-	p.Massless = true
-	p.CFrame = anchor.CFrame * offset
-	local w = Instance.new("Weld")
-	w.Part0 = anchor
-	w.Part1 = p
-	w.C0 = offset
-	w.Parent = p
-	p.Parent = folder
-	return p
-end
-
 function Sentinel.Become(player)
 	local char = player.Character
 	local hum, root = Util.Humanoid(char), Util.Root(char)
@@ -176,34 +152,11 @@ function Sentinel.Become(player)
 	player:SetAttribute("SuitEnds", workspace:GetServerTimeNow() + Config.Sentinel.Duration)
 	cooldowns[player] = {}
 
-	for _, d in char:GetChildren() do
-		if d:IsA("Shirt") or d:IsA("Pants") or d:IsA("ShirtGraphic") or d:IsA("Accessory") then
-			d:Destroy()
-		end
-	end
-	for _, p in char:GetChildren() do
-		if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then
-			p.Color = (p.Name:find("Hand") or p.Name:find("Foot") or p.Name:find("Lower")) and GREY or PURPLE
-			p.Material = Enum.Material.Metal
-		end
-	end
 	Posture.Forget(char)
 	pcall(function()
 		char:ScaleTo(Config.Sentinel.Scale)
 	end)
-
-	local head = char:FindFirstChild("Head")
-	if head then
-		local hs = head.Size
-		gear(char, head, hs * 1.12, PURPLE, nil, CFrame.new(0, 0.05, 0))
-		gear(char, head, Vector3.new(hs.X * 0.8, hs.Y * 0.14, 0.05), GLOW, Enum.Material.Neon, CFrame.new(0, hs.Y * 0.08, -hs.Z * 0.57))
-	end
-	local torso = Util.Torso(char)
-	if torso then
-		local ts = torso.Size
-		gear(char, torso, Vector3.new(ts.X * 0.35, ts.Y * 0.3, 0.1), GLOW, Enum.Material.Neon, CFrame.new(0, ts.Y * 0.1, -ts.Z * 0.55))
-		gear(char, torso, Vector3.new(ts.X * 1.5, ts.Y * 0.35, ts.Z * 1.1), GREY, nil, CFrame.new(0, ts.Y * 0.4, 0))
-	end
+	Costumes.DressSentinel(char)
 
 	hum.MaxHealth = 100
 	hum.Health = 100
@@ -238,6 +191,10 @@ function Sentinel.PowerDown(player)
 	for _, p in char:GetChildren() do
 		if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then
 			p.Color = GREY
+			local face = p:FindFirstChildOfClass("Decal")
+			if face then
+				face.Transparency = 0
+			end
 		end
 	end
 	local hum = Util.Humanoid(char)

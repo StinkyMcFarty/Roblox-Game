@@ -21,6 +21,19 @@ The whole game is written as code. The map, Wolverine's look, the claws, the "an
 | **80 Robux "Be Wolverine" pass** | Create a Developer Product (80 R$), then paste its ID into `Config.GuaranteedWolverineProductId` in `src/shared/Config.lua` |
 | **Sounds** | Paste Creator Store sound IDs into `Config.Sounds` (Roar, Heartbeat, Fart, Sniff are empty by default) |
 
+## Make the suits realistic (upload the textures)
+
+The suits' painted textures are in `assets/textures/`. There's a Shirt, Pants and Face for each of the four suits: fabric weave, muscle shading, stitching, belts, tiger stripes, denim, beards and scars. Roblox only accepts images uploaded to your account, so do this once:
+
+1. In Studio, open **View → Asset Manager → Bulk Import** and select every PNG in `assets/textures/` (skip `_preview.png`).
+2. In the Asset Manager's Images folder, right-click each image → **Copy Asset ID**.
+3. Paste the numbers into `Textures = { Shirt = ..., Pants = ..., Face = ... }` for each suit in `src/shared/Skins.lua`.
+4. Optional: find a messy "Wolverine hair" in the Marketplace, copy its ID from the URL, and set `HairAccessoryId`.
+
+Until you do this, each suit uses flat colours plus its 3D gear.
+
+To change the textures, edit `tools/generate_textures.py` and run `python3 tools/generate_textures.py`.
+
 ## How it plays
 
 **Round:** 20s intermission. Then Wolverine wakes up locked inside the glass tank room of the Weapon X lab. After ~2.5s his claws pop out (**SNIKT!**), then he **roars** and every player's screen shakes. After 7s he's released. Survivors have **2:30** to last. **Every kill adds +15s.**
@@ -60,7 +73,7 @@ The whole game is written as code. The map, Wolverine's look, the claws, the "an
 
 **Progression:** coins for surviving, kills, terminals and playing matches.
 
-- **Suits** (saved): Logan (free), Comic Wolverine (500), Weapon X (1000), Old Man Logan (1500).
+- **Suits** (saved): Logan (free), Comic Wolverine (1000), Weapon X (2000), Old Man Logan (3000).
 - **Claws** (saved): Adamantium (free), Bone (400), Gold (900), Blood-Soaked (1100, drips), Obsidian (1400), Cosmic (2200, glows).
 - Both are sold in the **Armory** (left dock).
 - **Daily challenges:** become Wolverine, 5 kills as Wolverine, survive 5 min total, play 3 matches.

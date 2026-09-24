@@ -274,13 +274,100 @@ end
 -- Props
 ---------------------------------------------------------------------------
 
+
+-- Detailed wooden crate: planks, frame beams, braces, metal corners, stencils.
+local STENCILS = { "WEAPON X", "PROPERTY OF DEPT. H", "FRAGILE", "LOT 47-X", "BIOHAZARD", "DO NOT OPEN", "ALKALI LAKE" }
+local function woodCrate(parent, cf, s, isBreakable)
+	local model = Instance.new("Model")
+	model.Name = "Crate"
+	local wood = vary(rgb(150, 112, 70), 0.12)
+	local dark = wood:Lerp(Color3.new(0, 0, 0), 0.35)
+	local metal = rgb(60, 62, 66)
+	local function bp(size, off, color, mat, extra)
+		local p = block(model, size, cf * off, mat, color, extra)
+		if isBreakable then
+			breakable(p)
+		end
+		return p
+	end
+	bp(s * 0.96, CFrame.new(0, s.Y / 2, 0), wood, M.WoodPlanks)
+	-- frame beams on all 12 edges
+	local e = math.min(s.X, s.Y, s.Z) * 0.09
+	for _, x in { -1, 1 } do
+		for _, z in { -1, 1 } do
+			bp(Vector3.new(e, s.Y, e), CFrame.new(x * (s.X / 2 - e / 2), s.Y / 2, z * (s.Z / 2 - e / 2)), dark, M.Wood)
+		end
+		for _, y in { 0, 1 } do
+			bp(Vector3.new(e, e, s.Z), CFrame.new(x * (s.X / 2 - e / 2), e / 2 + y * (s.Y - e), 0), dark, M.Wood)
+			bp(Vector3.new(s.X, e, e), CFrame.new(0, e / 2 + y * (s.Y - e), x * (s.Z / 2 - e / 2)), dark, M.Wood)
+		end
+	end
+	-- plank seams + diagonal braces on the faces
+	for _, z in { -1, 1 } do
+		for k = 1, 3 do
+			bp(Vector3.new(s.X * 0.9, 0.04, 0.03), CFrame.new(0, s.Y * k / 4, z * (s.Z / 2 + 0.005)), dark, M.Wood)
+		end
+		local diag = math.sqrt(s.X ^ 2 + s.Y ^ 2) * 0.82
+		bp(Vector3.new(diag, e * 0.8, e * 0.5), CFrame.new(0, s.Y / 2, z * (s.Z / 2 + e * 0.1)) * CFrame.Angles(0, 0, math.atan2(s.Y, s.X) * z), dark, M.Wood)
+	end
+	for _, x in { -1, 1 } do
+		for k = 1, 3 do
+			bp(Vector3.new(0.03, 0.04, s.Z * 0.9), CFrame.new(x * (s.X / 2 + 0.005), s.Y * k / 4, 0), dark, M.Wood)
+		end
+	end
+	-- metal corner brackets
+	for _, x in { -1, 1 } do
+		for _, y in { 0, 1 } do
+			for _, z in { -1, 1 } do
+				bp(Vector3.one * e * 1.5, CFrame.new(x * (s.X / 2 - e * 0.6), e * 0.7 + y * (s.Y - e * 1.4), z * (s.Z / 2 - e * 0.6)), metal, M.Metal)
+			end
+		end
+	end
+	-- stencilled labels
+	local label = block(model, Vector3.new(s.X * 0.6, s.Y * 0.28, 0.02), cf * CFrame.new(0, s.Y * 0.62, -(s.Z / 2 + e * 0.35)), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false, CanQuery = false })
+	local gui = make("SurfaceGui", label, { Face = Enum.NormalId.Front, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 60 })
+	make("TextLabel", gui, {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.Arcade,
+		TextScaled = true,
+		TextColor3 = rgb(30, 22, 16),
+		TextTransparency = 0.15,
+		Text = STENCILS[rng:NextInteger(1, #STENCILS)],
+	})
+	model.Parent = parent
+	return model
+end
+
+local function steelBarrel(parent, cf, color, isBreakable)
+	local model = Instance.new("Model")
+	model.Name = "Barrel"
+	local function bp(size, off, col, mat, extra)
+		local p = block(model, size, cf * off * CFrame.Angles(0, 0, math.rad(90)), mat, col, extra)
+		if isBreakable then
+			breakable(p)
+		end
+		return p
+	end
+	bp(Vector3.new(3, 2.2, 2.2), CFrame.new(0, 1.5, 0), color, M.Metal, { Shape = Enum.PartType.Cylinder })
+	for _, y in { 0.2, 1.05, 1.95, 2.8 } do
+		bp(Vector3.new(0.14, 2.32, 2.32), CFrame.new(0, y, 0), color:Lerp(Color3.new(0, 0, 0), 0.35), M.Metal, { Shape = Enum.PartType.Cylinder })
+	end
+	bp(Vector3.new(0.06, 1.9, 1.9), CFrame.new(0, 3.02, 0), color:Lerp(Color3.new(0, 0, 0), 0.2), M.DiamondPlate, { Shape = Enum.PartType.Cylinder })
+	local tag = block(model, Vector3.new(0.9, 0.9, 0.02), cf * CFrame.new(0, 1.5, -1.11), M.SmoothPlastic, rgb(230, 200, 40))
+	local g = make("SurfaceGui", tag, { Face = Enum.NormalId.Front, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 80 })
+	make("TextLabel", g, { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, TextScaled = true, Font = Enum.Font.GothamBlack, Text = "☢", TextColor3 = rgb(20, 20, 20) })
+	model.Parent = parent
+	return model
+end
+
 local function crate(parent, pos, s)
 	s = s or 4
-	return breakable(block(parent, Vector3.one * s, CFrame.new(pos + Vector3.new(0, s / 2, 0)) * CFrame.Angles(0, rng:NextNumber() * 0.4, 0), M.WoodPlanks, vary(C.Wood, 0.2)))
+	return woodCrate(parent, CFrame.new(pos) * CFrame.Angles(0, rng:NextNumber() * 0.4, 0), Vector3.one * s, true)
 end
 
 local function barrel(parent, pos, color)
-	return breakable(block(parent, Vector3.new(3, 2.2, 2.2), CFrame.new(pos + Vector3.new(0, 1.5, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, color or C.Rust, { Shape = Enum.PartType.Cylinder }))
+	return steelBarrel(parent, CFrame.new(pos), color or C.Rust, true)
 end
 
 local function fireBarrel(parent, pos)
@@ -1306,7 +1393,8 @@ local function hangingLamp(parent, pos, color)
 	block(parent, Vector3.new(0.15, 6, 0.15), CFrame.new(pos + Vector3.new(0, 3, 0)), M.Metal, rgb(30, 30, 30))
 	local shade = block(parent, Vector3.new(1.6, 3.4, 3.4), CFrame.new(pos) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, rgb(40, 42, 46), { Shape = Enum.PartType.Cylinder })
 	local bulb = block(parent, Vector3.new(1.2, 1.2, 1.2), CFrame.new(pos - Vector3.new(0, 0.9, 0)), M.Neon, color, { Shape = Enum.PartType.Ball })
-	make("SpotLight", shade, { Face = Enum.NormalId.Left, Range = 40, Angle = 80, Brightness = 2.2, Color = color, Shadows = true })
+	make("SpotLight", shade, { Face = Enum.NormalId.Left, Range = 50, Angle = 90, Brightness = 4, Color = color, Shadows = true })
+	light(bulb, { Range = 22, Brightness = 1.2, Color = color })
 	return bulb
 end
 
@@ -1350,7 +1438,7 @@ function MapBuilder.BuildLobby()
 	end
 
 	-- Floor: dark concrete, hazard border, steel walkway
-	block(lobby, Vector3.new(W, 1, D), CFrame.new(0, Y - 0.5, 0), M.Concrete, rgb(48, 48, 54))
+	block(lobby, Vector3.new(W, 1, D), CFrame.new(0, Y - 0.5, 0), M.Concrete, rgb(96, 96, 102))
 	for _, d in { { 0, -hz + 2, W - 2, 1.2 }, { 0, hz - 2, W - 2, 1.2 }, { -hx + 2, 0, 1.2, D - 2 }, { hx - 2, 0, 1.2, D - 2 } } do
 		block(lobby, Vector3.new(d[3], 0.06, d[4]), CFrame.new(d[1], Y + 0.03, d[2]), M.SmoothPlastic, C.Hazard)
 	end
@@ -1378,7 +1466,7 @@ function MapBuilder.BuildLobby()
 	})
 
 	-- Walls with pillars, pipes and windows (south)
-	local wallStyle = { Material = M.Concrete, Color = rgb(64, 64, 72), Vary = 0.05, Breakable = false }
+	local wallStyle = { Material = M.Concrete, Color = rgb(128, 128, 136), Vary = 0.05, Breakable = false }
 	wall(lobby, Vector3.new(-hx, 0, -hz + 0.5), Vector3.new(hx, 0, -hz + 0.5), Y, H, 1, wallStyle)
 	wall(lobby, Vector3.new(-hx + 0.5, 0, -hz), Vector3.new(-hx + 0.5, 0, hz), Y, H, 1, wallStyle)
 	wall(lobby, Vector3.new(hx - 0.5, 0, -hz), Vector3.new(hx - 0.5, 0, hz), Y, H, 1, wallStyle)
@@ -1422,6 +1510,26 @@ function MapBuilder.BuildLobby()
 			if red then
 				CollectionService:AddTag(bulb, "Flicker")
 			end
+		end
+	end
+
+	-- Wall sconces + ceiling light strips so the hangar is well lit
+	for x = -hx + 7.5, hx - 7.5, 15 do
+		for _, z in { -hz + 1.6, hz - 1.6 } do
+			local sc = block(lobby, Vector3.new(1.4, 1.8, 0.6), CFrame.new(x, Y + 11, z), M.Neon, rgb(255, 225, 180))
+			light(sc, { Range = 24, Brightness = 2, Color = rgb(255, 220, 170) })
+		end
+	end
+	for z = -hz + 7.5, hz - 7.5, 15 do
+		for _, x in { -hx + 1.6, hx - 1.6 } do
+			local sc = block(lobby, Vector3.new(0.6, 1.8, 1.4), CFrame.new(x, Y + 11, z), M.Neon, rgb(255, 225, 180))
+			light(sc, { Range = 24, Brightness = 2, Color = rgb(255, 220, 170) })
+		end
+	end
+	for z = -hz + 10, hz - 10, 15 do
+		for x = -45, 45, 30 do
+			local strip = block(lobby, Vector3.new(14, 0.3, 1), CFrame.new(x, Y + H - 1.6, z + 3), M.Neon, rgb(235, 240, 255))
+			light(strip, { Range = 30, Brightness = 1.6, Color = rgb(235, 240, 255) })
 		end
 	end
 
@@ -1555,7 +1663,7 @@ function MapBuilder.BuildLobby()
 	end
 
 	-- LEADERBOARD (west wall, north) -------------------------------------
-	local lb = block(lobby, Vector3.new(0.4, 12, 18), CFrame.new(-hx + 1.6, Y + 9, -26), M.SmoothPlastic, rgb(14, 14, 18))
+	local lb = block(lobby, Vector3.new(0.4, 12, 18), CFrame.new(-hx + 2.9, Y + 9, -26), M.SmoothPlastic, rgb(14, 14, 18))
 	local lbGui = make("SurfaceGui", lb, { Name = "Leaderboard", Face = Enum.NormalId.Right, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 36, LightInfluence = 0 })
 	local lbBg = make("Frame", lbGui, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = rgb(16, 14, 18), BorderSizePixel = 0 })
 	make("UIStroke", lbBg, { Color = rgb(200, 30, 30), Thickness = 8, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
@@ -1576,7 +1684,7 @@ function MapBuilder.BuildLobby()
 			LayoutOrder = i,
 		})
 	end
-	local lbLight = block(lobby, Vector3.new(0.3, 0.3, 18), CFrame.new(-hx + 2, Y + 15.4, -26), M.Neon, rgb(200, 30, 30))
+	local lbLight = block(lobby, Vector3.new(0.3, 0.3, 18), CFrame.new(-hx + 3.3, Y + 15.4, -26), M.Neon, rgb(200, 30, 30))
 	light(lbLight, { Range = 10, Brightness = 1, Color = rgb(255, 60, 40) })
 
 	-- HANGING STATUS SCREEN (centre) --------------------------------------
@@ -1597,9 +1705,13 @@ function MapBuilder.BuildLobby()
 	block(lobby, Vector3.new(18.4, 0.3, 18.4), CFrame.new(0, Y + 13.4, 0), M.Neon, rgb(200, 30, 30))
 
 	-- Supply crates + barrels for detail
-	for _, p in { Vector3.new(-30, Y, -36), Vector3.new(-26, Y, -38), Vector3.new(20, Y, -37), Vector3.new(-36, Y, 36), Vector3.new(14, Y, 38) } do
-		block(lobby, Vector3.new(4, 4, 4), CFrame.new(p + Vector3.new(0, 2, 0)) * CFrame.Angles(0, rng:NextNumber() * 0.5, 0), M.WoodPlanks, vary(C.Wood, 0.2))
-		block(lobby, Vector3.new(3, 2.2, 2.2), CFrame.new(p + Vector3.new(3.4, 1.5, 1.5)) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, rgb(150, 30, 30), { Shape = Enum.PartType.Cylinder })
+	for i, p in { Vector3.new(-30, Y, -34), Vector3.new(22, Y, -36), Vector3.new(-38, Y, 34), Vector3.new(14, Y, 36) } do
+		local yaw = rng:NextNumber() * 0.5
+		woodCrate(lobby, CFrame.new(p) * CFrame.Angles(0, yaw, 0), Vector3.new(5, 4, 4), false)
+		woodCrate(lobby, CFrame.new(p + Vector3.new(0.3, 4, 0.2)) * CFrame.Angles(0, yaw + 0.3, 0), Vector3.new(3, 3, 3), false)
+		woodCrate(lobby, CFrame.new(p + Vector3.new(5.2, 0, 0.5)) * CFrame.Angles(0, -yaw, 0), Vector3.new(3.4, 3.4, 3.4), false)
+		steelBarrel(lobby, CFrame.new(p + Vector3.new(-3.6, 0, 2.6)), i % 2 == 0 and rgb(150, 30, 30) or rgb(40, 80, 140), false)
+		steelBarrel(lobby, CFrame.new(p + Vector3.new(-4.2, 0, -0.3)), rgb(60, 110, 60), false)
 	end
 	sign(lobby, CFrame.new(-6, Y + H - 3.6, hz - 1.4), Vector3.new(30, 2.6, 0.3), "WEAPON X  •  HOLDING FACILITY 7", rgb(255, 200, 30), rgb(18, 18, 22))
 

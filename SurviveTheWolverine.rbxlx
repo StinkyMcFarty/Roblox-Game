@@ -163,12 +163,18 @@ return Config
           <string name="Name">Skins</string>
           <string name="Source"><![CDATA[-- Wolverine skins. Prices are in Coins (earned by playing).
 -- "Skin" in a colour slot means "keep the player's own skin tone".
+--
+-- REALISTIC TEXTURES: the painted suit textures live in assets/textures/.
+-- Upload them in Studio (View > Asset Manager > Bulk Import), right-click
+-- each image > Copy Asset ID, and paste the numbers into Textures below.
+-- Until then each suit uses its flat colours + 3D gear.
+-- HairAccessoryId: optional Marketplace hair accessory ID (e.g. a messy
+-- "Wolverine hair"). 0 keeps the player's own hair.
 local rgb = Color3.fromRGB
 
 local YELLOW = rgb(245, 195, 20)
 local BLUE = rgb(25, 60, 150)
 local DENIM = rgb(48, 66, 104)
-local LEATHER = rgb(92, 60, 38)
 local BOOT = rgb(55, 38, 26)
 
 local Skins = {}
@@ -179,19 +185,23 @@ Skins.List = {
 	Logan = {
 		Name = "Logan",
 		Price = 0,
-		Description = "The regular. Tank top, leather jacket, sideburns.",
-		Swatch = LEATHER,
+		Description = "The regular. Grey tee, jeans, beard and a bad attitude.",
+		Swatch = rgb(196, 198, 196),
 		Colors = {
-			UpperTorso = rgb(225, 225, 220), LowerTorso = DENIM,
-			UpperArm = LEATHER, LowerArm = LEATHER, Hand = "Skin",
+			UpperTorso = rgb(196, 198, 196), LowerTorso = DENIM,
+			UpperArm = rgb(196, 198, 196), LowerArm = "Skin", Hand = "Skin",
 			UpperLeg = DENIM, LowerLeg = DENIM, Foot = BOOT,
 		},
 		KeepHair = true,
+		Textures = { Shirt = 0, Pants = 0, Face = 0 },
+		HairAccessoryId = 0,
 	},
 	Comic = {
 		Name = "Comic Wolverine",
-		Price = 500,
-		Description = "Straight off the page. Yellow and blue with the iconic cowl.",
+		Price = 1000,
+		Description = "Straight off the page. Cowl, fins, shoulder pads, tiger stripes.",
+		Textures = { Shirt = 0, Pants = 0, Face = 0 },
+		HairAccessoryId = 0,
 		Swatch = YELLOW,
 		Colors = {
 			UpperTorso = YELLOW, LowerTorso = BLUE,
@@ -201,8 +211,10 @@ Skins.List = {
 	},
 	WeaponX = {
 		Name = "Weapon X",
-		Price = 1000,
-		Description = "Fresh out of the tank. Wired helmet, scars, nothing to lose.",
+		Price = 2000,
+		Description = "Fresh out of the tank. Visor helmet, cables, harness, scars.",
+		Textures = { Shirt = 0, Pants = 0, Face = 0 },
+		HairAccessoryId = 0,
 		Swatch = rgb(120, 200, 190),
 		Colors = {
 			UpperTorso = "Skin", LowerTorso = rgb(55, 58, 64),
@@ -212,8 +224,11 @@ Skins.List = {
 	},
 	OldManLogan = {
 		Name = "Old Man Logan",
-		Price = 1500,
-		Description = "Grey beard, long coat, and a lot of anger left.",
+		Price = 3000,
+		Description = "Grey beard, long duster coat, and a lot of anger left.",
+		KeepHair = true,
+		Textures = { Shirt = 0, Pants = 0, Face = 0 },
+		HairAccessoryId = 0,
 		Swatch = rgb(150, 150, 150),
 		Colors = {
 			UpperTorso = rgb(88, 94, 104), LowerTorso = rgb(60, 44, 34),
@@ -1047,6 +1062,557 @@ return Combat
       </Item>
       <Item class="ModuleScript" referent="14">
         <Properties>
+          <string name="Name">Costumes</string>
+          <string name="Source"><![CDATA[-- Everything that makes characters look good: Wolverine suits (textures +
+-- sculpted 3D gear), the claws, and the Sentinel armour.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+
+local Skins = require(ReplicatedStorage.Shared.Skins)
+local Util = require(ReplicatedStorage.Shared.Util)
+
+local Costumes = {}
+
+local rgb = Color3.fromRGB
+local rad = math.rad
+local M = Enum.Material
+
+Costumes.CLAW_LEN = 2.6
+
+---------------------------------------------------------------------------
+-- Helpers
+---------------------------------------------------------------------------
+
+local function folderFor(char, name)
+	local f = char:FindFirstChild(name)
+	if not f then
+		f = Instance.new("Folder")
+		f.Name = name
+		f.Parent = char
+	end
+	return f
+end
+
+-- Welded cosmetic part. `props` can set Shape/Mesh/etc.
+function Costumes.Gear(char, anchor, name, size, color, material, offset, props, folderName)
+	local p = Instance.new(props and props.Class or "Part")
+	p.Name = name
+	p.Size = size
+	p.Color = color
+	p.Material = material or M.SmoothPlastic
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.Massless = true
+	p.CastShadow = true
+	if props then
+		for k, v in props do
+			if k ~= "Class" and k ~= "Mesh" then
+				p[k] = v
+			end
+		end
+		if props.Mesh then
+			local m = Instance.new("SpecialMesh")
+			m.MeshType = props.Mesh
+			m.Parent = p
+		end
+	end
+	p.CFrame = anchor.CFrame * offset
+	local w = Instance.new("Weld")
+	w.Part0 = anchor
+	w.Part1 = p
+	w.C0 = offset
+	w.Parent = p
+	p.Parent = folderFor(char, folderName or "Gear")
+	return p, w
+end
+local gear = Costumes.Gear
+
+-- A cable made of short segments through `points` (in anchor space).
+local function cable(char, anchor, points, thickness, color)
+	for i = 1, #points - 1 do
+		local a, b = points[i], points[i + 1]
+		local len = (b - a).Magnitude
+		if len > 0.01 then
+			gear(char, anchor, "Cable", Vector3.new(thickness, thickness, len + thickness * 0.5), color or rgb(18, 18, 20), M.Rubber,
+				CFrame.lookAt((a + b) / 2, b))
+		end
+	end
+end
+
+-- Cable spiralling around a limb.
+local function wrap(char, limb, turns, thickness, yTop, yBottom)
+	if not limb then
+		return
+	end
+	local s = limb.Size
+	local r = math.max(s.X, s.Z) * 0.56
+	local pts = {}
+	local steps = math.floor(turns * 10)
+	for k = 0, steps do
+		local t = k / steps
+		local a = t * turns * math.pi * 2
+		local y = s.Y * (yTop + (yBottom - yTop) * t)
+		table.insert(pts, Vector3.new(math.cos(a) * r, y, math.sin(a) * r))
+	end
+	cable(char, limb, pts, thickness)
+end
+
+local function strap(char, anchor, a, b, width, color)
+	local len = (b - a).Magnitude
+	return gear(char, anchor, "Strap", Vector3.new(width, 0.08, len), color or rgb(30, 26, 22), M.Leather, CFrame.lookAt((a + b) / 2, b))
+end
+
+---------------------------------------------------------------------------
+-- Wolverine suits
+---------------------------------------------------------------------------
+
+local SLOT_PARTS = {
+	UpperTorso = { "UpperTorso", "Torso" },
+	LowerTorso = { "LowerTorso" },
+	UpperArm = { "RightUpperArm", "LeftUpperArm", "Right Arm", "Left Arm" },
+	LowerArm = { "RightLowerArm", "LeftLowerArm" },
+	Hand = { "RightHand", "LeftHand" },
+	UpperLeg = { "RightUpperLeg", "LeftUpperLeg", "Right Leg", "Left Leg" },
+	LowerLeg = { "RightLowerLeg", "LeftLowerLeg" },
+	Foot = { "RightFoot", "LeftFoot" },
+}
+
+local function asset(id)
+	return (id and id ~= 0 and id ~= "") and ("rbxassetid://" .. tostring(id)) or nil
+end
+
+local function comicGear(char, head)
+	local YEL, BLU, BLK = rgb(238, 184, 20), rgb(28, 56, 140), rgb(18, 18, 22)
+	if head then
+		local hs = head.Size
+		head.Color = YEL
+		-- sculpted cowl over the top of the head
+		gear(char, head, "Cowl", Vector3.new(hs.X * 1.1, hs.Y * 0.55, hs.Z * 1.1), YEL, M.SmoothPlastic,
+			CFrame.new(0, hs.Y * 0.38, hs.Z * 0.02), { Mesh = Enum.MeshType.Sphere })
+		-- the iconic swept-back fins
+		for s = -1, 1, 2 do
+			gear(char, head, "Fin", Vector3.new(0.1, hs.Y * 0.95, hs.Z * 0.62), BLK, M.SmoothPlastic,
+				CFrame.new(s * hs.X * 0.47, hs.Y * 0.62, hs.Z * 0.12) * CFrame.Angles(rad(-12), 0, rad(-s * 16)),
+				{ Class = "WedgePart" })
+		end
+	end
+	-- rounded blue shoulder pads
+	for _, n in { "RightUpperArm", "LeftUpperArm" } do
+		local arm = char:FindFirstChild(n)
+		if arm then
+			local s = arm.Size
+			local side = n:sub(1, 5) == "Right" and 1 or -1
+			gear(char, arm, "ShoulderPad", Vector3.new(s.X * 1.9, s.Y * 0.62, s.Z * 1.9), BLU, M.SmoothPlastic,
+				CFrame.new(side * s.X * 0.12, s.Y * 0.3, 0), { Mesh = Enum.MeshType.Sphere })
+			gear(char, arm, "PadTrim", Vector3.new(s.X * 1.95, 0.06, s.Z * 1.95), BLK, M.SmoothPlastic,
+				CFrame.new(side * s.X * 0.12, s.Y * 0.05, 0), { Mesh = Enum.MeshType.Sphere })
+		end
+	end
+	-- 3D belt + buckle
+	local lower = char:FindFirstChild("LowerTorso")
+	if lower then
+		local s = lower.Size
+		gear(char, lower, "Belt", Vector3.new(s.X * 1.06, s.Y * 0.28, s.Z * 1.08), rgb(170, 26, 30), M.Leather, CFrame.new(0, s.Y * 0.32, 0))
+		local buckle = gear(char, lower, "Buckle", Vector3.new(0.12, s.Y * 0.42, s.Y * 0.42), BLK, M.Metal,
+			CFrame.new(0, s.Y * 0.32, -s.Z * 0.56) * CFrame.Angles(0, rad(90), 0), { Shape = Enum.PartType.Cylinder })
+		buckle.Reflectance = 0.2
+	end
+end
+
+local function weaponXGear(char, head)
+	local GUN, DARK = rgb(58, 58, 62), rgb(34, 34, 38)
+	if head then
+		local hs = head.Size
+		gear(char, head, "Helmet", Vector3.new(hs.X * 1.16, hs.Y * 0.8, hs.Z * 1.18), GUN, M.Metal,
+			CFrame.new(0, hs.Y * 0.3, hs.Z * 0.03), { Mesh = Enum.MeshType.Sphere, Reflectance = 0.08 })
+		gear(char, head, "Band", Vector3.new(hs.Y * 0.3, hs.X * 1.2, hs.Z * 1.2), DARK, M.Metal,
+			CFrame.new(0, hs.Y * 0.1, 0) * CFrame.Angles(0, 0, rad(90)), { Shape = Enum.PartType.Cylinder })
+		-- glowing red visor band wrapping the eyes
+		local visor = gear(char, head, "Visor", Vector3.new(hs.X * 0.8, hs.Y * 0.09, 0.06), rgb(255, 40, 40), M.Neon, CFrame.new(0, hs.Y * 0.1, -hs.Z * 0.61))
+		for s = -1, 1, 2 do
+			gear(char, head, "Visor", Vector3.new(hs.Z * 0.38, hs.Y * 0.09, 0.06), rgb(255, 40, 40), M.Neon,
+				CFrame.new(s * hs.X * 0.5, hs.Y * 0.1, -hs.Z * 0.45) * CFrame.Angles(0, rad(s * -50), 0))
+			-- ear cans + bolts
+			gear(char, head, "EarCan", Vector3.new(0.28, hs.Y * 0.5, hs.Y * 0.5), DARK, M.Metal,
+				CFrame.new(s * hs.X * 0.62, hs.Y * 0.05, 0), { Shape = Enum.PartType.Cylinder })
+			gear(char, head, "Bolt", Vector3.new(0.1, hs.Y * 0.14, hs.Y * 0.14), rgb(150, 150, 155), M.Metal,
+				CFrame.new(s * hs.X * 0.78, hs.Y * 0.05, 0), { Shape = Enum.PartType.Cylinder })
+		end
+		local l = Instance.new("PointLight")
+		l.Color = rgb(255, 40, 40)
+		l.Range = 8
+		l.Brightness = 2
+		l.Parent = visor
+		gear(char, head, "Ridge", Vector3.new(hs.X * 0.16, hs.Y * 0.14, hs.Z * 0.95), DARK, M.Metal, CFrame.new(0, hs.Y * 0.68, hs.Z * 0.02))
+		for i = -1, 1 do -- cable ports on the dome
+			gear(char, head, "Port", Vector3.new(0.18, 0.22, 0.22), rgb(120, 120, 125), M.Metal,
+				CFrame.new(i * hs.X * 0.22, hs.Y * 0.55, hs.Z * 0.4) * CFrame.Angles(0, 0, rad(90)), { Shape = Enum.PartType.Cylinder })
+		end
+	end
+
+	local torso = char:FindFirstChild("UpperTorso")
+	if torso then
+		local s = torso.Size
+		-- cables from the helmet down the back
+		for i = -1, 1 do
+			local x = i * s.X * 0.18
+			cable(char, torso, {
+				Vector3.new(x, s.Y * 0.5 + 1.1, s.Z * 0.45),
+				Vector3.new(x * 1.4, s.Y * 0.55, s.Z * 0.7),
+				Vector3.new(x * 1.8, s.Y * 0.1, s.Z * 0.62),
+				Vector3.new(x * 2.1, -s.Y * 0.45, s.Z * 0.6),
+			}, 0.09)
+		end
+		-- chest harness: V straps into a centre box, and over the shoulders
+		for sx = -1, 1, 2 do
+			strap(char, torso, Vector3.new(sx * s.X * 0.32, s.Y * 0.5, -s.Z * 0.52), Vector3.new(sx * s.X * 0.06, -s.Y * 0.05, -s.Z * 0.54), 0.2)
+			strap(char, torso, Vector3.new(sx * s.X * 0.32, s.Y * 0.52, -s.Z * 0.5), Vector3.new(sx * s.X * 0.32, s.Y * 0.52, s.Z * 0.5), 0.2)
+			strap(char, torso, Vector3.new(sx * s.X * 0.32, s.Y * 0.5, s.Z * 0.52), Vector3.new(-sx * s.X * 0.2, -s.Y * 0.3, s.Z * 0.54), 0.2)
+		end
+		gear(char, torso, "HarnessBox", Vector3.new(s.X * 0.26, s.Y * 0.22, 0.2), rgb(80, 80, 86), M.Metal, CFrame.new(0, -s.Y * 0.05, -s.Z * 0.6))
+		local led = gear(char, torso, "LED", Vector3.new(0.08, 0.08, 0.04), rgb(80, 255, 120), M.Neon, CFrame.new(s.X * 0.07, -s.Y * 0.02, -s.Z * 0.71))
+		led.Name = "LED"
+	end
+
+	local lower = char:FindFirstChild("LowerTorso")
+	if lower then
+		local s = lower.Size
+		gear(char, lower, "Belt", Vector3.new(s.X * 1.08, s.Y * 0.3, s.Z * 1.1), rgb(40, 34, 28), M.Leather, CFrame.new(0, s.Y * 0.3, 0))
+		for i, x in { -0.32, 0.05, 0.36 } do -- equipment boxes on the belt
+			local box = gear(char, lower, "BeltBox", Vector3.new(s.X * 0.28, s.Y * 0.5, 0.3), i == 2 and rgb(70, 72, 78) or rgb(90, 88, 84), M.Metal,
+				CFrame.new(s.X * x, s.Y * 0.1, -s.Z * 0.62))
+			box.Reflectance = 0.05
+			gear(char, lower, "Grille", Vector3.new(s.X * 0.2, 0.04, 0.02), rgb(20, 20, 20), M.Metal, CFrame.new(s.X * x, s.Y * 0.15, -s.Z * 0.78))
+			gear(char, lower, "Grille", Vector3.new(s.X * 0.2, 0.04, 0.02), rgb(20, 20, 20), M.Metal, CFrame.new(s.X * x, s.Y * 0.05, -s.Z * 0.78))
+		end
+		gear(char, lower, "BeltLED", Vector3.new(0.06, 0.06, 0.03), rgb(255, 60, 40), M.Neon, CFrame.new(s.X * 0.05, s.Y * 0.28, -s.Z * 0.78))
+	end
+
+	-- cables wrapped around the arms and legs
+	wrap(char, char:FindFirstChild("RightUpperArm"), 1.6, 0.08, 0.35, -0.4)
+	wrap(char, char:FindFirstChild("LeftLowerArm"), 1.8, 0.08, 0.4, -0.35)
+	wrap(char, char:FindFirstChild("RightLowerArm"), 1.2, 0.07, 0.3, -0.3)
+	wrap(char, char:FindFirstChild("LeftUpperLeg"), 1.8, 0.09, 0.4, -0.4)
+	wrap(char, char:FindFirstChild("RightUpperLeg"), 1.2, 0.08, 0.3, -0.35)
+	wrap(char, char:FindFirstChild("RightLowerLeg"), 1.4, 0.08, 0.4, -0.2)
+end
+
+local function oldManGear(char)
+	local lower = char:FindFirstChild("LowerTorso")
+	if lower then
+		local s = lower.Size
+		for sx = -1, 1, 2 do -- long duster coat tails
+			gear(char, lower, "CoatTail", Vector3.new(s.X * 0.52, s.Y * 3.4, 0.12), rgb(60, 44, 34), M.Leather,
+				CFrame.new(sx * s.X * 0.27, -s.Y * 1.5, s.Z * 0.56) * CFrame.Angles(rad(6), 0, rad(sx * 3)))
+		end
+		for sx = -1, 1, 2 do
+			gear(char, lower, "CoatFront", Vector3.new(s.X * 0.3, s.Y * 3.2, 0.1), rgb(60, 44, 34), M.Leather,
+				CFrame.new(sx * s.X * 0.42, -s.Y * 1.4, -s.Z * 0.55) * CFrame.Angles(rad(-4), 0, rad(sx * 4)))
+		end
+	end
+	local torso = char:FindFirstChild("UpperTorso")
+	if torso then
+		local s = torso.Size
+		gear(char, torso, "Collar", Vector3.new(s.X * 1.1, s.Y * 0.2, s.Z * 1.15), rgb(52, 36, 26), M.Leather, CFrame.new(0, s.Y * 0.46, 0.05))
+	end
+end
+
+local function loadHair(char, id)
+	if not id or id == 0 then
+		return
+	end
+	local ok, model = pcall(function()
+		return game:GetService("InsertService"):LoadAsset(id)
+	end)
+	if ok and model then
+		local acc = model:FindFirstChildWhichIsA("Accessory", true)
+		local hum = Util.Humanoid(char)
+		if acc and hum then
+			hum:AddAccessory(acc)
+		end
+		model:Destroy()
+	end
+end
+
+function Costumes.Dress(char, skinId)
+	local skin = Skins.List[skinId] or Skins.List[Skins.Default]
+	local tex = skin.Textures or {}
+	local head = char:FindFirstChild("Head")
+	local skinTone = head and head.Color or rgb(226, 176, 140)
+	local hasShirt, hasPants = asset(tex.Shirt), asset(tex.Pants)
+
+	for _, d in char:GetChildren() do
+		if d:IsA("Shirt") or d:IsA("Pants") or d:IsA("ShirtGraphic") or d:IsA("BodyColors") then
+			d:Destroy()
+		elseif d:IsA("Accessory") and not (skin.KeepHair and d.AccessoryType == Enum.AccessoryType.Hair) then
+			d:Destroy()
+		end
+	end
+
+	-- Base body colours: skin tone under textures, flat colours as a fallback
+	for slot, names in SLOT_PARTS do
+		local color = skin.Colors[slot]
+		if hasShirt or hasPants or color == "Skin" then
+			color = skinTone
+		end
+		for _, name in names do
+			local p = char:FindFirstChild(name)
+			if p and p:IsA("BasePart") then
+				p.Color = color
+				local sa = p:FindFirstChildOfClass("SurfaceAppearance")
+				if sa then
+					sa:Destroy()
+				end
+				if p:IsA("MeshPart") then
+					pcall(function()
+						p.TextureID = ""
+					end)
+				end
+			end
+		end
+	end
+	if hasShirt then
+		local s = Instance.new("Shirt")
+		s.ShirtTemplate = hasShirt
+		s.Parent = char
+	end
+	if hasPants then
+		local p = Instance.new("Pants")
+		p.PantsTemplate = hasPants
+		p.Parent = char
+	end
+	if head and asset(tex.Face) then
+		local face = head:FindFirstChildOfClass("Decal")
+		if not face then
+			face = Instance.new("Decal")
+			face.Name = "face"
+			face.Face = Enum.NormalId.Front
+			face.Parent = head
+		end
+		face.Texture = asset(tex.Face)
+	end
+
+	if skinId == "Comic" then
+		comicGear(char, head)
+	elseif skinId == "WeaponX" then
+		weaponXGear(char, head)
+	elseif skinId == "OldManLogan" then
+		oldManGear(char)
+	end
+	loadHair(char, skin.HairAccessoryId)
+end
+
+---------------------------------------------------------------------------
+-- Claws: curved, tapered chrome blades with a bright cutting edge
+---------------------------------------------------------------------------
+
+local function lighten(c, f)
+	return c:Lerp(Color3.new(1, 1, 1), f)
+end
+
+-- Builds 3 claws per hand. Returns { Roots = { {Weld, Extended, Retracted} }, Parts, Tips, Bases }.
+function Costumes.BuildClaws(char, claw, extended)
+	local L = Costumes.CLAW_LEN
+	local thick = claw.Thick or 1
+	local set = { Roots = {}, Parts = {}, Tips = {}, Bases = {} }
+	local edgeColor = lighten(claw.Color, 0.65)
+	local spineColor = claw.Color:Lerp(Color3.new(0, 0, 0), 0.35)
+
+	for _, side in { "Right", "Left" } do
+		local hand = Util.Hand(char, side)
+		if hand then
+			local out = CFrame.new(0, -hand.Size.Y * 0.3, -hand.Size.Z * 0.1)
+			local tucked = CFrame.new(0, L * 0.5, -hand.Size.Z * 0.1)
+			local root, rootWeld = Costumes.Gear(char, hand, "ClawRoot", Vector3.one * 0.05, Color3.new(), M.SmoothPlastic, extended and out or tucked, { Transparency = 1 }, "Claws")
+			table.insert(set.Roots, { Weld = rootWeld, Extended = out })
+			local spread = math.max(0.11, hand.Size.Z * 0.32)
+			for i = -1, 1 do
+				local f = CFrame.new(0, 0, i * spread) * CFrame.Angles(0, 0, rad(i * 2))
+				local segs = {
+					{ Len = L * 0.44, W = 0.2, T = 0.07, Ang = 0 },
+					{ Len = L * 0.26, W = 0.19, T = 0.066, Ang = 5 },
+					{ Len = L * 0.16, W = 0.17, T = 0.06, Ang = 7 },
+				}
+				for k, sg in segs do
+					f = f * CFrame.Angles(rad(sg.Ang), 0, 0)
+					local center = f * CFrame.new(0, -sg.Len / 2, 0)
+					local w, t = sg.W * thick, sg.T * thick
+					local body = Costumes.Gear(char, root, "Claw", Vector3.new(t, sg.Len + 0.02, w), claw.Color, claw.Material, center, { Reflectance = claw.Reflectance, Transparency = extended and 0 or 1 }, "Claws")
+					-- bright honed edge along the inside curve
+					local edge = Costumes.Gear(char, root, "Claw", Vector3.new(t * 0.7, sg.Len + 0.02, 0.035), edgeColor, M.SmoothPlastic,
+						center * CFrame.new(0, 0, -w / 2 - 0.012), { Reflectance = math.min(1, claw.Reflectance + 0.35), Transparency = extended and 0 or 1 }, "Claws")
+					-- bevel line on both flats
+					for sx = -1, 1, 2 do
+						local bevel = Costumes.Gear(char, root, "Claw", Vector3.new(0.012, sg.Len, w * 0.06), spineColor, M.SmoothPlastic,
+							center * CFrame.new(sx * t / 2, 0, w * 0.12), { Transparency = extended and 0 or 1 }, "Claws")
+						table.insert(set.Parts, bevel)
+					end
+					table.insert(set.Parts, body)
+					table.insert(set.Parts, edge)
+					if k == 1 then
+						table.insert(set.Bases, body)
+					end
+					f = f * CFrame.new(0, -sg.Len, 0)
+				end
+				-- sharp tapered tip
+				local tipLen = L * 0.2
+				f = f * CFrame.Angles(rad(9), 0, 0)
+				local tip = Costumes.Gear(char, root, "Claw", Vector3.new(0.058 * thick, tipLen, 0.17 * thick), claw.Color, claw.Material,
+					f * CFrame.new(0, -tipLen / 2, 0) * CFrame.Angles(0, 0, math.pi), { Class = "WedgePart", Reflectance = claw.Reflectance, Transparency = extended and 0 or 1 }, "Claws")
+				table.insert(set.Parts, tip)
+				table.insert(set.Tips, tip)
+			end
+		end
+	end
+	return set
+end
+
+-- SNIKT: blades slide out of the knuckles.
+function Costumes.PopClaws(set)
+	for _, p in set.Parts do
+		p.Transparency = 0
+	end
+	local info = TweenInfo.new(0.13, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	for _, r in set.Roots do
+		TweenService:Create(r.Weld, info, { C0 = r.Extended }):Play()
+	end
+end
+
+---------------------------------------------------------------------------
+-- Sentinel armour (purple-blue plates, magenta limbs, gold face, glowing core)
+---------------------------------------------------------------------------
+
+function Costumes.DressSentinel(char)
+	local ARMOR, ARMOR2 = rgb(98, 102, 178), rgb(76, 78, 150)
+	local MAG, FACE, MECH = rgb(176, 84, 178), rgb(208, 172, 112), rgb(26, 26, 32)
+	local F = "SentinelGear"
+	local function g(anchor, name, size, color, mat, offset, props)
+		return Costumes.Gear(char, anchor, name, size, color, mat or M.SmoothPlastic, offset, props, F)
+	end
+
+	for _, d in char:GetChildren() do
+		if d:IsA("Shirt") or d:IsA("Pants") or d:IsA("ShirtGraphic") or d:IsA("Accessory") then
+			d:Destroy()
+		elseif d:IsA("BasePart") and d.Name ~= "HumanoidRootPart" then
+			d.Color = MECH
+			d.Material = M.Metal
+			local face = d:FindFirstChildOfClass("Decal")
+			if face then
+				face.Transparency = 1
+			end
+		end
+	end
+
+	local head = char:FindFirstChild("Head")
+	if head then
+		local hs = head.Size
+		g(head, "Helmet", Vector3.new(hs.X * 1.22, hs.Y * 1.12, hs.Z * 1.22), ARMOR, M.SmoothPlastic, CFrame.new(0, hs.Y * 0.1, hs.Z * 0.06), { Mesh = Enum.MeshType.Sphere })
+		g(head, "Crest", Vector3.new(hs.X * 0.3, hs.Y * 0.2, hs.Z * 1.1), ARMOR2, M.SmoothPlastic, CFrame.new(0, hs.Y * 0.62, hs.Z * 0.05))
+		g(head, "FacePlate", Vector3.new(hs.X * 0.8, hs.Y * 0.78, 0.14), FACE, M.Metal, CFrame.new(0, -hs.Y * 0.05, -hs.Z * 0.56), { Reflectance = 0.1 })
+		g(head, "Jaw", Vector3.new(hs.X * 0.62, hs.Y * 0.28, 0.2), FACE:Lerp(Color3.new(0, 0, 0), 0.15), M.Metal, CFrame.new(0, -hs.Y * 0.36, -hs.Z * 0.52))
+		for s = -1, 1, 2 do
+			local eye = g(head, "Eye", Vector3.new(hs.X * 0.2, hs.Y * 0.08, 0.05), rgb(255, 40, 40), M.Neon,
+				CFrame.new(s * hs.X * 0.19, hs.Y * 0.1, -hs.Z * 0.64) * CFrame.Angles(0, 0, rad(s * 10)))
+			local l = Instance.new("PointLight")
+			l.Color = rgb(255, 40, 40)
+			l.Range = 5
+			l.Brightness = 1.5
+			l.Parent = eye
+		end
+		for i = 0, 2 do -- mouth grille
+			g(head, "Grille", Vector3.new(hs.X * 0.36, 0.035, 0.03), rgb(60, 45, 30), M.Metal, CFrame.new(0, -hs.Y * (0.26 + i * 0.07), -hs.Z * 0.64))
+		end
+	end
+
+	local torso = char:FindFirstChild("UpperTorso")
+	if torso then
+		local s = torso.Size
+		g(torso, "ChestPlate", Vector3.new(s.X * 1.3, s.Y * 0.58, s.Z * 1.3), ARMOR, M.SmoothPlastic, CFrame.new(0, s.Y * 0.2, 0))
+		for sx = -1, 1, 2 do -- pec plates
+			g(torso, "Pec", Vector3.new(s.X * 0.58, s.Y * 0.36, 0.25), ARMOR2, M.SmoothPlastic,
+				CFrame.new(sx * s.X * 0.3, s.Y * 0.2, -s.Z * 0.68) * CFrame.Angles(0, rad(sx * 12), 0))
+		end
+		local core = g(torso, "Core", Vector3.one * s.X * 0.26, rgb(255, 220, 150), M.Neon, CFrame.new(0, s.Y * 0.28, -s.Z * 0.76), { Shape = Enum.PartType.Ball })
+		g(torso, "CoreRing", Vector3.new(0.12, s.X * 0.36, s.X * 0.36), ARMOR2, M.Metal, CFrame.new(0, s.Y * 0.28, -s.Z * 0.7) * CFrame.Angles(0, rad(90), 0), { Shape = Enum.PartType.Cylinder })
+		local l = Instance.new("PointLight")
+		l.Color = rgb(255, 190, 110)
+		l.Range = 12
+		l.Brightness = 3
+		l.Parent = core
+		-- exposed mechanical abdomen ribs
+		for i = 0, 3 do
+			g(torso, "Rib", Vector3.new(s.X * (0.78 - i * 0.05), 0.1, s.Z * 1.05), rgb(14, 14, 18), M.Metal, CFrame.new(0, -s.Y * (0.12 + i * 0.1), 0))
+			for sx = -1, 1, 2 do
+				g(torso, "AbPlate", Vector3.new(s.X * 0.22, s.Y * 0.07, 0.1), ARMOR2, M.SmoothPlastic, CFrame.new(sx * s.X * 0.13, -s.Y * (0.12 + i * 0.1), -s.Z * 0.55))
+			end
+		end
+		g(torso, "Collar", Vector3.new(s.X * 0.9, s.Y * 0.14, s.Z * 1.2), ARMOR2, M.SmoothPlastic, CFrame.new(0, s.Y * 0.52, 0))
+	end
+
+	local lower = char:FindFirstChild("LowerTorso")
+	if lower then
+		local s = lower.Size
+		g(lower, "Pelvis", Vector3.new(s.X * 1.15, s.Y * 0.8, s.Z * 1.2), MAG, M.SmoothPlastic, CFrame.new(0, -s.Y * 0.05, 0))
+		g(lower, "Waist", Vector3.new(s.X * 1.02, s.Y * 0.2, s.Z * 1.05), rgb(14, 14, 18), M.Metal, CFrame.new(0, s.Y * 0.42, 0))
+	end
+
+	for _, n in { "RightUpperArm", "LeftUpperArm" } do
+		local p = char:FindFirstChild(n)
+		if p then
+			local s = p.Size
+			local side = n:sub(1, 5) == "Right" and 1 or -1
+			g(p, "Pauldron", Vector3.new(s.X * 2.3, s.Y * 0.8, s.Z * 2.1), ARMOR, M.SmoothPlastic, CFrame.new(side * s.X * 0.18, s.Y * 0.28, 0), { Mesh = Enum.MeshType.Sphere })
+			g(p, "PauldronRim", Vector3.new(s.X * 2.1, s.Y * 0.12, s.Z * 1.95), ARMOR2, M.SmoothPlastic, CFrame.new(side * s.X * 0.18, -s.Y * 0.02, 0), { Mesh = Enum.MeshType.Sphere })
+		end
+	end
+	for _, n in { "RightLowerArm", "LeftLowerArm" } do
+		local p = char:FindFirstChild(n)
+		if p then
+			local s = p.Size
+			g(p, "Forearm", Vector3.new(s.X * 1.55, s.Y * 0.95, s.Z * 1.5), MAG, M.SmoothPlastic, CFrame.new(0, -s.Y * 0.02, 0))
+			g(p, "ForearmPlate", Vector3.new(s.X * 1.1, s.Y * 0.7, 0.1), ARMOR2, M.SmoothPlastic, CFrame.new(0, 0, -s.Z * 0.78))
+		end
+	end
+	for _, n in { "RightHand", "LeftHand" } do
+		local p = char:FindFirstChild(n)
+		if p then
+			g(p, "Gauntlet", p.Size * Vector3.new(1.4, 1.1, 1.4), rgb(40, 40, 46), M.Metal, CFrame.identity)
+		end
+	end
+	for _, n in { "RightUpperLeg", "LeftUpperLeg" } do
+		local p = char:FindFirstChild(n)
+		if p then
+			local s = p.Size
+			g(p, "Thigh", Vector3.new(s.X * 1.45, s.Y * 0.9, s.Z * 1.45), MAG, M.SmoothPlastic, CFrame.new(0, 0.02, 0))
+		end
+	end
+	for _, n in { "RightLowerLeg", "LeftLowerLeg" } do
+		local p = char:FindFirstChild(n)
+		if p then
+			local s = p.Size
+			g(p, "Knee", Vector3.new(s.X * 1.7, s.Y * 0.5, s.Z * 1.8), ARMOR, M.SmoothPlastic, CFrame.new(0, s.Y * 0.42, -s.Z * 0.1), { Mesh = Enum.MeshType.Sphere })
+			g(p, "Shin", Vector3.new(s.X * 1.7, s.Y * 1.05, s.Z * 1.75), ARMOR, M.SmoothPlastic, CFrame.new(0, -s.Y * 0.08, 0))
+			g(p, "ShinPlate", Vector3.new(s.X * 1.2, s.Y * 0.8, 0.12), ARMOR2, M.SmoothPlastic, CFrame.new(0, -s.Y * 0.05, -s.Z * 0.9))
+		end
+	end
+	for _, n in { "RightFoot", "LeftFoot" } do
+		local p = char:FindFirstChild(n)
+		if p then
+			local s = p.Size
+			g(p, "Boot", Vector3.new(s.X * 1.9, s.Y * 1.6, s.Z * 1.5), ARMOR, M.SmoothPlastic, CFrame.new(0, s.Y * 0.2, -s.Z * 0.1))
+		end
+	end
+end
+
+return Costumes
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="15">
+        <Properties>
           <string name="Name">Fart</string>
           <string name="Source"><![CDATA[-- Survivor counter to Wolverine's Sniff: a green gas cloud out the back.
 -- For a while afterwards the Sniff tracker points at the cloud, not you.
@@ -1160,7 +1726,7 @@ return Fart
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Script" referent="15">
+      <Item class="Script" referent="16">
         <Properties>
           <string name="Name">GameManager</string>
           <token name="RunContext">0</token>
@@ -1575,7 +2141,7 @@ end
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="16">
+      <Item class="ModuleScript" referent="17">
         <Properties>
           <string name="Name">Hiding</string>
           <string name="Source"><![CDATA[-- Hiding spots (lockers, wardrobes, dumpsters, freezer). Hidden survivors are
@@ -1727,7 +2293,7 @@ return Hiding
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="17">
+      <Item class="ModuleScript" referent="18">
         <Properties>
           <string name="Name">MapBuilder</string>
           <string name="Source"><![CDATA[-- Builds the whole map from code: a snowed-in Weapon X compound at night.
@@ -2006,13 +2572,100 @@ end
 -- Props
 ---------------------------------------------------------------------------
 
+
+-- Detailed wooden crate: planks, frame beams, braces, metal corners, stencils.
+local STENCILS = { "WEAPON X", "PROPERTY OF DEPT. H", "FRAGILE", "LOT 47-X", "BIOHAZARD", "DO NOT OPEN", "ALKALI LAKE" }
+local function woodCrate(parent, cf, s, isBreakable)
+	local model = Instance.new("Model")
+	model.Name = "Crate"
+	local wood = vary(rgb(150, 112, 70), 0.12)
+	local dark = wood:Lerp(Color3.new(0, 0, 0), 0.35)
+	local metal = rgb(60, 62, 66)
+	local function bp(size, off, color, mat, extra)
+		local p = block(model, size, cf * off, mat, color, extra)
+		if isBreakable then
+			breakable(p)
+		end
+		return p
+	end
+	bp(s * 0.96, CFrame.new(0, s.Y / 2, 0), wood, M.WoodPlanks)
+	-- frame beams on all 12 edges
+	local e = math.min(s.X, s.Y, s.Z) * 0.09
+	for _, x in { -1, 1 } do
+		for _, z in { -1, 1 } do
+			bp(Vector3.new(e, s.Y, e), CFrame.new(x * (s.X / 2 - e / 2), s.Y / 2, z * (s.Z / 2 - e / 2)), dark, M.Wood)
+		end
+		for _, y in { 0, 1 } do
+			bp(Vector3.new(e, e, s.Z), CFrame.new(x * (s.X / 2 - e / 2), e / 2 + y * (s.Y - e), 0), dark, M.Wood)
+			bp(Vector3.new(s.X, e, e), CFrame.new(0, e / 2 + y * (s.Y - e), x * (s.Z / 2 - e / 2)), dark, M.Wood)
+		end
+	end
+	-- plank seams + diagonal braces on the faces
+	for _, z in { -1, 1 } do
+		for k = 1, 3 do
+			bp(Vector3.new(s.X * 0.9, 0.04, 0.03), CFrame.new(0, s.Y * k / 4, z * (s.Z / 2 + 0.005)), dark, M.Wood)
+		end
+		local diag = math.sqrt(s.X ^ 2 + s.Y ^ 2) * 0.82
+		bp(Vector3.new(diag, e * 0.8, e * 0.5), CFrame.new(0, s.Y / 2, z * (s.Z / 2 + e * 0.1)) * CFrame.Angles(0, 0, math.atan2(s.Y, s.X) * z), dark, M.Wood)
+	end
+	for _, x in { -1, 1 } do
+		for k = 1, 3 do
+			bp(Vector3.new(0.03, 0.04, s.Z * 0.9), CFrame.new(x * (s.X / 2 + 0.005), s.Y * k / 4, 0), dark, M.Wood)
+		end
+	end
+	-- metal corner brackets
+	for _, x in { -1, 1 } do
+		for _, y in { 0, 1 } do
+			for _, z in { -1, 1 } do
+				bp(Vector3.one * e * 1.5, CFrame.new(x * (s.X / 2 - e * 0.6), e * 0.7 + y * (s.Y - e * 1.4), z * (s.Z / 2 - e * 0.6)), metal, M.Metal)
+			end
+		end
+	end
+	-- stencilled labels
+	local label = block(model, Vector3.new(s.X * 0.6, s.Y * 0.28, 0.02), cf * CFrame.new(0, s.Y * 0.62, -(s.Z / 2 + e * 0.35)), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false, CanQuery = false })
+	local gui = make("SurfaceGui", label, { Face = Enum.NormalId.Front, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 60 })
+	make("TextLabel", gui, {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.Arcade,
+		TextScaled = true,
+		TextColor3 = rgb(30, 22, 16),
+		TextTransparency = 0.15,
+		Text = STENCILS[rng:NextInteger(1, #STENCILS)],
+	})
+	model.Parent = parent
+	return model
+end
+
+local function steelBarrel(parent, cf, color, isBreakable)
+	local model = Instance.new("Model")
+	model.Name = "Barrel"
+	local function bp(size, off, col, mat, extra)
+		local p = block(model, size, cf * off * CFrame.Angles(0, 0, math.rad(90)), mat, col, extra)
+		if isBreakable then
+			breakable(p)
+		end
+		return p
+	end
+	bp(Vector3.new(3, 2.2, 2.2), CFrame.new(0, 1.5, 0), color, M.Metal, { Shape = Enum.PartType.Cylinder })
+	for _, y in { 0.2, 1.05, 1.95, 2.8 } do
+		bp(Vector3.new(0.14, 2.32, 2.32), CFrame.new(0, y, 0), color:Lerp(Color3.new(0, 0, 0), 0.35), M.Metal, { Shape = Enum.PartType.Cylinder })
+	end
+	bp(Vector3.new(0.06, 1.9, 1.9), CFrame.new(0, 3.02, 0), color:Lerp(Color3.new(0, 0, 0), 0.2), M.DiamondPlate, { Shape = Enum.PartType.Cylinder })
+	local tag = block(model, Vector3.new(0.9, 0.9, 0.02), cf * CFrame.new(0, 1.5, -1.11), M.SmoothPlastic, rgb(230, 200, 40))
+	local g = make("SurfaceGui", tag, { Face = Enum.NormalId.Front, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 80 })
+	make("TextLabel", g, { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, TextScaled = true, Font = Enum.Font.GothamBlack, Text = "☢", TextColor3 = rgb(20, 20, 20) })
+	model.Parent = parent
+	return model
+end
+
 local function crate(parent, pos, s)
 	s = s or 4
-	return breakable(block(parent, Vector3.one * s, CFrame.new(pos + Vector3.new(0, s / 2, 0)) * CFrame.Angles(0, rng:NextNumber() * 0.4, 0), M.WoodPlanks, vary(C.Wood, 0.2)))
+	return woodCrate(parent, CFrame.new(pos) * CFrame.Angles(0, rng:NextNumber() * 0.4, 0), Vector3.one * s, true)
 end
 
 local function barrel(parent, pos, color)
-	return breakable(block(parent, Vector3.new(3, 2.2, 2.2), CFrame.new(pos + Vector3.new(0, 1.5, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, color or C.Rust, { Shape = Enum.PartType.Cylinder }))
+	return steelBarrel(parent, CFrame.new(pos), color or C.Rust, true)
 end
 
 local function fireBarrel(parent, pos)
@@ -3038,7 +3691,8 @@ local function hangingLamp(parent, pos, color)
 	block(parent, Vector3.new(0.15, 6, 0.15), CFrame.new(pos + Vector3.new(0, 3, 0)), M.Metal, rgb(30, 30, 30))
 	local shade = block(parent, Vector3.new(1.6, 3.4, 3.4), CFrame.new(pos) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, rgb(40, 42, 46), { Shape = Enum.PartType.Cylinder })
 	local bulb = block(parent, Vector3.new(1.2, 1.2, 1.2), CFrame.new(pos - Vector3.new(0, 0.9, 0)), M.Neon, color, { Shape = Enum.PartType.Ball })
-	make("SpotLight", shade, { Face = Enum.NormalId.Left, Range = 40, Angle = 80, Brightness = 2.2, Color = color, Shadows = true })
+	make("SpotLight", shade, { Face = Enum.NormalId.Left, Range = 50, Angle = 90, Brightness = 4, Color = color, Shadows = true })
+	light(bulb, { Range = 22, Brightness = 1.2, Color = color })
 	return bulb
 end
 
@@ -3082,7 +3736,7 @@ function MapBuilder.BuildLobby()
 	end
 
 	-- Floor: dark concrete, hazard border, steel walkway
-	block(lobby, Vector3.new(W, 1, D), CFrame.new(0, Y - 0.5, 0), M.Concrete, rgb(48, 48, 54))
+	block(lobby, Vector3.new(W, 1, D), CFrame.new(0, Y - 0.5, 0), M.Concrete, rgb(96, 96, 102))
 	for _, d in { { 0, -hz + 2, W - 2, 1.2 }, { 0, hz - 2, W - 2, 1.2 }, { -hx + 2, 0, 1.2, D - 2 }, { hx - 2, 0, 1.2, D - 2 } } do
 		block(lobby, Vector3.new(d[3], 0.06, d[4]), CFrame.new(d[1], Y + 0.03, d[2]), M.SmoothPlastic, C.Hazard)
 	end
@@ -3110,7 +3764,7 @@ function MapBuilder.BuildLobby()
 	})
 
 	-- Walls with pillars, pipes and windows (south)
-	local wallStyle = { Material = M.Concrete, Color = rgb(64, 64, 72), Vary = 0.05, Breakable = false }
+	local wallStyle = { Material = M.Concrete, Color = rgb(128, 128, 136), Vary = 0.05, Breakable = false }
 	wall(lobby, Vector3.new(-hx, 0, -hz + 0.5), Vector3.new(hx, 0, -hz + 0.5), Y, H, 1, wallStyle)
 	wall(lobby, Vector3.new(-hx + 0.5, 0, -hz), Vector3.new(-hx + 0.5, 0, hz), Y, H, 1, wallStyle)
 	wall(lobby, Vector3.new(hx - 0.5, 0, -hz), Vector3.new(hx - 0.5, 0, hz), Y, H, 1, wallStyle)
@@ -3154,6 +3808,26 @@ function MapBuilder.BuildLobby()
 			if red then
 				CollectionService:AddTag(bulb, "Flicker")
 			end
+		end
+	end
+
+	-- Wall sconces + ceiling light strips so the hangar is well lit
+	for x = -hx + 7.5, hx - 7.5, 15 do
+		for _, z in { -hz + 1.6, hz - 1.6 } do
+			local sc = block(lobby, Vector3.new(1.4, 1.8, 0.6), CFrame.new(x, Y + 11, z), M.Neon, rgb(255, 225, 180))
+			light(sc, { Range = 24, Brightness = 2, Color = rgb(255, 220, 170) })
+		end
+	end
+	for z = -hz + 7.5, hz - 7.5, 15 do
+		for _, x in { -hx + 1.6, hx - 1.6 } do
+			local sc = block(lobby, Vector3.new(0.6, 1.8, 1.4), CFrame.new(x, Y + 11, z), M.Neon, rgb(255, 225, 180))
+			light(sc, { Range = 24, Brightness = 2, Color = rgb(255, 220, 170) })
+		end
+	end
+	for z = -hz + 10, hz - 10, 15 do
+		for x = -45, 45, 30 do
+			local strip = block(lobby, Vector3.new(14, 0.3, 1), CFrame.new(x, Y + H - 1.6, z + 3), M.Neon, rgb(235, 240, 255))
+			light(strip, { Range = 30, Brightness = 1.6, Color = rgb(235, 240, 255) })
 		end
 	end
 
@@ -3287,7 +3961,7 @@ function MapBuilder.BuildLobby()
 	end
 
 	-- LEADERBOARD (west wall, north) -------------------------------------
-	local lb = block(lobby, Vector3.new(0.4, 12, 18), CFrame.new(-hx + 1.6, Y + 9, -26), M.SmoothPlastic, rgb(14, 14, 18))
+	local lb = block(lobby, Vector3.new(0.4, 12, 18), CFrame.new(-hx + 2.9, Y + 9, -26), M.SmoothPlastic, rgb(14, 14, 18))
 	local lbGui = make("SurfaceGui", lb, { Name = "Leaderboard", Face = Enum.NormalId.Right, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 36, LightInfluence = 0 })
 	local lbBg = make("Frame", lbGui, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = rgb(16, 14, 18), BorderSizePixel = 0 })
 	make("UIStroke", lbBg, { Color = rgb(200, 30, 30), Thickness = 8, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
@@ -3308,7 +3982,7 @@ function MapBuilder.BuildLobby()
 			LayoutOrder = i,
 		})
 	end
-	local lbLight = block(lobby, Vector3.new(0.3, 0.3, 18), CFrame.new(-hx + 2, Y + 15.4, -26), M.Neon, rgb(200, 30, 30))
+	local lbLight = block(lobby, Vector3.new(0.3, 0.3, 18), CFrame.new(-hx + 3.3, Y + 15.4, -26), M.Neon, rgb(200, 30, 30))
 	light(lbLight, { Range = 10, Brightness = 1, Color = rgb(255, 60, 40) })
 
 	-- HANGING STATUS SCREEN (centre) --------------------------------------
@@ -3329,9 +4003,13 @@ function MapBuilder.BuildLobby()
 	block(lobby, Vector3.new(18.4, 0.3, 18.4), CFrame.new(0, Y + 13.4, 0), M.Neon, rgb(200, 30, 30))
 
 	-- Supply crates + barrels for detail
-	for _, p in { Vector3.new(-30, Y, -36), Vector3.new(-26, Y, -38), Vector3.new(20, Y, -37), Vector3.new(-36, Y, 36), Vector3.new(14, Y, 38) } do
-		block(lobby, Vector3.new(4, 4, 4), CFrame.new(p + Vector3.new(0, 2, 0)) * CFrame.Angles(0, rng:NextNumber() * 0.5, 0), M.WoodPlanks, vary(C.Wood, 0.2))
-		block(lobby, Vector3.new(3, 2.2, 2.2), CFrame.new(p + Vector3.new(3.4, 1.5, 1.5)) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, rgb(150, 30, 30), { Shape = Enum.PartType.Cylinder })
+	for i, p in { Vector3.new(-30, Y, -34), Vector3.new(22, Y, -36), Vector3.new(-38, Y, 34), Vector3.new(14, Y, 36) } do
+		local yaw = rng:NextNumber() * 0.5
+		woodCrate(lobby, CFrame.new(p) * CFrame.Angles(0, yaw, 0), Vector3.new(5, 4, 4), false)
+		woodCrate(lobby, CFrame.new(p + Vector3.new(0.3, 4, 0.2)) * CFrame.Angles(0, yaw + 0.3, 0), Vector3.new(3, 3, 3), false)
+		woodCrate(lobby, CFrame.new(p + Vector3.new(5.2, 0, 0.5)) * CFrame.Angles(0, -yaw, 0), Vector3.new(3.4, 3.4, 3.4), false)
+		steelBarrel(lobby, CFrame.new(p + Vector3.new(-3.6, 0, 2.6)), i % 2 == 0 and rgb(150, 30, 30) or rgb(40, 80, 140), false)
+		steelBarrel(lobby, CFrame.new(p + Vector3.new(-4.2, 0, -0.3)), rgb(60, 110, 60), false)
 	end
 	sign(lobby, CFrame.new(-6, Y + H - 3.6, hz - 1.4), Vector3.new(30, 2.6, 0.3), "WEAPON X  •  HOLDING FACILITY 7", rgb(255, 200, 30), rgb(18, 18, 22))
 
@@ -3412,7 +4090,7 @@ return MapBuilder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="18">
+      <Item class="ModuleScript" referent="19">
         <Properties>
           <string name="Name">Movement</string>
           <string name="Source"><![CDATA[-- Server-authoritative walk speeds, sprint/feral stamina and status slowdowns.
@@ -3558,7 +4236,7 @@ return Movement
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="19">
+      <Item class="ModuleScript" referent="20">
         <Properties>
           <string name="Name">PlayerData</string>
           <string name="Source"><![CDATA[-- Saved player data: coins, skins, daily challenges, login streak and
@@ -3946,7 +4624,7 @@ return PlayerData
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="20">
+      <Item class="ModuleScript" referent="21">
         <Properties>
           <string name="Name">Posture</string>
           <string name="Source"><![CDATA[-- Code-driven "animations": offsets Motor6D.C0 on R15 rigs so no animation
@@ -4075,7 +4753,7 @@ return Posture
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="21">
+      <Item class="ModuleScript" referent="22">
         <Properties>
           <string name="Name">Round</string>
           <string name="Source"><![CDATA[-- Shared round state used by every server module.
@@ -4101,7 +4779,7 @@ return Round
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="22">
+      <Item class="ModuleScript" referent="23">
         <Properties>
           <string name="Name">Sentinel</string>
           <string name="Source"><![CDATA[-- The counter (like the Hulkbuster): survivors reboot 3 Sentinel terminals,
@@ -4121,6 +4799,7 @@ local Status = require(script.Parent.Status)
 local Posture = require(script.Parent.Posture)
 local Wolverine = require(script.Parent.Wolverine)
 local Combat = require(script.Parent.Combat)
+local Costumes = require(script.Parent.Costumes)
 local PlayerData = require(script.Parent.PlayerData)
 local Skins = require(ReplicatedStorage.Shared.Skins)
 
@@ -4246,31 +4925,6 @@ end
 -- Suit up / power down
 ---------------------------------------------------------------------------
 
-local function gear(char, anchor, size, color, material, offset)
-	local folder = char:FindFirstChild("SentinelGear")
-	if not folder then
-		folder = Instance.new("Folder")
-		folder.Name = "SentinelGear"
-		folder.Parent = char
-	end
-	local p = Instance.new("Part")
-	p.Size = size
-	p.Color = color
-	p.Material = material or Enum.Material.Metal
-	p.CanCollide = false
-	p.CanQuery = false
-	p.CanTouch = false
-	p.Massless = true
-	p.CFrame = anchor.CFrame * offset
-	local w = Instance.new("Weld")
-	w.Part0 = anchor
-	w.Part1 = p
-	w.C0 = offset
-	w.Parent = p
-	p.Parent = folder
-	return p
-end
-
 function Sentinel.Become(player)
 	local char = player.Character
 	local hum, root = Util.Humanoid(char), Util.Root(char)
@@ -4282,34 +4936,11 @@ function Sentinel.Become(player)
 	player:SetAttribute("SuitEnds", workspace:GetServerTimeNow() + Config.Sentinel.Duration)
 	cooldowns[player] = {}
 
-	for _, d in char:GetChildren() do
-		if d:IsA("Shirt") or d:IsA("Pants") or d:IsA("ShirtGraphic") or d:IsA("Accessory") then
-			d:Destroy()
-		end
-	end
-	for _, p in char:GetChildren() do
-		if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then
-			p.Color = (p.Name:find("Hand") or p.Name:find("Foot") or p.Name:find("Lower")) and GREY or PURPLE
-			p.Material = Enum.Material.Metal
-		end
-	end
 	Posture.Forget(char)
 	pcall(function()
 		char:ScaleTo(Config.Sentinel.Scale)
 	end)
-
-	local head = char:FindFirstChild("Head")
-	if head then
-		local hs = head.Size
-		gear(char, head, hs * 1.12, PURPLE, nil, CFrame.new(0, 0.05, 0))
-		gear(char, head, Vector3.new(hs.X * 0.8, hs.Y * 0.14, 0.05), GLOW, Enum.Material.Neon, CFrame.new(0, hs.Y * 0.08, -hs.Z * 0.57))
-	end
-	local torso = Util.Torso(char)
-	if torso then
-		local ts = torso.Size
-		gear(char, torso, Vector3.new(ts.X * 0.35, ts.Y * 0.3, 0.1), GLOW, Enum.Material.Neon, CFrame.new(0, ts.Y * 0.1, -ts.Z * 0.55))
-		gear(char, torso, Vector3.new(ts.X * 1.5, ts.Y * 0.35, ts.Z * 1.1), GREY, nil, CFrame.new(0, ts.Y * 0.4, 0))
-	end
+	Costumes.DressSentinel(char)
 
 	hum.MaxHealth = 100
 	hum.Health = 100
@@ -4344,6 +4975,10 @@ function Sentinel.PowerDown(player)
 	for _, p in char:GetChildren() do
 		if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then
 			p.Color = GREY
+			local face = p:FindFirstChildOfClass("Decal")
+			if face then
+				face.Transparency = 0
+			end
 		end
 	end
 	local hum = Util.Humanoid(char)
@@ -4618,7 +5253,7 @@ return Sentinel
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="23">
+      <Item class="ModuleScript" referent="24">
         <Properties>
           <string name="Name">Status</string>
           <string name="Source"><![CDATA[-- Timed status effects: Stunned, Slowed, Frozen, Busy, Immune, Boost.
@@ -4656,7 +5291,7 @@ return Status
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="24">
+      <Item class="ModuleScript" referent="25">
         <Properties>
           <string name="Name">VFX</string>
           <string name="Source"><![CDATA[-- Crisp combat visuals, created on the server so everyone sees them.
@@ -4885,7 +5520,7 @@ return VFX
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="25">
+      <Item class="ModuleScript" referent="26">
         <Properties>
           <string name="Name">Wolverine</string>
           <string name="Source"><![CDATA[-- Wolverine: transformation, intro (SNIKT + roar), abilities, healing factor
@@ -4905,6 +5540,7 @@ local Combat = require(script.Parent.Combat)
 local PlayerData = require(script.Parent.PlayerData)
 local Fart = require(script.Parent.Fart)
 local VFX = require(script.Parent.VFX)
+local Costumes = require(script.Parent.Costumes)
 local Skins = require(ReplicatedStorage.Shared.Skins)
 
 local Fx = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Fx")
@@ -4912,15 +5548,12 @@ local Fx = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Fx")
 local Wolverine = {}
 
 local YELLOW = Color3.fromRGB(245, 195, 20)
-local BLACK = Color3.fromRGB(20, 20, 24)
 local STEEL = Color3.fromRGB(210, 214, 222)
-local CLAW_LEN = 2.3
 
 local cooldowns = {}
 local lastDamaged = 0
 local lastShredFx = 0
 local combo = 0
-local claws = {}
 local clawGlow = Color3.fromRGB(210, 230, 255)
 local clawSkin = nil
 
@@ -4956,215 +5589,40 @@ local function gearPart(char, anchor, name, size, color, material, offset)
 	return p, w
 end
 
-local SLOT_PARTS = {
-	UpperTorso = { "UpperTorso", "Torso" },
-	LowerTorso = { "LowerTorso" },
-	UpperArm = { "RightUpperArm", "LeftUpperArm", "Right Arm", "Left Arm" },
-	LowerArm = { "RightLowerArm", "LeftLowerArm" },
-	Hand = { "RightHand", "LeftHand" },
-	UpperLeg = { "RightUpperLeg", "LeftUpperLeg", "Right Leg", "Left Leg" },
-	LowerLeg = { "RightLowerLeg", "LeftLowerLeg" },
-	Foot = { "RightFoot", "LeftFoot" },
-}
-
-local function comicCowl(char, head, hs)
-	gearPart(char, head, "Cowl", Vector3.new(hs.X * 1.06, hs.Y * 0.55, hs.Z * 1.06), YELLOW, nil, CFrame.new(0, hs.Y * 0.25, 0))
-	gearPart(char, head, "MaskBand", Vector3.new(hs.X * 1.08, hs.Y * 0.24, hs.Z * 1.08), BLACK, nil, CFrame.new(0, hs.Y * 0.07, 0))
-	for s = -1, 1, 2 do
-		gearPart(char, head, "Fin", Vector3.new(0.12, hs.Y * 0.8, hs.Z * 0.55), BLACK, nil,
-			CFrame.new(s * hs.X * 0.5, hs.Y * 0.55, hs.Z * 0.05) * CFrame.Angles(0, 0, math.rad(-s * 18)))
-		gearPart(char, head, "Eye", Vector3.new(hs.X * 0.24, hs.Y * 0.08, 0.05), Color3.new(1, 1, 1), Enum.Material.Neon,
-			CFrame.new(s * hs.X * 0.2, hs.Y * 0.08, -hs.Z * 0.55) * CFrame.Angles(0, 0, math.rad(s * 12)))
-	end
-	-- black tiger stripes on the torso
-	local torso = Util.Torso(char)
-	if torso then
-		local ts = torso.Size
-		for s = -1, 1, 2 do
-			for i = 0, 1 do
-				gearPart(char, torso, "Stripe", Vector3.new(0.05, ts.Y * 0.12, ts.Z * 0.6), BLACK, nil,
-					CFrame.new(s * ts.X * 0.51, ts.Y * (0.15 - i * 0.3), 0) * CFrame.Angles(0, 0, math.rad(s * 25)))
-			end
-		end
-	end
-end
-
-local function sideburns(char, head, hs, color)
-	for s = -1, 1, 2 do
-		gearPart(char, head, "Sideburn", Vector3.new(0.1, hs.Y * 0.45, hs.Z * 0.35), color, Enum.Material.Fabric,
-			CFrame.new(s * hs.X * 0.5, -hs.Y * 0.05, hs.Z * 0.05))
-		-- the famous hair "horns"
-		gearPart(char, head, "HairPoint", Vector3.new(hs.X * 0.18, hs.Y * 0.45, hs.Z * 0.3), color, Enum.Material.Fabric,
-			CFrame.new(s * hs.X * 0.32, hs.Y * 0.58, 0) * CFrame.Angles(0, 0, math.rad(-s * 28)))
-	end
-end
-
-local function loganJacket(char)
-	local torso = Util.Torso(char)
-	if not torso then
-		return
-	end
-	local ts = torso.Size
-	local leather = Color3.fromRGB(92, 60, 38)
-	for s = -1, 1, 2 do
-		gearPart(char, torso, "Jacket", Vector3.new(ts.X * 0.3, ts.Y * 1.02, ts.Z * 1.1), leather, Enum.Material.Leather,
-			CFrame.new(s * ts.X * 0.37, 0, 0))
-	end
-	gearPart(char, torso, "Collar", Vector3.new(ts.X * 1.05, ts.Y * 0.18, ts.Z * 1.15), leather, Enum.Material.Leather,
-		CFrame.new(0, ts.Y * 0.46, 0))
-end
-
-local function weaponXRig(char, head, hs)
-	local metal = Color3.fromRGB(110, 115, 125)
-	gearPart(char, head, "Helmet", Vector3.new(hs.X * 1.1, hs.Y * 0.45, hs.Z * 1.1), metal, Enum.Material.DiamondPlate,
-		CFrame.new(0, hs.Y * 0.33, 0))
-	local visor = gearPart(char, head, "Eye", Vector3.new(hs.X * 0.8, hs.Y * 0.07, 0.05), Color3.fromRGB(120, 255, 200), Enum.Material.Neon,
-		CFrame.new(0, hs.Y * 0.12, -hs.Z * 0.56))
-	visor.Name = "Eye"
-	-- cables trailing from the helmet down the back
-	for i = -1, 1 do
-		gearPart(char, head, "Cable", Vector3.new(0.08, hs.Y * 1.3, 0.08), BLACK, Enum.Material.Rubber,
-			CFrame.new(i * hs.X * 0.22, -hs.Y * 0.1, hs.Z * 0.58) * CFrame.Angles(math.rad(-15), 0, 0))
-	end
-	-- surgical scars / wires on the arms and chest
-	for _, n in { "RightUpperArm", "LeftUpperArm", "RightLowerArm", "LeftLowerArm", "Right Arm", "Left Arm" } do
-		local limb = char:FindFirstChild(n)
-		if limb then
-			for j = -1, 1, 2 do
-				gearPart(char, limb, "Band", limb.Size * Vector3.new(1.08, 0.08, 1.08), BLACK, Enum.Material.Rubber,
-					CFrame.new(0, j * limb.Size.Y * 0.25, 0))
-			end
-		end
-	end
-	local torso = Util.Torso(char)
-	if torso then
-		local ts = torso.Size
-		for i = -1, 1 do
-			gearPart(char, torso, "Scar", Vector3.new(0.08, ts.Y * 0.7, 0.05), Color3.fromRGB(150, 40, 40), nil,
-				CFrame.new(i * ts.X * 0.18, 0, -ts.Z * 0.51) * CFrame.Angles(0, 0, math.rad(20)))
-		end
-	end
-end
-
-local function oldManGear(char, head, hs)
-	local grey = Color3.fromRGB(175, 175, 172)
-	gearPart(char, head, "Hair", Vector3.new(hs.X * 1.04, hs.Y * 0.35, hs.Z * 1.04), grey, Enum.Material.Fabric,
-		CFrame.new(0, hs.Y * 0.36, hs.Z * 0.02))
-	gearPart(char, head, "Beard", Vector3.new(hs.X * 0.95, hs.Y * 0.42, hs.Z * 0.5), grey, Enum.Material.Fabric,
-		CFrame.new(0, -hs.Y * 0.3, -hs.Z * 0.3))
-	gearPart(char, head, "Moustache", Vector3.new(hs.X * 0.55, hs.Y * 0.08, 0.12), grey, Enum.Material.Fabric,
-		CFrame.new(0, -hs.Y * 0.08, -hs.Z * 0.52))
-	sideburns(char, head, hs, grey)
-	-- long coat tails
-	local lower = char:FindFirstChild("LowerTorso") or char:FindFirstChild("Torso")
-	if lower then
-		local ls = lower.Size
-		gearPart(char, lower, "CoatTail", Vector3.new(ls.X * 1.12, ls.Y * 3.2, ls.Z * 1.15), Color3.fromRGB(60, 44, 34), Enum.Material.Leather,
-			CFrame.new(0, -ls.Y * 1.4, ls.Z * 0.05))
-	end
-end
-
 local function dressUp(char, skinId)
-	local skin = Skins.List[skinId] or Skins.List[Skins.Default]
-	local head = char:FindFirstChild("Head")
-	local skinTone = head and head.Color or Color3.fromRGB(230, 180, 140)
-	for _, d in char:GetChildren() do
-		if d:IsA("Shirt") or d:IsA("Pants") or d:IsA("ShirtGraphic") or d:IsA("BodyColors") then
-			d:Destroy()
-		elseif d:IsA("Accessory") and not (skin.KeepHair and d.AccessoryType == Enum.AccessoryType.Hair) then
-			d:Destroy()
-		end
-	end
-	for slot, names in SLOT_PARTS do
-		local color = skin.Colors[slot]
-		if color == "Skin" then
-			color = skinTone
-		end
-		for _, name in names do
-			local p = char:FindFirstChild(name)
-			if p and p:IsA("BasePart") and color then
-				p.Color = color
-				local sa = p:FindFirstChildOfClass("SurfaceAppearance")
-				if sa then
-					sa:Destroy()
-				end
-				if p:IsA("MeshPart") then
-					pcall(function()
-						p.TextureID = ""
-					end)
-				end
-			end
-		end
-	end
-
-	if head then
-		local hs = head.Size
-		if skinId == "Comic" then
-			comicCowl(char, head, hs)
-		elseif skinId == "WeaponX" then
-			weaponXRig(char, head, hs)
-		elseif skinId == "OldManLogan" then
-			oldManGear(char, head, hs)
-		else
-			sideburns(char, head, hs, Color3.fromRGB(35, 25, 20))
-			loganJacket(char)
-		end
-		-- Every skin gets faint glowing eyes so he reads as a monster in the dark
-		if skinId ~= "Comic" and skinId ~= "WeaponX" then
-			for s = -1, 1, 2 do
-				gearPart(char, head, "Eye", Vector3.new(hs.X * 0.12, hs.Y * 0.05, 0.04), Color3.fromRGB(255, 235, 200), Enum.Material.Neon,
-					CFrame.new(s * hs.X * 0.18, hs.Y * 0.1, -hs.Z * 0.5))
-			end
-		end
-	end
-
+	Costumes.Dress(char, skinId)
 	local hl = Instance.new("Highlight")
 	hl.Name = "Menace"
 	hl.FillTransparency = 1
 	hl.OutlineColor = Color3.fromRGB(170, 0, 0)
-	hl.OutlineTransparency = 0.25
+	hl.OutlineTransparency = 0.35
 	hl.DepthMode = Enum.HighlightDepthMode.Occluded
 	hl.Parent = char
 end
 
+local clawSet = nil
+
 local function makeClaws(char, clawId)
-	claws = {}
 	clawSkin = Skins.Claws[clawId] or Skins.Claws[Skins.DefaultClaw]
 	clawGlow = clawSkin.Glow
-	local thick = clawSkin.Thick or 1
-	for _, side in { "Right", "Left" } do
-		local hand = Util.Hand(char, side)
-		if hand then
-			for i = -1, 1 do
-				local z = i * math.max(0.1, hand.Size.Z * 0.3)
-				local c, w = gearPart(char, hand, "Claw", Vector3.new(0.07 * thick, 0.1, 0.16 * thick), clawSkin.Color, clawSkin.Material, CFrame.new(0, 0, z))
-				c.Reflectance = clawSkin.Reflectance
-				c.Transparency = 1
-				table.insert(claws, { Part = c, Weld = w, Z = z, Hand = hand })
-			end
-		end
-	end
+	clawSet = Costumes.BuildClaws(char, clawSkin, false)
 end
 
 local function popClaws(char)
-	local info = TweenInfo.new(0.16, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-	for _, c in claws do
-		if c.Part.Parent then
-			c.Part.Transparency = 0
-			local thick = clawSkin and clawSkin.Thick or 1
-			TweenService:Create(c.Part, info, { Size = Vector3.new(0.07 * thick, CLAW_LEN, 0.16 * thick) }):Play()
-			TweenService:Create(c.Weld, info, { C0 = CFrame.new(0, -(c.Hand.Size.Y * 0.3 + CLAW_LEN / 2), c.Z) }):Play()
-			-- Streaking trail off every blade: every swing leaves a crisp arc
-			task.delay(0.2, function()
-				if not c.Part.Parent then
-					return
-				end
+	if not clawSet then
+		return
+	end
+	Costumes.PopClaws(clawSet)
+	-- Streaking trails off every blade: every swing leaves a crisp arc
+	task.delay(0.18, function()
+		for i, tip in clawSet.Tips do
+			local base = clawSet.Bases[i]
+			if tip.Parent and base and base.Parent then
 				local a0 = Instance.new("Attachment")
-				a0.Position = Vector3.new(0, CLAW_LEN * 0.1, 0)
-				a0.Parent = c.Part
+				a0.Parent = base
+				a0.Position = Vector3.new(0, base.Size.Y * 0.3, 0)
 				local a1 = Instance.new("Attachment")
-				a1.Position = Vector3.new(0, -CLAW_LEN / 2, 0)
-				a1.Parent = c.Part
+				a1.Parent = tip
 				local trail = Instance.new("Trail")
 				trail.Attachment0 = a0
 				trail.Attachment1 = a1
@@ -5173,8 +5631,8 @@ local function popClaws(char)
 				trail.LightEmission = 1
 				trail.Color = ColorSequence.new(Color3.new(1, 1, 1), clawGlow)
 				trail.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.15), NumberSequenceKeypoint.new(1, 1) })
-				trail.Parent = c.Part
-				if clawSkin and (clawSkin.Drip or clawSkin.Sparkle) then
+				trail.Parent = tip
+				if clawSkin.Drip or clawSkin.Sparkle then
 					local pe = Instance.new("ParticleEmitter")
 					if clawSkin.Drip then
 						for k, v in Util.BloodProps do
@@ -5194,16 +5652,16 @@ local function popClaws(char)
 					end
 					pe.Parent = a1
 				end
-				if clawSkin and clawSkin.Material == Enum.Material.Neon then
+				if clawSkin.Material == Enum.Material.Neon then
 					local l = Instance.new("PointLight")
 					l.Color = clawGlow
 					l.Range = 6
 					l.Brightness = 1
-					l.Parent = c.Part
+					l.Parent = base
 				end
-			end)
+			end
 		end
-	end
+	end)
 	for _, side in { "Right", "Left" } do
 		local hand = Util.Hand(char, side)
 		if hand then
@@ -5734,18 +6192,7 @@ function Wolverine.MakeStatue(skinId, cframe, parent)
 	pcall(function()
 		model:ScaleTo(1.25)
 	end)
-	local claw = Skins.Claws[Skins.DefaultClaw]
-	for _, side in { "Right", "Left" } do
-		local hand = Util.Hand(model, side)
-		if hand then
-			for i = -1, 1 do
-				local z = i * math.max(0.1, hand.Size.Z * 0.3)
-				local c = gearPart(model, hand, "Claw", Vector3.new(0.08, CLAW_LEN * 1.25, 0.18), claw.Color, claw.Material,
-					CFrame.new(0, -(hand.Size.Y * 0.3 + CLAW_LEN * 0.62), z))
-				c.Reflectance = claw.Reflectance
-			end
-		end
-	end
+	Costumes.BuildClaws(model, Skins.Claws[Skins.DefaultClaw], true)
 	-- Crouched, arms flared, claws out
 	Posture.Set(model, "Root", CFrame.new(0, -0.3, 0) * CFrame.Angles(math.rad(-14), 0, 0))
 	Posture.Set(model, "Neck", CFrame.Angles(math.rad(12), 0, 0))
@@ -5830,15 +6277,15 @@ return Wolverine
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="26">
+  <Item class="StarterPlayer" referent="27">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterCharacterScripts" referent="27">
+    <Item class="StarterCharacterScripts" referent="28">
       <Properties>
         <string name="Name">StarterCharacterScripts</string>
       </Properties>
-      <Item class="Script" referent="28">
+      <Item class="Script" referent="29">
         <Properties>
           <string name="Name">Health</string>
           <token name="RunContext">0</token>
@@ -5849,15 +6296,15 @@ return Wolverine
         </Properties>
       </Item>
     </Item>
-    <Item class="StarterPlayerScripts" referent="29">
+    <Item class="StarterPlayerScripts" referent="30">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="30">
+      <Item class="Folder" referent="31">
         <Properties>
           <string name="Name">Client</string>
         </Properties>
-        <Item class="ModuleScript" referent="31">
+        <Item class="ModuleScript" referent="32">
           <Properties>
             <string name="Name">Anims</string>
             <string name="Source"><![CDATA[-- Procedural sprint animations, applied on every client to every sprinting
@@ -6042,7 +6489,7 @@ return Anims
 ]]></string>
           </Properties>
         </Item>
-        <Item class="LocalScript" referent="32">
+        <Item class="LocalScript" referent="33">
           <Properties>
             <string name="Name">ClientMain</string>
             <string name="Source"><![CDATA[-- Input + role handling. PC keys, gamepad and mobile touch buttons.
@@ -6305,7 +6752,7 @@ end)
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="33">
+        <Item class="ModuleScript" referent="34">
           <Properties>
             <string name="Name">Daily</string>
             <string name="Source"><![CDATA[-- Daily challenges, login streak, Wolverine odds and the Robux pass.
@@ -6606,7 +7053,7 @@ return Daily
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="34">
+        <Item class="ModuleScript" referent="35">
           <Properties>
             <string name="Name">Effects</string>
             <string name="Source"><![CDATA[-- Client-only atmosphere: camera shake, snowfall, flickering lights,
@@ -6658,6 +7105,34 @@ end
 ---------------------------------------------------------------------------
 -- Tint (used by sniff + the Wolverine's hunting vision)
 ---------------------------------------------------------------------------
+
+-- Lighting zones: bright snowy day in the lobby, dark night in the arena.
+local NIGHT, DAY = nil, {
+	ClockTime = 13.5, Brightness = 2.6, ExposureCompensation = 0.25,
+	Ambient = Color3.fromRGB(135, 132, 128), OutdoorAmbient = Color3.fromRGB(165, 168, 180),
+}
+local inLobby = nil
+local function applyZone(lobby)
+	if inLobby == lobby then
+		return
+	end
+	inLobby = lobby
+	if not NIGHT then
+		NIGHT = {}
+		for k in DAY do
+			NIGHT[k] = Lighting[k]
+		end
+	end
+	local target = lobby and DAY or NIGHT
+	TweenService:Create(Lighting, TweenInfo.new(1.2), target):Play()
+	local atmo = Lighting:FindFirstChildOfClass("Atmosphere")
+	if atmo then
+		TweenService:Create(atmo, TweenInfo.new(1.2), { Density = lobby and 0.25 or 0.42, Haze = lobby and 0.8 or 2.2 }):Play()
+	end
+end
+RunService.Heartbeat:Connect(function()
+	applyZone(workspace.CurrentCamera.CFrame.Position.Y > 300)
+end)
 
 local tint = Instance.new("ColorCorrectionEffect")
 tint.Name = "LocalTint"
@@ -6967,7 +7442,7 @@ return Effects
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="35">
+        <Item class="ModuleScript" referent="36">
           <Properties>
             <string name="Name">Interface</string>
             <string name="Source"><![CDATA[-- HUD built entirely from code.
@@ -7717,7 +8192,7 @@ return Interface
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="36">
+        <Item class="ModuleScript" referent="37">
           <Properties>
             <string name="Name">Shop</string>
             <string name="Source"><![CDATA[-- Wolverine shop: suits + claws, and the left-side menu dock.
@@ -8059,7 +8534,7 @@ return Shop
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="37">
+        <Item class="ModuleScript" referent="38">
           <Properties>
             <string name="Name">UIKit</string>
             <string name="Source"><![CDATA[-- Shared UI building blocks: animated buttons, panels, gradients.
@@ -8117,17 +8592,19 @@ local function darker(c, f)
 	return Color3.new(c.R * f, c.G * f, c.B * f)
 end
 
+-- Hover = a quick blade slice, click = a short metallic SNIKT
 local clickSound = Instance.new("Sound")
-clickSound.SoundId = "rbxasset://sounds/electronicpingshort.wav"
-clickSound.Volume = 0.25
-clickSound.PlaybackSpeed = 1.6
+clickSound.SoundId = "rbxasset://sounds/unsheath.wav"
+clickSound.Volume = 0.35
+clickSound.PlaybackSpeed = 1.5
 clickSound.Parent = SoundService
 
 local hoverSound = Instance.new("Sound")
-hoverSound.SoundId = "rbxasset://sounds/electronicpingshort.wav"
-hoverSound.Volume = 0.08
-hoverSound.PlaybackSpeed = 2.4
+hoverSound.SoundId = "rbxasset://sounds/swordslash.wav"
+hoverSound.Volume = 0.18
+hoverSound.PlaybackSpeed = 1.6
 hoverSound.Parent = SoundService
+local lastHover = 0
 
 -- Makes any GuiButton feel alive: grows + glows on hover, squishes on press.
 function UIKit.Animate(button, accent)
@@ -8140,7 +8617,11 @@ function UIKit.Animate(button, accent)
 	button.AutoButtonColor = false
 	button.MouseEnter:Connect(function()
 		hovering = true
-		hoverSound:Play()
+		if os.clock() - lastHover > 0.08 then
+			lastHover = os.clock()
+			hoverSound.PlaybackSpeed = 1.45 + math.random() * 0.3
+			hoverSound:Play()
+		end
 		TweenService:Create(scale, BOUNCE, { Scale = 1.07 }):Play()
 		if stroke then
 			TweenService:Create(stroke, FAST, { Thickness = baseThickness + 1.5, Color = accent or stroke.Color }):Play()
@@ -8373,7 +8854,7 @@ return UIKit
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="38">
+  <Item class="Workspace" referent="39">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>

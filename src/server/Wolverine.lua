@@ -15,6 +15,7 @@ local Combat = require(script.Parent.Combat)
 local PlayerData = require(script.Parent.PlayerData)
 local Fart = require(script.Parent.Fart)
 local VFX = require(script.Parent.VFX)
+local Costumes = require(script.Parent.Costumes)
 local Skins = require(ReplicatedStorage.Shared.Skins)
 
 local Fx = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Fx")
@@ -22,15 +23,12 @@ local Fx = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Fx")
 local Wolverine = {}
 
 local YELLOW = Color3.fromRGB(245, 195, 20)
-local BLACK = Color3.fromRGB(20, 20, 24)
 local STEEL = Color3.fromRGB(210, 214, 222)
-local CLAW_LEN = 2.3
 
 local cooldowns = {}
 local lastDamaged = 0
 local lastShredFx = 0
 local combo = 0
-local claws = {}
 local clawGlow = Color3.fromRGB(210, 230, 255)
 local clawSkin = nil
 
@@ -66,215 +64,40 @@ local function gearPart(char, anchor, name, size, color, material, offset)
 	return p, w
 end
 
-local SLOT_PARTS = {
-	UpperTorso = { "UpperTorso", "Torso" },
-	LowerTorso = { "LowerTorso" },
-	UpperArm = { "RightUpperArm", "LeftUpperArm", "Right Arm", "Left Arm" },
-	LowerArm = { "RightLowerArm", "LeftLowerArm" },
-	Hand = { "RightHand", "LeftHand" },
-	UpperLeg = { "RightUpperLeg", "LeftUpperLeg", "Right Leg", "Left Leg" },
-	LowerLeg = { "RightLowerLeg", "LeftLowerLeg" },
-	Foot = { "RightFoot", "LeftFoot" },
-}
-
-local function comicCowl(char, head, hs)
-	gearPart(char, head, "Cowl", Vector3.new(hs.X * 1.06, hs.Y * 0.55, hs.Z * 1.06), YELLOW, nil, CFrame.new(0, hs.Y * 0.25, 0))
-	gearPart(char, head, "MaskBand", Vector3.new(hs.X * 1.08, hs.Y * 0.24, hs.Z * 1.08), BLACK, nil, CFrame.new(0, hs.Y * 0.07, 0))
-	for s = -1, 1, 2 do
-		gearPart(char, head, "Fin", Vector3.new(0.12, hs.Y * 0.8, hs.Z * 0.55), BLACK, nil,
-			CFrame.new(s * hs.X * 0.5, hs.Y * 0.55, hs.Z * 0.05) * CFrame.Angles(0, 0, math.rad(-s * 18)))
-		gearPart(char, head, "Eye", Vector3.new(hs.X * 0.24, hs.Y * 0.08, 0.05), Color3.new(1, 1, 1), Enum.Material.Neon,
-			CFrame.new(s * hs.X * 0.2, hs.Y * 0.08, -hs.Z * 0.55) * CFrame.Angles(0, 0, math.rad(s * 12)))
-	end
-	-- black tiger stripes on the torso
-	local torso = Util.Torso(char)
-	if torso then
-		local ts = torso.Size
-		for s = -1, 1, 2 do
-			for i = 0, 1 do
-				gearPart(char, torso, "Stripe", Vector3.new(0.05, ts.Y * 0.12, ts.Z * 0.6), BLACK, nil,
-					CFrame.new(s * ts.X * 0.51, ts.Y * (0.15 - i * 0.3), 0) * CFrame.Angles(0, 0, math.rad(s * 25)))
-			end
-		end
-	end
-end
-
-local function sideburns(char, head, hs, color)
-	for s = -1, 1, 2 do
-		gearPart(char, head, "Sideburn", Vector3.new(0.1, hs.Y * 0.45, hs.Z * 0.35), color, Enum.Material.Fabric,
-			CFrame.new(s * hs.X * 0.5, -hs.Y * 0.05, hs.Z * 0.05))
-		-- the famous hair "horns"
-		gearPart(char, head, "HairPoint", Vector3.new(hs.X * 0.18, hs.Y * 0.45, hs.Z * 0.3), color, Enum.Material.Fabric,
-			CFrame.new(s * hs.X * 0.32, hs.Y * 0.58, 0) * CFrame.Angles(0, 0, math.rad(-s * 28)))
-	end
-end
-
-local function loganJacket(char)
-	local torso = Util.Torso(char)
-	if not torso then
-		return
-	end
-	local ts = torso.Size
-	local leather = Color3.fromRGB(92, 60, 38)
-	for s = -1, 1, 2 do
-		gearPart(char, torso, "Jacket", Vector3.new(ts.X * 0.3, ts.Y * 1.02, ts.Z * 1.1), leather, Enum.Material.Leather,
-			CFrame.new(s * ts.X * 0.37, 0, 0))
-	end
-	gearPart(char, torso, "Collar", Vector3.new(ts.X * 1.05, ts.Y * 0.18, ts.Z * 1.15), leather, Enum.Material.Leather,
-		CFrame.new(0, ts.Y * 0.46, 0))
-end
-
-local function weaponXRig(char, head, hs)
-	local metal = Color3.fromRGB(110, 115, 125)
-	gearPart(char, head, "Helmet", Vector3.new(hs.X * 1.1, hs.Y * 0.45, hs.Z * 1.1), metal, Enum.Material.DiamondPlate,
-		CFrame.new(0, hs.Y * 0.33, 0))
-	local visor = gearPart(char, head, "Eye", Vector3.new(hs.X * 0.8, hs.Y * 0.07, 0.05), Color3.fromRGB(120, 255, 200), Enum.Material.Neon,
-		CFrame.new(0, hs.Y * 0.12, -hs.Z * 0.56))
-	visor.Name = "Eye"
-	-- cables trailing from the helmet down the back
-	for i = -1, 1 do
-		gearPart(char, head, "Cable", Vector3.new(0.08, hs.Y * 1.3, 0.08), BLACK, Enum.Material.Rubber,
-			CFrame.new(i * hs.X * 0.22, -hs.Y * 0.1, hs.Z * 0.58) * CFrame.Angles(math.rad(-15), 0, 0))
-	end
-	-- surgical scars / wires on the arms and chest
-	for _, n in { "RightUpperArm", "LeftUpperArm", "RightLowerArm", "LeftLowerArm", "Right Arm", "Left Arm" } do
-		local limb = char:FindFirstChild(n)
-		if limb then
-			for j = -1, 1, 2 do
-				gearPart(char, limb, "Band", limb.Size * Vector3.new(1.08, 0.08, 1.08), BLACK, Enum.Material.Rubber,
-					CFrame.new(0, j * limb.Size.Y * 0.25, 0))
-			end
-		end
-	end
-	local torso = Util.Torso(char)
-	if torso then
-		local ts = torso.Size
-		for i = -1, 1 do
-			gearPart(char, torso, "Scar", Vector3.new(0.08, ts.Y * 0.7, 0.05), Color3.fromRGB(150, 40, 40), nil,
-				CFrame.new(i * ts.X * 0.18, 0, -ts.Z * 0.51) * CFrame.Angles(0, 0, math.rad(20)))
-		end
-	end
-end
-
-local function oldManGear(char, head, hs)
-	local grey = Color3.fromRGB(175, 175, 172)
-	gearPart(char, head, "Hair", Vector3.new(hs.X * 1.04, hs.Y * 0.35, hs.Z * 1.04), grey, Enum.Material.Fabric,
-		CFrame.new(0, hs.Y * 0.36, hs.Z * 0.02))
-	gearPart(char, head, "Beard", Vector3.new(hs.X * 0.95, hs.Y * 0.42, hs.Z * 0.5), grey, Enum.Material.Fabric,
-		CFrame.new(0, -hs.Y * 0.3, -hs.Z * 0.3))
-	gearPart(char, head, "Moustache", Vector3.new(hs.X * 0.55, hs.Y * 0.08, 0.12), grey, Enum.Material.Fabric,
-		CFrame.new(0, -hs.Y * 0.08, -hs.Z * 0.52))
-	sideburns(char, head, hs, grey)
-	-- long coat tails
-	local lower = char:FindFirstChild("LowerTorso") or char:FindFirstChild("Torso")
-	if lower then
-		local ls = lower.Size
-		gearPart(char, lower, "CoatTail", Vector3.new(ls.X * 1.12, ls.Y * 3.2, ls.Z * 1.15), Color3.fromRGB(60, 44, 34), Enum.Material.Leather,
-			CFrame.new(0, -ls.Y * 1.4, ls.Z * 0.05))
-	end
-end
-
 local function dressUp(char, skinId)
-	local skin = Skins.List[skinId] or Skins.List[Skins.Default]
-	local head = char:FindFirstChild("Head")
-	local skinTone = head and head.Color or Color3.fromRGB(230, 180, 140)
-	for _, d in char:GetChildren() do
-		if d:IsA("Shirt") or d:IsA("Pants") or d:IsA("ShirtGraphic") or d:IsA("BodyColors") then
-			d:Destroy()
-		elseif d:IsA("Accessory") and not (skin.KeepHair and d.AccessoryType == Enum.AccessoryType.Hair) then
-			d:Destroy()
-		end
-	end
-	for slot, names in SLOT_PARTS do
-		local color = skin.Colors[slot]
-		if color == "Skin" then
-			color = skinTone
-		end
-		for _, name in names do
-			local p = char:FindFirstChild(name)
-			if p and p:IsA("BasePart") and color then
-				p.Color = color
-				local sa = p:FindFirstChildOfClass("SurfaceAppearance")
-				if sa then
-					sa:Destroy()
-				end
-				if p:IsA("MeshPart") then
-					pcall(function()
-						p.TextureID = ""
-					end)
-				end
-			end
-		end
-	end
-
-	if head then
-		local hs = head.Size
-		if skinId == "Comic" then
-			comicCowl(char, head, hs)
-		elseif skinId == "WeaponX" then
-			weaponXRig(char, head, hs)
-		elseif skinId == "OldManLogan" then
-			oldManGear(char, head, hs)
-		else
-			sideburns(char, head, hs, Color3.fromRGB(35, 25, 20))
-			loganJacket(char)
-		end
-		-- Every skin gets faint glowing eyes so he reads as a monster in the dark
-		if skinId ~= "Comic" and skinId ~= "WeaponX" then
-			for s = -1, 1, 2 do
-				gearPart(char, head, "Eye", Vector3.new(hs.X * 0.12, hs.Y * 0.05, 0.04), Color3.fromRGB(255, 235, 200), Enum.Material.Neon,
-					CFrame.new(s * hs.X * 0.18, hs.Y * 0.1, -hs.Z * 0.5))
-			end
-		end
-	end
-
+	Costumes.Dress(char, skinId)
 	local hl = Instance.new("Highlight")
 	hl.Name = "Menace"
 	hl.FillTransparency = 1
 	hl.OutlineColor = Color3.fromRGB(170, 0, 0)
-	hl.OutlineTransparency = 0.25
+	hl.OutlineTransparency = 0.35
 	hl.DepthMode = Enum.HighlightDepthMode.Occluded
 	hl.Parent = char
 end
 
+local clawSet = nil
+
 local function makeClaws(char, clawId)
-	claws = {}
 	clawSkin = Skins.Claws[clawId] or Skins.Claws[Skins.DefaultClaw]
 	clawGlow = clawSkin.Glow
-	local thick = clawSkin.Thick or 1
-	for _, side in { "Right", "Left" } do
-		local hand = Util.Hand(char, side)
-		if hand then
-			for i = -1, 1 do
-				local z = i * math.max(0.1, hand.Size.Z * 0.3)
-				local c, w = gearPart(char, hand, "Claw", Vector3.new(0.07 * thick, 0.1, 0.16 * thick), clawSkin.Color, clawSkin.Material, CFrame.new(0, 0, z))
-				c.Reflectance = clawSkin.Reflectance
-				c.Transparency = 1
-				table.insert(claws, { Part = c, Weld = w, Z = z, Hand = hand })
-			end
-		end
-	end
+	clawSet = Costumes.BuildClaws(char, clawSkin, false)
 end
 
 local function popClaws(char)
-	local info = TweenInfo.new(0.16, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-	for _, c in claws do
-		if c.Part.Parent then
-			c.Part.Transparency = 0
-			local thick = clawSkin and clawSkin.Thick or 1
-			TweenService:Create(c.Part, info, { Size = Vector3.new(0.07 * thick, CLAW_LEN, 0.16 * thick) }):Play()
-			TweenService:Create(c.Weld, info, { C0 = CFrame.new(0, -(c.Hand.Size.Y * 0.3 + CLAW_LEN / 2), c.Z) }):Play()
-			-- Streaking trail off every blade: every swing leaves a crisp arc
-			task.delay(0.2, function()
-				if not c.Part.Parent then
-					return
-				end
+	if not clawSet then
+		return
+	end
+	Costumes.PopClaws(clawSet)
+	-- Streaking trails off every blade: every swing leaves a crisp arc
+	task.delay(0.18, function()
+		for i, tip in clawSet.Tips do
+			local base = clawSet.Bases[i]
+			if tip.Parent and base and base.Parent then
 				local a0 = Instance.new("Attachment")
-				a0.Position = Vector3.new(0, CLAW_LEN * 0.1, 0)
-				a0.Parent = c.Part
+				a0.Parent = base
+				a0.Position = Vector3.new(0, base.Size.Y * 0.3, 0)
 				local a1 = Instance.new("Attachment")
-				a1.Position = Vector3.new(0, -CLAW_LEN / 2, 0)
-				a1.Parent = c.Part
+				a1.Parent = tip
 				local trail = Instance.new("Trail")
 				trail.Attachment0 = a0
 				trail.Attachment1 = a1
@@ -283,8 +106,8 @@ local function popClaws(char)
 				trail.LightEmission = 1
 				trail.Color = ColorSequence.new(Color3.new(1, 1, 1), clawGlow)
 				trail.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.15), NumberSequenceKeypoint.new(1, 1) })
-				trail.Parent = c.Part
-				if clawSkin and (clawSkin.Drip or clawSkin.Sparkle) then
+				trail.Parent = tip
+				if clawSkin.Drip or clawSkin.Sparkle then
 					local pe = Instance.new("ParticleEmitter")
 					if clawSkin.Drip then
 						for k, v in Util.BloodProps do
@@ -304,16 +127,16 @@ local function popClaws(char)
 					end
 					pe.Parent = a1
 				end
-				if clawSkin and clawSkin.Material == Enum.Material.Neon then
+				if clawSkin.Material == Enum.Material.Neon then
 					local l = Instance.new("PointLight")
 					l.Color = clawGlow
 					l.Range = 6
 					l.Brightness = 1
-					l.Parent = c.Part
+					l.Parent = base
 				end
-			end)
+			end
 		end
-	end
+	end)
 	for _, side in { "Right", "Left" } do
 		local hand = Util.Hand(char, side)
 		if hand then
@@ -844,18 +667,7 @@ function Wolverine.MakeStatue(skinId, cframe, parent)
 	pcall(function()
 		model:ScaleTo(1.25)
 	end)
-	local claw = Skins.Claws[Skins.DefaultClaw]
-	for _, side in { "Right", "Left" } do
-		local hand = Util.Hand(model, side)
-		if hand then
-			for i = -1, 1 do
-				local z = i * math.max(0.1, hand.Size.Z * 0.3)
-				local c = gearPart(model, hand, "Claw", Vector3.new(0.08, CLAW_LEN * 1.25, 0.18), claw.Color, claw.Material,
-					CFrame.new(0, -(hand.Size.Y * 0.3 + CLAW_LEN * 0.62), z))
-				c.Reflectance = claw.Reflectance
-			end
-		end
-	end
+	Costumes.BuildClaws(model, Skins.Claws[Skins.DefaultClaw], true)
 	-- Crouched, arms flared, claws out
 	Posture.Set(model, "Root", CFrame.new(0, -0.3, 0) * CFrame.Angles(math.rad(-14), 0, 0))
 	Posture.Set(model, "Neck", CFrame.Angles(math.rad(12), 0, 0))

@@ -53,17 +53,19 @@ local function darker(c, f)
 	return Color3.new(c.R * f, c.G * f, c.B * f)
 end
 
+-- Hover = a quick blade slice, click = a short metallic SNIKT
 local clickSound = Instance.new("Sound")
-clickSound.SoundId = "rbxasset://sounds/electronicpingshort.wav"
-clickSound.Volume = 0.25
-clickSound.PlaybackSpeed = 1.6
+clickSound.SoundId = "rbxasset://sounds/unsheath.wav"
+clickSound.Volume = 0.35
+clickSound.PlaybackSpeed = 1.5
 clickSound.Parent = SoundService
 
 local hoverSound = Instance.new("Sound")
-hoverSound.SoundId = "rbxasset://sounds/electronicpingshort.wav"
-hoverSound.Volume = 0.08
-hoverSound.PlaybackSpeed = 2.4
+hoverSound.SoundId = "rbxasset://sounds/swordslash.wav"
+hoverSound.Volume = 0.18
+hoverSound.PlaybackSpeed = 1.6
 hoverSound.Parent = SoundService
+local lastHover = 0
 
 -- Makes any GuiButton feel alive: grows + glows on hover, squishes on press.
 function UIKit.Animate(button, accent)
@@ -76,7 +78,11 @@ function UIKit.Animate(button, accent)
 	button.AutoButtonColor = false
 	button.MouseEnter:Connect(function()
 		hovering = true
-		hoverSound:Play()
+		if os.clock() - lastHover > 0.08 then
+			lastHover = os.clock()
+			hoverSound.PlaybackSpeed = 1.45 + math.random() * 0.3
+			hoverSound:Play()
+		end
 		TweenService:Create(scale, BOUNCE, { Scale = 1.07 }):Play()
 		if stroke then
 			TweenService:Create(stroke, FAST, { Thickness = baseThickness + 1.5, Color = accent or stroke.Color }):Play()

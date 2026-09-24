@@ -1,11 +1,17 @@
 -- Wolverine skins. Prices are in Coins (earned by playing).
 -- "Skin" in a colour slot means "keep the player's own skin tone".
+--
+-- REALISTIC TEXTURES: the painted suit textures live in assets/textures/.
+-- Upload them in Studio (View > Asset Manager > Bulk Import), right-click
+-- each image > Copy Asset ID, and paste the numbers into Textures below.
+-- Until then each suit uses its flat colours + 3D gear.
+-- HairAccessoryId: optional Marketplace hair accessory ID (e.g. a messy
+-- "Wolverine hair"). 0 keeps the player's own hair.
 local rgb = Color3.fromRGB
 
 local YELLOW = rgb(245, 195, 20)
 local BLUE = rgb(25, 60, 150)
 local DENIM = rgb(48, 66, 104)
-local LEATHER = rgb(92, 60, 38)
 local BOOT = rgb(55, 38, 26)
 
 local Skins = {}
@@ -16,19 +22,23 @@ Skins.List = {
 	Logan = {
 		Name = "Logan",
 		Price = 0,
-		Description = "The regular. Tank top, leather jacket, sideburns.",
-		Swatch = LEATHER,
+		Description = "The regular. Grey tee, jeans, beard and a bad attitude.",
+		Swatch = rgb(196, 198, 196),
 		Colors = {
-			UpperTorso = rgb(225, 225, 220), LowerTorso = DENIM,
-			UpperArm = LEATHER, LowerArm = LEATHER, Hand = "Skin",
+			UpperTorso = rgb(196, 198, 196), LowerTorso = DENIM,
+			UpperArm = rgb(196, 198, 196), LowerArm = "Skin", Hand = "Skin",
 			UpperLeg = DENIM, LowerLeg = DENIM, Foot = BOOT,
 		},
 		KeepHair = true,
+		Textures = { Shirt = 0, Pants = 0, Face = 0 },
+		HairAccessoryId = 0,
 	},
 	Comic = {
 		Name = "Comic Wolverine",
-		Price = 500,
-		Description = "Straight off the page. Yellow and blue with the iconic cowl.",
+		Price = 1000,
+		Description = "Straight off the page. Cowl, fins, shoulder pads, tiger stripes.",
+		Textures = { Shirt = 0, Pants = 0, Face = 0 },
+		HairAccessoryId = 0,
 		Swatch = YELLOW,
 		Colors = {
 			UpperTorso = YELLOW, LowerTorso = BLUE,
@@ -38,8 +48,10 @@ Skins.List = {
 	},
 	WeaponX = {
 		Name = "Weapon X",
-		Price = 1000,
-		Description = "Fresh out of the tank. Wired helmet, scars, nothing to lose.",
+		Price = 2000,
+		Description = "Fresh out of the tank. Visor helmet, cables, harness, scars.",
+		Textures = { Shirt = 0, Pants = 0, Face = 0 },
+		HairAccessoryId = 0,
 		Swatch = rgb(120, 200, 190),
 		Colors = {
 			UpperTorso = "Skin", LowerTorso = rgb(55, 58, 64),
@@ -49,8 +61,11 @@ Skins.List = {
 	},
 	OldManLogan = {
 		Name = "Old Man Logan",
-		Price = 1500,
-		Description = "Grey beard, long coat, and a lot of anger left.",
+		Price = 3000,
+		Description = "Grey beard, long duster coat, and a lot of anger left.",
+		KeepHair = true,
+		Textures = { Shirt = 0, Pants = 0, Face = 0 },
+		HairAccessoryId = 0,
 		Swatch = rgb(150, 150, 150),
 		Colors = {
 			UpperTorso = rgb(88, 94, 104), LowerTorso = rgb(60, 44, 34),

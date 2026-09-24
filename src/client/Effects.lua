@@ -48,6 +48,34 @@ end
 -- Tint (used by sniff + the Wolverine's hunting vision)
 ---------------------------------------------------------------------------
 
+-- Lighting zones: bright snowy day in the lobby, dark night in the arena.
+local NIGHT, DAY = nil, {
+	ClockTime = 13.5, Brightness = 2.6, ExposureCompensation = 0.25,
+	Ambient = Color3.fromRGB(135, 132, 128), OutdoorAmbient = Color3.fromRGB(165, 168, 180),
+}
+local inLobby = nil
+local function applyZone(lobby)
+	if inLobby == lobby then
+		return
+	end
+	inLobby = lobby
+	if not NIGHT then
+		NIGHT = {}
+		for k in DAY do
+			NIGHT[k] = Lighting[k]
+		end
+	end
+	local target = lobby and DAY or NIGHT
+	TweenService:Create(Lighting, TweenInfo.new(1.2), target):Play()
+	local atmo = Lighting:FindFirstChildOfClass("Atmosphere")
+	if atmo then
+		TweenService:Create(atmo, TweenInfo.new(1.2), { Density = lobby and 0.25 or 0.42, Haze = lobby and 0.8 or 2.2 }):Play()
+	end
+end
+RunService.Heartbeat:Connect(function()
+	applyZone(workspace.CurrentCamera.CFrame.Position.Y > 300)
+end)
+
 local tint = Instance.new("ColorCorrectionEffect")
 tint.Name = "LocalTint"
 tint.Parent = Lighting
