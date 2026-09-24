@@ -159,6 +159,48 @@ function Effects.Impulse(root, velocity, duration)
 end
 
 ---------------------------------------------------------------------------
+-- Intro camera (Wolverine only): watch yourself smash out of the tank
+---------------------------------------------------------------------------
+
+function Effects.IntroCam(data)
+	local cam = workspace.CurrentCamera
+	if typeof(data.Tank) ~= "Vector3" or typeof(data.Land) ~= "Vector3" then
+		return
+	end
+	local dir = typeof(data.Dir) == "Vector3" and data.Dir or Vector3.zAxis
+	local side = dir:Cross(Vector3.yAxis)
+	local start = os.clock()
+	local burst, release = data.Burst or 3, data.Release or 8
+	cam.CameraType = Enum.CameraType.Scriptable
+	local conn
+	conn = RunService.RenderStepped:Connect(function()
+		local t = os.clock() - start
+		local cf
+		if t < burst then
+			-- slow push in on the tank, low angle
+			local u = t / burst
+			local eye = data.Tank + dir * (15 - 4 * u) + side * (3 - 2 * u) + Vector3.new(0, -1 + u, 0)
+			cf = CFrame.lookAt(eye, data.Tank + Vector3.new(0, 1.5, 0))
+		else
+			-- in front of the landing spot, tight on the X
+			local u = math.clamp((t - burst) / 1.2, 0, 1)
+			local ease = 1 - (1 - u) ^ 3
+			local eye = data.Land + dir * (11 - 3.5 * ease) + side * (1.5 - 1.5 * ease) + Vector3.new(0, 0.6, 0)
+			cf = CFrame.lookAt(eye, data.Land + Vector3.new(0, 1.4 - 0.6 * ease, 0))
+		end
+		cam.CFrame = cf
+		if t > release - 0.6 or player:GetAttribute("Role") ~= "Wolverine" then
+			conn:Disconnect()
+			cam.CameraType = Enum.CameraType.Custom
+			local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+			if hum then
+				cam.CameraSubject = hum
+			end
+		end
+	end)
+end
+
+---------------------------------------------------------------------------
 -- Sniff tracker
 ---------------------------------------------------------------------------
 

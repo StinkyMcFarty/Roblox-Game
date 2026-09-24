@@ -51,9 +51,12 @@ Config.KillTimeBonus = 15 -- Wolverine gets this much extra time per kill
 Config.EndScreenTime = 6
 
 -- Wolverine intro (he is locked in the Weapon X tank room)
-Config.IntroLength = 7 -- seconds before he is released
-Config.ClawPopTime = 2.5 -- SNIKT
+Config.IntroLength = 8 -- seconds before he is released
+Config.ClawPopTime = 2.5 -- SNIKT (maps without the Weapon X tank)
 Config.RoarTime = 3.8
+-- Weapon X tank breakout (seconds from spawn): eyes open, glass bursts,
+-- arms cross (claws pop 0.62s later in an X), roar.
+Config.Intro = { Wake = 1.6, Burst = 2.9, Cross = 3.8, Roar = 5.3 }
 
 -- Damage ----------------------------------------------------------------
 Config.HitsToKill = 3 -- the 3rd hit always rips the survivor in half
@@ -186,7 +189,8 @@ Config.UploadedSounds = {
 	Roar = 84386454545822, Snarl = 0, Tear = 0, Gore = 0, Break = 0, Heartbeat = 94699316471373, Fart = 130496994474771,
 	Sniff = 0, Laser = 0, Punch = 0, Terminal = 0, UIHover = 0, UIClick = 0, Paw = 90700737432630,
 	PounceHit = 140573962847729, Impale = 100362323212257, DeathRay = 89285816836463, Chase = 71009071343057,
-	PounceLeap = 0, -- pounce launch (falls back to a pitched slash)
+	PounceLeap = 92649317075292, -- pounce launch
+	Scream = 0, -- kill scream after ripping someone in half
 	Step = 101289698791450, StepMetal = 112150969278482, StepHeavy = 114217739046080, -- footsteps (4 takes per file; see Anims.lua)
 }
 Config.Sounds.Snarl = Config.Sounds.Snarl or ""
@@ -202,6 +206,7 @@ Config.Sounds.PounceHit = Config.Sounds.PounceHit or Config.Sounds.Slash
 Config.Sounds.Impale = Config.Sounds.Impale or Config.Sounds.Slash
 Config.Sounds.DeathRay = Config.Sounds.DeathRay or Config.Sounds.Laser
 Config.Sounds.Chase = Config.Sounds.Chase or ""
+Config.Sounds.Scream = Config.Sounds.Scream or Config.Sounds.Snarl
 -- Footsteps: until Step is uploaded, walking keeps Roblox's default running sound.
 Config.Sounds.Step = Config.Sounds.Step or ""
 Config.Sounds.StepMetal = Config.Sounds.StepMetal or Config.Sounds.Step
@@ -439,6 +444,39 @@ Util.SparkProps = {
 	Speed = NumberRange.new(10, 24),
 	SpreadAngle = Vector2.new(180, 180),
 	Acceleration = Vector3.new(0, -40, 0),
+}
+
+-- Molten metal: white-hot streaks stretched along their flight that cool to
+-- orange and red as gravity drags them down.
+Util.MoltenStreakProps = {
+	Texture = "rbxasset://textures/particles/sparkles_main.dds",
+	Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 230)),
+		ColorSequenceKeypoint.new(0.3, Color3.fromRGB(255, 190, 70)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(230, 60, 20)),
+	}),
+	LightEmission = 1,
+	Orientation = Enum.ParticleOrientation.VelocityParallel,
+	Squash = NumberSequence.new(-2.6),
+	Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.22), NumberSequenceKeypoint.new(1, 0.04) }),
+	Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.8, 0.2), NumberSequenceKeypoint.new(1, 1) }),
+	Lifetime = NumberRange.new(0.35, 0.9),
+	Speed = NumberRange.new(18, 46),
+	SpreadAngle = Vector2.new(70, 70),
+	Acceleration = Vector3.new(0, -85, 0),
+	Drag = 0.8,
+}
+Util.MoltenGlobProps = {
+	Texture = "rbxasset://textures/particles/sparkles_main.dds",
+	Color = ColorSequence.new(Color3.fromRGB(255, 170, 60), Color3.fromRGB(200, 40, 10)),
+	LightEmission = 1,
+	Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.35), NumberSequenceKeypoint.new(1, 0.1) }),
+	Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1) }),
+	Lifetime = NumberRange.new(0.8, 1.4),
+	Speed = NumberRange.new(6, 16),
+	SpreadAngle = Vector2.new(60, 60),
+	Acceleration = Vector3.new(0, -60, 0),
+	Drag = 1.2,
 }
 
 -- FireClient that quietly skips bots (they have no client).
@@ -855,6 +893,43 @@ function Combat.BreakPart(part, origin, force)
 	return true
 end
 
+local METAL = {
+	[Enum.Material.Metal] = true,
+	[Enum.Material.DiamondPlate] = true,
+	[Enum.Material.CorrodedMetal] = true,
+	[Enum.Material.Foil] = true,
+}
+function Combat.IsMetal(part)
+	return METAL[part.Material] == true
+end
+
+-- Claws on metal: a spray of molten sparks off the point of contact, an
+-- orange flash and a steel screech. dir = which way the sparks fly.
+function Combat.MetalSparks(position, dir)
+	local anchor = Instance.new("Part")
+	anchor.Anchored, anchor.CanCollide, anchor.CanQuery, anchor.CanTouch = true, false, false, false
+	anchor.Transparency = 1
+	anchor.Size = Vector3.one * 0.2
+	dir = (dir and dir.Magnitude > 0.01) and dir.Unit or Vector3.yAxis
+	anchor.CFrame = CFrame.lookAt(position, position + (dir + Vector3.new(0, 0.6, 0)).Unit)
+	anchor.Parent = debrisFolder()
+	local streaks = table.clone(Util.MoltenStreakProps)
+	streaks.EmissionDirection = Enum.NormalId.Front
+	local globs = table.clone(Util.MoltenGlobProps)
+	globs.EmissionDirection = Enum.NormalId.Front
+	Util.Burst(anchor, streaks, 55, 1.2)
+	Util.Burst(anchor, globs, 14, 1.6)
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 150, 50)
+	light.Range = 14
+	light.Brightness = 6
+	light.Shadows = false
+	light.Parent = anchor
+	TweenService:Create(light, TweenInfo.new(0.35, Enum.EasingStyle.Quad), { Brightness = 0 }):Play()
+	Util.SoundAt(Config.Sounds.Snikt, position, { Volume = 1.4, Pitch = 1.25 + math.random() * 0.2, Range = 160 })
+	Debris:AddItem(anchor, 2.5)
+end
+
 -- Breaks every breakable map part inside a box. Returns how many broke.
 function Combat.BreakInBox(cframe, size, origin, force)
 	local map = Round.Map
@@ -865,10 +940,18 @@ function Combat.BreakInBox(cframe, size, origin, force)
 	params.FilterType = Enum.RaycastFilterType.Include
 	params.FilterDescendantsInstances = { map }
 	local n = 0
+	local metalAt = nil
 	for _, p in workspace:GetPartBoundsInBox(cframe, size, params) do
+		local metal = METAL[p.Material] and p.Position
 		if Combat.BreakPart(p, origin, force or 40) then
 			n += 1
+			metalAt = metalAt or metal
 		end
+	end
+	if metalAt then
+		-- sparks off the face nearest him, flying back past the claws
+		local toward = Util.Flat(origin - metalAt)
+		Combat.MetalSparks(metalAt:Lerp(origin, 0.25) + Vector3.new(0, 0.5, 0), toward)
 	end
 	if n > 0 then
 		VFX.Dust(cframe.Position, Color3.fromRGB(190, 185, 180), 8 + n * 3)
@@ -1037,7 +1120,9 @@ function Combat.Wound(killer, victim, opts)
 	end
 	if victim:GetAttribute("Role") == "Sentinel" then
 		hum.Health = hum.MaxHealth * math.max(0.05, (victim:GetAttribute("Armor") or 1) / Config.Sentinel.Armor)
-		Util.Burst(root, Util.SparkProps, 30, 2)
+		local kRoot0 = killer and Util.Root(killer.Character)
+		local torso0 = Util.Torso(char) or root
+		Combat.MetalSparks(torso0.Position, kRoot0 and Util.Flat(kRoot0.Position - torso0.Position) or nil)
 	else
 		local hits = victim:GetAttribute("Hits") or 0
 		hum.Health = hum.MaxHealth * math.max(0.05, 1 - hits / Config.HitsToKill)
@@ -1247,7 +1332,8 @@ function Combat.Execute(killer, victim)
 	VFX.Anim(kChar, "Snarl")
 	local kHead = kChar:FindFirstChild("Head")
 	if kHead then
-		Util.Sound(Config.Sounds.Snarl, kHead, { Volume = 2, Range = 300 })
+		-- the cartoon berserker scream over what's left of them
+		Util.Sound(Config.Sounds.Scream, kHead, { Volume = 2.6, Range = 420, MinRange = 30 })
 	end
 	if kRoot.Parent then
 		kRoot.Anchored = false
@@ -3459,8 +3545,12 @@ local function buildAtrium(parent)
 		local a = k / 12 * math.pi * 2
 		D(parent, Vector3.new(0.6, 1.2, 1.4), CFrame.new(tp + Vector3.new(0, 1.2, 0)) * CFrame.Angles(0, a, 0) * CFrame.new(0, 0, -7.2), M.Metal, rgb(54, 52, 50))
 	end
-	drum(parent, tp + Vector3.new(0, 8.4, 0), 9.4, 13, M.Glass, rgb(170, 220, 230), { Transparency = 0.72, Reflectance = 0.25 })
+	local tankGlass = drum(parent, tp + Vector3.new(0, 8.4, 0), 9.4, 13, M.Glass, rgb(170, 220, 230), { Transparency = 0.72, Reflectance = 0.25 })
+	tankGlass.Name = "TankGlass" -- Wolverine smashes out of this in the intro
+	tankGlass:SetAttribute("Solid", true)
 	local liquid = drum(parent, tp + Vector3.new(0, 7, 0), 8.8, 10, M.Neon, rgb(60, 200, 190), { Transparency = 0.62, CanCollide = false })
+	liquid.Name = "TankLiquid"
+	liquid:SetAttribute("Solid", true)
 	pointLight(liquid, 30, 2.2, rgb(70, 230, 210), true)
 	make("ParticleEmitter", liquid, {
 		Texture = "rbxasset://textures/particles/sparkles_main.dds",
@@ -3475,7 +3565,7 @@ local function buildAtrium(parent)
 		LightEmission = 0.8,
 	})
 	for k = 0, 7 do
-		local a = k / 8 * math.pi * 2
+		local a = (k + 0.5) / 8 * math.pi * 2 -- half-step so the front is open (his breakout path)
 		local p = tp + Vector3.new(math.cos(a) * 4.9, 0, math.sin(a) * 4.9)
 		cyl(parent, p + Vector3.new(0, 1.9, 0), p + Vector3.new(0, 14.8, 0), 0.45, M.Metal, rgb(70, 68, 64), nil, true)
 	end
@@ -9343,8 +9433,10 @@ local function makeClaws(char, clawId)
 	clawSet = Costumes.BuildClaws(char, clawSkin, false)
 end
 
-local function popClaws(char)
-	VFX.Anim(char, "Snikt")
+local function popClaws(char, noAnim)
+	if not noAnim then
+		VFX.Anim(char, "Snikt")
+	end
 	if not clawSet then
 		return
 	end
@@ -9438,6 +9530,8 @@ local function popClaws(char)
 	end
 	Fx:FireAllClients("Shake", { Position = head and head.Position or Vector3.zero, Intensity = 0.4, Radius = 60 })
 end
+
+local tankIntro -- defined below (needs popClaws/roar)
 
 local function roar(char)
 	local head = char:FindFirstChild("Head")
@@ -9641,6 +9735,191 @@ end
 -- Transform / intro
 ---------------------------------------------------------------------------
 
+---------------------------------------------------------------------------
+-- Intro: the Weapon X tank breakout. He floats in the adamantium fluid, wakes,
+-- smashes out through the glass, lands, crosses his arms and the claws shoot
+-- out in an X, then the roar. Timings live in Config.Intro.
+---------------------------------------------------------------------------
+
+local GLASS = Color3.fromRGB(190, 230, 235)
+local FLUID = Color3.fromRGB(70, 220, 205)
+
+local function shatterTank(glass, liquid, dir)
+	local c = glass.CFrame.Position
+	local radius, height = glass.Size.Y / 2, glass.Size.X
+	glass.Transparency = 1
+	glass.CanCollide = false
+	glass.CanQuery = false
+	local folder = (Round.Map and Round.Map:FindFirstChild("Debris")) or workspace
+	for k = 1, 46 do
+		local a = math.random() * math.pi * 2
+		local y = (math.random() - 0.5) * height * 0.9
+		local p = c + Vector3.new(math.cos(a) * radius, y, math.sin(a) * radius)
+		local shard = Instance.new("WedgePart")
+		shard.Size = Vector3.new(0.08, 0.5 + math.random() * 1.6, 0.4 + math.random() * 1.2)
+		shard.CFrame = CFrame.new(p) * CFrame.Angles(math.random() * 6, math.random() * 6, math.random() * 6)
+		shard.Material = Enum.Material.Glass
+		shard.Color = GLASS
+		shard.Transparency = 0.35
+		shard.Reflectance = 0.3
+		shard.CanCollide = true
+		shard.CanQuery = false
+		shard.CastShadow = false
+		shard.Parent = folder
+		-- blown out, mostly the way he's facing
+		local out = (p - c) * Vector3.new(1, 0, 1)
+		out = out.Magnitude > 0.01 and out.Unit or dir
+		shard.AssemblyLinearVelocity = (out * 0.5 + dir * (0.6 + math.random() * 0.6)).Unit * (30 + math.random() * 35) + Vector3.new(0, 8 + math.random() * 14, 0)
+		shard.AssemblyAngularVelocity = Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5) * 30
+		Debris:AddItem(shard, 3 + math.random() * 1.5)
+	end
+	-- the fluid bursts out and drains
+	local anchor = Instance.new("Part")
+	anchor.Anchored, anchor.CanCollide, anchor.CanQuery, anchor.Transparency = true, false, false, 1
+	anchor.Size = Vector3.one
+	anchor.CFrame = CFrame.lookAt(c, c + dir)
+	anchor.Parent = folder
+	Util.Burst(anchor, {
+		Texture = "rbxasset://textures/particles/smoke_main.dds",
+		Color = ColorSequence.new(Color3.fromRGB(150, 255, 240), FLUID),
+		LightEmission = 0.4,
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.2), NumberSequenceKeypoint.new(1, 4.5) }),
+		Transparency = NumberSequence.new(0.25, 1),
+		Lifetime = NumberRange.new(0.6, 1.2),
+		Speed = NumberRange.new(18, 40),
+		SpreadAngle = Vector2.new(55, 30),
+		Acceleration = Vector3.new(0, -60, 0),
+		EmissionDirection = Enum.NormalId.Front,
+	}, 90, 2)
+	Util.Burst(anchor, Util.SparkProps, 40, 1.5)
+	Debris:AddItem(anchor, 3)
+	if liquid then
+		local bottom = liquid.CFrame.Position.Y - liquid.Size.X / 2
+		TweenService:Create(liquid, TweenInfo.new(0.9, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+			Size = Vector3.new(0.2, liquid.Size.Y, liquid.Size.Z),
+			CFrame = CFrame.new(liquid.CFrame.Position.X, bottom + 0.1, liquid.CFrame.Position.Z) * CFrame.Angles(0, 0, math.rad(90)),
+		}):Play()
+		local light = liquid:FindFirstChildWhichIsA("Light")
+		if light then
+			TweenService:Create(light, TweenInfo.new(1.2), { Brightness = 0.4 }):Play()
+		end
+	end
+	VFX.Shockwave(Vector3.new(c.X, c.Y - height / 2 + 0.3, c.Z), 26, FLUID)
+	Util.SoundAt(Config.Sounds.Break, c, { Volume = 3, Pitch = 1.35, Range = 500 })
+	Util.SoundAt(Config.Sounds.Break, c, { Volume = 2.4, Pitch = 0.6, Range = 500 })
+	Util.SoundAt(Config.Sounds.Impact, c, { Volume = 2.5, Pitch = 0.7, Range = 400 })
+	Fx:FireAllClients("Shake", { Position = c, Intensity = 1.4, Radius = 140 })
+end
+
+tankIntro = function(player, char, spawnCFrame, valid)
+	local cfg = Config.Intro
+	local root = Util.Root(char)
+	local map = Round.Map
+	local glass = map and map:FindFirstChild("TankGlass", true)
+	local liquid = map and map:FindFirstChild("TankLiquid", true)
+	if not (root and glass) then
+		-- no tank on this map: the classic intro
+		task.wait(Config.ClawPopTime)
+		if valid() then popClaws(char) end
+		task.wait(Config.RoarTime - Config.ClawPopTime)
+		if valid() then roar(char) end
+		return
+	end
+	local dir = Util.Flat(spawnCFrame.LookVector)
+	local tc = glass.CFrame.Position
+	local floorY = tc.Y - glass.Size.X / 2
+	local hum = Util.Humanoid(char)
+	local hip = (hum and hum.HipHeight or 2) + root.Size.Y / 2
+	local inside = CFrame.lookAt(Vector3.new(tc.X, floorY + hip + 1.2, tc.Z), Vector3.new(tc.X, floorY + hip + 1.2, tc.Z) + dir)
+	root.Anchored = true
+	char:PivotTo(inside)
+	VFX.Anim(char, "TankFloat")
+	Util.FireClient(Fx, player, "IntroCam", { Tank = tc, Land = spawnCFrame.Position, Dir = dir, Burst = cfg.Burst, Release = Config.IntroLength })
+
+	-- drifting in the fluid
+	local t0 = os.clock()
+	while os.clock() - t0 < cfg.Wake and valid() do
+		local t = os.clock() - t0
+		char:PivotTo(inside * CFrame.new(0, math.sin(t * 1.6) * 0.25, 0) * CFrame.Angles(0, math.sin(t * 0.7) * 0.08, 0))
+		task.wait()
+	end
+	if not valid() then
+		root.Anchored = false
+		return
+	end
+	-- eyes snap open, he fights the restraints: the glass takes two hits
+	VFX.Anim(char, "TankWake")
+	for _, eye in (char:FindFirstChild("Gear") or char):GetChildren() do
+		if eye.Name == "Eye" then
+			eye.Color = Color3.fromRGB(255, 40, 40)
+		end
+	end
+	Util.SoundAt(Config.Sounds.Snarl ~= "" and Config.Sounds.Snarl or Config.Sounds.Impact, tc, { Volume = 2, Pitch = 0.8, Range = 200 })
+	for k = 1, 2 do
+		task.wait((cfg.Burst - cfg.Wake) / 3)
+		if not valid() then break end
+		Util.SoundAt(Config.Sounds.Impact, tc, { Volume = 2.4, Pitch = 0.55 + k * 0.1, Range = 300 })
+		Fx:FireAllClients("Shake", { Position = tc, Intensity = 0.5 + k * 0.2, Radius = 80 })
+		glass.Transparency = math.max(0.45, glass.Transparency - 0.1) -- stress fogs the glass
+	end
+	task.wait((cfg.Burst - cfg.Wake) / 3)
+	if not valid() then
+		root.Anchored = false
+		return
+	end
+
+	-- BREAKOUT
+	shatterTank(glass, liquid, dir)
+	VFX.Anim(char, "BurstOut")
+	local from = char:GetPivot()
+	local to = spawnCFrame
+	local flight = 0.42
+	local f0 = os.clock()
+	while os.clock() - f0 < flight and valid() do
+		local u = (os.clock() - f0) / flight
+		local p = from.Position:Lerp(to.Position, u) + Vector3.new(0, math.sin(u * math.pi) * 2.2, 0)
+		char:PivotTo(CFrame.lookAt(p, p + dir))
+		task.wait()
+	end
+	char:PivotTo(to)
+	VFX.Dust(to.Position - Vector3.new(0, hip, 0), Color3.fromRGB(150, 210, 205), 18)
+	VFX.Shockwave(to.Position - Vector3.new(0, hip - 0.2, 0), 14, FLUID)
+	Util.Sound(Config.Sounds.Land ~= "" and Config.Sounds.Land or Config.Sounds.Impact, root, { Volume = 2.4, Pitch = 0.75, Range = 300 })
+	Fx:FireAllClients("Shake", { Position = to.Position, Intensity = 1, Radius = 90 })
+
+	-- rise, cross the forearms... SNIKT: the blades shoot out in an X
+	task.wait(cfg.Cross - cfg.Burst - flight)
+	if not valid() then
+		root.Anchored = false
+		return
+	end
+	VFX.Anim(char, "CrossSnikt")
+	task.wait(0.62)
+	if not valid() then
+		root.Anchored = false
+		return
+	end
+	popClaws(char, true)
+	for _, hand in { char:FindFirstChild("RightHand"), char:FindFirstChild("LeftHand") } do
+		if hand then
+			VFX.Impact(hand.Position + Vector3.new(0, 0.8, 0), clawGlow, 1.4)
+		end
+	end
+	Util.Sound(Config.Sounds.Snikt, root, { Volume = 3, Range = 400 })
+	Fx:FireAllClients("Shake", { Position = to.Position, Intensity = 0.8, Radius = 80 })
+	Fx:FireAllClients("HitStop", { Attacker = char, Duration = 0.12 })
+
+	-- hold the X... then throw the arms wide and ROAR
+	task.wait(cfg.Roar - cfg.Cross - 0.62)
+	if valid() then
+		roar(char)
+	end
+	task.wait(1.6)
+	if root.Parent then
+		root.Anchored = false
+	end
+end
+
 function Wolverine.Transform(player, spawnCFrame)
 	local char = player.Character
 	if not char then
@@ -9685,16 +9964,7 @@ function Wolverine.Transform(player, spawnCFrame)
 	makeSkeleton(char)
 	char:PivotTo(spawnCFrame * CFrame.new(0, 1, 0))
 
-	task.delay(Config.ClawPopTime, function()
-		if valid() then
-			popClaws(char)
-		end
-	end)
-	task.delay(Config.RoarTime, function()
-		if valid() then
-			roar(char)
-		end
-	end)
+	task.spawn(tankIntro, player, char, spawnCFrame, valid)
 	task.delay(Config.IntroLength, function()
 		if valid() then
 			Round.Released = true
@@ -10282,14 +10552,98 @@ Clips.Roar = {
 	},
 }
 
+---------------------------------------------------------------------------
+-- Intro: Weapon X tank breakout. He floats limp in the adamantium fluid,
+-- wakes, smashes out, lands in a crouch, crosses his forearms and the claws
+-- shoot out in an X (SNIKT), then he throws his arms wide into the roar.
+---------------------------------------------------------------------------
+local FLOAT = {
+	Root = { 0, 0, 0, 0, 0.1, 0 }, Neck = { -28, 0, 4 }, Waist = { -6, 0, 0 },
+	RShoulder = { 14, 0, 22 }, LShoulder = { 10, 0, -26 }, RElbow = { 24, 0, 0 }, LElbow = { 30, 0, 0 },
+	RWrist = { -10, 0, 0 }, LWrist = { -12, 0, 0 },
+	RHip = { 10, 0, 6 }, LHip = { 4, 0, -4 }, RKnee = { -18, 0, 0 }, LKnee = { -10, 0, 0 },
+	RAnkle = { -20, 0, 0 }, LAnkle = { -16, 0, 0 },
+}
+Clips.TankFloat = {
+	Hold = true,
+	Keys = {
+		{ T = 0, Pose = FLOAT },
+		{ T = 1.2, Ease = "InOut", Pose = FLOAT },
+	},
+}
+-- eyes open: head snaps up, fists clench, the whole body tenses
+Clips.TankWake = {
+	Hold = true,
+	Tremble = true,
+	Keys = {
+		{ T = 0, Pose = FLOAT },
+		{ T = 0.12, Ease = "Out", Pose = {
+			Root = { 0, 0, 0, 0, 0.1, 0 }, Neck = { 14, 0, 0 }, Waist = { 8, 0, 0 },
+			RShoulder = { 34, 0, 38 }, LShoulder = { 34, 0, -38 }, RElbow = { 96, 0, 0 }, LElbow = { 96, 0, 0 },
+			RHip = { 14, 0, 4 }, LHip = { 14, 0, -4 }, RKnee = { -30, 0, 0 }, LKnee = { -30, 0, 0 },
+		} },
+		{ T = 0.5, Pose = {
+			Root = { 0, 0, 0, 0, 0.1, 0 }, Neck = { 18, 0, 0 }, Waist = { 10, 0, 0 },
+			RShoulder = { 40, 0, 40 }, LShoulder = { 40, 0, -40 }, RElbow = { 104, 0, 0 }, LElbow = { 104, 0, 0 },
+			RHip = { 14, 0, 4 }, LHip = { 14, 0, -4 }, RKnee = { -30, 0, 0 }, LKnee = { -30, 0, 0 },
+		} },
+	},
+}
+-- smash through the glass shoulder-first, then drop into a three-point landing
+local CROUCH = {
+	Root = { -26, 0, 0, 0, -1.25, 0 }, Waist = { -14, 0, 0 }, Neck = { 30, 0, 0 },
+	RShoulder = { 62, 0, 12 }, RElbow = { 20, 0, 0 },
+	LShoulder = { -18, 0, -40 }, LElbow = { 30, 0, 0 },
+	RHip = { 96, 0, 8 }, RKnee = { -118, 0, 0 }, RAnkle = { 22, 0, 0 },
+	LHip = { 30, 0, -10 }, LKnee = { -110, 0, 0 }, LAnkle = { 60, 0, 0 },
+}
+Clips.BurstOut = {
+	Hold = true,
+	Keys = {
+		{ T = 0, Pose = FLOAT },
+		{ T = 0.1, Ease = "Out", Pose = {
+			Root = { -38, 0, 0 }, Waist = { -10, 0, 0 }, Neck = { 22, 0, 0 },
+			RShoulder = { 150, 0, 16 }, LShoulder = { 150, 0, -16 }, RElbow = { 30, 0, 0 }, LElbow = { 30, 0, 0 },
+			RHip = { -24, 0, 0 }, LHip = { 12, 0, 0 }, RKnee = { -40, 0, 0 }, LKnee = { -70, 0, 0 },
+		} },
+		{ T = 0.42, Ease = "In", Pose = CROUCH },
+		{ T = 0.52, Ease = "Out", Pose = CROUCH },
+	},
+}
+-- rise out of the crouch with the forearms crossing in front of the face
+local CROSS = {
+	Root = { -4, 0, 0, 0, -0.35, 0 }, Waist = { 4, 0, 0 }, Neck = { 6, 0, 0 },
+	RShoulder = { 86, 35, -48 }, RElbow = { 70, 0, 0 }, RWrist = { 0, 0, 0 },
+	LShoulder = { 86, -35, 48 }, LElbow = { 70, 0, 0 }, LWrist = { 0, 0, 0 },
+	RHip = { 34, 0, 14 }, RKnee = { -44, 0, 0 }, RAnkle = { 10, 0, 0 },
+	LHip = { 26, 0, -14 }, LKnee = { -40, 0, 0 }, LAnkle = { 12, 0, 0 },
+}
+Clips.CrossSnikt = {
+	Hold = true,
+	Tremble = true,
+	Keys = {
+		{ T = 0, Pose = CROUCH },
+		{ T = 0.45, Ease = "InOut", Pose = CROSS },
+		-- the blades punch out: arms jolt outward a touch with the recoil
+		{ T = 0.62, Pose = CROSS },
+		{ T = 0.68, Ease = "Out", Pose = {
+			Root = { -2, 0, 0, 0, -0.4, 0 }, Waist = { 8, 0, 0 }, Neck = { 12, 0, 0 },
+			RShoulder = { 92, 30, -40 }, RElbow = { 64, 0, 0 }, LShoulder = { 92, -30, 40 }, LElbow = { 64, 0, 0 },
+			RHip = { 34, 0, 14 }, RKnee = { -44, 0, 0 }, RAnkle = { 10, 0, 0 },
+			LHip = { 26, 0, -14 }, LKnee = { -40, 0, 0 }, LAnkle = { 12, 0, 0 },
+		} },
+		{ T = 0.85, Ease = "InOut", Pose = CROSS },
+	},
+}
+
 -- Quick snarl after every kill
 Clips.Snarl = {
 	Tremble = true,
 	Keys = {
 		{ T = 0, Pose = REST },
 		{ T = 0.18, Ease = "Out", Pose = { Waist = { 14, 0, 0 }, Neck = { 30, 0, 0 }, RShoulder = { 40, 0, 50 }, LShoulder = { 40, 0, -50 }, RElbow = { 60, 0, 0 }, LElbow = { 60, 0, 0 } } },
-		{ T = 0.8, Pose = { Waist = { 14, 0, 0 }, Neck = { 30, 0, 0 }, RShoulder = { 40, 0, 50 }, LShoulder = { 40, 0, -50 }, RElbow = { 60, 0, 0 }, LElbow = { 60, 0, 0 } } },
-		{ T = 1.05, Ease = "InOut", Pose = REST },
+		{ T = 1.5, Pose = { Waist = { 14, 0, 0 }, Neck = { 30, 0, 0 }, RShoulder = { 40, 0, 50 }, LShoulder = { 40, 0, -50 }, RElbow = { 60, 0, 0 }, LElbow = { 60, 0, 0 } } },
+		{ T = 1.8, Ease = "InOut", Pose = REST },
 	},
 }
 
@@ -11680,6 +12034,8 @@ Fx.OnClientEvent:Connect(function(kind, data)
 		Interface.KillFeed(data.Text)
 	elseif kind == "TimeBonus" then
 		Interface.TimeBonus(data.Seconds)
+	elseif kind == "IntroCam" then
+		Effects.IntroCam(data)
 	elseif kind == "Gassed" then
 		Interface.Announce("GASSED!", Color3.fromRGB(150, 220, 60), data.Duration)
 		Interface.Flash(Color3.fromRGB(110, 170, 30), 0.45, data.Duration)
@@ -12160,6 +12516,48 @@ function Effects.Impulse(root, velocity, duration)
 	task.delay(duration, function()
 		lv:Destroy()
 		att:Destroy()
+	end)
+end
+
+---------------------------------------------------------------------------
+-- Intro camera (Wolverine only): watch yourself smash out of the tank
+---------------------------------------------------------------------------
+
+function Effects.IntroCam(data)
+	local cam = workspace.CurrentCamera
+	if typeof(data.Tank) ~= "Vector3" or typeof(data.Land) ~= "Vector3" then
+		return
+	end
+	local dir = typeof(data.Dir) == "Vector3" and data.Dir or Vector3.zAxis
+	local side = dir:Cross(Vector3.yAxis)
+	local start = os.clock()
+	local burst, release = data.Burst or 3, data.Release or 8
+	cam.CameraType = Enum.CameraType.Scriptable
+	local conn
+	conn = RunService.RenderStepped:Connect(function()
+		local t = os.clock() - start
+		local cf
+		if t < burst then
+			-- slow push in on the tank, low angle
+			local u = t / burst
+			local eye = data.Tank + dir * (15 - 4 * u) + side * (3 - 2 * u) + Vector3.new(0, -1 + u, 0)
+			cf = CFrame.lookAt(eye, data.Tank + Vector3.new(0, 1.5, 0))
+		else
+			-- in front of the landing spot, tight on the X
+			local u = math.clamp((t - burst) / 1.2, 0, 1)
+			local ease = 1 - (1 - u) ^ 3
+			local eye = data.Land + dir * (11 - 3.5 * ease) + side * (1.5 - 1.5 * ease) + Vector3.new(0, 0.6, 0)
+			cf = CFrame.lookAt(eye, data.Land + Vector3.new(0, 1.4 - 0.6 * ease, 0))
+		end
+		cam.CFrame = cf
+		if t > release - 0.6 or player:GetAttribute("Role") ~= "Wolverine" then
+			conn:Disconnect()
+			cam.CameraType = Enum.CameraType.Custom
+			local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+			if hum then
+				cam.CameraSubject = hum
+			end
+		end
 	end)
 end
 

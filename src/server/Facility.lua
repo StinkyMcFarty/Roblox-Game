@@ -1412,8 +1412,12 @@ local function buildAtrium(parent)
 		local a = k / 12 * math.pi * 2
 		D(parent, Vector3.new(0.6, 1.2, 1.4), CFrame.new(tp + Vector3.new(0, 1.2, 0)) * CFrame.Angles(0, a, 0) * CFrame.new(0, 0, -7.2), M.Metal, rgb(54, 52, 50))
 	end
-	drum(parent, tp + Vector3.new(0, 8.4, 0), 9.4, 13, M.Glass, rgb(170, 220, 230), { Transparency = 0.72, Reflectance = 0.25 })
+	local tankGlass = drum(parent, tp + Vector3.new(0, 8.4, 0), 9.4, 13, M.Glass, rgb(170, 220, 230), { Transparency = 0.72, Reflectance = 0.25 })
+	tankGlass.Name = "TankGlass" -- Wolverine smashes out of this in the intro
+	tankGlass:SetAttribute("Solid", true)
 	local liquid = drum(parent, tp + Vector3.new(0, 7, 0), 8.8, 10, M.Neon, rgb(60, 200, 190), { Transparency = 0.62, CanCollide = false })
+	liquid.Name = "TankLiquid"
+	liquid:SetAttribute("Solid", true)
 	pointLight(liquid, 30, 2.2, rgb(70, 230, 210), true)
 	make("ParticleEmitter", liquid, {
 		Texture = "rbxasset://textures/particles/sparkles_main.dds",
@@ -1428,7 +1432,7 @@ local function buildAtrium(parent)
 		LightEmission = 0.8,
 	})
 	for k = 0, 7 do
-		local a = k / 8 * math.pi * 2
+		local a = (k + 0.5) / 8 * math.pi * 2 -- half-step so the front is open (his breakout path)
 		local p = tp + Vector3.new(math.cos(a) * 4.9, 0, math.sin(a) * 4.9)
 		cyl(parent, p + Vector3.new(0, 1.9, 0), p + Vector3.new(0, 14.8, 0), 0.45, M.Metal, rgb(70, 68, 64), nil, true)
 	end

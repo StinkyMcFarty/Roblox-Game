@@ -178,14 +178,98 @@ Clips.Roar = {
 	},
 }
 
+---------------------------------------------------------------------------
+-- Intro: Weapon X tank breakout. He floats limp in the adamantium fluid,
+-- wakes, smashes out, lands in a crouch, crosses his forearms and the claws
+-- shoot out in an X (SNIKT), then he throws his arms wide into the roar.
+---------------------------------------------------------------------------
+local FLOAT = {
+	Root = { 0, 0, 0, 0, 0.1, 0 }, Neck = { -28, 0, 4 }, Waist = { -6, 0, 0 },
+	RShoulder = { 14, 0, 22 }, LShoulder = { 10, 0, -26 }, RElbow = { 24, 0, 0 }, LElbow = { 30, 0, 0 },
+	RWrist = { -10, 0, 0 }, LWrist = { -12, 0, 0 },
+	RHip = { 10, 0, 6 }, LHip = { 4, 0, -4 }, RKnee = { -18, 0, 0 }, LKnee = { -10, 0, 0 },
+	RAnkle = { -20, 0, 0 }, LAnkle = { -16, 0, 0 },
+}
+Clips.TankFloat = {
+	Hold = true,
+	Keys = {
+		{ T = 0, Pose = FLOAT },
+		{ T = 1.2, Ease = "InOut", Pose = FLOAT },
+	},
+}
+-- eyes open: head snaps up, fists clench, the whole body tenses
+Clips.TankWake = {
+	Hold = true,
+	Tremble = true,
+	Keys = {
+		{ T = 0, Pose = FLOAT },
+		{ T = 0.12, Ease = "Out", Pose = {
+			Root = { 0, 0, 0, 0, 0.1, 0 }, Neck = { 14, 0, 0 }, Waist = { 8, 0, 0 },
+			RShoulder = { 34, 0, 38 }, LShoulder = { 34, 0, -38 }, RElbow = { 96, 0, 0 }, LElbow = { 96, 0, 0 },
+			RHip = { 14, 0, 4 }, LHip = { 14, 0, -4 }, RKnee = { -30, 0, 0 }, LKnee = { -30, 0, 0 },
+		} },
+		{ T = 0.5, Pose = {
+			Root = { 0, 0, 0, 0, 0.1, 0 }, Neck = { 18, 0, 0 }, Waist = { 10, 0, 0 },
+			RShoulder = { 40, 0, 40 }, LShoulder = { 40, 0, -40 }, RElbow = { 104, 0, 0 }, LElbow = { 104, 0, 0 },
+			RHip = { 14, 0, 4 }, LHip = { 14, 0, -4 }, RKnee = { -30, 0, 0 }, LKnee = { -30, 0, 0 },
+		} },
+	},
+}
+-- smash through the glass shoulder-first, then drop into a three-point landing
+local CROUCH = {
+	Root = { -26, 0, 0, 0, -1.25, 0 }, Waist = { -14, 0, 0 }, Neck = { 30, 0, 0 },
+	RShoulder = { 62, 0, 12 }, RElbow = { 20, 0, 0 },
+	LShoulder = { -18, 0, -40 }, LElbow = { 30, 0, 0 },
+	RHip = { 96, 0, 8 }, RKnee = { -118, 0, 0 }, RAnkle = { 22, 0, 0 },
+	LHip = { 30, 0, -10 }, LKnee = { -110, 0, 0 }, LAnkle = { 60, 0, 0 },
+}
+Clips.BurstOut = {
+	Hold = true,
+	Keys = {
+		{ T = 0, Pose = FLOAT },
+		{ T = 0.1, Ease = "Out", Pose = {
+			Root = { -38, 0, 0 }, Waist = { -10, 0, 0 }, Neck = { 22, 0, 0 },
+			RShoulder = { 150, 0, 16 }, LShoulder = { 150, 0, -16 }, RElbow = { 30, 0, 0 }, LElbow = { 30, 0, 0 },
+			RHip = { -24, 0, 0 }, LHip = { 12, 0, 0 }, RKnee = { -40, 0, 0 }, LKnee = { -70, 0, 0 },
+		} },
+		{ T = 0.42, Ease = "In", Pose = CROUCH },
+		{ T = 0.52, Ease = "Out", Pose = CROUCH },
+	},
+}
+-- rise out of the crouch with the forearms crossing in front of the face
+local CROSS = {
+	Root = { -4, 0, 0, 0, -0.35, 0 }, Waist = { 4, 0, 0 }, Neck = { 6, 0, 0 },
+	RShoulder = { 86, 35, -48 }, RElbow = { 70, 0, 0 }, RWrist = { 0, 0, 0 },
+	LShoulder = { 86, -35, 48 }, LElbow = { 70, 0, 0 }, LWrist = { 0, 0, 0 },
+	RHip = { 34, 0, 14 }, RKnee = { -44, 0, 0 }, RAnkle = { 10, 0, 0 },
+	LHip = { 26, 0, -14 }, LKnee = { -40, 0, 0 }, LAnkle = { 12, 0, 0 },
+}
+Clips.CrossSnikt = {
+	Hold = true,
+	Tremble = true,
+	Keys = {
+		{ T = 0, Pose = CROUCH },
+		{ T = 0.45, Ease = "InOut", Pose = CROSS },
+		-- the blades punch out: arms jolt outward a touch with the recoil
+		{ T = 0.62, Pose = CROSS },
+		{ T = 0.68, Ease = "Out", Pose = {
+			Root = { -2, 0, 0, 0, -0.4, 0 }, Waist = { 8, 0, 0 }, Neck = { 12, 0, 0 },
+			RShoulder = { 92, 30, -40 }, RElbow = { 64, 0, 0 }, LShoulder = { 92, -30, 40 }, LElbow = { 64, 0, 0 },
+			RHip = { 34, 0, 14 }, RKnee = { -44, 0, 0 }, RAnkle = { 10, 0, 0 },
+			LHip = { 26, 0, -14 }, LKnee = { -40, 0, 0 }, LAnkle = { 12, 0, 0 },
+		} },
+		{ T = 0.85, Ease = "InOut", Pose = CROSS },
+	},
+}
+
 -- Quick snarl after every kill
 Clips.Snarl = {
 	Tremble = true,
 	Keys = {
 		{ T = 0, Pose = REST },
 		{ T = 0.18, Ease = "Out", Pose = { Waist = { 14, 0, 0 }, Neck = { 30, 0, 0 }, RShoulder = { 40, 0, 50 }, LShoulder = { 40, 0, -50 }, RElbow = { 60, 0, 0 }, LElbow = { 60, 0, 0 } } },
-		{ T = 0.8, Pose = { Waist = { 14, 0, 0 }, Neck = { 30, 0, 0 }, RShoulder = { 40, 0, 50 }, LShoulder = { 40, 0, -50 }, RElbow = { 60, 0, 0 }, LElbow = { 60, 0, 0 } } },
-		{ T = 1.05, Ease = "InOut", Pose = REST },
+		{ T = 1.5, Pose = { Waist = { 14, 0, 0 }, Neck = { 30, 0, 0 }, RShoulder = { 40, 0, 50 }, LShoulder = { 40, 0, -50 }, RElbow = { 60, 0, 0 }, LElbow = { 60, 0, 0 } } },
+		{ T = 1.8, Ease = "InOut", Pose = REST },
 	},
 }
 

@@ -106,8 +106,10 @@ local function makeClaws(char, clawId)
 	clawSet = Costumes.BuildClaws(char, clawSkin, false)
 end
 
-local function popClaws(char)
-	VFX.Anim(char, "Snikt")
+local function popClaws(char, noAnim)
+	if not noAnim then
+		VFX.Anim(char, "Snikt")
+	end
 	if not clawSet then
 		return
 	end
@@ -201,6 +203,8 @@ local function popClaws(char)
 	end
 	Fx:FireAllClients("Shake", { Position = head and head.Position or Vector3.zero, Intensity = 0.4, Radius = 60 })
 end
+
+local tankIntro -- defined below (needs popClaws/roar)
 
 local function roar(char)
 	local head = char:FindFirstChild("Head")
@@ -404,6 +408,191 @@ end
 -- Transform / intro
 ---------------------------------------------------------------------------
 
+---------------------------------------------------------------------------
+-- Intro: the Weapon X tank breakout. He floats in the adamantium fluid, wakes,
+-- smashes out through the glass, lands, crosses his arms and the claws shoot
+-- out in an X, then the roar. Timings live in Config.Intro.
+---------------------------------------------------------------------------
+
+local GLASS = Color3.fromRGB(190, 230, 235)
+local FLUID = Color3.fromRGB(70, 220, 205)
+
+local function shatterTank(glass, liquid, dir)
+	local c = glass.CFrame.Position
+	local radius, height = glass.Size.Y / 2, glass.Size.X
+	glass.Transparency = 1
+	glass.CanCollide = false
+	glass.CanQuery = false
+	local folder = (Round.Map and Round.Map:FindFirstChild("Debris")) or workspace
+	for k = 1, 46 do
+		local a = math.random() * math.pi * 2
+		local y = (math.random() - 0.5) * height * 0.9
+		local p = c + Vector3.new(math.cos(a) * radius, y, math.sin(a) * radius)
+		local shard = Instance.new("WedgePart")
+		shard.Size = Vector3.new(0.08, 0.5 + math.random() * 1.6, 0.4 + math.random() * 1.2)
+		shard.CFrame = CFrame.new(p) * CFrame.Angles(math.random() * 6, math.random() * 6, math.random() * 6)
+		shard.Material = Enum.Material.Glass
+		shard.Color = GLASS
+		shard.Transparency = 0.35
+		shard.Reflectance = 0.3
+		shard.CanCollide = true
+		shard.CanQuery = false
+		shard.CastShadow = false
+		shard.Parent = folder
+		-- blown out, mostly the way he's facing
+		local out = (p - c) * Vector3.new(1, 0, 1)
+		out = out.Magnitude > 0.01 and out.Unit or dir
+		shard.AssemblyLinearVelocity = (out * 0.5 + dir * (0.6 + math.random() * 0.6)).Unit * (30 + math.random() * 35) + Vector3.new(0, 8 + math.random() * 14, 0)
+		shard.AssemblyAngularVelocity = Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5) * 30
+		Debris:AddItem(shard, 3 + math.random() * 1.5)
+	end
+	-- the fluid bursts out and drains
+	local anchor = Instance.new("Part")
+	anchor.Anchored, anchor.CanCollide, anchor.CanQuery, anchor.Transparency = true, false, false, 1
+	anchor.Size = Vector3.one
+	anchor.CFrame = CFrame.lookAt(c, c + dir)
+	anchor.Parent = folder
+	Util.Burst(anchor, {
+		Texture = "rbxasset://textures/particles/smoke_main.dds",
+		Color = ColorSequence.new(Color3.fromRGB(150, 255, 240), FLUID),
+		LightEmission = 0.4,
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.2), NumberSequenceKeypoint.new(1, 4.5) }),
+		Transparency = NumberSequence.new(0.25, 1),
+		Lifetime = NumberRange.new(0.6, 1.2),
+		Speed = NumberRange.new(18, 40),
+		SpreadAngle = Vector2.new(55, 30),
+		Acceleration = Vector3.new(0, -60, 0),
+		EmissionDirection = Enum.NormalId.Front,
+	}, 90, 2)
+	Util.Burst(anchor, Util.SparkProps, 40, 1.5)
+	Debris:AddItem(anchor, 3)
+	if liquid then
+		local bottom = liquid.CFrame.Position.Y - liquid.Size.X / 2
+		TweenService:Create(liquid, TweenInfo.new(0.9, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+			Size = Vector3.new(0.2, liquid.Size.Y, liquid.Size.Z),
+			CFrame = CFrame.new(liquid.CFrame.Position.X, bottom + 0.1, liquid.CFrame.Position.Z) * CFrame.Angles(0, 0, math.rad(90)),
+		}):Play()
+		local light = liquid:FindFirstChildWhichIsA("Light")
+		if light then
+			TweenService:Create(light, TweenInfo.new(1.2), { Brightness = 0.4 }):Play()
+		end
+	end
+	VFX.Shockwave(Vector3.new(c.X, c.Y - height / 2 + 0.3, c.Z), 26, FLUID)
+	Util.SoundAt(Config.Sounds.Break, c, { Volume = 3, Pitch = 1.35, Range = 500 })
+	Util.SoundAt(Config.Sounds.Break, c, { Volume = 2.4, Pitch = 0.6, Range = 500 })
+	Util.SoundAt(Config.Sounds.Impact, c, { Volume = 2.5, Pitch = 0.7, Range = 400 })
+	Fx:FireAllClients("Shake", { Position = c, Intensity = 1.4, Radius = 140 })
+end
+
+tankIntro = function(player, char, spawnCFrame, valid)
+	local cfg = Config.Intro
+	local root = Util.Root(char)
+	local map = Round.Map
+	local glass = map and map:FindFirstChild("TankGlass", true)
+	local liquid = map and map:FindFirstChild("TankLiquid", true)
+	if not (root and glass) then
+		-- no tank on this map: the classic intro
+		task.wait(Config.ClawPopTime)
+		if valid() then popClaws(char) end
+		task.wait(Config.RoarTime - Config.ClawPopTime)
+		if valid() then roar(char) end
+		return
+	end
+	local dir = Util.Flat(spawnCFrame.LookVector)
+	local tc = glass.CFrame.Position
+	local floorY = tc.Y - glass.Size.X / 2
+	local hum = Util.Humanoid(char)
+	local hip = (hum and hum.HipHeight or 2) + root.Size.Y / 2
+	local inside = CFrame.lookAt(Vector3.new(tc.X, floorY + hip + 1.2, tc.Z), Vector3.new(tc.X, floorY + hip + 1.2, tc.Z) + dir)
+	root.Anchored = true
+	char:PivotTo(inside)
+	VFX.Anim(char, "TankFloat")
+	Util.FireClient(Fx, player, "IntroCam", { Tank = tc, Land = spawnCFrame.Position, Dir = dir, Burst = cfg.Burst, Release = Config.IntroLength })
+
+	-- drifting in the fluid
+	local t0 = os.clock()
+	while os.clock() - t0 < cfg.Wake and valid() do
+		local t = os.clock() - t0
+		char:PivotTo(inside * CFrame.new(0, math.sin(t * 1.6) * 0.25, 0) * CFrame.Angles(0, math.sin(t * 0.7) * 0.08, 0))
+		task.wait()
+	end
+	if not valid() then
+		root.Anchored = false
+		return
+	end
+	-- eyes snap open, he fights the restraints: the glass takes two hits
+	VFX.Anim(char, "TankWake")
+	for _, eye in (char:FindFirstChild("Gear") or char):GetChildren() do
+		if eye.Name == "Eye" then
+			eye.Color = Color3.fromRGB(255, 40, 40)
+		end
+	end
+	Util.SoundAt(Config.Sounds.Snarl ~= "" and Config.Sounds.Snarl or Config.Sounds.Impact, tc, { Volume = 2, Pitch = 0.8, Range = 200 })
+	for k = 1, 2 do
+		task.wait((cfg.Burst - cfg.Wake) / 3)
+		if not valid() then break end
+		Util.SoundAt(Config.Sounds.Impact, tc, { Volume = 2.4, Pitch = 0.55 + k * 0.1, Range = 300 })
+		Fx:FireAllClients("Shake", { Position = tc, Intensity = 0.5 + k * 0.2, Radius = 80 })
+		glass.Transparency = math.max(0.45, glass.Transparency - 0.1) -- stress fogs the glass
+	end
+	task.wait((cfg.Burst - cfg.Wake) / 3)
+	if not valid() then
+		root.Anchored = false
+		return
+	end
+
+	-- BREAKOUT
+	shatterTank(glass, liquid, dir)
+	VFX.Anim(char, "BurstOut")
+	local from = char:GetPivot()
+	local to = spawnCFrame
+	local flight = 0.42
+	local f0 = os.clock()
+	while os.clock() - f0 < flight and valid() do
+		local u = (os.clock() - f0) / flight
+		local p = from.Position:Lerp(to.Position, u) + Vector3.new(0, math.sin(u * math.pi) * 2.2, 0)
+		char:PivotTo(CFrame.lookAt(p, p + dir))
+		task.wait()
+	end
+	char:PivotTo(to)
+	VFX.Dust(to.Position - Vector3.new(0, hip, 0), Color3.fromRGB(150, 210, 205), 18)
+	VFX.Shockwave(to.Position - Vector3.new(0, hip - 0.2, 0), 14, FLUID)
+	Util.Sound(Config.Sounds.Land ~= "" and Config.Sounds.Land or Config.Sounds.Impact, root, { Volume = 2.4, Pitch = 0.75, Range = 300 })
+	Fx:FireAllClients("Shake", { Position = to.Position, Intensity = 1, Radius = 90 })
+
+	-- rise, cross the forearms... SNIKT: the blades shoot out in an X
+	task.wait(cfg.Cross - cfg.Burst - flight)
+	if not valid() then
+		root.Anchored = false
+		return
+	end
+	VFX.Anim(char, "CrossSnikt")
+	task.wait(0.62)
+	if not valid() then
+		root.Anchored = false
+		return
+	end
+	popClaws(char, true)
+	for _, hand in { char:FindFirstChild("RightHand"), char:FindFirstChild("LeftHand") } do
+		if hand then
+			VFX.Impact(hand.Position + Vector3.new(0, 0.8, 0), clawGlow, 1.4)
+		end
+	end
+	Util.Sound(Config.Sounds.Snikt, root, { Volume = 3, Range = 400 })
+	Fx:FireAllClients("Shake", { Position = to.Position, Intensity = 0.8, Radius = 80 })
+	Fx:FireAllClients("HitStop", { Attacker = char, Duration = 0.12 })
+
+	-- hold the X... then throw the arms wide and ROAR
+	task.wait(cfg.Roar - cfg.Cross - 0.62)
+	if valid() then
+		roar(char)
+	end
+	task.wait(1.6)
+	if root.Parent then
+		root.Anchored = false
+	end
+end
+
 function Wolverine.Transform(player, spawnCFrame)
 	local char = player.Character
 	if not char then
@@ -448,16 +637,7 @@ function Wolverine.Transform(player, spawnCFrame)
 	makeSkeleton(char)
 	char:PivotTo(spawnCFrame * CFrame.new(0, 1, 0))
 
-	task.delay(Config.ClawPopTime, function()
-		if valid() then
-			popClaws(char)
-		end
-	end)
-	task.delay(Config.RoarTime, function()
-		if valid() then
-			roar(char)
-		end
-	end)
+	task.spawn(tankIntro, player, char, spawnCFrame, valid)
 	task.delay(Config.IntroLength, function()
 		if valid() then
 			Round.Released = true

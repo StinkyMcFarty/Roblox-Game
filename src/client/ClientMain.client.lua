@@ -451,6 +451,8 @@ Fx.OnClientEvent:Connect(function(kind, data)
 		Interface.KillFeed(data.Text)
 	elseif kind == "TimeBonus" then
 		Interface.TimeBonus(data.Seconds)
+	elseif kind == "IntroCam" then
+		Effects.IntroCam(data)
 	elseif kind == "Gassed" then
 		Interface.Announce("GASSED!", Color3.fromRGB(150, 220, 60), data.Duration)
 		Interface.Flash(Color3.fromRGB(110, 170, 30), 0.45, data.Duration)

@@ -161,6 +161,43 @@ function Combat.BreakPart(part, origin, force)
 	return true
 end
 
+local METAL = {
+	[Enum.Material.Metal] = true,
+	[Enum.Material.DiamondPlate] = true,
+	[Enum.Material.CorrodedMetal] = true,
+	[Enum.Material.Foil] = true,
+}
+function Combat.IsMetal(part)
+	return METAL[part.Material] == true
+end
+
+-- Claws on metal: a spray of molten sparks off the point of contact, an
+-- orange flash and a steel screech. dir = which way the sparks fly.
+function Combat.MetalSparks(position, dir)
+	local anchor = Instance.new("Part")
+	anchor.Anchored, anchor.CanCollide, anchor.CanQuery, anchor.CanTouch = true, false, false, false
+	anchor.Transparency = 1
+	anchor.Size = Vector3.one * 0.2
+	dir = (dir and dir.Magnitude > 0.01) and dir.Unit or Vector3.yAxis
+	anchor.CFrame = CFrame.lookAt(position, position + (dir + Vector3.new(0, 0.6, 0)).Unit)
+	anchor.Parent = debrisFolder()
+	local streaks = table.clone(Util.MoltenStreakProps)
+	streaks.EmissionDirection = Enum.NormalId.Front
+	local globs = table.clone(Util.MoltenGlobProps)
+	globs.EmissionDirection = Enum.NormalId.Front
+	Util.Burst(anchor, streaks, 55, 1.2)
+	Util.Burst(anchor, globs, 14, 1.6)
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 150, 50)
+	light.Range = 14
+	light.Brightness = 6
+	light.Shadows = false
+	light.Parent = anchor
+	TweenService:Create(light, TweenInfo.new(0.35, Enum.EasingStyle.Quad), { Brightness = 0 }):Play()
+	Util.SoundAt(Config.Sounds.Snikt, position, { Volume = 1.4, Pitch = 1.25 + math.random() * 0.2, Range = 160 })
+	Debris:AddItem(anchor, 2.5)
+end
+
 -- Breaks every breakable map part inside a box. Returns how many broke.
 function Combat.BreakInBox(cframe, size, origin, force)
 	local map = Round.Map
@@ -171,10 +208,18 @@ function Combat.BreakInBox(cframe, size, origin, force)
 	params.FilterType = Enum.RaycastFilterType.Include
 	params.FilterDescendantsInstances = { map }
 	local n = 0
+	local metalAt = nil
 	for _, p in workspace:GetPartBoundsInBox(cframe, size, params) do
+		local metal = METAL[p.Material] and p.Position
 		if Combat.BreakPart(p, origin, force or 40) then
 			n += 1
+			metalAt = metalAt or metal
 		end
+	end
+	if metalAt then
+		-- sparks off the face nearest him, flying back past the claws
+		local toward = Util.Flat(origin - metalAt)
+		Combat.MetalSparks(metalAt:Lerp(origin, 0.25) + Vector3.new(0, 0.5, 0), toward)
 	end
 	if n > 0 then
 		VFX.Dust(cframe.Position, Color3.fromRGB(190, 185, 180), 8 + n * 3)
@@ -343,7 +388,9 @@ function Combat.Wound(killer, victim, opts)
 	end
 	if victim:GetAttribute("Role") == "Sentinel" then
 		hum.Health = hum.MaxHealth * math.max(0.05, (victim:GetAttribute("Armor") or 1) / Config.Sentinel.Armor)
-		Util.Burst(root, Util.SparkProps, 30, 2)
+		local kRoot0 = killer and Util.Root(killer.Character)
+		local torso0 = Util.Torso(char) or root
+		Combat.MetalSparks(torso0.Position, kRoot0 and Util.Flat(kRoot0.Position - torso0.Position) or nil)
 	else
 		local hits = victim:GetAttribute("Hits") or 0
 		hum.Health = hum.MaxHealth * math.max(0.05, 1 - hits / Config.HitsToKill)
@@ -553,7 +600,8 @@ function Combat.Execute(killer, victim)
 	VFX.Anim(kChar, "Snarl")
 	local kHead = kChar:FindFirstChild("Head")
 	if kHead then
-		Util.Sound(Config.Sounds.Snarl, kHead, { Volume = 2, Range = 300 })
+		-- the cartoon berserker scream over what's left of them
+		Util.Sound(Config.Sounds.Scream, kHead, { Volume = 2.6, Range = 420, MinRange = 30 })
 	end
 	if kRoot.Parent then
 		kRoot.Anchored = false

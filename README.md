@@ -54,7 +54,7 @@ Anything left at `0` uses a built-in Roblox sound instead. Roblox may ask you to
 
 Also upload `DeathRay.ogg`, `Chase.ogg` (chase music), `Heartbeat.ogg` and `Fart.ogg`, then paste their IDs.
 Footsteps: upload `Step.ogg` (tile), `StepMetal.ogg` (grating) and `StepHeavy.ogg` (Sentinel stomp) and paste their IDs as `Step`, `StepMetal`, `StepHeavy`. Until `Step` is set, walking keeps the default Roblox run sound.
-Also upload `PounceLeap.ogg` (pounce launch) and paste its ID as `PounceLeap`.
+Also upload `PounceLeap.ogg` (pounce launch) as `PounceLeap`, `Scream.ogg` (kill scream) as `Scream`, and the remade `Roar.ogg` (replace the old `Roar` ID).
 
 **Upload at least `Slash.ogg` and `Roar.ogg`.** Without them, M1 uses Roblox's old sword sound and the roar is a pitched-down placeholder.
 
@@ -167,3 +167,5 @@ src/shared/   Config, Skins, Util
 - **Fart gas**: if Wolverine runs into a fresh cloud (first 4s, within 7 studs) he's gassed for 2s: no attacks, 40% speed, covering his nose and coughing.
 - **Sniff** marks every survivor, hiding spot and gas decoy with the same red silhouette, live-tracked for 5s, so a decoy looks exactly like a person.
 - **Death ray** shoves Wolverine back harder and more constantly the closer he is (up to 3.2x within 18 studs).
+- **Intro**: Wolverine floats in the atrium's adamantium tank, wakes, smashes out through the glass, lands, crosses his forearms and the claws shoot out in an X, then roars (his camera films it). Timings: `Config.Intro`.
+- **Kill scream** after every rip-in-half. **Molten sparks** fly when his claws tear through metal or hit a Sentinel.

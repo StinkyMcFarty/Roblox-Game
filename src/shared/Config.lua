@@ -13,9 +13,12 @@ Config.KillTimeBonus = 15 -- Wolverine gets this much extra time per kill
 Config.EndScreenTime = 6
 
 -- Wolverine intro (he is locked in the Weapon X tank room)
-Config.IntroLength = 7 -- seconds before he is released
-Config.ClawPopTime = 2.5 -- SNIKT
+Config.IntroLength = 8 -- seconds before he is released
+Config.ClawPopTime = 2.5 -- SNIKT (maps without the Weapon X tank)
 Config.RoarTime = 3.8
+-- Weapon X tank breakout (seconds from spawn): eyes open, glass bursts,
+-- arms cross (claws pop 0.62s later in an X), roar.
+Config.Intro = { Wake = 1.6, Burst = 2.9, Cross = 3.8, Roar = 5.3 }
 
 -- Damage ----------------------------------------------------------------
 Config.HitsToKill = 3 -- the 3rd hit always rips the survivor in half
@@ -148,7 +151,8 @@ Config.UploadedSounds = {
 	Roar = 84386454545822, Snarl = 0, Tear = 0, Gore = 0, Break = 0, Heartbeat = 94699316471373, Fart = 130496994474771,
 	Sniff = 0, Laser = 0, Punch = 0, Terminal = 0, UIHover = 0, UIClick = 0, Paw = 90700737432630,
 	PounceHit = 140573962847729, Impale = 100362323212257, DeathRay = 89285816836463, Chase = 71009071343057,
-	PounceLeap = 0, -- pounce launch (falls back to a pitched slash)
+	PounceLeap = 92649317075292, -- pounce launch
+	Scream = 0, -- kill scream after ripping someone in half
 	Step = 101289698791450, StepMetal = 112150969278482, StepHeavy = 114217739046080, -- footsteps (4 takes per file; see Anims.lua)
 }
 Config.Sounds.Snarl = Config.Sounds.Snarl or ""
@@ -164,6 +168,7 @@ Config.Sounds.PounceHit = Config.Sounds.PounceHit or Config.Sounds.Slash
 Config.Sounds.Impale = Config.Sounds.Impale or Config.Sounds.Slash
 Config.Sounds.DeathRay = Config.Sounds.DeathRay or Config.Sounds.Laser
 Config.Sounds.Chase = Config.Sounds.Chase or ""
+Config.Sounds.Scream = Config.Sounds.Scream or Config.Sounds.Snarl
 -- Footsteps: until Step is uploaded, walking keeps Roblox's default running sound.
 Config.Sounds.Step = Config.Sounds.Step or ""
 Config.Sounds.StepMetal = Config.Sounds.StepMetal or Config.Sounds.Step

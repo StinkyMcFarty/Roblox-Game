@@ -98,6 +98,39 @@ Util.SparkProps = {
 	Acceleration = Vector3.new(0, -40, 0),
 }
 
+-- Molten metal: white-hot streaks stretched along their flight that cool to
+-- orange and red as gravity drags them down.
+Util.MoltenStreakProps = {
+	Texture = "rbxasset://textures/particles/sparkles_main.dds",
+	Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 230)),
+		ColorSequenceKeypoint.new(0.3, Color3.fromRGB(255, 190, 70)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(230, 60, 20)),
+	}),
+	LightEmission = 1,
+	Orientation = Enum.ParticleOrientation.VelocityParallel,
+	Squash = NumberSequence.new(-2.6),
+	Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.22), NumberSequenceKeypoint.new(1, 0.04) }),
+	Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.8, 0.2), NumberSequenceKeypoint.new(1, 1) }),
+	Lifetime = NumberRange.new(0.35, 0.9),
+	Speed = NumberRange.new(18, 46),
+	SpreadAngle = Vector2.new(70, 70),
+	Acceleration = Vector3.new(0, -85, 0),
+	Drag = 0.8,
+}
+Util.MoltenGlobProps = {
+	Texture = "rbxasset://textures/particles/sparkles_main.dds",
+	Color = ColorSequence.new(Color3.fromRGB(255, 170, 60), Color3.fromRGB(200, 40, 10)),
+	LightEmission = 1,
+	Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.35), NumberSequenceKeypoint.new(1, 0.1) }),
+	Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1) }),
+	Lifetime = NumberRange.new(0.8, 1.4),
+	Speed = NumberRange.new(6, 16),
+	SpreadAngle = Vector2.new(60, 60),
+	Acceleration = Vector3.new(0, -60, 0),
+	Drag = 1.2,
+}
+
 -- FireClient that quietly skips bots (they have no client).
 function Util.FireClient(remote, target, ...)
 	if typeof(target) == "Instance" and target:IsA("Player") then
