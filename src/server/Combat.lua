@@ -14,6 +14,8 @@ local Fx = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Fx")
 
 local Combat = {}
 
+local regenLater
+
 local function debrisFolder()
 	local map = Round.Map
 	return (map and map:FindFirstChild("Debris")) or workspace
@@ -40,6 +42,70 @@ local function topple(part, origin)
 	end
 	model.Parent = debrisFolder()
 	Debris:AddItem(model, 7)
+end
+
+-- Shredded walls/props grow back after Config.WallRegen seconds (with all their
+-- trim, which is parented to them). Waits until nobody is standing in the spot.
+local regenParams = OverlapParams.new()
+regenParams.FilterType = Enum.RaycastFilterType.Include
+local function blocked(part)
+	local chars = {}
+	for _, p in game:GetService("Players"):GetPlayers() do
+		if p.Character then
+			table.insert(chars, p.Character)
+		end
+	end
+	local debris = Round.Map and Round.Map:FindFirstChild("Debris")
+	if debris then
+		table.insert(chars, debris) -- bots live here
+	end
+	regenParams.FilterDescendantsInstances = chars
+	for _, hit in workspace:GetPartBoundsInBox(part.CFrame, part.Size + Vector3.new(0.6, 0.6, 0.6), regenParams) do
+		local model = hit:FindFirstAncestorOfClass("Model")
+		if model and model:FindFirstChildOfClass("Humanoid") then
+			return true
+		end
+	end
+	return false
+end
+
+regenLater = function(part)
+	local home = part.Parent
+	local map = Round.Map
+	if part:GetAttribute("NoRegen") or not home or not map then
+		part:Destroy()
+		return
+	end
+	part.Parent = nil
+	task.delay(Config.WallRegen or 20, function()
+		while true do
+			if Round.Map ~= map or not home:IsDescendantOf(workspace) then
+				part:Destroy()
+				return
+			end
+			if not blocked(part) then
+				break
+			end
+			task.wait(1.5)
+		end
+		part:SetAttribute("Broken", nil)
+		part.Parent = home
+		-- quick materialise flash
+		local ghost = part:Clone()
+		for _, d in ghost:GetChildren() do
+			d:Destroy()
+		end
+		ghost:SetAttribute("Breakable", nil)
+		ghost.Material = Enum.Material.Neon
+		ghost.Color = Color3.fromRGB(120, 200, 255)
+		ghost.Transparency = 0.4
+		ghost.CanCollide = false
+		ghost.CanQuery = false
+		ghost.Size = part.Size + Vector3.new(0.08, 0.08, 0.08)
+		ghost.Parent = debrisFolder()
+		TweenService:Create(ghost, TweenInfo.new(0.5), { Transparency = 1 }):Play()
+		Debris:AddItem(ghost, 0.6)
+	end)
 end
 
 function Combat.BreakPart(part, origin, force)
@@ -91,7 +157,7 @@ function Combat.BreakPart(part, origin, force)
 			end
 		end
 	end
-	part:Destroy()
+	regenLater(part)
 	return true
 end
 

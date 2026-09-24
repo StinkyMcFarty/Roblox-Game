@@ -76,6 +76,28 @@ local function dressUp(char, skinId)
 end
 
 local clawSet = nil
+local clawTrails = {}
+local trailToken = 0
+
+-- Claw trails only streak during attacks, never while walking around.
+local function swingTrails(duration)
+	trailToken += 1
+	local my = trailToken
+	for _, t in clawTrails do
+		if t.Parent then
+			t.Enabled = true
+		end
+	end
+	task.delay(duration, function()
+		if trailToken == my then
+			for _, t in clawTrails do
+				if t.Parent then
+					t.Enabled = false
+				end
+			end
+		end
+	end)
+end
 
 local function makeClaws(char, clawId)
 	clawSkin = Skins.Claws[clawId] or Skins.Claws[Skins.DefaultClaw]
@@ -92,6 +114,7 @@ local function popClaws(char)
 	Costumes.PopClaws(clawSet)
 	-- Streaking trails off every blade: every swing leaves a crisp arc
 	task.delay(0.18, function()
+		table.clear(clawTrails)
 		for i, tip in clawSet.Tips do
 			local base = clawSet.Bases[i]
 			if tip.Parent and base and base.Parent then
@@ -108,7 +131,9 @@ local function popClaws(char)
 				trail.LightEmission = 1
 				trail.Color = ColorSequence.new(Color3.new(1, 1, 1), clawGlow)
 				trail.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.15), NumberSequenceKeypoint.new(1, 1) })
+				trail.Enabled = false
 				trail.Parent = tip
+				table.insert(clawTrails, trail)
 				if clawSkin.Drip or clawSkin.Sparkle then
 					local pe = Instance.new("ParticleEmitter")
 					if clawSkin.Drip then
@@ -418,6 +443,7 @@ end
 ---------------------------------------------------------------------------
 
 local function slash(player, char, root)
+	swingTrails(0.38)
 	combo = combo % 2 + 1
 	local side = combo == 1 and "R" or "L"
 	VFX.Anim(char, side == "R" and "SlashR" or "SlashL")
@@ -472,6 +498,7 @@ local function pounceStrike(player, char, root, target)
 end
 
 local function pounce(player, char, root)
+	swingTrails(1.3)
 	local cfg = Config.Abilities.Pounce
 	VFX.Anim(char, "Pounce")
 	Util.Sound(Config.Sounds.Leap, root, { Pitch = 0.9, Volume = 1.8 })
@@ -495,6 +522,7 @@ end
 
 -- Uppercut impale: drive the claws up through them and hoist them overhead.
 local function stab(player, char, root)
+	swingTrails(1.1)
 	local cfg = Config.Abilities.Stab
 	VFX.Anim(char, "Impale")
 	Util.Sound(Config.Sounds.Whoosh, root, { Pitch = 0.8, Volume = 1.4 })

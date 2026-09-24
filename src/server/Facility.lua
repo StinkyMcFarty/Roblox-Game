@@ -495,8 +495,8 @@ end
 
 local STYLES = {
 	-- clean two-tone office/lab walls: dark wainscot, chair rail, light plaster
-	Office = { T = 1.2, Core = M.Plaster, Upper = rgb(188, 194, 200), Lower = rgb(62, 70, 80), Line = rgb(34, 37, 42), Cornice = rgb(46, 50, 56), Pil = rgb(70, 76, 84), LowerH = 3.4, Kind = "Office" },
-	Lab = { T = 1.2, Core = M.Plaster, Upper = rgb(206, 212, 216), Lower = rgb(84, 104, 110), Line = rgb(38, 44, 48), Cornice = rgb(52, 58, 62), Pil = rgb(92, 100, 106), LowerH = 3.4, Kind = "Office" },
+	Office = { T = 1.2, Core = M.Plaster, Upper = rgb(150, 156, 162), Lower = rgb(62, 70, 80), Line = rgb(34, 37, 42), Cornice = rgb(46, 50, 56), Pil = rgb(70, 76, 84), LowerH = 3.4, Kind = "Office" },
+	Lab = { T = 1.2, Core = M.Plaster, Upper = rgb(160, 166, 170), Lower = rgb(84, 104, 110), Line = rgb(38, 44, 48), Cornice = rgb(52, 58, 62), Pil = rgb(92, 100, 106), LowerH = 3.4, Kind = "Office" },
 	Dark = { T = 1.2, Core = M.SmoothPlastic, Upper = rgb(64, 68, 76), Lower = rgb(30, 32, 38), Line = rgb(18, 20, 24), Cornice = rgb(24, 26, 30), Pil = rgb(40, 44, 50), LowerH = 3.4, Kind = "Office", Glow = rgb(60, 190, 255) },
 	-- bunker corridor: painted concrete, blue-grey dado, orange stripe, red pipe pilasters
 	Concrete = { T = 1.4, Core = M.Concrete, Upper = rgb(176, 178, 180), Lower = rgb(64, 76, 90), Line = rgb(40, 44, 50), Stripe = rgb(226, 118, 32), Pil = rgb(142, 26, 22), LowerH = 2.6, Kind = "Concrete" },
@@ -588,7 +588,7 @@ local STENCIL_CODES = { "WX-01", "WX-04", "B-07", "SEC 3", "HAZ-2", "E-12", "WX-
 local function feature(core, st, at, w, side, idx, H)
 	local r = (idx * 7919) % 11
 	local faceCF = function(y)
-		return at(y) * CFrame.new(side * (st.T / 2 + 0.25), 0, 0) * CFrame.Angles(0, side > 0 and math.rad(-90) or math.rad(90), 0)
+		return at(y) * CFrame.new(side * (st.T / 2 + (st.Kind == "Industrial" and 0.45 or 0.25)), 0, 0) * CFrame.Angles(0, side > 0 and math.rad(-90) or math.rad(90), 0)
 	end
 	-- faceCF: -Z points away from the wall (front of the feature faces the room)
 	if r == 0 and H >= 9 then
@@ -667,8 +667,8 @@ local function openingFrame(parent, st, frame, o, H)
 	local mat = st.Kind == "Office" and M.SmoothPlastic or M.Metal
 	if o.Bottom and o.Bottom > 0 then
 		-- window: sill, head, mullions
-		D(parent, Vector3.new(T + 0.5, 0.3, w + 0.4), at(o.Bottom - 0.15, c), mat, frameColor)
-		D(parent, Vector3.new(T + 0.4, 0.3, w + 0.4), at(o.Top + 0.15, c), mat, frameColor)
+		D(parent, Vector3.new(T + 0.5, 0.36, w + 0.4), at(o.Bottom - 0.1, c), mat, frameColor)
+		D(parent, Vector3.new(T + 0.4, 0.36, w + 0.4), at(o.Top + 0.1, c), mat, frameColor)
 		for s = -1, 1, 2 do
 			D(parent, Vector3.new(T + 0.4, o.Top - o.Bottom, 0.3), at((o.Top + o.Bottom) / 2, c + s * (w / 2)), mat, frameColor)
 		end
@@ -680,24 +680,25 @@ local function openingFrame(parent, st, frame, o, H)
 	end
 	-- doorway
 	for s = -1, 1, 2 do
-		local jamb = D(parent, Vector3.new(T + jambT, o.Top, jambT), at(o.Top / 2, c + s * (w / 2 + jambT / 2)), mat, frameColor, { CanCollide = true, CanQuery = false })
+		local jamb = D(parent, Vector3.new(T + jambT, o.Top + 0.02, jambT), at(o.Top / 2 + 0.01, c + s * (w / 2 + jambT / 2 - 0.1)), mat, frameColor, { CanCollide = true, CanQuery = false })
 		if st.Kind == "Industrial" then
 			hazard(jamb, N.Right, jambT, 20)
 			hazard(jamb, N.Left, jambT, 20)
 		end
 	end
-	local header = D(parent, Vector3.new(T + jambT, st.Kind == "Industrial" and 1.6 or 0.7, w + jambT * 2), at(o.Top + (st.Kind == "Industrial" and 0.8 or 0.35), c), mat, frameColor)
+	local headerH = st.Kind == "Industrial" and 1.6 or 0.7
+	local header = D(parent, Vector3.new(T + jambT + 0.02, headerH, w + jambT * 2 - 0.2), at(o.Top + headerH / 2 - 0.1, c), mat, frameColor)
 	if st.Kind == "Industrial" then
 		hazard(header, N.Right, w + jambT * 2, 16)
 		hazard(header, N.Left, w + jambT * 2, 16)
 	end
 	-- floor threshold
-	local th = D(parent, Vector3.new(T + 1.6, 0.06, w), at(0.03, c), M.DiamondPlate, rgb(90, 92, 96))
+	local th = D(parent, Vector3.new(T + 1.6, 0.06, w - 0.2), at(0.035, c), M.DiamondPlate, rgb(90, 92, 96))
 	if st.Kind ~= "Office" then
 		hazard(th, N.Top, w, 12)
 	end
 	-- status light over the door + room signs on both faces
-	local lamp = D(parent, Vector3.new(T + 0.3, 0.25, 1.4), at(o.Top + (st.Kind == "Industrial" and 1.9 or 1.0), c), M.Neon, rgb(70, 255, 120))
+	local lamp = D(parent, Vector3.new(T + (st.Kind == "Industrial" and 1.5 or 0.5), 0.25, 1.4), at(o.Top + (st.Kind == "Industrial" and 1.9 or 1.0), c), M.Neon, rgb(70, 255, 120))
 	tag(lamp, "DoorLamp")
 	for _, s in { -1, 1 } do
 		local probe = (at(0, c) * CFrame.new(s * 6, 0, 0)).Position
@@ -707,7 +708,8 @@ local function openingFrame(parent, st, frame, o, H)
 		if there and (not here or here.Label ~= there.Label) then
 			local y = o.Top + (st.Kind == "Industrial" and 3.2 or 2.0)
 			if y < H - 0.8 then
-				local cf = at(y, c) * CFrame.new(s * (T / 2 + 0.12), 0, 0) * CFrame.Angles(0, s > 0 and math.rad(-90) or math.rad(90), 0)
+				local proud = st.Kind == "Industrial" and 0.9 or st.Kind == "Concrete" and 0.3 or 0.2
+				local cf = at(y, c) * CFrame.new(s * (T / 2 + proud), 0, 0) * CFrame.Angles(0, s > 0 and math.rad(-90) or math.rad(90), 0)
 				sideSign(parent, cf, math.min(w + 2, 11), there.Label, st.Kind ~= "Office")
 			end
 		end
@@ -853,7 +855,7 @@ end
 local FLOORS = {
 	Grate = { Size = 8, Mat = M.DiamondPlate, Color = rgb(74, 70, 64), Seam = rgb(22, 21, 20) },
 	DarkTile = { Size = 6, Mat = M.SmoothPlastic, Color = rgb(64, 68, 74), Seam = rgb(40, 43, 48) },
-	LabTile = { Size = 4, Mat = M.CeramicTiles, Color = rgb(196, 202, 206), Seam = rgb(120, 126, 132) },
+	LabTile = { Size = 4, Mat = M.CeramicTiles, Color = rgb(128, 134, 140), Seam = rgb(78, 82, 88) },
 	Corridor = { Size = 6, Mat = M.Slate, Color = rgb(84, 94, 104), Seam = rgb(40, 44, 50) },
 	Hangar = { Size = 12, Mat = M.Concrete, Color = rgb(112, 114, 116), Seam = rgb(56, 58, 60) },
 	Rubber = { Size = 6, Mat = M.Rubber, Color = rgb(40, 42, 46), Seam = rgb(20, 21, 24) },
@@ -889,7 +891,7 @@ local function lightPanel(parent, pos, w, d, color, withLight, range)
 	D(parent, Vector3.new(w + 0.5, 0.3, d + 0.5), CFrame.new(pos + Vector3.new(0, 0.1, 0)), M.Metal, rgb(34, 36, 40))
 	local p = D(parent, Vector3.new(w, 0.1, d), CFrame.new(pos - Vector3.new(0, 0.06, 0)), M.Neon, color or rgb(226, 234, 246))
 	if withLight then
-		surfaceLight(p, N.Bottom, range or 22, 1.6, color or rgb(226, 234, 246), 140)
+		surfaceLight(p, N.Bottom, range or 22, 0.75, color or rgb(226, 234, 246), 115)
 	end
 	return p
 end
@@ -944,16 +946,16 @@ local function ceiling(parent, r, kind)
 	if kind == "Coffered" then
 		-- dropped soffit around the room, recessed light grid inside
 		local band = 4
-		local c = rgb(170, 176, 182)
+		local c = rgb(110, 116, 122)
 		D(parent, Vector3.new(sx, 1.4, band), CFrame.new(cx, y - 0.7, r.z0 + band / 2), M.SmoothPlastic, c)
 		D(parent, Vector3.new(sx, 1.4, band), CFrame.new(cx, y - 0.7, r.z1 - band / 2), M.SmoothPlastic, c)
 		D(parent, Vector3.new(band, 1.4, sz - band * 2), CFrame.new(r.x0 + band / 2, y - 0.7, cz), M.SmoothPlastic, c)
 		D(parent, Vector3.new(band, 1.4, sz - band * 2), CFrame.new(r.x1 - band / 2, y - 0.7, cz), M.SmoothPlastic, c)
 		-- cove light strip along the soffit edge
 		for _, e in { { cx, r.z0 + band + 0.1, sx - band * 2, 0.15 }, { cx, r.z1 - band - 0.1, sx - band * 2, 0.15 } } do
-			D(parent, Vector3.new(e[3], 0.12, e[4]), CFrame.new(e[1], y - 1.3, e[2]), M.Neon, rgb(200, 220, 255))
+			D(parent, Vector3.new(e[3], 0.12, e[4]), CFrame.new(e[1], y - 1.3, e[2]), M.Neon, rgb(120, 140, 170))
 		end
-		D(parent, Vector3.new(sx - band * 2, 0.2, sz - band * 2), CFrame.new(cx, y - 0.1, cz), M.SmoothPlastic, rgb(150, 156, 162))
+		D(parent, Vector3.new(sx - band * 2, 0.2, sz - band * 2), CFrame.new(cx, y - 0.1, cz), M.SmoothPlastic, rgb(70, 74, 80))
 		-- ceiling tile grid
 		for x = r.x0 + band + 4, r.x1 - band - 1, 4 do
 			D(parent, Vector3.new(0.08, 0.06, sz - band * 2), CFrame.new(x, y - 0.23, cz), M.SmoothPlastic, rgb(120, 126, 132))
@@ -965,7 +967,7 @@ local function ceiling(parent, r, kind)
 		for x = r.x0 + band + 6, r.x1 - band - 4, 12 do
 			for z = r.z0 + band + 6, r.z1 - band - 4, 12 do
 				k += 1
-				lightPanel(parent, Vector3.new(x, y - 0.3, z), 3.6, 3.6, rgb(232, 238, 248), k % 2 == 1, r.h + 16)
+				lightPanel(parent, Vector3.new(x, y - 0.3, z), 3.6, 3.6, rgb(206, 214, 228), k % 2 == 1, r.h + 6)
 			end
 		end
 	elseif kind == "Grate" then
@@ -1355,6 +1357,7 @@ local function buildAtrium(parent)
 			local mid = t + 1.625
 			local g = P(glassFolder, Vector3.new(0.5, 12, 3.1), fcf * CFrame.new(0, 7, -mid), M.Glass, rgb(140, 190, 205), { Transparency = 0.6, Reflectance = 0.2 })
 			breakable(g)
+			g:SetAttribute("NoRegen", true)
 			D(g, Vector3.new(0.55, 0.12, 3.1), fcf * CFrame.new(0, 7, -mid), M.Metal, rgb(60, 62, 66), { Transparency = 0.3 })
 		end
 		for t = 0, len, 3.25 do
@@ -1840,9 +1843,10 @@ local function buildHangar(parent)
 	for _, y in { 6, 13, 20 } do
 		D(door, Vector3.new(44, 1, 2), CFrame.new(0, F + y, 138.3), M.Metal, rgb(46, 44, 42))
 	end
-	local hz = D(door, Vector3.new(44, 2.4, 0.1), CFrame.new(0, F + 1.4, 137.9), M.SmoothPlastic, rgb(222, 170, 28))
+	local hz = D(door, Vector3.new(44, 2.4, 0.1), CFrame.new(0, F + 1.4, 137.15), M.SmoothPlastic, rgb(222, 170, 28))
 	hazard(hz, N.Front, 44, 10)
-	local dl = D(door, Vector3.new(30, 2.6, 0.1), CFrame.new(0, F + 22.5, 137.85), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
+	D(door, Vector3.new(31, 3.2, 0.2), CFrame.new(0, F + 22.5, 137.2), M.Metal, rgb(26, 26, 28))
+	local dl = D(door, Vector3.new(30, 2.6, 0.1), CFrame.new(0, F + 22.5, 137.05), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
 	stencil(dl, N.Front, "HANGAR 7 — SENTINEL DEPLOYMENT", rgb(226, 190, 40), 20)
 
 	-- service clutter

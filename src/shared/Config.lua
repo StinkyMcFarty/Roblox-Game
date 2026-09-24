@@ -101,6 +101,7 @@ Config.DailyChallenges = {
 }
 
 -- Daily login reward: Base + PerStreakDay * (streak - 1), capped at MaxStreak days
+Config.WallRegen = 20 -- seconds before shredded walls/props grow back
 Config.DailyReward = { Base = 50, PerStreakDay = 25, MaxStreak = 7 }
 
 -- Sounds ----------------------------------------------------------------

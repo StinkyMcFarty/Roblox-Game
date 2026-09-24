@@ -264,6 +264,30 @@ local function huntPose(s, c, build)
 	}
 end
 
+-- Wolverine walking: a heavy, hunched prowl. Shoulders roll against the
+-- hips, arms hang low and wide with the claws out, weight drops into each
+-- step and the head stays locked on his prey.
+local function prowlPose(s, c)
+	local plant = math.abs(s) ^ 3 -- heel strike
+	return {
+		Root = CFrame.new(0, math.abs(c) * 0.12 - 0.34 - plant * 0.08, 0) * CFrame.Angles(rad(-20), rad(6 * s), rad(4 * s)),
+		Waist = CFrame.Angles(rad(-8 + plant * 3), rad(-13 * s), rad(-3 * s)),
+		Neck = CFrame.Angles(rad(22), rad(9 * s), rad(-2 * s)),
+		RShoulder = CFrame.Angles(rad(10 - 26 * s), rad(-6), rad(26 + 4 * c)),
+		LShoulder = CFrame.Angles(rad(10 + 26 * s), rad(6), rad(-26 - 4 * c)),
+		RElbow = CFrame.Angles(rad(42 + 14 * math.max(0, -s)), 0, 0),
+		LElbow = CFrame.Angles(rad(42 + 14 * math.max(0, s)), 0, 0),
+		RWrist = CFrame.Angles(rad(-18), 0, rad(8)),
+		LWrist = CFrame.Angles(rad(-18), 0, rad(-8)),
+		RHip = CFrame.Angles(rad(36 * s + 14), 0, rad(3)),
+		LHip = CFrame.Angles(rad(-36 * s + 14), 0, rad(-3)),
+		RKnee = CFrame.Angles(rad(-(22 + 55 * math.max(0, -s))), 0, 0),
+		LKnee = CFrame.Angles(rad(-(22 + 55 * math.max(0, s))), 0, 0),
+		RAnkle = CFrame.Angles(rad(-14 * s + 6), 0, 0),
+		LAnkle = CFrame.Angles(rad(14 * s + 6), 0, 0),
+	}
+end
+
 -- Wolverine on all fours: a smooth bounding lope. The spine stretches as
 -- the front paws reach and bunches as the back legs drive; the head stays
 -- level and locked forward while the body flows underneath it.
@@ -445,16 +469,18 @@ step:Connect(function(a, b)
 				loop = "Gallop"
 			elseif attr(char, "Sprinting") and speed > 8 and not airborne then
 				loop = role == "Wolverine" and "Hunt" or "Flee"
+			elseif role == "Wolverine" and speed > 1.5 and not airborne then
+				loop = "Prowl"
 			end
 		end
 		if loop then
 			st.Loop = loop
 		end
 		st.LoopBlend = math.clamp(st.LoopBlend + (loop and dt * 7 or -dt * 7), 0, 1)
-		st.Phase += dt * math.max(speed, 10) * (st.Loop == "Gallop" and 0.36 or 0.5)
+		st.Phase += dt * math.max(speed, st.Loop == "Prowl" and 6 or 10) * (st.Loop == "Gallop" and 0.36 or st.Loop == "Prowl" and 0.55 or 0.5)
 
 		-- predator idle blend (Wolverine standing / walking slowly, no clip)
-		local wantIdle = role == "Wolverine" and speed < 6 and not st.Clip and not loop and not root.Anchored
+		local wantIdle = role == "Wolverine" and not st.Clip and not loop and not root.Anchored
 		st.IdleBlend = math.clamp((st.IdleBlend or 0) + (wantIdle and dt * 3 or -dt * 6), 0, 1)
 
 		-- breathing: calm when rested, ragged panting when out of stamina / after sprinting
@@ -472,6 +498,8 @@ step:Connect(function(a, b)
 				pose = gallopPose(st.Phase)
 			elseif st.Loop == "Hunt" then
 				pose = huntPose(s, c, attr(char, "RunBuild"))
+			elseif st.Loop == "Prowl" then
+				pose = prowlPose(s, c)
 			else
 				local look = 0
 				if now > st.NextLook and wolverineNear(root) then
