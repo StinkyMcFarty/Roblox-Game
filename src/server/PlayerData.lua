@@ -33,8 +33,10 @@ local function fx(player, kind, data)
 	ReplicatedStorage.Remotes.Fx:FireClient(player, kind, data)
 end
 
+local DAY = 24 * 60 * 60 -- dailies and the login reward run on a rolling 24 hours
+
 local function freshDaily()
-	return { Day = today(), Progress = {}, Done = {} }
+	return { Started = os.time(), Progress = {}, Done = {} }
 end
 
 local function publish(player)
@@ -88,6 +90,7 @@ function PlayerData.Save(player)
 			Claw = d.Claw,
 			Tokens = d.Tokens,
 			LastLogin = d.LastLogin,
+			LastClaim = d.LastClaim,
 			Streak = d.Streak,
 			Daily = d.Daily,
 			Receipts = d.Receipts,
@@ -107,7 +110,7 @@ function PlayerData.AddCoins(player, amount, reason)
 end
 
 local function checkDay(d)
-	if d.Daily.Day ~= today() then
+	if os.time() - (d.Daily.Started or 0) >= DAY then
 		d.Daily = freshDaily()
 	end
 end
@@ -121,6 +124,7 @@ function PlayerData.Load(player)
 		Claw = Skins.DefaultClaw,
 		Tokens = 0,
 		LastLogin = "",
+		LastClaim = 0, -- os.time() of the last daily login reward
 		Streak = 0,
 		Daily = freshDaily(),
 		Pity = 0, -- rounds played in a row without being Wolverine (this session)
@@ -162,10 +166,11 @@ function PlayerData.Load(player)
 				end
 			end
 			data.LastLogin = saved.LastLogin or ""
+			data.LastClaim = tonumber(saved.LastClaim) or 0
 			data.Streak = tonumber(saved.Streak) or 0
-			if type(saved.Daily) == "table" and saved.Daily.Day == today() then
+			if type(saved.Daily) == "table" and os.time() - (tonumber(saved.Daily.Started) or 0) < DAY then
 				data.Daily = {
-					Day = saved.Daily.Day,
+					Started = tonumber(saved.Daily.Started),
 					Progress = saved.Daily.Progress or {},
 					Done = saved.Daily.Done or {},
 				}
@@ -179,9 +184,11 @@ function PlayerData.Load(player)
 	publish(player)
 
 	-- Daily login reward
-	if data.LastLogin ~= today() then
-		data.Streak = (data.LastLogin == yesterday()) and data.Streak + 1 or 1
-		data.LastLogin = today()
+	local since = os.time() - data.LastClaim
+	if since >= DAY then
+		-- claimed again within 48 hours keeps the streak going
+		data.Streak = (since < DAY * 2) and data.Streak + 1 or 1
+		data.LastClaim = os.time()
 		local r = Config.DailyReward
 		local reward = r.Base + r.PerStreakDay * (math.min(data.Streak, r.MaxStreak) - 1)
 		PlayerData.AddCoins(player, reward, ("Daily reward — day %d streak"):format(data.Streak))

@@ -105,7 +105,7 @@ Config.GuaranteedWolverineProductId = 0
 -- Coin packs (Store button). For each pack create a Developer Product in the
 -- Creator Dashboard (Monetization > Developer Products) at the Robux price
 -- below, then paste its ID into ProductId. Bigger packs give a bonus.
--- Roughly: a round earns ~70-100 coins; claws cost 400-2200, suits 1000-3000.
+-- Roughly: a round earns ~70-100 coins; claws cost 400-2200, suits 2000-6000.
 Config.CoinPacks = {
 	{ Id = "Handful", Name = "Handful of Coins", Coins = 500, Robux = 49, Bonus = "", ProductId = 0 },
 	{ Id = "Pouch", Name = "Pouch of Coins", Coins = 1200, Robux = 99, Bonus = "+20% BONUS", ProductId = 0 },
@@ -121,7 +121,7 @@ Config.AutoAfk = true
 -- your odds (everyone starts at weight 1).
 Config.WolverinePityWeight = 1
 
--- Daily challenges (reset every day at 00:00 UTC). Rewards are coins.
+-- Daily challenges (reset every 24 hours per player). Rewards are coins.
 Config.DailyChallenges = {
 	{ Id = "BecomeWolverine", Text = "Become Wolverine", Goal = 1, Reward = 100 },
 	{ Id = "WolverineKills", Text = "Rip apart 5 survivors as Wolverine", Goal = 5, Reward = 150 },

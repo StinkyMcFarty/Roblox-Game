@@ -30,7 +30,7 @@ The suits' painted textures are in `assets/textures/`. There's a Shirt, Pants an
 3. Paste the numbers into `Textures = { Shirt = ..., Pants = ..., Face = ... }` for each suit in `src/shared/Skins.lua`.
 4. Optional: find a messy "Wolverine hair" in the Marketplace, copy its ID from the URL, and set `HairAccessoryId`.
 
-Until you do this, each suit uses flat colours plus its 3D gear.
+All four suits have their textures uploaded and set. Any suit left at 0 uses flat colours plus its 3D gear.
 
 To change the textures, edit `tools/generate_textures.py` and run `python3 tools/generate_textures.py`.
 

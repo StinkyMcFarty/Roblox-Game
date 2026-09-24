@@ -30,15 +30,15 @@ Skins.List = {
 			UpperLeg = DENIM, LowerLeg = DENIM, Foot = BOOT,
 		},
 		KeepHair = true,
-		Textures = { Shirt = 0, Pants = 0, Face = 0 },
+		Textures = { Shirt = 72143365011183, Pants = 80981964263373, Face = 127116209556275 },
 		HairAccessoryId = 0,
 	},
 	Comic = {
 		Name = "Comic Wolverine",
-		Price = 1000,
+		Price = 2000,
 		Description = "Jim Lee classic. Wild hair, mutton chops, shoulder pads, tiger stripes.",
 		KeepHair = true,
-		Textures = { Shirt = 0, Pants = 0, Face = 0 },
+		Textures = { Shirt = 112579941158359, Pants = 84892200431804, Face = 108529900389924 },
 		HairAccessoryId = 0,
 		Swatch = YELLOW,
 		Colors = {
@@ -49,9 +49,9 @@ Skins.List = {
 	},
 	WeaponX = {
 		Name = "Weapon X",
-		Price = 2000,
+		Price = 4000,
 		Description = "Fresh out of the tank. Visor helmet, cables, harness, scars.",
-		Textures = { Shirt = 0, Pants = 0, Face = 0 },
+		Textures = { Shirt = 125698769813626, Pants = 121111924489660, Face = 101452932954846 },
 		HairAccessoryId = 0,
 		Swatch = rgb(120, 200, 190),
 		Colors = {
@@ -62,10 +62,10 @@ Skins.List = {
 	},
 	OldManLogan = {
 		Name = "Old Man Logan",
-		Price = 3000,
+		Price = 6000,
 		Description = "Grey beard, long duster coat, and a lot of anger left.",
 		KeepHair = true,
-		Textures = { Shirt = 0, Pants = 0, Face = 0 },
+		Textures = { Shirt = 91199990464230, Pants = 131767294384086, Face = 109948303211918 },
 		HairAccessoryId = 0,
 		Swatch = rgb(150, 150, 150),
 		Colors = {

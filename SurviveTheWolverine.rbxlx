@@ -148,7 +148,7 @@ Config.GuaranteedWolverineProductId = 0
 -- Coin packs (Store button). For each pack create a Developer Product in the
 -- Creator Dashboard (Monetization > Developer Products) at the Robux price
 -- below, then paste its ID into ProductId. Bigger packs give a bonus.
--- Roughly: a round earns ~70-100 coins; claws cost 400-2200, suits 1000-3000.
+-- Roughly: a round earns ~70-100 coins; claws cost 400-2200, suits 2000-6000.
 Config.CoinPacks = {
 	{ Id = "Handful", Name = "Handful of Coins", Coins = 500, Robux = 49, Bonus = "", ProductId = 0 },
 	{ Id = "Pouch", Name = "Pouch of Coins", Coins = 1200, Robux = 99, Bonus = "+20% BONUS", ProductId = 0 },
@@ -164,7 +164,7 @@ Config.AutoAfk = true
 -- your odds (everyone starts at weight 1).
 Config.WolverinePityWeight = 1
 
--- Daily challenges (reset every day at 00:00 UTC). Rewards are coins.
+-- Daily challenges (reset every 24 hours per player). Rewards are coins.
 Config.DailyChallenges = {
 	{ Id = "BecomeWolverine", Text = "Become Wolverine", Goal = 1, Reward = 100 },
 	{ Id = "WolverineKills", Text = "Rip apart 5 survivors as Wolverine", Goal = 5, Reward = 150 },
@@ -276,15 +276,15 @@ Skins.List = {
 			UpperLeg = DENIM, LowerLeg = DENIM, Foot = BOOT,
 		},
 		KeepHair = true,
-		Textures = { Shirt = 0, Pants = 0, Face = 0 },
+		Textures = { Shirt = 72143365011183, Pants = 80981964263373, Face = 127116209556275 },
 		HairAccessoryId = 0,
 	},
 	Comic = {
 		Name = "Comic Wolverine",
-		Price = 1000,
+		Price = 2000,
 		Description = "Jim Lee classic. Wild hair, mutton chops, shoulder pads, tiger stripes.",
 		KeepHair = true,
-		Textures = { Shirt = 0, Pants = 0, Face = 0 },
+		Textures = { Shirt = 112579941158359, Pants = 84892200431804, Face = 108529900389924 },
 		HairAccessoryId = 0,
 		Swatch = YELLOW,
 		Colors = {
@@ -295,9 +295,9 @@ Skins.List = {
 	},
 	WeaponX = {
 		Name = "Weapon X",
-		Price = 2000,
+		Price = 4000,
 		Description = "Fresh out of the tank. Visor helmet, cables, harness, scars.",
-		Textures = { Shirt = 0, Pants = 0, Face = 0 },
+		Textures = { Shirt = 125698769813626, Pants = 121111924489660, Face = 101452932954846 },
 		HairAccessoryId = 0,
 		Swatch = rgb(120, 200, 190),
 		Colors = {
@@ -308,10 +308,10 @@ Skins.List = {
 	},
 	OldManLogan = {
 		Name = "Old Man Logan",
-		Price = 3000,
+		Price = 6000,
 		Description = "Grey beard, long duster coat, and a lot of anger left.",
 		KeepHair = true,
-		Textures = { Shirt = 0, Pants = 0, Face = 0 },
+		Textures = { Shirt = 91199990464230, Pants = 131767294384086, Face = 109948303211918 },
 		HairAccessoryId = 0,
 		Swatch = rgb(150, 150, 150),
 		Colors = {
@@ -1504,7 +1504,10 @@ local SLOT_PARTS = {
 }
 
 local function asset(id)
-	return (id and id ~= 0 and id ~= "") and ("rbxassetid://" .. tostring(id)) or nil
+	if not id or id == 0 or id == "" then
+		return nil
+	end
+	return "rbxassetid://" .. (type(id) == "number" and string.format("%.0f", id) or tostring(id))
 end
 
 local function comicGear(char, head)
@@ -7973,8 +7976,10 @@ local function fx(player, kind, data)
 	ReplicatedStorage.Remotes.Fx:FireClient(player, kind, data)
 end
 
+local DAY = 24 * 60 * 60 -- dailies and the login reward run on a rolling 24 hours
+
 local function freshDaily()
-	return { Day = today(), Progress = {}, Done = {} }
+	return { Started = os.time(), Progress = {}, Done = {} }
 end
 
 local function publish(player)
@@ -8028,6 +8033,7 @@ function PlayerData.Save(player)
 			Claw = d.Claw,
 			Tokens = d.Tokens,
 			LastLogin = d.LastLogin,
+			LastClaim = d.LastClaim,
 			Streak = d.Streak,
 			Daily = d.Daily,
 			Receipts = d.Receipts,
@@ -8047,7 +8053,7 @@ function PlayerData.AddCoins(player, amount, reason)
 end
 
 local function checkDay(d)
-	if d.Daily.Day ~= today() then
+	if os.time() - (d.Daily.Started or 0) >= DAY then
 		d.Daily = freshDaily()
 	end
 end
@@ -8061,6 +8067,7 @@ function PlayerData.Load(player)
 		Claw = Skins.DefaultClaw,
 		Tokens = 0,
 		LastLogin = "",
+		LastClaim = 0, -- os.time() of the last daily login reward
 		Streak = 0,
 		Daily = freshDaily(),
 		Pity = 0, -- rounds played in a row without being Wolverine (this session)
@@ -8102,10 +8109,11 @@ function PlayerData.Load(player)
 				end
 			end
 			data.LastLogin = saved.LastLogin or ""
+			data.LastClaim = tonumber(saved.LastClaim) or 0
 			data.Streak = tonumber(saved.Streak) or 0
-			if type(saved.Daily) == "table" and saved.Daily.Day == today() then
+			if type(saved.Daily) == "table" and os.time() - (tonumber(saved.Daily.Started) or 0) < DAY then
 				data.Daily = {
-					Day = saved.Daily.Day,
+					Started = tonumber(saved.Daily.Started),
 					Progress = saved.Daily.Progress or {},
 					Done = saved.Daily.Done or {},
 				}
@@ -8119,9 +8127,11 @@ function PlayerData.Load(player)
 	publish(player)
 
 	-- Daily login reward
-	if data.LastLogin ~= today() then
-		data.Streak = (data.LastLogin == yesterday()) and data.Streak + 1 or 1
-		data.LastLogin = today()
+	local since = os.time() - data.LastClaim
+	if since >= DAY then
+		-- claimed again within 48 hours keeps the streak going
+		data.Streak = (since < DAY * 2) and data.Streak + 1 or 1
+		data.LastClaim = os.time()
 		local r = Config.DailyReward
 		local reward = r.Base + r.PerStreakDay * (math.min(data.Streak, r.MaxStreak) - 1)
 		PlayerData.AddCoins(player, reward, ("Daily reward — day %d streak"):format(data.Streak))

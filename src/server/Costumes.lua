@@ -116,7 +116,10 @@ local SLOT_PARTS = {
 }
 
 local function asset(id)
-	return (id and id ~= 0 and id ~= "") and ("rbxassetid://" .. tostring(id)) or nil
+	if not id or id == 0 or id == "" then
+		return nil
+	end
+	return "rbxassetid://" .. (type(id) == "number" and string.format("%.0f", id) or tostring(id))
 end
 
 local function comicGear(char, head)
