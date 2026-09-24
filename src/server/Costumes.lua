@@ -157,6 +157,56 @@ local function wolverineHair(char, head, color, opts)
 		CFrame.new(0, hs.Y * (0.6 + 0.1 * tuft), hs.Z * 0.12) * CFrame.Angles(rad(-16), 0, 0), "WedgePart")
 end
 
+-- Wolverine's face, built from thin parts on the front of the head (image
+-- faces looked muddy): angry brows, narrowed eyes, a gritted-teeth snarl and
+-- the mutton chops. opts:
+--   Hair   colour of brows/chops/beard      Skin  lower-face colour (Comic mask)
+--   Eyes   "plain" | "mask" (comic eye patches) | "none" (visor covers them)
+--   Beard  full beard + moustache (Old Man Logan)
+local function wolverineFace(char, head, opts)
+	if not head then
+		return
+	end
+	local hs = head.Size
+	local t = 0.04
+	local z = -(hs.Z / 2 + t / 2)
+	local hair = opts.Hair or rgb(30, 24, 20)
+	local function f(name, w, h, x, y, color, rot, depth, mat)
+		return gear(char, head, name, Vector3.new(hs.X * w, hs.Y * h, t), color, mat or M.SmoothPlastic,
+			CFrame.new(hs.X * x, hs.Y * y, z - (depth or 0) * t) * CFrame.Angles(0, 0, rad(rot or 0)), nil, "Face")
+	end
+	local old = head:FindFirstChildOfClass("Decal")
+	if old then
+		old.Transparency = 1 -- the built face replaces the default one
+	end
+
+	if opts.Skin then
+		-- the comic mask leaves the jaw bare
+		f("Jaw", 1.0, 0.44, 0, -0.28, opts.Skin, 0, 0)
+	end
+	for _, side in { -1, 1 } do
+		if opts.Eyes == "mask" then
+			f("EyePatch", 0.34, 0.2, side * 0.2, 0.06, rgb(16, 16, 20), side * 14, 1)
+			f("Eye", 0.2, 0.06, side * 0.19, 0.05, Color3.new(1, 1, 1), side * 14, 2)
+		elseif opts.Eyes ~= "none" then
+			f("Eye", 0.14, 0.06, side * 0.2, 0.05, rgb(245, 240, 232), side * 8, 1)
+			f("Pupil", 0.06, 0.06, side * 0.18, 0.05, rgb(20, 16, 14), side * 8, 2)
+			-- heavy angry brows, low at the middle
+			f("Brow", 0.3, 0.08, side * 0.2, 0.16, hair, side * 16, 2)
+		end
+		-- mutton chops down the cheeks, curling in toward the mouth (chin bare)
+		f("Chop", 0.16, 0.46, side * 0.42, -0.12, hair, 0, 1)
+		f("ChopCurl", 0.2, 0.12, side * 0.3, -0.31, hair, side * -18, 1)
+	end
+	-- gritted-teeth snarl
+	f("Mouth", 0.34, 0.1, 0, -0.24, rgb(40, 14, 14), 0, 1)
+	f("Teeth", 0.28, 0.045, 0, -0.235, rgb(236, 232, 220), 0, 2)
+	if opts.Beard then
+		f("Beard", 0.92, 0.26, 0, -0.38, hair, 0, 1)
+		f("Moustache", 0.44, 0.07, 0, -0.17, hair, 0, 3)
+	end
+end
+
 local function comicGear(char, head)
 	local YEL, BLU, BLK = rgb(238, 184, 20), rgb(28, 56, 140), rgb(18, 18, 22)
 	if head then
@@ -419,6 +469,16 @@ function Costumes.Dress(char, skinId)
 		face.Texture = asset(tex.Face)
 	end
 
+	-- the built Wolverine face (Face texture, if any, is used instead)
+	if not asset(tex.Face) then
+		local face = skin.Face or {}
+		wolverineFace(char, head, {
+			Hair = face.Hair or (skin.Hair and skin.Hair.Color),
+			Eyes = face.Eyes,
+			Beard = face.Beard,
+			Skin = face.MaskJaw and skinTone or nil,
+		})
+	end
 	if skinId == "Logan" then
 		loganGear(char)
 	elseif skinId == "Comic" then
