@@ -1481,14 +1481,19 @@ function MapBuilder.BuildLobby()
 		block(lobby, Vector3.new(12.6, 0.6, 1.6), CFrame.new(x, Y + 20, hz - 0.5), M.Metal, C.DarkMetal)
 		block(lobby, Vector3.new(0.4, 15, 1.4), CFrame.new(x, Y + 12.5, hz - 0.5), M.Metal, C.DarkMetal)
 	end
+	-- Pillars, but never behind signs/boards (north rules wall, south sign, gallery title)
 	for x = -hx, hx, 15 do
-		for _, z in { -hz + 1.2, hz - 1.2 } do
-			block(lobby, Vector3.new(1.8, H, 1.4), CFrame.new(x, Y + H / 2, z), M.Metal, rgb(58, 60, 66))
+		if not (x > -47 and x < 52) then
+			block(lobby, Vector3.new(1.8, H, 1.4), CFrame.new(x, Y + H / 2, -hz + 1.2), M.Metal, rgb(58, 60, 66))
+		end
+		if not (x > -24 and x < 12) then
+			block(lobby, Vector3.new(1.8, H, 1.4), CFrame.new(x, Y + H / 2, hz - 1.2), M.Metal, rgb(58, 60, 66))
 		end
 	end
 	for z = -hz, hz, 15 do
-		for _, x in { -hx + 1.2, hx - 1.2 } do
-			block(lobby, Vector3.new(1.4, H, 1.8), CFrame.new(x, Y + H / 2, z), M.Metal, rgb(58, 60, 66))
+		block(lobby, Vector3.new(1.4, H, 1.8), CFrame.new(-hx + 1.2, Y + H / 2, z), M.Metal, rgb(58, 60, 66))
+		if not (z > -17 and z < 17) then
+			block(lobby, Vector3.new(1.4, H, 1.8), CFrame.new(hx - 1.2, Y + H / 2, z), M.Metal, rgb(58, 60, 66))
 		end
 	end
 	for _, y in { H - 3, H - 4.4 } do
@@ -1571,7 +1576,7 @@ function MapBuilder.BuildLobby()
 	block(lobby, Vector3.new(20, 1, 70), CFrame.new(gx + 2, Y + 0.5, 0), M.Marble, rgb(26, 26, 30))
 	block(lobby, Vector3.new(0.3, 0.2, 70), CFrame.new(gx - 8, Y + 1.05, 0), M.Neon, rgb(255, 190, 30))
 	block(lobby, Vector3.new(3, 0.5, 70), CFrame.new(gx - 9.5, Y + 0.25, 0), M.Marble, rgb(34, 34, 38))
-	local galleryTitle = block(lobby, Vector3.new(30, 4, 0.3), CFrame.new(hx - 1.4, Y + 23, 0) * CFrame.Angles(0, math.rad(90), 0), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
+	local galleryTitle = block(lobby, Vector3.new(30, 4, 0.3), CFrame.new(hx - 1.6, Y + 23, 0) * CFrame.Angles(0, math.rad(90), 0), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
 	local _, gt = surfaceText(galleryTitle, Enum.NormalId.Front, { Text = "SUIT GALLERY", Font = Enum.Font.LuckiestGuy, TextColor3 = rgb(255, 200, 30) })
 	make("UIStroke", gt, { Thickness = 6 })
 	for z = -30, 30, 6 do
@@ -1713,7 +1718,8 @@ function MapBuilder.BuildLobby()
 		steelBarrel(lobby, CFrame.new(p + Vector3.new(-3.6, 0, 2.6)), i % 2 == 0 and rgb(150, 30, 30) or rgb(40, 80, 140), false)
 		steelBarrel(lobby, CFrame.new(p + Vector3.new(-4.2, 0, -0.3)), rgb(60, 110, 60), false)
 	end
-	sign(lobby, CFrame.new(-6, Y + H - 3.6, hz - 1.4), Vector3.new(30, 2.6, 0.3), "WEAPON X  •  HOLDING FACILITY 7", rgb(255, 200, 30), rgb(18, 18, 22))
+	block(lobby, Vector3.new(32, 3.6, 0.3), CFrame.new(-6, Y + H - 3.6, hz - 1.3), M.Metal, rgb(40, 40, 46))
+	sign(lobby, CFrame.new(-6, Y + H - 3.6, hz - 1.6), Vector3.new(30, 2.6, 0.3), "WEAPON X  •  HOLDING FACILITY 7", rgb(255, 200, 30), rgb(18, 18, 22))
 
 	lobby.Parent = workspace
 	return lobby
