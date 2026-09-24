@@ -35,6 +35,63 @@ local function pawStep(st, root, pitch)
 	snd.TimePosition = 0
 	snd:Play()
 end
+-- Footsteps: custom multi-take files (tools/generate_sfx.py). Each file holds
+-- several takes back to back; a random one (never the same twice running) is
+-- played through PlaybackRegion. Surfaces: tile, steel grating, Sentinel stomp.
+local STEP_LAYOUT = {
+	Step = { Slot = 0.5, Takes = 4 },
+	StepMetal = { Slot = 0.5, Takes = 4 },
+	StepHeavy = { Slot = 0.8, Takes = 3 },
+}
+local CUSTOM_STEPS = Config.Sounds.Step ~= ""
+local METAL_FLOORS = {
+	[Enum.Material.Metal] = true,
+	[Enum.Material.DiamondPlate] = true,
+	[Enum.Material.CorrodedMetal] = true,
+	[Enum.Material.Foil] = true,
+}
+
+local function footstep(st, root, kind, volume, pitch)
+	local id = Config.Sounds[kind]
+	local layout = STEP_LAYOUT[kind]
+	if kind == "StepHeavy" and id == Config.Sounds.StepMetal then
+		layout = STEP_LAYOUT.StepMetal -- heavy file not uploaded yet: pitched-down grate
+	end
+	st.Steps = st.Steps or {}
+	local pool = st.Steps[kind]
+	if not pool then
+		pool = { Index = 0, Last = -1 }
+		for i = 1, 3 do
+			local snd = Instance.new("Sound")
+			snd.Name = kind
+			snd.SoundId = id
+			snd.PlaybackRegionsEnabled = true
+			snd.RollOffMode = Enum.RollOffMode.InverseTapered
+			snd.RollOffMinDistance = kind == "StepHeavy" and 14 or 7
+			snd.RollOffMaxDistance = kind == "StepHeavy" and 170 or 85
+			snd.Parent = root
+			pool[i] = snd
+		end
+		st.Steps[kind] = pool
+	end
+	pool.Index = pool.Index % 3 + 1
+	local snd = pool[pool.Index]
+	if snd.Parent ~= root then
+		snd.Parent = root
+	end
+	local take = math.random(0, layout.Takes - 2)
+	if take >= pool.Last then
+		take += 1
+	end
+	pool.Last = take
+	local from = take * layout.Slot
+	snd.PlaybackRegion = NumberRange.new(from, from + layout.Slot - 0.02)
+	snd.Volume = volume * (0.88 + math.random() * 0.12)
+	snd.PlaybackSpeed = pitch * (0.95 + math.random() * 0.1)
+	snd.TimePosition = from
+	snd:Play()
+end
+
 local TAU = math.pi * 2
 local PAW_HITS = { 0.25, 0.6, 0.25 + math.pi, 0.6 + math.pi }
 
@@ -547,11 +604,11 @@ step:Connect(function(a, b)
 		local prevPhase = st.Phase
 		st.Phase += dt * math.max(speed, (st.Loop == "Prowl" or st.Loop == "Stomp") and 6 or 10) * (st.Loop == "Gallop" and 0.36 or st.Loop == "Prowl" and 0.55 or st.Loop == "Stomp" and 0.42 or 0.5)
 
-		-- all-fours footfalls replace the normal running sound
+		-- all-fours footfalls (and custom footsteps) replace the normal running sound
 		local running = root:FindFirstChild("Running")
 		local galloping = st.Loop == "Gallop" and loop == "Gallop"
 		if running and running:IsA("Sound") then
-			if galloping then
+			if galloping or CUSTOM_STEPS then
 				st.RunVolume = st.RunVolume or running.Volume
 				running.Volume = 0
 			elseif st.RunVolume then
@@ -564,6 +621,33 @@ step:Connect(function(a, b)
 				if math.floor((prevPhase - off) / TAU) ~= math.floor((st.Phase - off) / TAU) then
 					pawStep(st, root, i > 2 and 0.85 or 1.08)
 				end
+			end
+		elseif CUSTOM_STEPS and speed > 1.5 and hum.FloorMaterial ~= Enum.Material.Air and not airborne then
+			local kind = role == "Sentinel" and "StepHeavy" or (METAL_FLOORS[hum.FloorMaterial] and "StepMetal" or "Step")
+			local vol, pitch = 0.5, 1
+			if role == "Sentinel" then
+				vol, pitch = 1, Config.Sounds.StepHeavy == Config.Sounds.StepMetal and 0.6 or 1
+			elseif role == "Wolverine" then
+				vol, pitch = 0.8, 0.86 -- heavier boots
+			elseif speed > 18 then
+				vol = 0.68
+			end
+			local stepped = false
+			if loop and st.Loop == loop and st.LoopBlend > 0.5 then
+				-- heel strike lands where the stride peaks (|sin phase| = 1)
+				local off = math.pi / 2
+				stepped = math.floor((prevPhase - off) / math.pi) ~= math.floor((st.Phase - off) / math.pi)
+				st.StepDist = 0
+			else
+				-- plain walk (Roblox's own walk animation): one footfall per stride
+				st.StepDist = (st.StepDist or 0) + speed * dt
+				if st.StepDist >= 5.2 then
+					st.StepDist -= 5.2
+					stepped = true
+				end
+			end
+			if stepped then
+				footstep(st, root, kind, vol, pitch)
 			end
 		end
 

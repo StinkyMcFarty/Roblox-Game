@@ -856,6 +856,9 @@ local function wallRun(parent, ax, az, bx, bz, H, styleName, openings, opts)
 	for _, o in openings do
 		openingFrame(model, st, frame, o, H)
 	end
+	if opts.Solid then
+		model:SetAttribute("Solid", true)
+	end
 	model.Parent = parent
 	return model, frame
 end
@@ -1569,7 +1572,7 @@ local function buildAtrium(parent)
 		local depth = run / steps
 		for i = 0, steps - 1 do
 			local z = s.from + dir * (i + 0.5) * depth
-			P(parent, Vector3.new(4, 0.4, depth + 0.05), CFrame.new(s.x, y0 + (i + 1) * cw / steps - 0.2, z), M.DiamondPlate, grateC)
+			P(parent, Vector3.new(4, 0.4, depth + 0.05), CFrame.new(s.x, y0 + (i + 1) * cw / steps - 0.2, z), M.DiamondPlate, grateC):SetAttribute("Solid", true)
 			D(parent, Vector3.new(4, 0.08, 0.14), CFrame.new(s.x, y0 + (i + 1) * cw / steps + 0.02, z - dir * (depth / 2 - 0.08)), M.SmoothPlastic, rgb(222, 170, 28))
 		end
 		local a = Vector3.new(s.x, y0, s.from)
@@ -2641,6 +2644,35 @@ local function build()
 	for i, spot in TERMINAL_SPOTS do
 		local m = console(terminalsFolder, spot[2], spot[3], ("Terminal_%s_%d"):format(spot[1], i))
 		m:SetAttribute("Wing", spot[1])
+	end
+
+	-- Everything Wolverine or a Sentinel could reasonably wreck is breakable:
+	-- furniture, machines, screens, pods, pillars, door frames... Not the floor,
+	-- ceilings, roof, outer shell, stairs, consoles or the docked suits. Parts
+	-- parented to a breakable part go with it (so walls regrow with their trim).
+	local function isSolid(d)
+		local a = d
+		while a and a ~= map do
+			if a:GetAttribute("Solid") then
+				return true
+			end
+			a = a.Parent
+		end
+		return false
+	end
+	for _, folderName in { "Props", "Structure" } do
+		for _, d in map:FindFirstChild(folderName):GetDescendants() do
+			if d:IsA("BasePart") and not d:GetAttribute("Breakable") and d.Transparency < 0.95 and not d.Parent:IsA("BasePart") then
+				local sz = d.Size
+				local biggest = math.max(sz.X, sz.Y, sz.Z)
+				local volume = sz.X * sz.Y * sz.Z
+				local onFloor = d.CFrame.Position.Y < F + 0.15 and sz.Y < 0.3
+				if biggest <= 46 and volume <= 1600 and not onFloor and not isSolid(d) then
+					d:SetAttribute("Breakable", true)
+					d.CanQuery = true
+				end
+			end
+		end
 	end
 
 	for i, p in spawnPoints do

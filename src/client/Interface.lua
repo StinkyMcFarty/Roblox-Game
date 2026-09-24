@@ -835,8 +835,23 @@ for i = 1, math.max(Config.HitsToKill, Config.Sentinel.Armor) do
 	end
 	pips[i] = pip
 end
+-- pips stretch to fill the panel: 3 wound pips or 6 armour pips
+local pipLayout = 0
+local function layoutPips(n)
+	if n == pipLayout then
+		return
+	end
+	pipLayout = n
+	local gap = 6
+	local w = math.floor((210 - 24 - gap * (n - 1)) / n)
+	for i, pip in pips do
+		pip.Position = UDim2.fromOffset(12 + (i - 1) * (w + gap), 26)
+		pip.Size = UDim2.fromOffset(w, 20)
+	end
+end
 RunService.RenderStepped:Connect(function()
 	local role = player:GetAttribute("Role")
+	layoutPips(role == "Sentinel" and Config.Sentinel.Armor or Config.HitsToKill)
 	if role == "Survivor" then
 		wounds.Visible = true
 		woundsTitle.Text = player:GetAttribute("Hidden") and "WOUNDS — HIDING" or "WOUNDS"

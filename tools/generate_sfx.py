@@ -399,6 +399,91 @@ def paw():
     return finish(reverb(mix(thump * 1.3, pad_ * 0.8, scuff, clicks), 0.18, 0.08), 0.85)
 
 
+STEP_SLOT = 0.5    # seconds per take in the multi-take footstep files
+HEAVY_SLOT = 0.8
+
+
+def takes(fn, count, slot):
+    """Several distinct takes laid end to end so the game can pick a random one
+    (Sound.PlaybackRegion) and consecutive steps never sound identical."""
+    out = np.zeros(int(SR * slot * count))
+    n = int(SR * slot)
+    for k in range(count):
+        x = fn(k)[:n]
+        x = x - np.mean(x)
+        f = int(SR * 0.03)
+        x[-f:] *= np.linspace(1, 0, f)
+        x = x / (np.max(np.abs(x)) + 1e-9) * (0.9 + 0.1 * rng.uniform())
+        out[k * n: k * n + len(x)] += x
+    return finish(out, 0.9, 0)
+
+
+def step_take(k):
+    """Hard-soled shoe on facility tile: heel click with a short body thump, the
+    toe rolling down ~50ms later, a little grit under the sole, tight room."""
+    heel_f = rng.uniform(95, 130)
+    t = t_axis(0.12)
+    body = np.sin(2 * np.pi * heel_f * t * (1 - 0.8 * t)) * env(0.12, 0.001, 0.035)
+    click = bandpass(noise(0.03), rng.uniform(1600, 2200), rng.uniform(5200, 7000)) * env(0.03, 0.0003, 0.008)
+    tick = ring([rng.uniform(2300, 2900), rng.uniform(4100, 4800)], 0.04, 0.006) * 0.35
+    heel = mix(body * 0.9, click * 1.1, tick)
+    toe_at = rng.uniform(0.04, 0.06)
+    toe = mix(bandpass(noise(0.02), 1200, 4500) * env(0.02, 0.0005, 0.006) * 0.45,
+              np.sin(2 * np.pi * heel_f * 1.4 * t_axis(0.05)) * env(0.05, 0.001, 0.015) * 0.3)
+    grit = mix(*[pad(highpass(noise(0.004), 5000) * env(0.004, 0.0002, 0.001) * rng.uniform(0.1, 0.25),
+                     rng.uniform(0.005, 0.09)) for _ in range(5)])
+    scuff = pad(bandpass(noise(0.07), 2500, 8000) * env(0.07, 0.01, 0.03) * 0.12, 0.02)
+    x = mix(heel, pad(toe, toe_at), grit, scuff)
+    return reverb(x, 0.28, 0.14)
+
+
+def step_metal_take(k):
+    """Boot on a steel grate / catwalk: bright clank with inharmonic ring, a
+    hollow low bong from the span and a loose-panel rattle."""
+    t = t_axis(0.4)
+    partials = [rng.uniform(360, 420), rng.uniform(880, 960), rng.uniform(1580, 1700), rng.uniform(2650, 2900), rng.uniform(4100, 4500)]
+    clank = ring(partials, 0.4, rng.uniform(0.06, 0.09)) * env(0.4, 0.0005, 0.25)
+    hit = bandpass(noise(0.025), 1500, 7000) * env(0.025, 0.0002, 0.006)
+    bong = np.sin(2 * np.pi * rng.uniform(150, 190) * t) * np.exp(-t / 0.07) * 0.5
+    rattle = mix(*[pad(bandpass(noise(0.008), 2500, 6000) * env(0.008, 0.0003, 0.002) * 0.3,
+                       0.03 + j * rng.uniform(0.018, 0.028)) for j in range(3)])
+    toe = pad(ring([p * 1.03 for p in partials[1:4]], 0.15, 0.03) * 0.25, rng.uniform(0.05, 0.07))
+    x = mix(clank * 0.55, hit, bong, rattle, toe)
+    return reverb(x, 0.45, 0.2)
+
+
+def step_heavy_take(k):
+    """Sentinel footfall: a servo whine as the leg drives down, a huge metal
+    stomp with a sub boom and floor crunch, then the hydraulics venting."""
+    at = 0.1
+    t = t_axis(at + 0.02)
+    whine_f = 700 + 900 * (t / (at + 0.02)) ** 2
+    whine = np.sin(2 * np.pi * np.cumsum(whine_f) / SR) * np.linspace(0, 1, len(t)) ** 2 * 0.12
+    tb = t_axis(0.5)
+    f0 = rng.uniform(52, 60)
+    boom = np.sin(2 * np.pi * f0 * tb * (1 - 0.35 * tb)) * np.exp(-tb / 0.12)
+    clank = ring([rng.uniform(210, 240), rng.uniform(540, 590), rng.uniform(1080, 1180), rng.uniform(1800, 1950), 3100], 0.5, 0.12) * env(0.5, 0.0005, 0.3)
+    crunch = lowpass(noise(0.12), 2500) * env(0.12, 0.0005, 0.03)
+    grit = mix(*[pad(bandpass(noise(0.006), 2000, 7000) * env(0.006, 0.0002, 0.0015) * rng.uniform(0.15, 0.35),
+                     rng.uniform(0.01, 0.12)) for _ in range(7)])
+    hiss = pad(bandpass(noise(0.35), 3000, 9000) * env(0.35, 0.04, 0.2) * 0.12, 0.14)
+    impact = mix(boom * 1.2, clank * 0.5, crunch * 0.6, grit, hiss)
+    x = mix(whine, pad(impact, at))
+    return reverb(x, 0.6, 0.18)
+
+
+def step():
+    return takes(step_take, 4, STEP_SLOT)
+
+
+def step_metal():
+    return takes(step_metal_take, 4, STEP_SLOT)
+
+
+def step_heavy():
+    return takes(step_heavy_take, 3, HEAVY_SLOT)
+
+
 def pounce_hit():
     """Pounce strike: two claw sets punch in (crisp double 'shk-shk') over a tight thump."""
     parts = []
@@ -513,6 +598,7 @@ SOUNDS = {
     "Tear": tear, "Gore": gore, "Break": wall_break, "Heartbeat": heartbeat, "Fart": fart,
     "Sniff": sniff, "Laser": laser, "Punch": punch, "Terminal": terminal,
     "UIHover": ui_hover, "UIClick": ui_click, "Paw": paw, "PounceHit": pounce_hit, "Impale": impale, "DeathRay": death_ray, "Chase": chase,
+    "Step": step, "StepMetal": step_metal, "StepHeavy": step_heavy,
 }
 
 

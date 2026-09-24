@@ -53,6 +53,7 @@ No copyrighted audio is used.
 Anything left at `0` uses a built-in Roblox sound instead. Roblox may ask you to verify your account before uploading audio.
 
 Also upload `DeathRay.ogg`, `Chase.ogg` (chase music), `Heartbeat.ogg` and `Fart.ogg`, then paste their IDs.
+Footsteps: upload `Step.ogg` (tile), `StepMetal.ogg` (grating) and `StepHeavy.ogg` (Sentinel stomp) and paste their IDs as `Step`, `StepMetal`, `StepHeavy`. Until `Step` is set, walking keeps the default Roblox run sound.
 
 **Upload at least `Slash.ogg` and `Roar.ogg`.** Without them, M1 uses Roblox's old sword sound and the roar is a pitched-down placeholder.
 
@@ -72,6 +73,7 @@ Also upload `DeathRay.ogg`, `Chase.ogg` (chase music), `Heartbeat.ogg` and `Fart
 | F | Sniff: see every survivor through walls for **5s** (25s cooldown) |
 
 - It takes **3 hits to kill** a survivor. The 3rd hit, from any attack, triggers the finisher: he lifts them and **rips them in half**.
+- A **Sentinel suit takes 6 hits** to destroy; the 6th rips it apart.
 - Hits 1 and 2 **throw** the survivor, who tumbles through the air with a trail. They get **2s of i-frames** (a visible white shimmer) and an adrenaline boost. Wolverine gets a short recovery, so there are no infinite combos.
 - The HUD shows animated ability cards (bottom-right) with keys, cooldown sweeps and "ready" flashes.
 - Crisp VFX: three razor-thin claw crescents on every M1, spark flecks, and an X-shaped star flare with a needle burst and a white body flash on hit. The client draws these every frame.

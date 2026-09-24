@@ -536,6 +536,9 @@ local function pounce(player, char, root)
 	while os.clock() < untilTime and char.Parent and Util.IsAlive(char) do
 		Combat.BreakInBox(root.CFrame * CFrame.new(0, 0, -2.5), Vector3.new(6, 8, 5), root.Position, 55)
 		local target = Combat.FindNear(root.Position, cfg.GrabRadius)[1]
+		if target and Combat.BreakShield(target.Player) then
+			target = nil -- pounced into their i-frames: shatters them instead
+		end
 		if target and not Status.Has(target.Player, "Immune") then
 			pounceStrike(player, char, root, target)
 			return
@@ -573,6 +576,7 @@ local function stab(player, char, root)
 				target = cand
 				break
 			end
+			Combat.BreakShield(cand.Player)
 		end
 		if not target then
 			task.wait()

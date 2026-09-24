@@ -285,6 +285,25 @@ function Combat.PullOut(victim)
 	return false
 end
 
+-- Hitting someone on i-frames doesn't hurt them, but it shatters the i-frames.
+function Combat.BreakShield(victim)
+	if not Status.Has(victim, "Immune") then
+		return false
+	end
+	Status.Clear(victim, "Immune")
+	local char = victim.Character
+	local glow = char and char:FindFirstChild("IFrameGlow")
+	if glow then
+		glow:Destroy()
+	end
+	local torso = Util.Torso(char)
+	if torso then
+		VFX.Impact(torso.Position, Color3.fromRGB(160, 220, 255), 0.8, char)
+		Util.Sound(Config.Sounds.Slash, torso, { Volume = 1.2, Pitch = 1.6 })
+	end
+	return true
+end
+
 function Combat.Hit(victim, ignoreImmunity)
 	if not Round.Survivors[victim] then
 		return nil
@@ -293,6 +312,7 @@ function Combat.Hit(victim, ignoreImmunity)
 		ignoreImmunity = true
 	end
 	if not ignoreImmunity and Status.Has(victim, "Immune") then
+		Combat.BreakShield(victim)
 		return nil
 	end
 	if not Util.IsAlive(victim.Character) then

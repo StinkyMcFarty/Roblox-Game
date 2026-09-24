@@ -65,7 +65,7 @@ Config.Sentinel = {
 	HoldTime = 4,
 	PodHoldTime = 2,
 	Duration = 90, -- the suit powers down after this
-	Armor = 4, -- Wolverine hits needed to destroy it (the last one rips it in half)
+	Armor = 6, -- Wolverine hits needed to destroy it (the last one rips it in half)
 	Suits = 2, -- how many survivors can suit up per round
 	-- Teamwork: suits within LinkRange of each other are "linked" and hit hard.
 	-- Two suits apart barely scratch him; the last suit standing hits at 1x.
@@ -144,6 +144,7 @@ Config.UploadedSounds = {
 	Roar = 84386454545822, Snarl = 0, Tear = 0, Gore = 0, Break = 0, Heartbeat = 94699316471373, Fart = 130496994474771,
 	Sniff = 0, Laser = 0, Punch = 0, Terminal = 0, UIHover = 0, UIClick = 0, Paw = 90700737432630,
 	PounceHit = 140573962847729, Impale = 100362323212257, DeathRay = 89285816836463, Chase = 71009071343057,
+	Step = 0, StepMetal = 0, StepHeavy = 0, -- footsteps (4 takes per file; see Anims.lua)
 }
 Config.Sounds.Snarl = Config.Sounds.Snarl or ""
 for name, id in Config.UploadedSounds do
@@ -158,5 +159,9 @@ Config.Sounds.PounceHit = Config.Sounds.PounceHit or Config.Sounds.Slash
 Config.Sounds.Impale = Config.Sounds.Impale or Config.Sounds.Slash
 Config.Sounds.DeathRay = Config.Sounds.DeathRay or Config.Sounds.Laser
 Config.Sounds.Chase = Config.Sounds.Chase or ""
+-- Footsteps: until Step is uploaded, walking keeps Roblox's default running sound.
+Config.Sounds.Step = Config.Sounds.Step or ""
+Config.Sounds.StepMetal = Config.Sounds.StepMetal or Config.Sounds.Step
+Config.Sounds.StepHeavy = Config.Sounds.StepHeavy or Config.Sounds.StepMetal
 
 return Config

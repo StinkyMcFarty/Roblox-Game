@@ -103,7 +103,7 @@ Config.Sentinel = {
 	HoldTime = 4,
 	PodHoldTime = 2,
 	Duration = 90, -- the suit powers down after this
-	Armor = 4, -- Wolverine hits needed to destroy it (the last one rips it in half)
+	Armor = 6, -- Wolverine hits needed to destroy it (the last one rips it in half)
 	Suits = 2, -- how many survivors can suit up per round
 	-- Teamwork: suits within LinkRange of each other are "linked" and hit hard.
 	-- Two suits apart barely scratch him; the last suit standing hits at 1x.
@@ -182,6 +182,7 @@ Config.UploadedSounds = {
 	Roar = 84386454545822, Snarl = 0, Tear = 0, Gore = 0, Break = 0, Heartbeat = 94699316471373, Fart = 130496994474771,
 	Sniff = 0, Laser = 0, Punch = 0, Terminal = 0, UIHover = 0, UIClick = 0, Paw = 90700737432630,
 	PounceHit = 140573962847729, Impale = 100362323212257, DeathRay = 89285816836463, Chase = 71009071343057,
+	Step = 0, StepMetal = 0, StepHeavy = 0, -- footsteps (4 takes per file; see Anims.lua)
 }
 Config.Sounds.Snarl = Config.Sounds.Snarl or ""
 for name, id in Config.UploadedSounds do
@@ -196,6 +197,10 @@ Config.Sounds.PounceHit = Config.Sounds.PounceHit or Config.Sounds.Slash
 Config.Sounds.Impale = Config.Sounds.Impale or Config.Sounds.Slash
 Config.Sounds.DeathRay = Config.Sounds.DeathRay or Config.Sounds.Laser
 Config.Sounds.Chase = Config.Sounds.Chase or ""
+-- Footsteps: until Step is uploaded, walking keeps Roblox's default running sound.
+Config.Sounds.Step = Config.Sounds.Step or ""
+Config.Sounds.StepMetal = Config.Sounds.StepMetal or Config.Sounds.Step
+Config.Sounds.StepHeavy = Config.Sounds.StepHeavy or Config.Sounds.StepMetal
 
 return Config
 ]]></string>
@@ -969,6 +974,25 @@ function Combat.PullOut(victim)
 	return false
 end
 
+-- Hitting someone on i-frames doesn't hurt them, but it shatters the i-frames.
+function Combat.BreakShield(victim)
+	if not Status.Has(victim, "Immune") then
+		return false
+	end
+	Status.Clear(victim, "Immune")
+	local char = victim.Character
+	local glow = char and char:FindFirstChild("IFrameGlow")
+	if glow then
+		glow:Destroy()
+	end
+	local torso = Util.Torso(char)
+	if torso then
+		VFX.Impact(torso.Position, Color3.fromRGB(160, 220, 255), 0.8, char)
+		Util.Sound(Config.Sounds.Slash, torso, { Volume = 1.2, Pitch = 1.6 })
+	end
+	return true
+end
+
 function Combat.Hit(victim, ignoreImmunity)
 	if not Round.Survivors[victim] then
 		return nil
@@ -977,6 +1001,7 @@ function Combat.Hit(victim, ignoreImmunity)
 		ignoreImmunity = true
 	end
 	if not ignoreImmunity and Status.Has(victim, "Immune") then
+		Combat.BreakShield(victim)
 		return nil
 	end
 	if not Util.IsAlive(victim.Character) then
@@ -2869,6 +2894,9 @@ local function wallRun(parent, ax, az, bx, bz, H, styleName, openings, opts)
 	for _, o in openings do
 		openingFrame(model, st, frame, o, H)
 	end
+	if opts.Solid then
+		model:SetAttribute("Solid", true)
+	end
 	model.Parent = parent
 	return model, frame
 end
@@ -3582,7 +3610,7 @@ local function buildAtrium(parent)
 		local depth = run / steps
 		for i = 0, steps - 1 do
 			local z = s.from + dir * (i + 0.5) * depth
-			P(parent, Vector3.new(4, 0.4, depth + 0.05), CFrame.new(s.x, y0 + (i + 1) * cw / steps - 0.2, z), M.DiamondPlate, grateC)
+			P(parent, Vector3.new(4, 0.4, depth + 0.05), CFrame.new(s.x, y0 + (i + 1) * cw / steps - 0.2, z), M.DiamondPlate, grateC):SetAttribute("Solid", true)
 			D(parent, Vector3.new(4, 0.08, 0.14), CFrame.new(s.x, y0 + (i + 1) * cw / steps + 0.02, z - dir * (depth / 2 - 0.08)), M.SmoothPlastic, rgb(222, 170, 28))
 		end
 		local a = Vector3.new(s.x, y0, s.from)
@@ -4654,6 +4682,35 @@ local function build()
 	for i, spot in TERMINAL_SPOTS do
 		local m = console(terminalsFolder, spot[2], spot[3], ("Terminal_%s_%d"):format(spot[1], i))
 		m:SetAttribute("Wing", spot[1])
+	end
+
+	-- Everything Wolverine or a Sentinel could reasonably wreck is breakable:
+	-- furniture, machines, screens, pods, pillars, door frames... Not the floor,
+	-- ceilings, roof, outer shell, stairs, consoles or the docked suits. Parts
+	-- parented to a breakable part go with it (so walls regrow with their trim).
+	local function isSolid(d)
+		local a = d
+		while a and a ~= map do
+			if a:GetAttribute("Solid") then
+				return true
+			end
+			a = a.Parent
+		end
+		return false
+	end
+	for _, folderName in { "Props", "Structure" } do
+		for _, d in map:FindFirstChild(folderName):GetDescendants() do
+			if d:IsA("BasePart") and not d:GetAttribute("Breakable") and d.Transparency < 0.95 and not d.Parent:IsA("BasePart") then
+				local sz = d.Size
+				local biggest = math.max(sz.X, sz.Y, sz.Z)
+				local volume = sz.X * sz.Y * sz.Z
+				local onFloor = d.CFrame.Position.Y < F + 0.15 and sz.Y < 0.3
+				if biggest <= 46 and volume <= 1600 and not onFloor and not isSolid(d) then
+					d:SetAttribute("Breakable", true)
+					d.CanQuery = true
+				end
+			end
+		end
 	end
 
 	for i, p in spawnPoints do
@@ -9638,6 +9695,9 @@ local function pounce(player, char, root)
 	while os.clock() < untilTime and char.Parent and Util.IsAlive(char) do
 		Combat.BreakInBox(root.CFrame * CFrame.new(0, 0, -2.5), Vector3.new(6, 8, 5), root.Position, 55)
 		local target = Combat.FindNear(root.Position, cfg.GrabRadius)[1]
+		if target and Combat.BreakShield(target.Player) then
+			target = nil -- pounced into their i-frames: shatters them instead
+		end
 		if target and not Status.Has(target.Player, "Immune") then
 			pounceStrike(player, char, root, target)
 			return
@@ -9675,6 +9735,7 @@ local function stab(player, char, root)
 				target = cand
 				break
 			end
+			Combat.BreakShield(cand.Player)
 		end
 		if not target then
 			task.wait()
@@ -10312,6 +10373,63 @@ local function pawStep(st, root, pitch)
 	snd.TimePosition = 0
 	snd:Play()
 end
+-- Footsteps: custom multi-take files (tools/generate_sfx.py). Each file holds
+-- several takes back to back; a random one (never the same twice running) is
+-- played through PlaybackRegion. Surfaces: tile, steel grating, Sentinel stomp.
+local STEP_LAYOUT = {
+	Step = { Slot = 0.5, Takes = 4 },
+	StepMetal = { Slot = 0.5, Takes = 4 },
+	StepHeavy = { Slot = 0.8, Takes = 3 },
+}
+local CUSTOM_STEPS = Config.Sounds.Step ~= ""
+local METAL_FLOORS = {
+	[Enum.Material.Metal] = true,
+	[Enum.Material.DiamondPlate] = true,
+	[Enum.Material.CorrodedMetal] = true,
+	[Enum.Material.Foil] = true,
+}
+
+local function footstep(st, root, kind, volume, pitch)
+	local id = Config.Sounds[kind]
+	local layout = STEP_LAYOUT[kind]
+	if kind == "StepHeavy" and id == Config.Sounds.StepMetal then
+		layout = STEP_LAYOUT.StepMetal -- heavy file not uploaded yet: pitched-down grate
+	end
+	st.Steps = st.Steps or {}
+	local pool = st.Steps[kind]
+	if not pool then
+		pool = { Index = 0, Last = -1 }
+		for i = 1, 3 do
+			local snd = Instance.new("Sound")
+			snd.Name = kind
+			snd.SoundId = id
+			snd.PlaybackRegionsEnabled = true
+			snd.RollOffMode = Enum.RollOffMode.InverseTapered
+			snd.RollOffMinDistance = kind == "StepHeavy" and 14 or 7
+			snd.RollOffMaxDistance = kind == "StepHeavy" and 170 or 85
+			snd.Parent = root
+			pool[i] = snd
+		end
+		st.Steps[kind] = pool
+	end
+	pool.Index = pool.Index % 3 + 1
+	local snd = pool[pool.Index]
+	if snd.Parent ~= root then
+		snd.Parent = root
+	end
+	local take = math.random(0, layout.Takes - 2)
+	if take >= pool.Last then
+		take += 1
+	end
+	pool.Last = take
+	local from = take * layout.Slot
+	snd.PlaybackRegion = NumberRange.new(from, from + layout.Slot - 0.02)
+	snd.Volume = volume * (0.88 + math.random() * 0.12)
+	snd.PlaybackSpeed = pitch * (0.95 + math.random() * 0.1)
+	snd.TimePosition = from
+	snd:Play()
+end
+
 local TAU = math.pi * 2
 local PAW_HITS = { 0.25, 0.6, 0.25 + math.pi, 0.6 + math.pi }
 
@@ -10824,11 +10942,11 @@ step:Connect(function(a, b)
 		local prevPhase = st.Phase
 		st.Phase += dt * math.max(speed, (st.Loop == "Prowl" or st.Loop == "Stomp") and 6 or 10) * (st.Loop == "Gallop" and 0.36 or st.Loop == "Prowl" and 0.55 or st.Loop == "Stomp" and 0.42 or 0.5)
 
-		-- all-fours footfalls replace the normal running sound
+		-- all-fours footfalls (and custom footsteps) replace the normal running sound
 		local running = root:FindFirstChild("Running")
 		local galloping = st.Loop == "Gallop" and loop == "Gallop"
 		if running and running:IsA("Sound") then
-			if galloping then
+			if galloping or CUSTOM_STEPS then
 				st.RunVolume = st.RunVolume or running.Volume
 				running.Volume = 0
 			elseif st.RunVolume then
@@ -10841,6 +10959,33 @@ step:Connect(function(a, b)
 				if math.floor((prevPhase - off) / TAU) ~= math.floor((st.Phase - off) / TAU) then
 					pawStep(st, root, i > 2 and 0.85 or 1.08)
 				end
+			end
+		elseif CUSTOM_STEPS and speed > 1.5 and hum.FloorMaterial ~= Enum.Material.Air and not airborne then
+			local kind = role == "Sentinel" and "StepHeavy" or (METAL_FLOORS[hum.FloorMaterial] and "StepMetal" or "Step")
+			local vol, pitch = 0.5, 1
+			if role == "Sentinel" then
+				vol, pitch = 1, Config.Sounds.StepHeavy == Config.Sounds.StepMetal and 0.6 or 1
+			elseif role == "Wolverine" then
+				vol, pitch = 0.8, 0.86 -- heavier boots
+			elseif speed > 18 then
+				vol = 0.68
+			end
+			local stepped = false
+			if loop and st.Loop == loop and st.LoopBlend > 0.5 then
+				-- heel strike lands where the stride peaks (|sin phase| = 1)
+				local off = math.pi / 2
+				stepped = math.floor((prevPhase - off) / math.pi) ~= math.floor((st.Phase - off) / math.pi)
+				st.StepDist = 0
+			else
+				-- plain walk (Roblox's own walk animation): one footfall per stride
+				st.StepDist = (st.StepDist or 0) + speed * dt
+				if st.StepDist >= 5.2 then
+					st.StepDist -= 5.2
+					stepped = true
+				end
+			end
+			if stepped then
+				footstep(st, root, kind, vol, pitch)
 			end
 		end
 
@@ -13123,8 +13268,23 @@ for i = 1, math.max(Config.HitsToKill, Config.Sentinel.Armor) do
 	end
 	pips[i] = pip
 end
+-- pips stretch to fill the panel: 3 wound pips or 6 armour pips
+local pipLayout = 0
+local function layoutPips(n)
+	if n == pipLayout then
+		return
+	end
+	pipLayout = n
+	local gap = 6
+	local w = math.floor((210 - 24 - gap * (n - 1)) / n)
+	for i, pip in pips do
+		pip.Position = UDim2.fromOffset(12 + (i - 1) * (w + gap), 26)
+		pip.Size = UDim2.fromOffset(w, 20)
+	end
+end
 RunService.RenderStepped:Connect(function()
 	local role = player:GetAttribute("Role")
+	layoutPips(role == "Sentinel" and Config.Sentinel.Armor or Config.HitsToKill)
 	if role == "Survivor" then
 		wounds.Visible = true
 		woundsTitle.Text = player:GetAttribute("Hidden") and "WOUNDS — HIDING" or "WOUNDS"
