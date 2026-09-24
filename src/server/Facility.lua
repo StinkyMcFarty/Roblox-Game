@@ -866,7 +866,7 @@ end
 
 -- One floor everywhere: 4-stud tiles with dark grout, two alternating greys,
 -- per-tile shade variation, concrete grain, and the odd cracked or scuffed tile.
-local TILE = { Size = 4, Mat = M.Concrete, A = rgb(98, 102, 108), B = rgb(68, 71, 77), Seam = rgb(18, 19, 22) }
+local TILE = { Size = 4, Mat = M.Concrete, A = rgb(84, 87, 93), B = rgb(58, 61, 67), Seam = rgb(14, 15, 17) }
 
 local function floorTiles(parent, r, _kind, x0, z0, x1, z1)
 	local f = TILE
@@ -885,7 +885,7 @@ local function floorTiles(parent, r, _kind, x0, z0, x1, z1)
 			if roll < 0.04 then
 				base = base:Lerp(rgb(70, 66, 58), 0.35) -- stained
 			end
-			local tile = P(parent, Vector3.new(sx - 0.16, 0.12, sz - 0.16), CFrame.new(wx, F - 0.06, wz), f.Mat, vary(base, 0.1))
+			local tile = P(parent, Vector3.new(sx - 0.22, 0.12, sz - 0.22), CFrame.new(wx, F - 0.06, wz), f.Mat, vary(base, 0.1))
 			if roll > 0.965 then
 				-- a hairline crack across the tile
 				local a = rng:NextNumber(-0.8, 0.8)

@@ -1418,6 +1418,9 @@ function MapBuilder.SetupTerrain()
 			t:FillBall(pos + Vector3.new(r:NextNumber(-10, 10), rad * 0.3, r:NextNumber(-10, 10)), rad * 0.35, Mat.Rock)
 		end
 	end
+	-- no snow under the facility: its tiled floor sits on bare foundation
+	t:FillBlock(CFrame.new(0, -8, 0), Vector3.new(340, 20, 300), Mat.Air)
+	t:FillBlock(CFrame.new(0, -12, 0), Vector3.new(340, 8, 300), Mat.Rock)
 	-- mountains on the horizon
 	for i = 1, 16 do
 		local a = i / 16 * math.pi * 2 + r:NextNumber() * 0.2
@@ -1591,7 +1594,7 @@ function MapBuilder.BuildLobby()
 			for j = 0, nz - 1 do
 				local x, z = -hx + (i + 0.5) * sx, -hz + (j + 0.5) * sz
 				local base = (i + j) % 2 == 0 and rgb(84, 87, 93) or rgb(58, 61, 67)
-				local tile = block(lobby, Vector3.new(sx - 0.16, 0.12, sz - 0.16), CFrame.new(x, Y - 0.06, z), M.Concrete, vary(base, 0.1))
+				local tile = block(lobby, Vector3.new(sx - 0.22, 0.12, sz - 0.22), CFrame.new(x, Y - 0.06, z), M.Concrete, vary(base, 0.1))
 				if rng:NextNumber() < 0.05 then
 					block(tile, Vector3.new(rng:NextNumber(0.8, 1.8), 0.02, rng:NextNumber(0.2, 0.4)), CFrame.new(x + rng:NextNumber(-1, 1), Y + 0.01, z + rng:NextNumber(-1, 1)) * CFrame.Angles(0, rng:NextNumber(0, 3), 0), M.SmoothPlastic, rgb(48, 50, 54), { Transparency = 0.35, CanCollide = false })
 				end
