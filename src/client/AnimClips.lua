@@ -277,6 +277,17 @@ Clips.DeathRay = {
 	Tremble = true,
 }
 
+-- Inhibitor Blast charge: crouch, fists pulled in to the core, trembling with power
+Clips.PulseCharge = {
+	Hold = true,
+	Tremble = true,
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.35, Ease = "Out", Pose = { Root = { 0, 0, 0, 0, -0.6, 0 }, Waist = { -8, 0, 0 }, Neck = { -6, 0, 0 }, RShoulder = { 60, 0, 30 }, LShoulder = { 60, 0, -30 }, RElbow = { 110, 0, 0 }, LElbow = { 110, 0, 0 }, RHip = { 40, 0, 12 }, LHip = { 40, 0, -12 }, RKnee = { -60, 0, 0 }, LKnee = { -60, 0, 0 } } },
+		{ T = 2, Ease = "InOut", Pose = { Root = { 0, 0, 0, 0, -0.7, 0 }, Waist = { -12, 0, 0 }, Neck = { -10, 0, 0 }, RShoulder = { 64, 0, 36 }, LShoulder = { 64, 0, -36 }, RElbow = { 118, 0, 0 }, LElbow = { 118, 0, 0 }, RHip = { 44, 0, 14 }, LHip = { 44, 0, -14 }, RKnee = { -66, 0, 0 }, LKnee = { -66, 0, 0 } } },
+	},
+}
+
 Clips.Pulse = {
 	Keys = {
 		{ T = 0, Pose = REST },

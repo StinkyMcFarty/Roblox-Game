@@ -8,14 +8,14 @@ The whole game is written as code. The map, Wolverine's look, the claws, the "an
 
 1. Download **`SurviveTheWolverine.rbxlx`** from this repo.
 2. Double-click it (or use Studio → File → Open from File).
-3. Press **Play**. In Studio one player is enough: **bot survivors** fill the round (up to 5) so you can test. The published game never uses bots and needs 2+ real players (`Config.MinPlayers`).
+3. Press **Play**. In Studio one player is enough: **bot survivors** fill the round (up to 6) so you can test. The published game never uses bots and needs 2+ real players (`Config.MinPlayers`).
    To test with real survivors, use **Test → Clients and Servers → 2+ players**.
 
 ## Before you publish
 
 | Setting | Where |
 |---|---|
-| **Server size: 10** | Creator Dashboard → your experience → Places → the place → Server Size |
+| **Server size: 7** (1 Wolverine + 6 survivors) | Creator Dashboard → your experience → Places → the place → Server Size |
 | **Avatar type: R15** | Studio → Game Settings → Avatar (the gore and all-fours run are built for R15) |
 | **Saving coins/skins in Studio** | Game Settings → Security → *Enable Studio Access to API Services* |
 | **80 Robux "Be Wolverine" pass** | Create a Developer Product (80 R$), then paste its ID into `Config.GuaranteedWolverineProductId` in `src/shared/Config.lua` |

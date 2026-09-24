@@ -224,63 +224,109 @@ function Minigame.Wires(st)
 		local j = math.random(i)
 		order[i], order[j] = order[j], order[i]
 	end
-	local strikes, matched, selected = 0, 0, nil
+	local strikes, matched = 0, 0
 	local left, right = {}, {}
 	local lines = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1 }, body)
-	local function node(parent, x, y, c)
-		local b = button(parent, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(x, 0, 0, y), Size = UDim2.fromOffset(26, 26), BackgroundColor3 = c })
-		corner(b, 13)
+	local function node(x, y, c)
+		local b = button(body, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(x, 0, 0, y), Size = UDim2.fromOffset(28, 28), BackgroundColor3 = c, ZIndex = 3 })
+		corner(b, 14)
 		stroke(b, Color3.new(1, 1, 1), 2, 0.6)
 		return b
 	end
-	local function drawLine(a, b, c)
-		local ap = a.AbsolutePosition + a.AbsoluteSize / 2 - body.AbsolutePosition
-		local bp = b.AbsolutePosition + b.AbsoluteSize / 2 - body.AbsolutePosition
-		local mid = (ap + bp) / 2
-		local d = bp - ap
-		new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(mid.X, mid.Y), Size = UDim2.fromOffset(d.Magnitude, 5), Rotation = math.deg(math.atan2(d.Y, d.X)), BackgroundColor3 = c, BorderSizePixel = 0 }, lines)
+	local function centre(g)
+		return g.AbsolutePosition + g.AbsoluteSize / 2 - body.AbsolutePosition
+	end
+	-- a wire frame stretched between two points (body space)
+	local function setWire(w, a, b)
+		local mid = (a + b) / 2
+		local d = b - a
+		w.Position = UDim2.fromOffset(mid.X, mid.Y)
+		w.Size = UDim2.fromOffset(math.max(1, d.Magnitude), 6)
+		w.Rotation = math.deg(math.atan2(d.Y, d.X))
+	end
+	local function newWire(c)
+		local w = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = c, BorderSizePixel = 0, ZIndex = 2 }, lines)
+		corner(w, 3)
+		return w
 	end
 	for i = 1, 4 do
 		local y = 14 + (i - 1) * 42
-		local l = node(body, 0.06, y, colors[i])
-		local r = node(body, 0.94, y, colors[order[i]])
-		left[i], right[i] = l, r
+		left[i] = node(0.06, y, colors[i])
+		right[i] = node(0.94, y, colors[order[i]])
+		right[i]:SetAttribute("Color", order[i])
 		label(body, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0.06, 22, 0, y), Size = UDim2.fromOffset(60, 12), Text = ("L%d-%02d"):format(i, math.random(10, 99)), Font = Enum.Font.Code, TextColor3 = DIM })
-		st.Conn(l.Activated:Connect(function()
-			if l:GetAttribute("Done") then
+	end
+	label(body, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 180), Size = UDim2.fromOffset(300, 14), Text = "Drag each wire across to its matching port", Font = Enum.Font.Gotham, TextColor3 = DIM })
+
+	-- dragging
+	local dragging = nil -- { Index, Wire }
+	local function pointer()
+		-- the repair screen ignores the top-bar inset, same space as GetMouseLocation
+		return UserInputService:GetMouseLocation() - body.AbsolutePosition
+	end
+	local lastTouch = nil
+	for i, l in left do
+		st.Conn(l.InputBegan:Connect(function(input)
+			if l:GetAttribute("Done") or dragging then
 				return
 			end
-			if selected then
-				left[selected].Size = UDim2.fromOffset(26, 26)
-			end
-			selected = i
-			l.Size = UDim2.fromOffset(32, 32)
-			beep(1.2, 0.3)
-		end))
-		st.Conn(r.Activated:Connect(function()
-			if not selected or r:GetAttribute("Done") then
-				return
-			end
-			if order[i] == selected then
-				drawLine(left[selected], r, colors[selected])
-				left[selected]:SetAttribute("Done", true)
-				r:SetAttribute("Done", true)
-				left[selected].Size = UDim2.fromOffset(26, 26)
-				selected = nil
-				matched += 1
-				beep(1.5, 0.4)
-				if matched == 4 then
-					st.Finish(true)
-				end
-			else
-				strikes += 1
-				beep(0.6, 0.6)
-				if strikes >= 2 then
-					st.Finish(false)
-				end
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				dragging = { Index = i, Wire = newWire(colors[i]) }
+				l.Size = UDim2.fromOffset(32, 32)
+				beep(1.2, 0.3)
 			end
 		end))
 	end
+	st.Conn(UserInputService.TouchMoved:Connect(function(t)
+		local inset = game:GetService("GuiService"):GetGuiInset()
+		lastTouch = Vector2.new(t.Position.X, t.Position.Y + inset.Y) - body.AbsolutePosition
+	end))
+	st.Conn(RunService.RenderStepped:Connect(function()
+		if dragging then
+			local p = lastTouch or pointer()
+			setWire(dragging.Wire, centre(left[dragging.Index]), p)
+		end
+	end))
+	st.Conn(UserInputService.InputEnded:Connect(function(input)
+		if not dragging then
+			return
+		end
+		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
+			return
+		end
+		local i = dragging.Index
+		local p = lastTouch or pointer()
+		lastTouch = nil
+		left[i].Size = UDim2.fromOffset(28, 28)
+		-- which port did we let go over?
+		local target = nil
+		for _, r in right do
+			if (centre(r) - p).Magnitude < 26 and not r:GetAttribute("Done") then
+				target = r
+			end
+		end
+		if target and target:GetAttribute("Color") == i then
+			setWire(dragging.Wire, centre(left[i]), centre(target))
+			left[i]:SetAttribute("Done", true)
+			target:SetAttribute("Done", true)
+			matched += 1
+			beep(1.5, 0.4)
+			dragging = nil
+			if matched == 4 then
+				st.Finish(true)
+			end
+			return
+		end
+		dragging.Wire:Destroy()
+		dragging = nil
+		if target then -- wrong port: sparks
+			strikes += 1
+			beep(0.6, 0.6)
+			if strikes >= 2 then
+				st.Finish(false)
+			end
+		end
+	end))
 end
 
 ---------------------------------------------------------------------------

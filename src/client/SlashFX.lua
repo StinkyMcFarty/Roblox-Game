@@ -750,4 +750,185 @@ function SlashFX.Smash(char, position, dir, hit)
 	end
 end
 
+---------------------------------------------------------------------------
+-- Inhibitor Blast
+---------------------------------------------------------------------------
+
+local GOLD = Color3.fromRGB(255, 210, 90)
+local pulseState = {}
+
+-- jagged lightning between two points
+local function setBolt(r, a, b, jag, width, transparency)
+	local n = r.N
+	local pts, ws = table.create(n), table.create(n)
+	local d = b - a
+	local side = d:Cross(Vector3.new(0, 1, 0))
+	side = side.Magnitude > 0.01 and side.Unit or Vector3.new(1, 0, 0)
+	local up = side:Cross(d.Unit)
+	for i = 1, n do
+		local u = (i - 1) / (n - 1)
+		local off = (i == 1 or i == n) and Vector3.zero or (side * (math.random() - 0.5) + up * (math.random() - 0.5)) * jag
+		pts[i] = a + d * u + off
+		ws[i] = width * (1 - math.abs(u - 0.5))
+	end
+	setRibbon(r, pts, ws, transparency)
+end
+
+function SlashFX.PulseCharge(char, duration)
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	if not root then
+		return
+	end
+	duration = duration or 2
+	local state = { Cancelled = false }
+	pulseState[char] = state
+	local sphere = Instance.new("Part")
+	sphere.Shape = Enum.PartType.Ball
+	sphere.Anchored, sphere.CanCollide, sphere.CanQuery, sphere.CanTouch, sphere.CastShadow = true, false, false, false, false
+	sphere.Material = Enum.Material.ForceField
+	sphere.Color = GOLD
+	sphere.Size = Vector3.one * 2
+	sphere.Parent = workspace
+	local light = Instance.new("PointLight")
+	light.Color = GOLD
+	light.Parent = sphere
+	local ribbons, bolts = {}, {}
+	for i = 1, 6 do
+		local r = takeRibbon(8, i % 2 == 0 and WHITE or GOLD, 6)
+		table.insert(ribbons, r)
+		bolts[i] = r
+	end
+	local ring = takeRibbon(32, GOLD, 5)
+	local ring2 = takeRibbon(32, WHITE, 5)
+	table.insert(ribbons, ring)
+	table.insert(ribbons, ring2)
+	state.Sphere = sphere
+	run(ribbons, function(t)
+		local k = math.min(1, t / duration)
+		if state.Cancelled or t > duration + 0.4 or not root.Parent then
+			sphere:Destroy()
+			return false
+		end
+		local s = root.Size.Y / 2
+		local c = root.Position
+		local rad = (3 + 5 * k * k) * s
+		sphere.Position = c
+		sphere.Size = Vector3.one * rad * (0.95 + math.random() * 0.1)
+		light.Range = 8 + 22 * k
+		light.Brightness = 1 + 6 * k
+		-- lightning crawling over the sphere, more of it as the charge builds
+		for i, b in bolts do
+			if math.random() < 0.35 + 0.5 * k then
+				local a1 = math.random() * math.pi * 2
+				local a2 = a1 + (math.random() - 0.5) * 2
+				local e1 = (math.random() - 0.5) * 1.6
+				local p1 = c + Vector3.new(math.cos(a1) * math.cos(e1), math.sin(e1), math.sin(a1) * math.cos(e1)) * rad * 0.5
+				local p2 = c + Vector3.new(math.cos(a2), (math.random() - 0.5), math.sin(a2)) * rad * 0.5
+				setBolt(b, p1, p2, 0.8 * s, (0.1 + 0.12 * k) * s, 0)
+			else
+				hideRibbon(b)
+			end
+			_ = i
+		end
+		-- spinning ground rings tightening in
+		local floor = c - Vector3.new(0, 2.8 * s, 0)
+		setRing(ring, floor, Vector3.new(0, 1, 0), (7 - 3 * k) * s, 0.25 * s, 0.2)
+		setRing(ring2, floor + Vector3.new(0, 0.05, 0), Vector3.new(0, 1, 0), (5 - 2.5 * k + math.sin(t * 20) * 0.2) * s, 0.12 * s, 0.1)
+		return true
+	end)
+end
+
+function SlashFX.PulseCancel(char)
+	local st = pulseState[char]
+	if st then
+		st.Cancelled = true
+		pulseState[char] = nil
+		local root = char:FindFirstChild("HumanoidRootPart")
+		if root then
+			starFlare(root.Position, GOLD, 0.8, 0.3)
+		end
+	end
+end
+
+function SlashFX.PulseBlast(position, radius)
+	if not position then
+		return
+	end
+	radius = radius or 20
+	-- clear any charge visuals near this blast
+	for char, st in pulseState do
+		local r = char:FindFirstChild("HumanoidRootPart")
+		if r and (r.Position - position).Magnitude < 6 then
+			st.Cancelled = true
+			pulseState[char] = nil
+		end
+	end
+	local dome = Instance.new("Part")
+	dome.Shape = Enum.PartType.Ball
+	dome.Anchored, dome.CanCollide, dome.CanQuery, dome.CanTouch, dome.CastShadow = true, false, false, false, false
+	dome.Material = Enum.Material.ForceField
+	dome.Color = GOLD
+	dome.Size = Vector3.one * 4
+	dome.Position = position
+	dome.Parent = workspace
+	local core = dome:Clone()
+	core.Material = Enum.Material.Neon
+	core.Color = WHITE
+	core.Parent = workspace
+	local light = Instance.new("PointLight")
+	light.Color = GOLD
+	light.Range = 60
+	light.Brightness = 10
+	light.Parent = core
+	TweenService:Create(dome, TweenInfo.new(0.45, Enum.EasingStyle.Quint), { Size = Vector3.one * radius * 2.2, Transparency = 1 }):Play()
+	TweenService:Create(core, TweenInfo.new(0.2, Enum.EasingStyle.Quad), { Size = Vector3.one * 9, Transparency = 1 }):Play()
+	TweenService:Create(light, TweenInfo.new(0.6), { Brightness = 0 }):Play()
+	task.delay(0.7, function()
+		dome:Destroy()
+		core:Destroy()
+	end)
+	-- ground shock rings + lightning bolts ripping outward
+	local ribbons, rings, bolts = {}, {}, {}
+	for i = 1, 3 do
+		local r = takeRibbon(40, i == 1 and WHITE or GOLD, 6)
+		table.insert(ribbons, r)
+		rings[i] = { R = r, Delay = (i - 1) * 0.07 }
+	end
+	for i = 1, 10 do
+		local r = takeRibbon(9, i % 2 == 0 and WHITE or GOLD, 7)
+		table.insert(ribbons, r)
+		local a = i / 10 * math.pi * 2 + math.random() * 0.4
+		bolts[i] = { R = r, Dir = Vector3.new(math.cos(a), (math.random() - 0.3) * 0.5, math.sin(a)).Unit }
+	end
+	local floor = position - Vector3.new(0, 2.6, 0)
+	local LIFE = 0.55
+	run(ribbons, function(t)
+		local k = t / LIFE
+		if k >= 1 then
+			return false
+		end
+		for _, rg in rings do
+			local q = math.clamp((t - rg.Delay) / (LIFE - rg.Delay), 0, 1)
+			if q > 0 and q < 1 then
+				setRing(rg.R, floor, Vector3.new(0, 1, 0), 2 + radius * 1.1 * outQuad(q), 0.6 * (1 - q), q)
+			else
+				hideRibbon(rg.R)
+			end
+		end
+		for _, b in bolts do
+			local len = radius * (0.3 + 0.9 * outQuad(math.min(1, k * 2)))
+			setBolt(b.R, position, position + b.Dir * len, 1.6, 0.35 * (1 - k), k)
+		end
+		return true
+	end)
+	if _G.WolverineShake then
+		local cam = workspace.CurrentCamera
+		local d = cam and (cam.CFrame.Position - position).Magnitude or 999
+		if d < radius * 3 then
+			_G.WolverineShake(1.2 * (1 - d / (radius * 3)))
+		end
+	end
+	SlashFX.HitFlash(position, GOLD, 2)
+end
+
 return SlashFX

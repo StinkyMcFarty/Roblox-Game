@@ -44,7 +44,7 @@ Config.MinPlayers = 2 -- real players needed to start a round in the live game
 -- Bot survivors are for testing only: in Roblox Studio a round starts with
 -- 1 player and bots fill in up to this many survivors. The published game
 -- never spawns bots.
-Config.BotFill = 5
+Config.BotFill = 6
 Config.IntermissionTime = 20
 Config.RoundTime = 180 -- seconds survivors must last (after the intro)
 Config.KillTimeBonus = 15 -- Wolverine gets this much extra time per kill
@@ -108,8 +108,8 @@ Config.Sentinel = {
 	-- Teamwork: suits within LinkRange of each other are "linked" and hit hard.
 	-- Two suits apart barely scratch him; the last suit standing hits at 1x.
 	LinkRange = 30,
-	LinkedMultiplier = 1.6,
-	SoloMultiplier = 0.5,
+	LinkedMultiplier = 1.5,
+	SoloMultiplier = 0.6, -- two suits but far apart; a lone suit hits at 1x
 	WalkSpeed = 18,
 	Scale = 1.8, -- same size as the docked suits in the Hangar
 	Punch = { Cooldown = 0.9, Damage = 40, Range = 9, Stun = 0.6, Knockback = 70 },
@@ -117,7 +117,7 @@ Config.Sentinel = {
 	-- Death ray: charge, then a 3s aimable beam that pushes him back; the suit
 	-- is sluggish for 3s after firing.
 	Laser = { Cooldown = 12, Charge = 0.6, Duration = 3, DPS = 24, Range = 260, Slow = 1.5, WallsBurned = 8, Push = 22, Recover = 3 },
-	Pulse = { Cooldown = 18, Radius = 16, Stun = 2.2, Damage = 10 },
+	Pulse = { Cooldown = 18, Charge = 2, Radius = 20, Stun = 3, Damage = 12, CancelCooldown = 3 },
 }
 
 -- Survivor fart: masks your scent from Wolverine's Sniff
@@ -879,14 +879,53 @@ local function sorted(list, from)
 	return list
 end
 
+-- Blocky hitboxes: every character is a body-sized box (scaled with the
+-- character); an attack lands when its box overlaps that body box at all.
+function Combat.BodyBox(root)
+	local k = root.Size.Y / 2
+	return root.CFrame * CFrame.new(0, -0.4 * k, 0), Vector3.new(3.4, 5.8, 2.4) * k
+end
+
+-- oriented box vs oriented box (separating axis test)
+function Combat.BoxOverlap(cfA, sizeA, cfB, sizeB)
+	local ea, eb = sizeA / 2, sizeB / 2
+	local A = { cfA.RightVector, cfA.UpVector, cfA.LookVector }
+	local B = { cfB.RightVector, cfB.UpVector, cfB.LookVector }
+	local ae = { ea.X, ea.Y, ea.Z }
+	local be = { eb.X, eb.Y, eb.Z }
+	local d = cfB.Position - cfA.Position
+	local function separated(axis)
+		if axis.Magnitude < 1e-6 then
+			return false
+		end
+		axis = axis.Unit
+		local ra = math.abs(A[1]:Dot(axis)) * ae[1] + math.abs(A[2]:Dot(axis)) * ae[2] + math.abs(A[3]:Dot(axis)) * ae[3]
+		local rb = math.abs(B[1]:Dot(axis)) * be[1] + math.abs(B[2]:Dot(axis)) * be[2] + math.abs(B[3]:Dot(axis)) * be[3]
+		return math.abs(d:Dot(axis)) > ra + rb
+	end
+	for i = 1, 3 do
+		if separated(A[i]) or separated(B[i]) then
+			return false
+		end
+	end
+	for i = 1, 3 do
+		for j = 1, 3 do
+			if separated(A[i]:Cross(B[j])) then
+				return false
+			end
+		end
+	end
+	return true
+end
+
 function Combat.FindTargets(cframe, size)
 	local found = {}
 	for player in Round.Survivors do
 		local char = player.Character
 		local root = Util.Root(char)
 		if root and Util.IsAlive(char) and not Status.Has(player, "Busy") then
-			local rel = cframe:PointToObjectSpace(root.Position)
-			if math.abs(rel.X) <= size.X / 2 and math.abs(rel.Y) <= size.Y / 2 and math.abs(rel.Z) <= size.Z / 2 then
+			local bcf, bsize = Combat.BodyBox(root)
+			if Combat.BoxOverlap(cframe, size, bcf, bsize) then
 				table.insert(found, { Player = player, Char = char, Root = root })
 			end
 		end
@@ -896,11 +935,13 @@ end
 
 function Combat.FindNear(position, radius)
 	local found = {}
+	local probe = Vector3.one * radius * 2
 	for player in Round.Survivors do
 		local char = player.Character
 		local root = Util.Root(char)
 		if root and Util.IsAlive(char) and not Status.Has(player, "Busy") then
-			if (root.Position - position).Magnitude <= radius then
+			local bcf, bsize = Combat.BodyBox(root)
+			if (root.Position - position).Magnitude <= radius or Combat.BoxOverlap(CFrame.new(position), probe, bcf, bsize) then
 				table.insert(found, { Player = player, Char = char, Root = root })
 			end
 		end
@@ -2505,6 +2546,9 @@ local function decorate(core, st, at, w, y0, y1, full, idx)
 	local T = st.T
 	local function band(yA, yB, extraT, color, mat, extra)
 		local a, b = math.max(yA, y0), math.min(yB, y1)
+		if a < 0.01 then
+			a = 0.012 -- never share the floor plane with the wall core
+		end
 		if b - a > 0.02 then
 			return D(core, Vector3.new(T + extraT, b - a, w - 0.03), at((a + b) / 2), mat or M.SmoothPlastic, color, extra)
 		end
@@ -2835,7 +2879,7 @@ end
 
 -- One floor everywhere: 4-stud tiles with dark grout, two alternating greys,
 -- per-tile shade variation, concrete grain, and the odd cracked or scuffed tile.
-local TILE = { Size = 4, Mat = M.Concrete, A = rgb(104, 108, 114), B = rgb(88, 92, 98), Seam = rgb(34, 36, 40) }
+local TILE = { Size = 4, Mat = M.Concrete, A = rgb(98, 102, 108), B = rgb(68, 71, 77), Seam = rgb(18, 19, 22) }
 
 local function floorTiles(parent, r, _kind, x0, z0, x1, z1)
 	local f = TILE
@@ -3783,10 +3827,6 @@ local function buildHangar(parent)
 		D(pod, Vector3.new(12, 0.08, 12), CFrame.new(c + Vector3.new(0, 0.06, -1)), M.DiamondPlate, rgb(56, 54, 52))
 	end
 	dummy.Parent = pod
-	local beacon = P(pod, Vector3.new(3, r.h, 3), CFrame.new(0, F + r.h / 2, 112), M.Neon, rgb(160, 60, 220), { Transparency = 1, CanCollide = false, CanQuery = false, Shape = Enum.PartType.Cylinder })
-	beacon.CFrame = CFrame.new(0, F + r.h / 2, 112) * CFrame.Angles(0, 0, math.rad(90))
-	beacon.Size = Vector3.new(r.h, 2.4, 2.4)
-	beacon.Name = "Beacon"
 	-- central control podium
 	local podium = CFrame.new(0, F + 0.8, 106)
 	P(pod, Vector3.new(6, 3.4, 3), podium * CFrame.new(0, 1.7, 0), M.Metal, rgb(40, 42, 48))
@@ -6787,13 +6827,16 @@ end
 
 function MapBuilder.SetupLighting()
 	Lighting.ClockTime = 0.4
-	Lighting.Brightness = 2
-	Lighting.Ambient = rgb(34, 38, 52)
-	Lighting.OutdoorAmbient = rgb(72, 82, 108)
+	Lighting.Brightness = 4
+	Lighting.Ambient = rgb(124, 155, 184)
+	Lighting.OutdoorAmbient = rgb(157, 178, 255)
+	pcall(function()
+		Lighting.LightingStyle = Enum.LightingStyle.Realistic
+	end)
 	Lighting.EnvironmentDiffuseScale = 1
 	Lighting.EnvironmentSpecularScale = 1
 	Lighting.GlobalShadows = true
-	Lighting.ShadowSoftness = 0.2
+	Lighting.ShadowSoftness = 1
 	Lighting.GeographicLatitude = 48
 	Lighting.ExposureCompensation = 0.1
 	for _, c in Lighting:GetChildren() do
@@ -6811,12 +6854,12 @@ function MapBuilder.SetupLighting()
 	})
 	make("Sky", Lighting, { StarCount = 5000, MoonAngularSize = 16, CelestialBodiesShown = true })
 	make("ColorCorrectionEffect", Lighting, {
-		Brightness = 0.01,
-		Contrast = 0.2,
-		Saturation = -0.12,
-		TintColor = rgb(212, 224, 255),
+		Brightness = 0,
+		Contrast = 0.5,
+		Saturation = 0.5,
+		TintColor = rgb(243, 234, 255),
 	})
-	make("BloomEffect", Lighting, { Intensity = 0.9, Size = 26, Threshold = 1.15 })
+	make("BloomEffect", Lighting, { Intensity = 0.9, Size = 56, Threshold = 1.15 })
 	make("SunRaysEffect", Lighting, { Intensity = 0.04, Spread = 0.6 })
 	make("DepthOfFieldEffect", Lighting, { FarIntensity = 0.18, FocusDistance = 70, InFocusRadius = 60, NearIntensity = 0 })
 end
@@ -6942,7 +6985,7 @@ local function clawGouge(parent, origin, length, tilt)
 			block(parent, Vector3.new(0.14, length * 0.96, 0.32), cf * CFrame.new(s * 0.5, 0, 0), M.Neon, rgb(255, 120, 30))
 			-- torn flaps curling out of the cut
 			for f = -1, 1 do
-				block(parent, Vector3.new(0.6, 1.4, 0.1), cf * CFrame.new(s * 0.75, f * length * 0.3, -0.35) * CFrame.Angles(math.rad(-35), 0, math.rad(s * 35)), M.Metal, rgb(90, 92, 98))
+				block(parent, Vector3.new(0.6, 1.4, 0.1), cf * CFrame.new(s * 0.75, f * length * 0.3, -0.35 - (f + 1) * 0.03 - (s + 1) * 0.01) * CFrame.Angles(math.rad(-35), 0, math.rad(s * 35)), M.Metal, rgb(90, 92, 98))
 			end
 		end
 	end
@@ -6963,7 +7006,7 @@ local function couch(parent, cf, color)
 	block(parent, Vector3.new(10, 1.6, 4), cf * CFrame.new(0, 1.2, 0), M.Fabric, color)
 	block(parent, Vector3.new(10, 3, 1.2), cf * CFrame.new(0, 2.6, 1.6), M.Fabric, color)
 	for _, x in { -5.3, 5.3 } do
-		block(parent, Vector3.new(0.9, 2.4, 4), cf * CFrame.new(x, 1.8, 0), M.Fabric, color)
+		block(parent, Vector3.new(0.9, 2.4, 4.08), cf * CFrame.new(x, 1.81, 0), M.Fabric, color)
 	end
 	for _, x in { -3.3, 0, 3.3 } do
 		block(parent, Vector3.new(3.1, 0.6, 3.4), cf * CFrame.new(x, 2.2, -0.2), M.Fabric, vary(color, 0.15))
@@ -7006,7 +7049,23 @@ function MapBuilder.BuildLobby()
 	end
 
 	-- Floor: dark concrete, hazard border, steel walkway
-	block(lobby, Vector3.new(W, 1, D), CFrame.new(0, Y - 0.5, 0), M.Concrete, rgb(96, 96, 102))
+	-- Tiled floor (same style as the facility): dark grout under 4-stud concrete
+	-- tiles in two alternating greys, with per-tile shade variation and scuffs
+	block(lobby, Vector3.new(W, 0.88, D), CFrame.new(0, Y - 0.56, 0), M.SmoothPlastic, rgb(18, 19, 22))
+	do
+		local nx, nz = math.floor(W / 4 + 0.5), math.floor(D / 4 + 0.5)
+		local sx, sz = W / nx, D / nz
+		for i = 0, nx - 1 do
+			for j = 0, nz - 1 do
+				local x, z = -hx + (i + 0.5) * sx, -hz + (j + 0.5) * sz
+				local base = (i + j) % 2 == 0 and rgb(84, 87, 93) or rgb(58, 61, 67)
+				local tile = block(lobby, Vector3.new(sx - 0.16, 0.12, sz - 0.16), CFrame.new(x, Y - 0.06, z), M.Concrete, vary(base, 0.1))
+				if rng:NextNumber() < 0.05 then
+					block(tile, Vector3.new(rng:NextNumber(0.8, 1.8), 0.02, rng:NextNumber(0.2, 0.4)), CFrame.new(x + rng:NextNumber(-1, 1), Y + 0.01, z + rng:NextNumber(-1, 1)) * CFrame.Angles(0, rng:NextNumber(0, 3), 0), M.SmoothPlastic, rgb(48, 50, 54), { Transparency = 0.35, CanCollide = false })
+				end
+			end
+		end
+	end
 	for _, d in { { 0, -hz + 2, W - 2, 1.2 }, { 0, hz - 2, W - 2, 1.2 }, { -hx + 2, 0, 1.2, D - 2 }, { hx - 2, 0, 1.2, D - 2 } } do
 		block(lobby, Vector3.new(d[3], 0.06, d[4]), CFrame.new(d[1], Y + 0.03, d[2]), M.SmoothPlastic, C.Hazard)
 	end
@@ -7038,7 +7097,7 @@ function MapBuilder.BuildLobby()
 		if not inGap(deg) then
 			local a0 = math.rad(deg)
 			local len = 2 * math.pi * rMid / segs * 1.04
-			block(lobby, Vector3.new(len, 0.06, ringW), CFrame.new(math.cos(a0) * rMid, logoY, math.sin(a0) * rMid) * CFrame.Angles(0, -a0 + math.pi / 2, 0), M.Concrete, yellow)
+			block(lobby, Vector3.new(len, 0.06, ringW), CFrame.new(math.cos(a0) * rMid, logoY + (i % 2) * 0.008, math.sin(a0) * rMid) * CFrame.Angles(0, -a0 + math.pi / 2, 0), M.Concrete, yellow)
 		end
 	end
 	-- the X: a thick stroke punching out through the ring gaps, and a thinner cross stroke
@@ -7058,7 +7117,7 @@ function MapBuilder.BuildLobby()
 		local r = math.sqrt(rng:NextNumber()) * LR
 		local t = rng:NextNumber() * math.pi * 2
 		block(lobby, Vector3.new(rng:NextNumber(0.12, 0.5), 0.1, rng:NextNumber(0.12, 0.4)),
-			CFrame.new(math.cos(t) * r, logoY + 0.08, math.sin(t) * r) * CFrame.Angles(0, rng:NextNumber() * 6, 0), M.Slate, rgb(24, 22, 20), { CanCollide = false, CanQuery = false })
+			CFrame.new(math.cos(t) * r, logoY + 0.1 + rng:NextNumber() * 0.05, math.sin(t) * r) * CFrame.Angles(0, rng:NextNumber() * 6, 0), M.Slate, rgb(24, 22, 20), { CanCollide = false, CanQuery = false })
 	end
 	-- warm spotlight on the emblem
 	local emblemLamp = block(lobby, Vector3.new(1.4, 0.6, 1.4), CFrame.new(0, Y + H - 2.2, 8), M.Metal, C.DarkMetal)
@@ -7151,7 +7210,7 @@ function MapBuilder.BuildLobby()
 	block(lobby, Vector3.new(77, 0.4, 0.4), CFrame.new(-6, Y + 26.6, rz + 0.3), M.Neon, rgb(200, 20, 20))
 	block(lobby, Vector3.new(77, 0.4, 0.4), CFrame.new(-6, Y + 0.6, rz + 0.3), M.Neon, rgb(200, 20, 20))
 	for _, x in { -44.3, 32.3 } do
-		block(lobby, Vector3.new(0.4, 26, 0.4), CFrame.new(x, Y + 13.6, rz + 0.3), M.Neon, rgb(200, 20, 20))
+		block(lobby, Vector3.new(0.36, 25.9, 0.36), CFrame.new(x, Y + 13.6, rz + 0.3), M.Neon, rgb(200, 20, 20))
 	end
 	local title = block(lobby, Vector3.new(62, 8, 0.3), CFrame.new(-6, Y + 21.5, rz + 0.5) * CFrame.Angles(0, math.pi, 0), M.SmoothPlastic, rgb(12, 12, 14), { Transparency = 1 })
 	local _, tl = surfaceText(title, Enum.NormalId.Front, { Text = "SURVIVE THE WOLVERINE", Font = Enum.Font.LuckiestGuy, TextColor3 = rgb(255, 200, 30) })
@@ -7181,7 +7240,7 @@ function MapBuilder.BuildLobby()
 	-- SUIT GALLERY (east) -----------------------------------------------
 	local gx = hx - 12
 	block(lobby, Vector3.new(20, 1, 70), CFrame.new(gx + 2, Y + 0.5, 0), M.Marble, rgb(26, 26, 30))
-	block(lobby, Vector3.new(0.3, 0.2, 70), CFrame.new(gx - 8, Y + 1.05, 0), M.Neon, rgb(255, 228, 196))
+	block(lobby, Vector3.new(0.3, 0.2, 69.6), CFrame.new(gx - 8, Y + 1.05, 0), M.Neon, rgb(255, 228, 196))
 	block(lobby, Vector3.new(3, 0.5, 70), CFrame.new(gx - 9.5, Y + 0.25, 0), M.Marble, rgb(34, 34, 38))
 	local galleryTitle = block(lobby, Vector3.new(30, 4, 0.3), CFrame.new(hx - 1.6, Y + 23, 0) * CFrame.Angles(0, math.rad(90), 0), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
 	local _, gt = surfaceText(galleryTitle, Enum.NormalId.Front, { Text = "SUIT GALLERY", Font = Enum.Font.LuckiestGuy, TextColor3 = rgb(255, 200, 30) })
@@ -8565,8 +8624,9 @@ local function punch(player, char, root)
 	local fist = root.CFrame * CFrame.new(0, 0.5, -3.2)
 	local hit = false
 	if wRoot then
-		local rel = root.CFrame:PointToObjectSpace(wRoot.Position)
-		if rel.Z < 1 and rel.Z > -cfg.Range and math.abs(rel.X) < 5 and math.abs(rel.Y) < 6 then
+		local box = root.CFrame * CFrame.new(0, 0, -cfg.Range / 2 + 0.5)
+		local bcf, bsize = Combat.BodyBox(wRoot)
+		if Combat.BoxOverlap(box, Vector3.new(9, 11, cfg.Range + 1), bcf, bsize) then
 			hit = true
 			local mult = power(player)
 			Wolverine.Damage(cfg.Damage * mult)
@@ -8654,6 +8714,19 @@ local function laser(player, char, root, aim)
 				break
 			end
 		end
+		-- forgiving hit test: anywhere within a few studs of the beam counts
+		if not hitW and wRoot then
+			local seg = endPos - origin
+			local segLen = seg.Magnitude
+			if segLen > 0.1 then
+				local u = math.clamp((wRoot.Position - origin):Dot(seg / segLen), 0, segLen)
+				local closest = origin + seg / segLen * u
+				if (wRoot.Position - closest).Magnitude < 3.5 then
+					hitW = true
+					endPos = closest
+				end
+			end
+		end
 		if hitW then
 			Wolverine.Damage(cfg.DPS * dt * power(player))
 			Status.Apply(Round.Wolverine, "Slowed", cfg.Slow)
@@ -8678,30 +8751,58 @@ local function laser(player, char, root, aim)
 	Util.FireClient(Fx, player, "Announce", { Text = "CORE VENTING", Color = Color3.fromRGB(255, 120, 80), Duration = cfg.Recover })
 end
 
+-- Inhibitor Blast: a 2s charge (cancel with E again, or it breaks if Wolverine
+-- lands a hit), then a mutant-suppression shockwave that stuns him for 3s.
+local charging = {}
 local function pulse(player, char, root)
+	local cfg = Config.Sentinel.Pulse
+	local token = {}
+	charging[player] = token
+	player:SetAttribute("PulseCharging", true)
+	VFX.Anim(char, "PulseCharge")
+	Fx:FireAllClients("PulseCharge", { Char = char, Time = cfg.Charge })
+	Util.Sound(Config.Sounds.DeathRay, root, { Volume = 1.6, Range = 200, Pitch = 0.55 })
+	Status.Apply(player, "Slowed", cfg.Charge)
+	local armor0 = player:GetAttribute("Armor")
+	local t0 = os.clock()
+	local cancelled = false
+	while os.clock() - t0 < cfg.Charge do
+		task.wait(0.05)
+		if charging[player] ~= token or not (char.Parent and Util.IsAlive(char)) or player:GetAttribute("Role") ~= "Sentinel" or player:GetAttribute("Armor") ~= armor0 or not Round.Active then
+			cancelled = true
+			break
+		end
+	end
+	if charging[player] == token then
+		charging[player] = nil
+	end
+	player:SetAttribute("PulseCharging", nil)
+	if cancelled then
+		VFX.StopAnim(char, "PulseCharge")
+		Fx:FireAllClients("PulseCancel", { Char = char })
+		local cd = cooldowns[player]
+		if cd then
+			cd.Pulse = os.clock() + cfg.CancelCooldown
+		end
+		Status.Apply(player, "Slowed", 0)
+		return
+	end
+	VFX.StopAnim(char, "PulseCharge")
 	VFX.Anim(char, "Pulse")
 	task.wait(0.28) -- slam frame
-	local cfg = Config.Sentinel.Pulse
-	local ring = Instance.new("Part")
-	ring.Shape = Enum.PartType.Ball
-	ring.Anchored = true
-	ring.CanCollide = false
-	ring.CanQuery = false
-	ring.CanTouch = false
-	ring.Material = Enum.Material.ForceField
-	ring.Color = GLOW
-	ring.Size = Vector3.one * 2
-	ring.Position = root.Position
-	ring.Parent = workspace
-	TweenService:Create(ring, TweenInfo.new(0.35), { Size = Vector3.one * cfg.Radius * 2, Transparency = 0.6 }):Play()
-	Debris:AddItem(ring, 0.5)
-	Util.Sound(Config.Sounds.Laser, root, { Volume = 2, Pitch = 0.3, Range = 200 })
-	Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 0.8, Radius = 50 })
+	Fx:FireAllClients("PulseBlast", { Position = root.Position, Radius = cfg.Radius })
+	Util.Sound(Config.Sounds.PounceHit, root, { Volume = 3, Pitch = 0.4, Range = 300 })
+	Util.Sound(Config.Sounds.Roar, root, { Volume = 0.6, Pitch = 2.2, Range = 120 })
+	Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 1.2, Radius = 70 })
 	local _, _, wRoot = wolverineParts()
-	if wRoot and (wRoot.Position - root.Position).Magnitude <= cfg.Radius then
-		local mult = power(player)
-		Wolverine.Damage(cfg.Damage * mult)
-		stunWolverine(cfg.Stun * mult)
+	if wRoot then
+		local bcf, bsize = Combat.BodyBox(wRoot)
+		local near = (wRoot.Position - root.Position).Magnitude <= cfg.Radius
+		if near or Combat.BoxOverlap(CFrame.new(root.Position), Vector3.one * cfg.Radius * 1.4, bcf, bsize) then
+			Wolverine.Damage(cfg.Damage * power(player))
+			stunWolverine(cfg.Stun)
+			Wolverine.RevealSkeleton()
+		end
 	end
 end
 
@@ -8719,6 +8820,10 @@ function Sentinel.Handle(player, ability, arg)
 		return
 	end
 	if player:GetAttribute("Beaming") then
+		return
+	end
+	if ability == "Pulse" and charging[player] then
+		charging[player] = nil -- cancel the charge
 		return
 	end
 	local cfg = Config.Sentinel[ability]
@@ -9316,6 +9421,23 @@ local function makeSkeleton(char)
 	for _, p in skeleton do
 		flesh[p] = nil
 	end
+	-- group the bones so they can glow through the see-through flesh
+	local model = Instance.new("Model")
+	model.Name = "Skeleton"
+	model.Parent = char
+	for _, p in skeleton do
+		p.Parent = model
+	end
+	local glow = Instance.new("Highlight")
+	glow.Name = "BoneGlow"
+	glow.Adornee = model
+	glow.FillColor = Color3.fromRGB(215, 228, 245)
+	glow.FillTransparency = 0.35
+	glow.OutlineColor = Color3.new(1, 1, 1)
+	glow.OutlineTransparency = 0.15
+	glow.DepthMode = Enum.HighlightDepthMode.Occluded
+	glow.Enabled = false
+	glow.Parent = model
 end
 
 function Wolverine.RevealSkeleton()
@@ -9328,8 +9450,12 @@ function Wolverine.RevealSkeleton()
 	local token = revealToken
 	for p in flesh do
 		if p.Parent then
-			p.Transparency = 0.85
+			p.Transparency = 0.92
 		end
+	end
+	local glow = char:FindFirstChild("BoneGlow", true)
+	if glow then
+		glow.Enabled = true
 	end
 	for _, p in skeleton do
 		if p.Parent then
@@ -9352,6 +9478,14 @@ function Wolverine.RevealSkeleton()
 			return
 		end
 		local info = TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.In)
+		local glow2 = char:FindFirstChild("BoneGlow", true)
+		if glow2 then
+			task.delay(0.9, function()
+				if token == revealToken then
+					glow2.Enabled = false
+				end
+			end)
+		end
 		for p, t in flesh do
 			if p.Parent then
 				TweenService:Create(p, info, { Transparency = t }):Play()
@@ -10088,6 +10222,17 @@ Clips.DeathRay = {
 		{ T = 1.2, Ease = "InOut", Pose = { Waist = { 18, 0, 0 }, Neck = { 9, 0, 0 }, RShoulder = { -58, 0, 60 }, LShoulder = { -58, 0, -60 }, RElbow = { 18, 0, 0 }, LElbow = { 18, 0, 0 }, Root = { 7, 0, 0, 0, -0.45, 0 }, RHip = { 34, 0, 10 }, LHip = { -18, 0, -10 }, RKnee = { -36, 0, 0 }, LKnee = { -20, 0, 0 } } },
 	},
 	Tremble = true,
+}
+
+-- Inhibitor Blast charge: crouch, fists pulled in to the core, trembling with power
+Clips.PulseCharge = {
+	Hold = true,
+	Tremble = true,
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.35, Ease = "Out", Pose = { Root = { 0, 0, 0, 0, -0.6, 0 }, Waist = { -8, 0, 0 }, Neck = { -6, 0, 0 }, RShoulder = { 60, 0, 30 }, LShoulder = { 60, 0, -30 }, RElbow = { 110, 0, 0 }, LElbow = { 110, 0, 0 }, RHip = { 40, 0, 12 }, LHip = { 40, 0, -12 }, RKnee = { -60, 0, 0 }, LKnee = { -60, 0, 0 } } },
+		{ T = 2, Ease = "InOut", Pose = { Root = { 0, 0, 0, 0, -0.7, 0 }, Waist = { -12, 0, 0 }, Neck = { -10, 0, 0 }, RShoulder = { 64, 0, 36 }, LShoulder = { 64, 0, -36 }, RElbow = { 118, 0, 0 }, LElbow = { 118, 0, 0 }, RHip = { 44, 0, 14 }, LHip = { 44, 0, -14 }, RKnee = { -66, 0, 0 }, LKnee = { -66, 0, 0 } } },
+	},
 }
 
 Clips.Pulse = {
@@ -10853,7 +10998,7 @@ local ROLE_KIT = {
 	Sentinel = {
 		{ Name = "Punch", Label = "Hydraulic Smash", Desc = "Piston-driven haymaker. Stuns and launches him", Icon = "👊", KeyText = "M1", Key = Enum.KeyCode.ButtonR2, Cooldown = S.Punch.Cooldown, Click = true, Color = Color3.fromRGB(200, 160, 255) },
 		{ Name = "Laser", Label = "Death Ray", Desc = "Melts through walls. Burns him to the adamantium", Icon = "🔴", KeyText = "Q", Key = Enum.KeyCode.Q, Cooldown = S.Laser.Cooldown, Color = Color3.fromRGB(255, 90, 60) },
-		{ Name = "Pulse", Label = "Inhibitor Blast", Desc = "Mutant-suppression shockwave. Locks him in place", Icon = "💥", KeyText = "E", Key = Enum.KeyCode.E, Cooldown = S.Pulse.Cooldown, Color = Color3.fromRGB(255, 210, 60) },
+		{ Name = "Pulse", Label = "Inhibitor Blast", Desc = "Charge 2s (E again to cancel). Stuns him for 3s", Icon = "💥", KeyText = "E", Key = Enum.KeyCode.E, Cooldown = S.Pulse.Cooldown, Color = Color3.fromRGB(255, 210, 60) },
 	},
 }
 
@@ -10863,7 +11008,7 @@ local ROLE_HOLDS = {
 		{ Name = "FeralHold", Label = "All Fours", Desc = "Fastest. Burns stamina", Icon = "🐺", KeyText = "C", Attr = "Feral", Color = Color3.fromRGB(255, 140, 30) },
 	},
 	Sentinel = {
-		{ Name = "LinkHold", Label = "Twin Link", Desc = "Fight beside the other suit: 1.6x power", Icon = "🔗", KeyText = "30m", Attr = "Linked", Color = Color3.fromRGB(190, 140, 255) },
+		{ Name = "LinkHold", Label = "Twin Link", Desc = "Beside the other suit: 1.5x. Apart: 0.6x", Icon = "🔗", KeyText = "30m", Attr = "Linked", Color = Color3.fromRGB(190, 140, 255) },
 	},
 	Survivor = {
 		{ Name = "SprintHold", Label = "Sprint", Desc = "Run for your life", Icon = "🏃", KeyText = "SHIFT", Attr = "Sprinting", Color = Color3.fromRGB(80, 170, 255) },
@@ -10879,7 +11024,7 @@ local ROLE_TITLE = {
 
 local HINTS = {
 	Wolverine = "Shift: sprint   C / Ctrl: run on all fours\nRunning into walls tears through them. Hit anyone 3 times to rip them in half.",
-	Sentinel = "MUTANT-HUNTER ONLINE. M1 Hydraulic Smash · Q Death Ray · E Inhibitor Blast.\nLink up with the other suit for 1.6x power. Core burns out in " .. S.Duration .. "s.",
+	Sentinel = "MUTANT-HUNTER ONLINE. M1 Hydraulic Smash · Q Death Ray · E Inhibitor Blast.\nLinked: 1.5x power. Apart: 0.6x. Last suit standing: 1x. Core burns out in " .. S.Duration .. "s.",
 	Survivor = "Subject X is loose. Reboot the 3 Sentinel Protocol consoles (Foundry, Genetics Lab, Command Centre), then suit up in the Hangar.\nShift: sprint. G: fart (hides your scent). He tears through walls — keep moving.",
 	Lobby = "Waiting for the next round.",
 	Dead = "You were torn apart. Wait for the next round.",
@@ -10888,7 +11033,7 @@ local HINTS = {
 local readyAt = {}
 local slashSide = 0
 local lastPredictedSlash = -1
-local PREDICT = { Pounce = "Pounce", Stab = "Impale", Sniff = "Sniff", Punch = "Punch", Laser = "DeathRay", Pulse = "Pulse", Fart = "Fart" }
+local PREDICT = { Pounce = "Pounce", Stab = "Impale", Sniff = "Sniff", Punch = "Punch", Laser = "DeathRay", Pulse = "PulseCharge", Fart = "Fart" }
 local currentKit = {}
 
 local function kitEntry(name)
@@ -10921,6 +11066,11 @@ local function activate(name)
 		return
 	end
 	if player:GetAttribute("Role") == "Wolverine" and not ReplicatedStorage:GetAttribute("Released") then
+		return
+	end
+	-- pressing the blast key again while it's charging cancels it
+	if name == "Pulse" and player:GetAttribute("PulseCharging") then
+		Ability:FireServer("Pulse")
 		return
 	end
 	if os.clock() < (readyAt[name] or 0) then
@@ -11207,6 +11357,16 @@ Fx.OnClientEvent:Connect(function(kind, data)
 		t.Parent = bb
 		game:GetService("TweenService"):Create(t, TweenInfo.new(5), { TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
 		game:GetService("Debris"):AddItem(p, 5.2)
+	elseif kind == "PulseCharge" then
+		SlashFX.PulseCharge(data.Char, data.Time)
+	elseif kind == "PulseCancel" then
+		SlashFX.PulseCancel(data.Char)
+		if data.Char == player.Character then
+			readyAt.Pulse = os.clock() + Config.Sentinel.Pulse.CancelCooldown
+			Interface.StartCooldown("Pulse", Config.Sentinel.Pulse.CancelCooldown)
+		end
+	elseif kind == "PulseBlast" then
+		SlashFX.PulseBlast(data.Position, data.Radius)
 	elseif kind == "LaserCharge" then
 		SlashFX.LaserCharge(data.Char, data.Time)
 	elseif kind == "LaserBeam" then
@@ -11615,8 +11775,8 @@ end
 
 -- Lighting zones: bright snowy day in the lobby, dark night in the arena.
 local NIGHT, DAY = nil, {
-	ClockTime = 15.5, Brightness = 1.5, ExposureCompensation = -0.15,
-	Ambient = Color3.fromRGB(78, 76, 74), OutdoorAmbient = Color3.fromRGB(112, 116, 128),
+	ClockTime = 15.5, Brightness = 4, ExposureCompensation = -0.15,
+	Ambient = Color3.fromRGB(124, 155, 184), OutdoorAmbient = Color3.fromRGB(157, 178, 255),
 }
 local inLobby = nil
 local function applyZone(lobby)
@@ -11635,7 +11795,7 @@ local function applyZone(lobby)
 	local bloom = Lighting:FindFirstChildOfClass("BloomEffect")
 	if bloom then
 		-- the lobby is daylit: keep glow tight and subtle there
-		TweenService:Create(bloom, TweenInfo.new(1.2), lobby and { Intensity = 0.35, Size = 14, Threshold = 1.6 } or { Intensity = 0.9, Size = 26, Threshold = 1.15 }):Play()
+		TweenService:Create(bloom, TweenInfo.new(1.2), lobby and { Intensity = 0.35, Size = 56, Threshold = 1.6 } or { Intensity = 0.9, Size = 56, Threshold = 1.15 }):Play()
 	end
 	local atmo = Lighting:FindFirstChildOfClass("Atmosphere")
 	if atmo then
@@ -11818,20 +11978,81 @@ function Effects.Sniff(duration, targets)
 	end
 
 	TweenService:Create(tint, TweenInfo.new(0.3), { Saturation = -0.85, TintColor = Color3.fromRGB(255, 190, 180) }):Play()
-	Interface.Announce("You catch their scent...", Color3.fromRGB(255, 90, 90), 2)
+	print(("[Sniff] %d scent(s) marked for %.0fs"):format(#marks, duration or 0))
+	Interface.Announce(#marks > 0 and ("You catch their scent...  (%d)"):format(#marks) or "No scent...", Color3.fromRGB(255, 90, 90), 2)
 	Effects.Shake(0.3)
+	-- a red scent wave rolls out from him
+	local myRoot0 = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	if myRoot0 then
+		local wave = Instance.new("Part")
+		wave.Shape = Enum.PartType.Ball
+		wave.Anchored, wave.CanCollide, wave.CanQuery, wave.CanTouch, wave.CastShadow = true, false, false, false, false
+		wave.Material = Enum.Material.ForceField
+		wave.Color = Color3.fromRGB(255, 40, 40)
+		wave.Size = Vector3.one * 4
+		wave.Position = myRoot0.Position
+		wave.Parent = workspace.CurrentCamera
+		TweenService:Create(wave, TweenInfo.new(0.9, Enum.EasingStyle.Quad), { Size = Vector3.one * 160, Transparency = 1 }):Play()
+		task.delay(1, function()
+			wave:Destroy()
+		end)
+	end
+	-- screen-edge arrows toward every scent
+	local arrowGui = Instance.new("ScreenGui")
+	arrowGui.Name = "ScentArrows"
+	arrowGui.IgnoreGuiInset = true
+	arrowGui.ResetOnSpawn = false
+	arrowGui.Parent = player:WaitForChild("PlayerGui")
+	local arrows = {}
+	for i, m in marks do
+		local a = Instance.new("TextLabel")
+		a.AnchorPoint = Vector2.new(0.5, 0.5)
+		a.Size = UDim2.fromOffset(34, 34)
+		a.BackgroundTransparency = 1
+		a.Font = Enum.Font.GothamBlack
+		a.TextScaled = true
+		a.Text = "▲"
+		a.TextColor3 = Color3.fromRGB(255, 70, 70)
+		a.TextStrokeTransparency = 0.2
+		a.Parent = arrowGui
+		arrows[i] = a
+	end
 
 	local conn = RunService.RenderStepped:Connect(function()
 		local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-		for _, m in marks do
+		local cam = workspace.CurrentCamera
+		local vp = cam.ViewportSize
+		for i, m in marks do
 			local r = m.Part
+			local arrow = arrows[i]
 			if myRoot and r and r.Parent then
 				m.Label.Text = (m.Prefix or "") .. math.floor((r.Position - myRoot.Position).Magnitude) .. "m"
+				local sp, onScreen = cam:WorldToViewportPoint(r.Position)
+				if onScreen and sp.Z > 0 and sp.X > 0 and sp.X < vp.X and sp.Y > 0 and sp.Y < vp.Y then
+					arrow.Visible = false
+				else
+					-- point from screen centre toward the target, pinned to the edge
+					local rel = cam.CFrame:PointToObjectSpace(r.Position)
+					local dir = Vector2.new(rel.X, -rel.Y)
+					if dir.Magnitude < 0.01 then
+						dir = Vector2.new(0, 1)
+					end
+					dir = dir.Unit
+					local c = vp / 2
+					local k = math.min((c.X - 40) / math.max(math.abs(dir.X), 1e-3), (c.Y - 40) / math.max(math.abs(dir.Y), 1e-3))
+					local pos = c + dir * k
+					arrow.Visible = true
+					arrow.Position = UDim2.fromOffset(pos.X, pos.Y)
+					arrow.Rotation = math.deg(math.atan2(dir.Y, dir.X)) + 90
+				end
+			elseif arrow then
+				arrow.Visible = false
 			end
 		end
 	end)
 	task.delay(duration, function()
 		conn:Disconnect()
+		arrowGui:Destroy()
 		for _, m in marks do
 			m.Highlight:Destroy()
 			m.Billboard:Destroy()
@@ -12458,14 +12679,15 @@ local function makeCard(a, order, isHold)
 	local edge = new("Frame", { Position = UDim2.fromOffset(0, 8), Size = UDim2.new(0, 3, 1, -16), BackgroundColor3 = accent, BorderSizePixel = 0 }, card)
 	corner(edge, 2)
 
-	-- round icon (CanvasGroup so the cooldown sweep is clipped to the circle)
+	-- icon tile (rounded square; the cooldown sweep drains inside it)
 	local tileSize = isHold and 28 or 38
-	local tile = new("CanvasGroup", {
+	local tile = new("Frame", {
 		Position = UDim2.new(0, 12, 0.5, -tileSize / 2),
 		Size = UDim2.fromOffset(tileSize, tileSize),
 		BackgroundColor3 = Color3.new(1, 1, 1),
+		ClipsDescendants = true,
 	}, card)
-	corner(tile, tileSize)
+	corner(tile, 9)
 	gradient(tile, darker(accent, 0.7), darker(accent, 0.28))
 	local tileStroke = stroke(tile, accent, 1.5, 0.1)
 	local icon = new("TextLabel", {
@@ -12488,19 +12710,26 @@ local function makeCard(a, order, isHold)
 		Position = UDim2.fromScale(0, 1),
 		Size = UDim2.fromScale(1, 0),
 		BackgroundColor3 = Color3.new(0, 0, 0),
-		BackgroundTransparency = 0.3,
+		BackgroundTransparency = 0.2,
 		BorderSizePixel = 0,
 		ZIndex = 7,
 	}, tile)
+	corner(sweep, 9)
 	local countdown = new("TextLabel", {
 		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
-		Font = Enum.Font.GothamBold,
-		TextSize = isHold and 11 or 13,
+		Font = Enum.Font.GothamBlack,
+		TextSize = isHold and 12 or 15,
 		Text = "",
 		TextColor3 = K.White,
+		TextStrokeTransparency = 0.3,
 		ZIndex = 8,
 	}, tile)
+	-- recharge bar along the bottom of the card
+	local barBg = new("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 10, 1, -3), Size = UDim2.new(1, -20, 0, 3), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.9, BorderSizePixel = 0, Visible = not isHold }, card)
+	corner(barBg, 2)
+	local bar = new("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = accent, BorderSizePixel = 0 }, barBg)
+	corner(bar, 2)
 
 	-- text
 	local x = 12 + tileSize + 10
@@ -12547,13 +12776,27 @@ local function makeCard(a, order, isHold)
 		TextColor3 = K.White,
 	}, cap)
 
+	if a.Cooldown and not isHold then
+		cap.Position = UDim2.new(1, -10, 0.5, -7)
+		new("TextLabel", {
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, -10, 0.5, 7),
+			Size = UDim2.fromOffset(capW, 12),
+			BackgroundTransparency = 1,
+			Font = Enum.Font.GothamBold,
+			TextSize = 10,
+			Text = (a.Cooldown >= 1 and ("%ds"):format(math.floor(a.Cooldown + 0.5)) or ("%.1fs"):format(a.Cooldown)),
+			TextColor3 = Color3.fromRGB(150, 154, 162),
+		}, card)
+	end
+
 	local flashFrame = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = accent, BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 9 }, card)
 	corner(flashFrame, 10)
 
 	slots[a.Name] = {
 		Card = card, Scale = scale, Stroke = cardStroke, TileStroke = tileStroke, Sweep = sweep, Countdown = countdown,
 		Flash = flashFrame, Name = name, Icon = icon, Accent = accent, ReadyAt = 0, Duration = 1, WasCooling = false,
-		Hold = isHold, Attr = a.Attr,
+		Hold = isHold, Attr = a.Attr, Bar = bar,
 	}
 end
 
@@ -12795,12 +13038,20 @@ RunService.RenderStepped:Connect(function(dt)
 			local remaining = s.ReadyAt - t
 			if remaining > 0 then
 				s.Sweep.Size = UDim2.fromScale(1, math.clamp(remaining / s.Duration, 0, 1))
+				if s.Bar then
+					s.Bar.Size = UDim2.fromScale(1 - math.clamp(remaining / s.Duration, 0, 1), 1)
+				end
+				s.Name.TextTransparency = 0.45
 				s.Countdown.Text = remaining >= 10 and tostring(math.ceil(remaining)) or ("%.1f"):format(remaining)
 				s.Icon.TextTransparency = 0.5
 				s.Stroke.Transparency = 0.88
 			else
 				s.Sweep.Size = UDim2.fromScale(1, 0)
 				s.Countdown.Text = ""
+				if s.Bar then
+					s.Bar.Size = UDim2.fromScale(1, 1)
+				end
+				s.Name.TextTransparency = 0
 				s.Icon.TextTransparency = 0
 				-- ready glow pulse
 				local pulse = (math.sin(t * 3) + 1) / 2
@@ -13137,63 +13388,109 @@ function Minigame.Wires(st)
 		local j = math.random(i)
 		order[i], order[j] = order[j], order[i]
 	end
-	local strikes, matched, selected = 0, 0, nil
+	local strikes, matched = 0, 0
 	local left, right = {}, {}
 	local lines = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1 }, body)
-	local function node(parent, x, y, c)
-		local b = button(parent, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(x, 0, 0, y), Size = UDim2.fromOffset(26, 26), BackgroundColor3 = c })
-		corner(b, 13)
+	local function node(x, y, c)
+		local b = button(body, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(x, 0, 0, y), Size = UDim2.fromOffset(28, 28), BackgroundColor3 = c, ZIndex = 3 })
+		corner(b, 14)
 		stroke(b, Color3.new(1, 1, 1), 2, 0.6)
 		return b
 	end
-	local function drawLine(a, b, c)
-		local ap = a.AbsolutePosition + a.AbsoluteSize / 2 - body.AbsolutePosition
-		local bp = b.AbsolutePosition + b.AbsoluteSize / 2 - body.AbsolutePosition
-		local mid = (ap + bp) / 2
-		local d = bp - ap
-		new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(mid.X, mid.Y), Size = UDim2.fromOffset(d.Magnitude, 5), Rotation = math.deg(math.atan2(d.Y, d.X)), BackgroundColor3 = c, BorderSizePixel = 0 }, lines)
+	local function centre(g)
+		return g.AbsolutePosition + g.AbsoluteSize / 2 - body.AbsolutePosition
+	end
+	-- a wire frame stretched between two points (body space)
+	local function setWire(w, a, b)
+		local mid = (a + b) / 2
+		local d = b - a
+		w.Position = UDim2.fromOffset(mid.X, mid.Y)
+		w.Size = UDim2.fromOffset(math.max(1, d.Magnitude), 6)
+		w.Rotation = math.deg(math.atan2(d.Y, d.X))
+	end
+	local function newWire(c)
+		local w = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = c, BorderSizePixel = 0, ZIndex = 2 }, lines)
+		corner(w, 3)
+		return w
 	end
 	for i = 1, 4 do
 		local y = 14 + (i - 1) * 42
-		local l = node(body, 0.06, y, colors[i])
-		local r = node(body, 0.94, y, colors[order[i]])
-		left[i], right[i] = l, r
+		left[i] = node(0.06, y, colors[i])
+		right[i] = node(0.94, y, colors[order[i]])
+		right[i]:SetAttribute("Color", order[i])
 		label(body, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0.06, 22, 0, y), Size = UDim2.fromOffset(60, 12), Text = ("L%d-%02d"):format(i, math.random(10, 99)), Font = Enum.Font.Code, TextColor3 = DIM })
-		st.Conn(l.Activated:Connect(function()
-			if l:GetAttribute("Done") then
+	end
+	label(body, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 180), Size = UDim2.fromOffset(300, 14), Text = "Drag each wire across to its matching port", Font = Enum.Font.Gotham, TextColor3 = DIM })
+
+	-- dragging
+	local dragging = nil -- { Index, Wire }
+	local function pointer()
+		-- the repair screen ignores the top-bar inset, same space as GetMouseLocation
+		return UserInputService:GetMouseLocation() - body.AbsolutePosition
+	end
+	local lastTouch = nil
+	for i, l in left do
+		st.Conn(l.InputBegan:Connect(function(input)
+			if l:GetAttribute("Done") or dragging then
 				return
 			end
-			if selected then
-				left[selected].Size = UDim2.fromOffset(26, 26)
-			end
-			selected = i
-			l.Size = UDim2.fromOffset(32, 32)
-			beep(1.2, 0.3)
-		end))
-		st.Conn(r.Activated:Connect(function()
-			if not selected or r:GetAttribute("Done") then
-				return
-			end
-			if order[i] == selected then
-				drawLine(left[selected], r, colors[selected])
-				left[selected]:SetAttribute("Done", true)
-				r:SetAttribute("Done", true)
-				left[selected].Size = UDim2.fromOffset(26, 26)
-				selected = nil
-				matched += 1
-				beep(1.5, 0.4)
-				if matched == 4 then
-					st.Finish(true)
-				end
-			else
-				strikes += 1
-				beep(0.6, 0.6)
-				if strikes >= 2 then
-					st.Finish(false)
-				end
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				dragging = { Index = i, Wire = newWire(colors[i]) }
+				l.Size = UDim2.fromOffset(32, 32)
+				beep(1.2, 0.3)
 			end
 		end))
 	end
+	st.Conn(UserInputService.TouchMoved:Connect(function(t)
+		local inset = game:GetService("GuiService"):GetGuiInset()
+		lastTouch = Vector2.new(t.Position.X, t.Position.Y + inset.Y) - body.AbsolutePosition
+	end))
+	st.Conn(RunService.RenderStepped:Connect(function()
+		if dragging then
+			local p = lastTouch or pointer()
+			setWire(dragging.Wire, centre(left[dragging.Index]), p)
+		end
+	end))
+	st.Conn(UserInputService.InputEnded:Connect(function(input)
+		if not dragging then
+			return
+		end
+		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
+			return
+		end
+		local i = dragging.Index
+		local p = lastTouch or pointer()
+		lastTouch = nil
+		left[i].Size = UDim2.fromOffset(28, 28)
+		-- which port did we let go over?
+		local target = nil
+		for _, r in right do
+			if (centre(r) - p).Magnitude < 26 and not r:GetAttribute("Done") then
+				target = r
+			end
+		end
+		if target and target:GetAttribute("Color") == i then
+			setWire(dragging.Wire, centre(left[i]), centre(target))
+			left[i]:SetAttribute("Done", true)
+			target:SetAttribute("Done", true)
+			matched += 1
+			beep(1.5, 0.4)
+			dragging = nil
+			if matched == 4 then
+				st.Finish(true)
+			end
+			return
+		end
+		dragging.Wire:Destroy()
+		dragging = nil
+		if target then -- wrong port: sparks
+			strikes += 1
+			beep(0.6, 0.6)
+			if strikes >= 2 then
+				st.Finish(false)
+			end
+		end
+	end))
 end
 
 ---------------------------------------------------------------------------
@@ -14458,6 +14755,187 @@ function SlashFX.Smash(char, position, dir, hit)
 	if hit then
 		SlashFX.HitFlash(position, gold, 1.5)
 	end
+end
+
+---------------------------------------------------------------------------
+-- Inhibitor Blast
+---------------------------------------------------------------------------
+
+local GOLD = Color3.fromRGB(255, 210, 90)
+local pulseState = {}
+
+-- jagged lightning between two points
+local function setBolt(r, a, b, jag, width, transparency)
+	local n = r.N
+	local pts, ws = table.create(n), table.create(n)
+	local d = b - a
+	local side = d:Cross(Vector3.new(0, 1, 0))
+	side = side.Magnitude > 0.01 and side.Unit or Vector3.new(1, 0, 0)
+	local up = side:Cross(d.Unit)
+	for i = 1, n do
+		local u = (i - 1) / (n - 1)
+		local off = (i == 1 or i == n) and Vector3.zero or (side * (math.random() - 0.5) + up * (math.random() - 0.5)) * jag
+		pts[i] = a + d * u + off
+		ws[i] = width * (1 - math.abs(u - 0.5))
+	end
+	setRibbon(r, pts, ws, transparency)
+end
+
+function SlashFX.PulseCharge(char, duration)
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	if not root then
+		return
+	end
+	duration = duration or 2
+	local state = { Cancelled = false }
+	pulseState[char] = state
+	local sphere = Instance.new("Part")
+	sphere.Shape = Enum.PartType.Ball
+	sphere.Anchored, sphere.CanCollide, sphere.CanQuery, sphere.CanTouch, sphere.CastShadow = true, false, false, false, false
+	sphere.Material = Enum.Material.ForceField
+	sphere.Color = GOLD
+	sphere.Size = Vector3.one * 2
+	sphere.Parent = workspace
+	local light = Instance.new("PointLight")
+	light.Color = GOLD
+	light.Parent = sphere
+	local ribbons, bolts = {}, {}
+	for i = 1, 6 do
+		local r = takeRibbon(8, i % 2 == 0 and WHITE or GOLD, 6)
+		table.insert(ribbons, r)
+		bolts[i] = r
+	end
+	local ring = takeRibbon(32, GOLD, 5)
+	local ring2 = takeRibbon(32, WHITE, 5)
+	table.insert(ribbons, ring)
+	table.insert(ribbons, ring2)
+	state.Sphere = sphere
+	run(ribbons, function(t)
+		local k = math.min(1, t / duration)
+		if state.Cancelled or t > duration + 0.4 or not root.Parent then
+			sphere:Destroy()
+			return false
+		end
+		local s = root.Size.Y / 2
+		local c = root.Position
+		local rad = (3 + 5 * k * k) * s
+		sphere.Position = c
+		sphere.Size = Vector3.one * rad * (0.95 + math.random() * 0.1)
+		light.Range = 8 + 22 * k
+		light.Brightness = 1 + 6 * k
+		-- lightning crawling over the sphere, more of it as the charge builds
+		for i, b in bolts do
+			if math.random() < 0.35 + 0.5 * k then
+				local a1 = math.random() * math.pi * 2
+				local a2 = a1 + (math.random() - 0.5) * 2
+				local e1 = (math.random() - 0.5) * 1.6
+				local p1 = c + Vector3.new(math.cos(a1) * math.cos(e1), math.sin(e1), math.sin(a1) * math.cos(e1)) * rad * 0.5
+				local p2 = c + Vector3.new(math.cos(a2), (math.random() - 0.5), math.sin(a2)) * rad * 0.5
+				setBolt(b, p1, p2, 0.8 * s, (0.1 + 0.12 * k) * s, 0)
+			else
+				hideRibbon(b)
+			end
+			_ = i
+		end
+		-- spinning ground rings tightening in
+		local floor = c - Vector3.new(0, 2.8 * s, 0)
+		setRing(ring, floor, Vector3.new(0, 1, 0), (7 - 3 * k) * s, 0.25 * s, 0.2)
+		setRing(ring2, floor + Vector3.new(0, 0.05, 0), Vector3.new(0, 1, 0), (5 - 2.5 * k + math.sin(t * 20) * 0.2) * s, 0.12 * s, 0.1)
+		return true
+	end)
+end
+
+function SlashFX.PulseCancel(char)
+	local st = pulseState[char]
+	if st then
+		st.Cancelled = true
+		pulseState[char] = nil
+		local root = char:FindFirstChild("HumanoidRootPart")
+		if root then
+			starFlare(root.Position, GOLD, 0.8, 0.3)
+		end
+	end
+end
+
+function SlashFX.PulseBlast(position, radius)
+	if not position then
+		return
+	end
+	radius = radius or 20
+	-- clear any charge visuals near this blast
+	for char, st in pulseState do
+		local r = char:FindFirstChild("HumanoidRootPart")
+		if r and (r.Position - position).Magnitude < 6 then
+			st.Cancelled = true
+			pulseState[char] = nil
+		end
+	end
+	local dome = Instance.new("Part")
+	dome.Shape = Enum.PartType.Ball
+	dome.Anchored, dome.CanCollide, dome.CanQuery, dome.CanTouch, dome.CastShadow = true, false, false, false, false
+	dome.Material = Enum.Material.ForceField
+	dome.Color = GOLD
+	dome.Size = Vector3.one * 4
+	dome.Position = position
+	dome.Parent = workspace
+	local core = dome:Clone()
+	core.Material = Enum.Material.Neon
+	core.Color = WHITE
+	core.Parent = workspace
+	local light = Instance.new("PointLight")
+	light.Color = GOLD
+	light.Range = 60
+	light.Brightness = 10
+	light.Parent = core
+	TweenService:Create(dome, TweenInfo.new(0.45, Enum.EasingStyle.Quint), { Size = Vector3.one * radius * 2.2, Transparency = 1 }):Play()
+	TweenService:Create(core, TweenInfo.new(0.2, Enum.EasingStyle.Quad), { Size = Vector3.one * 9, Transparency = 1 }):Play()
+	TweenService:Create(light, TweenInfo.new(0.6), { Brightness = 0 }):Play()
+	task.delay(0.7, function()
+		dome:Destroy()
+		core:Destroy()
+	end)
+	-- ground shock rings + lightning bolts ripping outward
+	local ribbons, rings, bolts = {}, {}, {}
+	for i = 1, 3 do
+		local r = takeRibbon(40, i == 1 and WHITE or GOLD, 6)
+		table.insert(ribbons, r)
+		rings[i] = { R = r, Delay = (i - 1) * 0.07 }
+	end
+	for i = 1, 10 do
+		local r = takeRibbon(9, i % 2 == 0 and WHITE or GOLD, 7)
+		table.insert(ribbons, r)
+		local a = i / 10 * math.pi * 2 + math.random() * 0.4
+		bolts[i] = { R = r, Dir = Vector3.new(math.cos(a), (math.random() - 0.3) * 0.5, math.sin(a)).Unit }
+	end
+	local floor = position - Vector3.new(0, 2.6, 0)
+	local LIFE = 0.55
+	run(ribbons, function(t)
+		local k = t / LIFE
+		if k >= 1 then
+			return false
+		end
+		for _, rg in rings do
+			local q = math.clamp((t - rg.Delay) / (LIFE - rg.Delay), 0, 1)
+			if q > 0 and q < 1 then
+				setRing(rg.R, floor, Vector3.new(0, 1, 0), 2 + radius * 1.1 * outQuad(q), 0.6 * (1 - q), q)
+			else
+				hideRibbon(rg.R)
+			end
+		end
+		for _, b in bolts do
+			local len = radius * (0.3 + 0.9 * outQuad(math.min(1, k * 2)))
+			setBolt(b.R, position, position + b.Dir * len, 1.6, 0.35 * (1 - k), k)
+		end
+		return true
+	end)
+	if _G.WolverineShake then
+		local cam = workspace.CurrentCamera
+		local d = cam and (cam.CFrame.Position - position).Magnitude or 999
+		if d < radius * 3 then
+			_G.WolverineShake(1.2 * (1 - d / (radius * 3)))
+		end
+	end
+	SlashFX.HitFlash(position, GOLD, 2)
 end
 
 return SlashFX

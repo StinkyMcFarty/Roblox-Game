@@ -195,14 +195,53 @@ local function sorted(list, from)
 	return list
 end
 
+-- Blocky hitboxes: every character is a body-sized box (scaled with the
+-- character); an attack lands when its box overlaps that body box at all.
+function Combat.BodyBox(root)
+	local k = root.Size.Y / 2
+	return root.CFrame * CFrame.new(0, -0.4 * k, 0), Vector3.new(3.4, 5.8, 2.4) * k
+end
+
+-- oriented box vs oriented box (separating axis test)
+function Combat.BoxOverlap(cfA, sizeA, cfB, sizeB)
+	local ea, eb = sizeA / 2, sizeB / 2
+	local A = { cfA.RightVector, cfA.UpVector, cfA.LookVector }
+	local B = { cfB.RightVector, cfB.UpVector, cfB.LookVector }
+	local ae = { ea.X, ea.Y, ea.Z }
+	local be = { eb.X, eb.Y, eb.Z }
+	local d = cfB.Position - cfA.Position
+	local function separated(axis)
+		if axis.Magnitude < 1e-6 then
+			return false
+		end
+		axis = axis.Unit
+		local ra = math.abs(A[1]:Dot(axis)) * ae[1] + math.abs(A[2]:Dot(axis)) * ae[2] + math.abs(A[3]:Dot(axis)) * ae[3]
+		local rb = math.abs(B[1]:Dot(axis)) * be[1] + math.abs(B[2]:Dot(axis)) * be[2] + math.abs(B[3]:Dot(axis)) * be[3]
+		return math.abs(d:Dot(axis)) > ra + rb
+	end
+	for i = 1, 3 do
+		if separated(A[i]) or separated(B[i]) then
+			return false
+		end
+	end
+	for i = 1, 3 do
+		for j = 1, 3 do
+			if separated(A[i]:Cross(B[j])) then
+				return false
+			end
+		end
+	end
+	return true
+end
+
 function Combat.FindTargets(cframe, size)
 	local found = {}
 	for player in Round.Survivors do
 		local char = player.Character
 		local root = Util.Root(char)
 		if root and Util.IsAlive(char) and not Status.Has(player, "Busy") then
-			local rel = cframe:PointToObjectSpace(root.Position)
-			if math.abs(rel.X) <= size.X / 2 and math.abs(rel.Y) <= size.Y / 2 and math.abs(rel.Z) <= size.Z / 2 then
+			local bcf, bsize = Combat.BodyBox(root)
+			if Combat.BoxOverlap(cframe, size, bcf, bsize) then
 				table.insert(found, { Player = player, Char = char, Root = root })
 			end
 		end
@@ -212,11 +251,13 @@ end
 
 function Combat.FindNear(position, radius)
 	local found = {}
+	local probe = Vector3.one * radius * 2
 	for player in Round.Survivors do
 		local char = player.Character
 		local root = Util.Root(char)
 		if root and Util.IsAlive(char) and not Status.Has(player, "Busy") then
-			if (root.Position - position).Magnitude <= radius then
+			local bcf, bsize = Combat.BodyBox(root)
+			if (root.Position - position).Magnitude <= radius or Combat.BoxOverlap(CFrame.new(position), probe, bcf, bsize) then
 				table.insert(found, { Player = player, Char = char, Root = root })
 			end
 		end

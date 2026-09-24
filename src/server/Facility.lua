@@ -533,6 +533,9 @@ local function decorate(core, st, at, w, y0, y1, full, idx)
 	local T = st.T
 	local function band(yA, yB, extraT, color, mat, extra)
 		local a, b = math.max(yA, y0), math.min(yB, y1)
+		if a < 0.01 then
+			a = 0.012 -- never share the floor plane with the wall core
+		end
 		if b - a > 0.02 then
 			return D(core, Vector3.new(T + extraT, b - a, w - 0.03), at((a + b) / 2), mat or M.SmoothPlastic, color, extra)
 		end
@@ -863,7 +866,7 @@ end
 
 -- One floor everywhere: 4-stud tiles with dark grout, two alternating greys,
 -- per-tile shade variation, concrete grain, and the odd cracked or scuffed tile.
-local TILE = { Size = 4, Mat = M.Concrete, A = rgb(104, 108, 114), B = rgb(88, 92, 98), Seam = rgb(34, 36, 40) }
+local TILE = { Size = 4, Mat = M.Concrete, A = rgb(98, 102, 108), B = rgb(68, 71, 77), Seam = rgb(18, 19, 22) }
 
 local function floorTiles(parent, r, _kind, x0, z0, x1, z1)
 	local f = TILE
@@ -1811,10 +1814,6 @@ local function buildHangar(parent)
 		D(pod, Vector3.new(12, 0.08, 12), CFrame.new(c + Vector3.new(0, 0.06, -1)), M.DiamondPlate, rgb(56, 54, 52))
 	end
 	dummy.Parent = pod
-	local beacon = P(pod, Vector3.new(3, r.h, 3), CFrame.new(0, F + r.h / 2, 112), M.Neon, rgb(160, 60, 220), { Transparency = 1, CanCollide = false, CanQuery = false, Shape = Enum.PartType.Cylinder })
-	beacon.CFrame = CFrame.new(0, F + r.h / 2, 112) * CFrame.Angles(0, 0, math.rad(90))
-	beacon.Size = Vector3.new(r.h, 2.4, 2.4)
-	beacon.Name = "Beacon"
 	-- central control podium
 	local podium = CFrame.new(0, F + 0.8, 106)
 	P(pod, Vector3.new(6, 3.4, 3), podium * CFrame.new(0, 1.7, 0), M.Metal, rgb(40, 42, 48))

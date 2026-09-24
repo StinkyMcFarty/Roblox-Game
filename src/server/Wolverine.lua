@@ -322,6 +322,23 @@ local function makeSkeleton(char)
 	for _, p in skeleton do
 		flesh[p] = nil
 	end
+	-- group the bones so they can glow through the see-through flesh
+	local model = Instance.new("Model")
+	model.Name = "Skeleton"
+	model.Parent = char
+	for _, p in skeleton do
+		p.Parent = model
+	end
+	local glow = Instance.new("Highlight")
+	glow.Name = "BoneGlow"
+	glow.Adornee = model
+	glow.FillColor = Color3.fromRGB(215, 228, 245)
+	glow.FillTransparency = 0.35
+	glow.OutlineColor = Color3.new(1, 1, 1)
+	glow.OutlineTransparency = 0.15
+	glow.DepthMode = Enum.HighlightDepthMode.Occluded
+	glow.Enabled = false
+	glow.Parent = model
 end
 
 function Wolverine.RevealSkeleton()
@@ -334,8 +351,12 @@ function Wolverine.RevealSkeleton()
 	local token = revealToken
 	for p in flesh do
 		if p.Parent then
-			p.Transparency = 0.85
+			p.Transparency = 0.92
 		end
+	end
+	local glow = char:FindFirstChild("BoneGlow", true)
+	if glow then
+		glow.Enabled = true
 	end
 	for _, p in skeleton do
 		if p.Parent then
@@ -358,6 +379,14 @@ function Wolverine.RevealSkeleton()
 			return
 		end
 		local info = TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.In)
+		local glow2 = char:FindFirstChild("BoneGlow", true)
+		if glow2 then
+			task.delay(0.9, function()
+				if token == revealToken then
+					glow2.Enabled = false
+				end
+			end)
+		end
 		for p, t in flesh do
 			if p.Parent then
 				TweenService:Create(p, info, { Transparency = t }):Play()

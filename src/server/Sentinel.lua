@@ -388,8 +388,9 @@ local function punch(player, char, root)
 	local fist = root.CFrame * CFrame.new(0, 0.5, -3.2)
 	local hit = false
 	if wRoot then
-		local rel = root.CFrame:PointToObjectSpace(wRoot.Position)
-		if rel.Z < 1 and rel.Z > -cfg.Range and math.abs(rel.X) < 5 and math.abs(rel.Y) < 6 then
+		local box = root.CFrame * CFrame.new(0, 0, -cfg.Range / 2 + 0.5)
+		local bcf, bsize = Combat.BodyBox(wRoot)
+		if Combat.BoxOverlap(box, Vector3.new(9, 11, cfg.Range + 1), bcf, bsize) then
 			hit = true
 			local mult = power(player)
 			Wolverine.Damage(cfg.Damage * mult)
@@ -477,6 +478,19 @@ local function laser(player, char, root, aim)
 				break
 			end
 		end
+		-- forgiving hit test: anywhere within a few studs of the beam counts
+		if not hitW and wRoot then
+			local seg = endPos - origin
+			local segLen = seg.Magnitude
+			if segLen > 0.1 then
+				local u = math.clamp((wRoot.Position - origin):Dot(seg / segLen), 0, segLen)
+				local closest = origin + seg / segLen * u
+				if (wRoot.Position - closest).Magnitude < 3.5 then
+					hitW = true
+					endPos = closest
+				end
+			end
+		end
 		if hitW then
 			Wolverine.Damage(cfg.DPS * dt * power(player))
 			Status.Apply(Round.Wolverine, "Slowed", cfg.Slow)
@@ -501,30 +515,58 @@ local function laser(player, char, root, aim)
 	Util.FireClient(Fx, player, "Announce", { Text = "CORE VENTING", Color = Color3.fromRGB(255, 120, 80), Duration = cfg.Recover })
 end
 
+-- Inhibitor Blast: a 2s charge (cancel with E again, or it breaks if Wolverine
+-- lands a hit), then a mutant-suppression shockwave that stuns him for 3s.
+local charging = {}
 local function pulse(player, char, root)
+	local cfg = Config.Sentinel.Pulse
+	local token = {}
+	charging[player] = token
+	player:SetAttribute("PulseCharging", true)
+	VFX.Anim(char, "PulseCharge")
+	Fx:FireAllClients("PulseCharge", { Char = char, Time = cfg.Charge })
+	Util.Sound(Config.Sounds.DeathRay, root, { Volume = 1.6, Range = 200, Pitch = 0.55 })
+	Status.Apply(player, "Slowed", cfg.Charge)
+	local armor0 = player:GetAttribute("Armor")
+	local t0 = os.clock()
+	local cancelled = false
+	while os.clock() - t0 < cfg.Charge do
+		task.wait(0.05)
+		if charging[player] ~= token or not (char.Parent and Util.IsAlive(char)) or player:GetAttribute("Role") ~= "Sentinel" or player:GetAttribute("Armor") ~= armor0 or not Round.Active then
+			cancelled = true
+			break
+		end
+	end
+	if charging[player] == token then
+		charging[player] = nil
+	end
+	player:SetAttribute("PulseCharging", nil)
+	if cancelled then
+		VFX.StopAnim(char, "PulseCharge")
+		Fx:FireAllClients("PulseCancel", { Char = char })
+		local cd = cooldowns[player]
+		if cd then
+			cd.Pulse = os.clock() + cfg.CancelCooldown
+		end
+		Status.Apply(player, "Slowed", 0)
+		return
+	end
+	VFX.StopAnim(char, "PulseCharge")
 	VFX.Anim(char, "Pulse")
 	task.wait(0.28) -- slam frame
-	local cfg = Config.Sentinel.Pulse
-	local ring = Instance.new("Part")
-	ring.Shape = Enum.PartType.Ball
-	ring.Anchored = true
-	ring.CanCollide = false
-	ring.CanQuery = false
-	ring.CanTouch = false
-	ring.Material = Enum.Material.ForceField
-	ring.Color = GLOW
-	ring.Size = Vector3.one * 2
-	ring.Position = root.Position
-	ring.Parent = workspace
-	TweenService:Create(ring, TweenInfo.new(0.35), { Size = Vector3.one * cfg.Radius * 2, Transparency = 0.6 }):Play()
-	Debris:AddItem(ring, 0.5)
-	Util.Sound(Config.Sounds.Laser, root, { Volume = 2, Pitch = 0.3, Range = 200 })
-	Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 0.8, Radius = 50 })
+	Fx:FireAllClients("PulseBlast", { Position = root.Position, Radius = cfg.Radius })
+	Util.Sound(Config.Sounds.PounceHit, root, { Volume = 3, Pitch = 0.4, Range = 300 })
+	Util.Sound(Config.Sounds.Roar, root, { Volume = 0.6, Pitch = 2.2, Range = 120 })
+	Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 1.2, Radius = 70 })
 	local _, _, wRoot = wolverineParts()
-	if wRoot and (wRoot.Position - root.Position).Magnitude <= cfg.Radius then
-		local mult = power(player)
-		Wolverine.Damage(cfg.Damage * mult)
-		stunWolverine(cfg.Stun * mult)
+	if wRoot then
+		local bcf, bsize = Combat.BodyBox(wRoot)
+		local near = (wRoot.Position - root.Position).Magnitude <= cfg.Radius
+		if near or Combat.BoxOverlap(CFrame.new(root.Position), Vector3.one * cfg.Radius * 1.4, bcf, bsize) then
+			Wolverine.Damage(cfg.Damage * power(player))
+			stunWolverine(cfg.Stun)
+			Wolverine.RevealSkeleton()
+		end
 	end
 end
 
@@ -542,6 +584,10 @@ function Sentinel.Handle(player, ability, arg)
 		return
 	end
 	if player:GetAttribute("Beaming") then
+		return
+	end
+	if ability == "Pulse" and charging[player] then
+		charging[player] = nil -- cancel the charge
 		return
 	end
 	local cfg = Config.Sentinel[ability]

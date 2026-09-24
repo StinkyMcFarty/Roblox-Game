@@ -50,8 +50,8 @@ end
 
 -- Lighting zones: bright snowy day in the lobby, dark night in the arena.
 local NIGHT, DAY = nil, {
-	ClockTime = 15.5, Brightness = 1.5, ExposureCompensation = -0.15,
-	Ambient = Color3.fromRGB(78, 76, 74), OutdoorAmbient = Color3.fromRGB(112, 116, 128),
+	ClockTime = 15.5, Brightness = 4, ExposureCompensation = -0.15,
+	Ambient = Color3.fromRGB(124, 155, 184), OutdoorAmbient = Color3.fromRGB(157, 178, 255),
 }
 local inLobby = nil
 local function applyZone(lobby)
@@ -70,7 +70,7 @@ local function applyZone(lobby)
 	local bloom = Lighting:FindFirstChildOfClass("BloomEffect")
 	if bloom then
 		-- the lobby is daylit: keep glow tight and subtle there
-		TweenService:Create(bloom, TweenInfo.new(1.2), lobby and { Intensity = 0.35, Size = 14, Threshold = 1.6 } or { Intensity = 0.9, Size = 26, Threshold = 1.15 }):Play()
+		TweenService:Create(bloom, TweenInfo.new(1.2), lobby and { Intensity = 0.35, Size = 56, Threshold = 1.6 } or { Intensity = 0.9, Size = 56, Threshold = 1.15 }):Play()
 	end
 	local atmo = Lighting:FindFirstChildOfClass("Atmosphere")
 	if atmo then
@@ -253,20 +253,81 @@ function Effects.Sniff(duration, targets)
 	end
 
 	TweenService:Create(tint, TweenInfo.new(0.3), { Saturation = -0.85, TintColor = Color3.fromRGB(255, 190, 180) }):Play()
-	Interface.Announce("You catch their scent...", Color3.fromRGB(255, 90, 90), 2)
+	print(("[Sniff] %d scent(s) marked for %.0fs"):format(#marks, duration or 0))
+	Interface.Announce(#marks > 0 and ("You catch their scent...  (%d)"):format(#marks) or "No scent...", Color3.fromRGB(255, 90, 90), 2)
 	Effects.Shake(0.3)
+	-- a red scent wave rolls out from him
+	local myRoot0 = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	if myRoot0 then
+		local wave = Instance.new("Part")
+		wave.Shape = Enum.PartType.Ball
+		wave.Anchored, wave.CanCollide, wave.CanQuery, wave.CanTouch, wave.CastShadow = true, false, false, false, false
+		wave.Material = Enum.Material.ForceField
+		wave.Color = Color3.fromRGB(255, 40, 40)
+		wave.Size = Vector3.one * 4
+		wave.Position = myRoot0.Position
+		wave.Parent = workspace.CurrentCamera
+		TweenService:Create(wave, TweenInfo.new(0.9, Enum.EasingStyle.Quad), { Size = Vector3.one * 160, Transparency = 1 }):Play()
+		task.delay(1, function()
+			wave:Destroy()
+		end)
+	end
+	-- screen-edge arrows toward every scent
+	local arrowGui = Instance.new("ScreenGui")
+	arrowGui.Name = "ScentArrows"
+	arrowGui.IgnoreGuiInset = true
+	arrowGui.ResetOnSpawn = false
+	arrowGui.Parent = player:WaitForChild("PlayerGui")
+	local arrows = {}
+	for i, m in marks do
+		local a = Instance.new("TextLabel")
+		a.AnchorPoint = Vector2.new(0.5, 0.5)
+		a.Size = UDim2.fromOffset(34, 34)
+		a.BackgroundTransparency = 1
+		a.Font = Enum.Font.GothamBlack
+		a.TextScaled = true
+		a.Text = "▲"
+		a.TextColor3 = Color3.fromRGB(255, 70, 70)
+		a.TextStrokeTransparency = 0.2
+		a.Parent = arrowGui
+		arrows[i] = a
+	end
 
 	local conn = RunService.RenderStepped:Connect(function()
 		local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-		for _, m in marks do
+		local cam = workspace.CurrentCamera
+		local vp = cam.ViewportSize
+		for i, m in marks do
 			local r = m.Part
+			local arrow = arrows[i]
 			if myRoot and r and r.Parent then
 				m.Label.Text = (m.Prefix or "") .. math.floor((r.Position - myRoot.Position).Magnitude) .. "m"
+				local sp, onScreen = cam:WorldToViewportPoint(r.Position)
+				if onScreen and sp.Z > 0 and sp.X > 0 and sp.X < vp.X and sp.Y > 0 and sp.Y < vp.Y then
+					arrow.Visible = false
+				else
+					-- point from screen centre toward the target, pinned to the edge
+					local rel = cam.CFrame:PointToObjectSpace(r.Position)
+					local dir = Vector2.new(rel.X, -rel.Y)
+					if dir.Magnitude < 0.01 then
+						dir = Vector2.new(0, 1)
+					end
+					dir = dir.Unit
+					local c = vp / 2
+					local k = math.min((c.X - 40) / math.max(math.abs(dir.X), 1e-3), (c.Y - 40) / math.max(math.abs(dir.Y), 1e-3))
+					local pos = c + dir * k
+					arrow.Visible = true
+					arrow.Position = UDim2.fromOffset(pos.X, pos.Y)
+					arrow.Rotation = math.deg(math.atan2(dir.Y, dir.X)) + 90
+				end
+			elseif arrow then
+				arrow.Visible = false
 			end
 		end
 	end)
 	task.delay(duration, function()
 		conn:Disconnect()
+		arrowGui:Destroy()
 		for _, m in marks do
 			m.Highlight:Destroy()
 			m.Billboard:Destroy()

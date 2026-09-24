@@ -394,14 +394,15 @@ local function makeCard(a, order, isHold)
 	local edge = new("Frame", { Position = UDim2.fromOffset(0, 8), Size = UDim2.new(0, 3, 1, -16), BackgroundColor3 = accent, BorderSizePixel = 0 }, card)
 	corner(edge, 2)
 
-	-- round icon (CanvasGroup so the cooldown sweep is clipped to the circle)
+	-- icon tile (rounded square; the cooldown sweep drains inside it)
 	local tileSize = isHold and 28 or 38
-	local tile = new("CanvasGroup", {
+	local tile = new("Frame", {
 		Position = UDim2.new(0, 12, 0.5, -tileSize / 2),
 		Size = UDim2.fromOffset(tileSize, tileSize),
 		BackgroundColor3 = Color3.new(1, 1, 1),
+		ClipsDescendants = true,
 	}, card)
-	corner(tile, tileSize)
+	corner(tile, 9)
 	gradient(tile, darker(accent, 0.7), darker(accent, 0.28))
 	local tileStroke = stroke(tile, accent, 1.5, 0.1)
 	local icon = new("TextLabel", {
@@ -424,19 +425,26 @@ local function makeCard(a, order, isHold)
 		Position = UDim2.fromScale(0, 1),
 		Size = UDim2.fromScale(1, 0),
 		BackgroundColor3 = Color3.new(0, 0, 0),
-		BackgroundTransparency = 0.3,
+		BackgroundTransparency = 0.2,
 		BorderSizePixel = 0,
 		ZIndex = 7,
 	}, tile)
+	corner(sweep, 9)
 	local countdown = new("TextLabel", {
 		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
-		Font = Enum.Font.GothamBold,
-		TextSize = isHold and 11 or 13,
+		Font = Enum.Font.GothamBlack,
+		TextSize = isHold and 12 or 15,
 		Text = "",
 		TextColor3 = K.White,
+		TextStrokeTransparency = 0.3,
 		ZIndex = 8,
 	}, tile)
+	-- recharge bar along the bottom of the card
+	local barBg = new("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 10, 1, -3), Size = UDim2.new(1, -20, 0, 3), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.9, BorderSizePixel = 0, Visible = not isHold }, card)
+	corner(barBg, 2)
+	local bar = new("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = accent, BorderSizePixel = 0 }, barBg)
+	corner(bar, 2)
 
 	-- text
 	local x = 12 + tileSize + 10
@@ -483,13 +491,27 @@ local function makeCard(a, order, isHold)
 		TextColor3 = K.White,
 	}, cap)
 
+	if a.Cooldown and not isHold then
+		cap.Position = UDim2.new(1, -10, 0.5, -7)
+		new("TextLabel", {
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, -10, 0.5, 7),
+			Size = UDim2.fromOffset(capW, 12),
+			BackgroundTransparency = 1,
+			Font = Enum.Font.GothamBold,
+			TextSize = 10,
+			Text = (a.Cooldown >= 1 and ("%ds"):format(math.floor(a.Cooldown + 0.5)) or ("%.1fs"):format(a.Cooldown)),
+			TextColor3 = Color3.fromRGB(150, 154, 162),
+		}, card)
+	end
+
 	local flashFrame = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = accent, BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 9 }, card)
 	corner(flashFrame, 10)
 
 	slots[a.Name] = {
 		Card = card, Scale = scale, Stroke = cardStroke, TileStroke = tileStroke, Sweep = sweep, Countdown = countdown,
 		Flash = flashFrame, Name = name, Icon = icon, Accent = accent, ReadyAt = 0, Duration = 1, WasCooling = false,
-		Hold = isHold, Attr = a.Attr,
+		Hold = isHold, Attr = a.Attr, Bar = bar,
 	}
 end
 
@@ -731,12 +753,20 @@ RunService.RenderStepped:Connect(function(dt)
 			local remaining = s.ReadyAt - t
 			if remaining > 0 then
 				s.Sweep.Size = UDim2.fromScale(1, math.clamp(remaining / s.Duration, 0, 1))
+				if s.Bar then
+					s.Bar.Size = UDim2.fromScale(1 - math.clamp(remaining / s.Duration, 0, 1), 1)
+				end
+				s.Name.TextTransparency = 0.45
 				s.Countdown.Text = remaining >= 10 and tostring(math.ceil(remaining)) or ("%.1f"):format(remaining)
 				s.Icon.TextTransparency = 0.5
 				s.Stroke.Transparency = 0.88
 			else
 				s.Sweep.Size = UDim2.fromScale(1, 0)
 				s.Countdown.Text = ""
+				if s.Bar then
+					s.Bar.Size = UDim2.fromScale(1, 1)
+				end
+				s.Name.TextTransparency = 0
 				s.Icon.TextTransparency = 0
 				-- ready glow pulse
 				local pulse = (math.sin(t * 3) + 1) / 2

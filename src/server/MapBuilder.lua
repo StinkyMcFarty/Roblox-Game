@@ -1359,13 +1359,16 @@ end
 
 function MapBuilder.SetupLighting()
 	Lighting.ClockTime = 0.4
-	Lighting.Brightness = 2
-	Lighting.Ambient = rgb(34, 38, 52)
-	Lighting.OutdoorAmbient = rgb(72, 82, 108)
+	Lighting.Brightness = 4
+	Lighting.Ambient = rgb(124, 155, 184)
+	Lighting.OutdoorAmbient = rgb(157, 178, 255)
+	pcall(function()
+		Lighting.LightingStyle = Enum.LightingStyle.Realistic
+	end)
 	Lighting.EnvironmentDiffuseScale = 1
 	Lighting.EnvironmentSpecularScale = 1
 	Lighting.GlobalShadows = true
-	Lighting.ShadowSoftness = 0.2
+	Lighting.ShadowSoftness = 1
 	Lighting.GeographicLatitude = 48
 	Lighting.ExposureCompensation = 0.1
 	for _, c in Lighting:GetChildren() do
@@ -1383,12 +1386,12 @@ function MapBuilder.SetupLighting()
 	})
 	make("Sky", Lighting, { StarCount = 5000, MoonAngularSize = 16, CelestialBodiesShown = true })
 	make("ColorCorrectionEffect", Lighting, {
-		Brightness = 0.01,
-		Contrast = 0.2,
-		Saturation = -0.12,
-		TintColor = rgb(212, 224, 255),
+		Brightness = 0,
+		Contrast = 0.5,
+		Saturation = 0.5,
+		TintColor = rgb(243, 234, 255),
 	})
-	make("BloomEffect", Lighting, { Intensity = 0.9, Size = 26, Threshold = 1.15 })
+	make("BloomEffect", Lighting, { Intensity = 0.9, Size = 56, Threshold = 1.15 })
 	make("SunRaysEffect", Lighting, { Intensity = 0.04, Spread = 0.6 })
 	make("DepthOfFieldEffect", Lighting, { FarIntensity = 0.18, FocusDistance = 70, InFocusRadius = 60, NearIntensity = 0 })
 end
@@ -1514,7 +1517,7 @@ local function clawGouge(parent, origin, length, tilt)
 			block(parent, Vector3.new(0.14, length * 0.96, 0.32), cf * CFrame.new(s * 0.5, 0, 0), M.Neon, rgb(255, 120, 30))
 			-- torn flaps curling out of the cut
 			for f = -1, 1 do
-				block(parent, Vector3.new(0.6, 1.4, 0.1), cf * CFrame.new(s * 0.75, f * length * 0.3, -0.35) * CFrame.Angles(math.rad(-35), 0, math.rad(s * 35)), M.Metal, rgb(90, 92, 98))
+				block(parent, Vector3.new(0.6, 1.4, 0.1), cf * CFrame.new(s * 0.75, f * length * 0.3, -0.35 - (f + 1) * 0.03 - (s + 1) * 0.01) * CFrame.Angles(math.rad(-35), 0, math.rad(s * 35)), M.Metal, rgb(90, 92, 98))
 			end
 		end
 	end
@@ -1535,7 +1538,7 @@ local function couch(parent, cf, color)
 	block(parent, Vector3.new(10, 1.6, 4), cf * CFrame.new(0, 1.2, 0), M.Fabric, color)
 	block(parent, Vector3.new(10, 3, 1.2), cf * CFrame.new(0, 2.6, 1.6), M.Fabric, color)
 	for _, x in { -5.3, 5.3 } do
-		block(parent, Vector3.new(0.9, 2.4, 4), cf * CFrame.new(x, 1.8, 0), M.Fabric, color)
+		block(parent, Vector3.new(0.9, 2.4, 4.08), cf * CFrame.new(x, 1.81, 0), M.Fabric, color)
 	end
 	for _, x in { -3.3, 0, 3.3 } do
 		block(parent, Vector3.new(3.1, 0.6, 3.4), cf * CFrame.new(x, 2.2, -0.2), M.Fabric, vary(color, 0.15))
@@ -1578,7 +1581,23 @@ function MapBuilder.BuildLobby()
 	end
 
 	-- Floor: dark concrete, hazard border, steel walkway
-	block(lobby, Vector3.new(W, 1, D), CFrame.new(0, Y - 0.5, 0), M.Concrete, rgb(96, 96, 102))
+	-- Tiled floor (same style as the facility): dark grout under 4-stud concrete
+	-- tiles in two alternating greys, with per-tile shade variation and scuffs
+	block(lobby, Vector3.new(W, 0.88, D), CFrame.new(0, Y - 0.56, 0), M.SmoothPlastic, rgb(18, 19, 22))
+	do
+		local nx, nz = math.floor(W / 4 + 0.5), math.floor(D / 4 + 0.5)
+		local sx, sz = W / nx, D / nz
+		for i = 0, nx - 1 do
+			for j = 0, nz - 1 do
+				local x, z = -hx + (i + 0.5) * sx, -hz + (j + 0.5) * sz
+				local base = (i + j) % 2 == 0 and rgb(84, 87, 93) or rgb(58, 61, 67)
+				local tile = block(lobby, Vector3.new(sx - 0.16, 0.12, sz - 0.16), CFrame.new(x, Y - 0.06, z), M.Concrete, vary(base, 0.1))
+				if rng:NextNumber() < 0.05 then
+					block(tile, Vector3.new(rng:NextNumber(0.8, 1.8), 0.02, rng:NextNumber(0.2, 0.4)), CFrame.new(x + rng:NextNumber(-1, 1), Y + 0.01, z + rng:NextNumber(-1, 1)) * CFrame.Angles(0, rng:NextNumber(0, 3), 0), M.SmoothPlastic, rgb(48, 50, 54), { Transparency = 0.35, CanCollide = false })
+				end
+			end
+		end
+	end
 	for _, d in { { 0, -hz + 2, W - 2, 1.2 }, { 0, hz - 2, W - 2, 1.2 }, { -hx + 2, 0, 1.2, D - 2 }, { hx - 2, 0, 1.2, D - 2 } } do
 		block(lobby, Vector3.new(d[3], 0.06, d[4]), CFrame.new(d[1], Y + 0.03, d[2]), M.SmoothPlastic, C.Hazard)
 	end
@@ -1610,7 +1629,7 @@ function MapBuilder.BuildLobby()
 		if not inGap(deg) then
 			local a0 = math.rad(deg)
 			local len = 2 * math.pi * rMid / segs * 1.04
-			block(lobby, Vector3.new(len, 0.06, ringW), CFrame.new(math.cos(a0) * rMid, logoY, math.sin(a0) * rMid) * CFrame.Angles(0, -a0 + math.pi / 2, 0), M.Concrete, yellow)
+			block(lobby, Vector3.new(len, 0.06, ringW), CFrame.new(math.cos(a0) * rMid, logoY + (i % 2) * 0.008, math.sin(a0) * rMid) * CFrame.Angles(0, -a0 + math.pi / 2, 0), M.Concrete, yellow)
 		end
 	end
 	-- the X: a thick stroke punching out through the ring gaps, and a thinner cross stroke
@@ -1630,7 +1649,7 @@ function MapBuilder.BuildLobby()
 		local r = math.sqrt(rng:NextNumber()) * LR
 		local t = rng:NextNumber() * math.pi * 2
 		block(lobby, Vector3.new(rng:NextNumber(0.12, 0.5), 0.1, rng:NextNumber(0.12, 0.4)),
-			CFrame.new(math.cos(t) * r, logoY + 0.08, math.sin(t) * r) * CFrame.Angles(0, rng:NextNumber() * 6, 0), M.Slate, rgb(24, 22, 20), { CanCollide = false, CanQuery = false })
+			CFrame.new(math.cos(t) * r, logoY + 0.1 + rng:NextNumber() * 0.05, math.sin(t) * r) * CFrame.Angles(0, rng:NextNumber() * 6, 0), M.Slate, rgb(24, 22, 20), { CanCollide = false, CanQuery = false })
 	end
 	-- warm spotlight on the emblem
 	local emblemLamp = block(lobby, Vector3.new(1.4, 0.6, 1.4), CFrame.new(0, Y + H - 2.2, 8), M.Metal, C.DarkMetal)
@@ -1723,7 +1742,7 @@ function MapBuilder.BuildLobby()
 	block(lobby, Vector3.new(77, 0.4, 0.4), CFrame.new(-6, Y + 26.6, rz + 0.3), M.Neon, rgb(200, 20, 20))
 	block(lobby, Vector3.new(77, 0.4, 0.4), CFrame.new(-6, Y + 0.6, rz + 0.3), M.Neon, rgb(200, 20, 20))
 	for _, x in { -44.3, 32.3 } do
-		block(lobby, Vector3.new(0.4, 26, 0.4), CFrame.new(x, Y + 13.6, rz + 0.3), M.Neon, rgb(200, 20, 20))
+		block(lobby, Vector3.new(0.36, 25.9, 0.36), CFrame.new(x, Y + 13.6, rz + 0.3), M.Neon, rgb(200, 20, 20))
 	end
 	local title = block(lobby, Vector3.new(62, 8, 0.3), CFrame.new(-6, Y + 21.5, rz + 0.5) * CFrame.Angles(0, math.pi, 0), M.SmoothPlastic, rgb(12, 12, 14), { Transparency = 1 })
 	local _, tl = surfaceText(title, Enum.NormalId.Front, { Text = "SURVIVE THE WOLVERINE", Font = Enum.Font.LuckiestGuy, TextColor3 = rgb(255, 200, 30) })
@@ -1753,7 +1772,7 @@ function MapBuilder.BuildLobby()
 	-- SUIT GALLERY (east) -----------------------------------------------
 	local gx = hx - 12
 	block(lobby, Vector3.new(20, 1, 70), CFrame.new(gx + 2, Y + 0.5, 0), M.Marble, rgb(26, 26, 30))
-	block(lobby, Vector3.new(0.3, 0.2, 70), CFrame.new(gx - 8, Y + 1.05, 0), M.Neon, rgb(255, 228, 196))
+	block(lobby, Vector3.new(0.3, 0.2, 69.6), CFrame.new(gx - 8, Y + 1.05, 0), M.Neon, rgb(255, 228, 196))
 	block(lobby, Vector3.new(3, 0.5, 70), CFrame.new(gx - 9.5, Y + 0.25, 0), M.Marble, rgb(34, 34, 38))
 	local galleryTitle = block(lobby, Vector3.new(30, 4, 0.3), CFrame.new(hx - 1.6, Y + 23, 0) * CFrame.Angles(0, math.rad(90), 0), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
 	local _, gt = surfaceText(galleryTitle, Enum.NormalId.Front, { Text = "SUIT GALLERY", Font = Enum.Font.LuckiestGuy, TextColor3 = rgb(255, 200, 30) })

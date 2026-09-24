@@ -6,7 +6,7 @@ Config.MinPlayers = 2 -- real players needed to start a round in the live game
 -- Bot survivors are for testing only: in Roblox Studio a round starts with
 -- 1 player and bots fill in up to this many survivors. The published game
 -- never spawns bots.
-Config.BotFill = 5
+Config.BotFill = 6
 Config.IntermissionTime = 20
 Config.RoundTime = 180 -- seconds survivors must last (after the intro)
 Config.KillTimeBonus = 15 -- Wolverine gets this much extra time per kill
@@ -70,8 +70,8 @@ Config.Sentinel = {
 	-- Teamwork: suits within LinkRange of each other are "linked" and hit hard.
 	-- Two suits apart barely scratch him; the last suit standing hits at 1x.
 	LinkRange = 30,
-	LinkedMultiplier = 1.6,
-	SoloMultiplier = 0.5,
+	LinkedMultiplier = 1.5,
+	SoloMultiplier = 0.6, -- two suits but far apart; a lone suit hits at 1x
 	WalkSpeed = 18,
 	Scale = 1.8, -- same size as the docked suits in the Hangar
 	Punch = { Cooldown = 0.9, Damage = 40, Range = 9, Stun = 0.6, Knockback = 70 },
@@ -79,7 +79,7 @@ Config.Sentinel = {
 	-- Death ray: charge, then a 3s aimable beam that pushes him back; the suit
 	-- is sluggish for 3s after firing.
 	Laser = { Cooldown = 12, Charge = 0.6, Duration = 3, DPS = 24, Range = 260, Slow = 1.5, WallsBurned = 8, Push = 22, Recover = 3 },
-	Pulse = { Cooldown = 18, Radius = 16, Stun = 2.2, Damage = 10 },
+	Pulse = { Cooldown = 18, Charge = 2, Radius = 20, Stun = 3, Damage = 12, CancelCooldown = 3 },
 }
 
 -- Survivor fart: masks your scent from Wolverine's Sniff

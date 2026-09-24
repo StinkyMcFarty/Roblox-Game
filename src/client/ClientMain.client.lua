@@ -39,7 +39,7 @@ local ROLE_KIT = {
 	Sentinel = {
 		{ Name = "Punch", Label = "Hydraulic Smash", Desc = "Piston-driven haymaker. Stuns and launches him", Icon = "👊", KeyText = "M1", Key = Enum.KeyCode.ButtonR2, Cooldown = S.Punch.Cooldown, Click = true, Color = Color3.fromRGB(200, 160, 255) },
 		{ Name = "Laser", Label = "Death Ray", Desc = "Melts through walls. Burns him to the adamantium", Icon = "🔴", KeyText = "Q", Key = Enum.KeyCode.Q, Cooldown = S.Laser.Cooldown, Color = Color3.fromRGB(255, 90, 60) },
-		{ Name = "Pulse", Label = "Inhibitor Blast", Desc = "Mutant-suppression shockwave. Locks him in place", Icon = "💥", KeyText = "E", Key = Enum.KeyCode.E, Cooldown = S.Pulse.Cooldown, Color = Color3.fromRGB(255, 210, 60) },
+		{ Name = "Pulse", Label = "Inhibitor Blast", Desc = "Charge 2s (E again to cancel). Stuns him for 3s", Icon = "💥", KeyText = "E", Key = Enum.KeyCode.E, Cooldown = S.Pulse.Cooldown, Color = Color3.fromRGB(255, 210, 60) },
 	},
 }
 
@@ -49,7 +49,7 @@ local ROLE_HOLDS = {
 		{ Name = "FeralHold", Label = "All Fours", Desc = "Fastest. Burns stamina", Icon = "🐺", KeyText = "C", Attr = "Feral", Color = Color3.fromRGB(255, 140, 30) },
 	},
 	Sentinel = {
-		{ Name = "LinkHold", Label = "Twin Link", Desc = "Fight beside the other suit: 1.6x power", Icon = "🔗", KeyText = "30m", Attr = "Linked", Color = Color3.fromRGB(190, 140, 255) },
+		{ Name = "LinkHold", Label = "Twin Link", Desc = "Beside the other suit: 1.5x. Apart: 0.6x", Icon = "🔗", KeyText = "30m", Attr = "Linked", Color = Color3.fromRGB(190, 140, 255) },
 	},
 	Survivor = {
 		{ Name = "SprintHold", Label = "Sprint", Desc = "Run for your life", Icon = "🏃", KeyText = "SHIFT", Attr = "Sprinting", Color = Color3.fromRGB(80, 170, 255) },
@@ -65,7 +65,7 @@ local ROLE_TITLE = {
 
 local HINTS = {
 	Wolverine = "Shift: sprint   C / Ctrl: run on all fours\nRunning into walls tears through them. Hit anyone 3 times to rip them in half.",
-	Sentinel = "MUTANT-HUNTER ONLINE. M1 Hydraulic Smash · Q Death Ray · E Inhibitor Blast.\nLink up with the other suit for 1.6x power. Core burns out in " .. S.Duration .. "s.",
+	Sentinel = "MUTANT-HUNTER ONLINE. M1 Hydraulic Smash · Q Death Ray · E Inhibitor Blast.\nLinked: 1.5x power. Apart: 0.6x. Last suit standing: 1x. Core burns out in " .. S.Duration .. "s.",
 	Survivor = "Subject X is loose. Reboot the 3 Sentinel Protocol consoles (Foundry, Genetics Lab, Command Centre), then suit up in the Hangar.\nShift: sprint. G: fart (hides your scent). He tears through walls — keep moving.",
 	Lobby = "Waiting for the next round.",
 	Dead = "You were torn apart. Wait for the next round.",
@@ -74,7 +74,7 @@ local HINTS = {
 local readyAt = {}
 local slashSide = 0
 local lastPredictedSlash = -1
-local PREDICT = { Pounce = "Pounce", Stab = "Impale", Sniff = "Sniff", Punch = "Punch", Laser = "DeathRay", Pulse = "Pulse", Fart = "Fart" }
+local PREDICT = { Pounce = "Pounce", Stab = "Impale", Sniff = "Sniff", Punch = "Punch", Laser = "DeathRay", Pulse = "PulseCharge", Fart = "Fart" }
 local currentKit = {}
 
 local function kitEntry(name)
@@ -107,6 +107,11 @@ local function activate(name)
 		return
 	end
 	if player:GetAttribute("Role") == "Wolverine" and not ReplicatedStorage:GetAttribute("Released") then
+		return
+	end
+	-- pressing the blast key again while it's charging cancels it
+	if name == "Pulse" and player:GetAttribute("PulseCharging") then
+		Ability:FireServer("Pulse")
 		return
 	end
 	if os.clock() < (readyAt[name] or 0) then
@@ -393,6 +398,16 @@ Fx.OnClientEvent:Connect(function(kind, data)
 		t.Parent = bb
 		game:GetService("TweenService"):Create(t, TweenInfo.new(5), { TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
 		game:GetService("Debris"):AddItem(p, 5.2)
+	elseif kind == "PulseCharge" then
+		SlashFX.PulseCharge(data.Char, data.Time)
+	elseif kind == "PulseCancel" then
+		SlashFX.PulseCancel(data.Char)
+		if data.Char == player.Character then
+			readyAt.Pulse = os.clock() + Config.Sentinel.Pulse.CancelCooldown
+			Interface.StartCooldown("Pulse", Config.Sentinel.Pulse.CancelCooldown)
+		end
+	elseif kind == "PulseBlast" then
+		SlashFX.PulseBlast(data.Position, data.Radius)
 	elseif kind == "LaserCharge" then
 		SlashFX.LaserCharge(data.Char, data.Time)
 	elseif kind == "LaserBeam" then
