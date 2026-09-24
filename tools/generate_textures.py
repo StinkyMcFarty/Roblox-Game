@@ -615,22 +615,23 @@ def outlined(img, pts, fill, width=7):
     d.line(P(pts + [pts[0]]), fill=INK, width=width * SS, joint="curve")
 
 
-def cartoon_eyes(img, y=226, spacing=74, iris=(92, 70, 44), white=(250, 248, 242, 255)):
+def cartoon_eyes(img, y=220, spacing=80, iris=(92, 70, 44), white=(250, 248, 242, 255), k=1.3):
     """Narrowed angry eyes: almond shape with the top cut flat and slanting
     down toward the nose, pupil pushed up under the lid."""
     for s in (-1, 1):
         cx = F / 2 + s * spacing
-        inner, outer = cx - s * 34, cx + s * 34
+        inner, outer = cx - s * 34 * k, cx + s * 34 * k
         mask = Image.new("L", img.size, 0)
         md = ImageDraw.Draw(mask)
-        md.ellipse(P([(cx - 36, y - 20), (cx + 36, y + 18)]), fill=255)
+        md.ellipse(P([(cx - 36 * k, y - 20 * k), (cx + 36 * k, y + 18 * k)]), fill=255)
         # angry lid: everything above the slanted line is cut away
-        md.polygon(P([(inner - s * 10, y + 2), (outer + s * 10, y - 16), (outer + s * 10, y - 40), (inner - s * 10, y - 40)]), fill=0)
+        md.polygon(P([(inner - s * 10, y + 2 * k), (outer + s * 10, y - 16 * k), (outer + s * 10, y - 60), (inner - s * 10, y - 60)]), fill=0)
         eye = Image.new("RGBA", img.size, white)
         pupil = ImageDraw.Draw(eye)
-        pupil.ellipse(P([(cx - s * 4 - 14, y - 12), (cx - s * 4 + 14, y + 16)]), fill=iris + (255,))
-        pupil.ellipse(P([(cx - s * 4 - 7, y - 5), (cx - s * 4 + 7, y + 9)]), fill=INK)
-        pupil.ellipse(P([(cx - s * 4 - 10, y - 8), (cx - s * 4 - 4, y - 2)]), fill=(255, 255, 255, 230))
+        px = cx - s * 5
+        pupil.ellipse(P([(px - 15 * k, y - 12 * k), (px + 15 * k, y + 16 * k)]), fill=iris + (255,))
+        pupil.ellipse(P([(px - 8 * k, y - 5 * k), (px + 8 * k, y + 9 * k)]), fill=INK)
+        pupil.ellipse(P([(px - 11 * k, y - 8 * k), (px - 5 * k, y - 2 * k)]), fill=(255, 255, 255, 230))
         img.paste(eye, (0, 0), mask)
         # ink outline = dilated mask minus mask
         edge = mask.filter(ImageFilter.MaxFilter(5 * SS + 1))
@@ -638,14 +639,14 @@ def cartoon_eyes(img, y=226, spacing=74, iris=(92, 70, 44), white=(250, 248, 242
         edge_only = Image.fromarray(np.clip(np.asarray(edge, np.int16) - np.asarray(mask, np.int16), 0, 255).astype(np.uint8))
         img.paste(ring, (0, 0), edge_only)
         # heavy lid line
-        ImageDraw.Draw(img).line(P([(inner - s * 8, y + 2), (outer + s * 8, y - 16)]), fill=INK, width=8 * SS)
+        ImageDraw.Draw(img).line(P([(inner - s * 8, y + 2 * k), (outer + s * 8, y - 16 * k)]), fill=INK, width=10 * SS)
 
 
-def cartoon_brows(img, color, y=178, spacing=74):
+def cartoon_brows(img, color, y=164, spacing=82):
     """Thick brows, tapering out, the inner ends pulled down into a scowl."""
     for s in (-1, 1):
         cx = F / 2 + s * spacing
-        pts = [(cx - s * 46, y + 22), (cx + s * 50, y - 16), (cx + s * 54, y - 4), (cx - s * 40, y + 40)]
+        pts = [(cx - s * 58, y + 26), (cx + s * 58, y - 18), (cx + s * 62, y + 2), (cx - s * 50, y + 50)]
         outlined(img, pts, color + (255,), 5)
     d = ImageDraw.Draw(img)
     for k in (-1, 1):  # scowl creases between the brows
@@ -657,7 +658,7 @@ def cartoon_nose(img, y=300):
     d.line(P([(F / 2 - 6, y - 40), (F / 2 - 14, y), (F / 2 + 12, y + 4)]), fill=(130, 78, 56, 200), width=5 * SS, joint="curve")
 
 
-def cartoon_snarl(img, y=366, w=74):
+def cartoon_snarl(img, y=356, w=92):
     """Gritted teeth, lips pulled back."""
     cx = F / 2
     outer = [(cx - w, y - 4), (cx - w * 0.5, y - 26), (cx + w * 0.5, y - 26), (cx + w, y - 4), (cx + w * 0.55, y + 24), (cx - w * 0.55, y + 24)]
@@ -672,13 +673,14 @@ def cartoon_snarl(img, y=366, w=74):
 
 
 def cartoon_chops(img, color, reach=1.0):
-    """Wolverine's mutton chops: from the temples down the cheeks, flaring
-    into points toward the mouth corners; the chin stays bare."""
+    """Wolverine's mutton chops, slim and low: they start at ear level (below
+    the eyes), hug the jaw and point in at the mouth corners, chin bare.
+    Kept off the image edges, which wrap round to the sides of the round head
+    and smear when seen at an angle."""
     for s in (-1, 1):
         cx = F / 2
-        e = cx + s * 250  # face edge (wraps round the head)
-        pts = [(e, 130), (cx + s * 196, 150), (cx + s * 190, 250), (cx + s * 150, 318), (cx + s * (96 - 20 * (reach - 1)), 366),
-               (cx + s * 132, 388), (cx + s * 170, 380), (cx + s * 150, 410), (cx + s * 196, 420), (e, 400)]
+        pts = [(cx + s * 196, 236), (cx + s * 170, 244), (cx + s * 162, 318), (cx + s * (108 - 14 * (reach - 1)), 372),
+               (cx + s * 124, 396), (cx + s * 170, 386), (cx + s * 196, 360)]
         outlined(img, pts, color + (255,), 5)
 
 
@@ -706,7 +708,7 @@ def comic_face():
         outlined(img, [(F / 2 + s * 14, 206), (cx + s * 70, 150), (cx + s * 96, 176), (cx + s * 64, 262), (F / 2 + s * 18, 250)], (18, 18, 24, 255), 4)
         # blank white comic eyes
         outlined(img, [(F / 2 + s * 36, 220), (cx + s * 50, 196), (cx + s * 44, 226), (F / 2 + s * 40, 238)], (255, 255, 255, 255), 3)
-    cartoon_snarl(img, y=372)
+    cartoon_snarl(img, y=360)
     return finish_face(img)
 
 

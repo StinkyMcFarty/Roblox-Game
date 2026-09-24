@@ -1808,6 +1808,17 @@ function Costumes.Dress(char, skinId)
 				d:Destroy()
 			end
 		end
+		-- newer default heads can carry the face in the mesh texture itself
+		for _, d in head:GetChildren() do
+			if d:IsA("SurfaceAppearance") or d.ClassName == "FaceControls" then
+				d:Destroy()
+			end
+		end
+		pcall(function()
+			if head:IsA("MeshPart") then
+				head.TextureID = ""
+			end
+		end)
 		local face = head:FindFirstChild("WolverineFace") or Instance.new("Decal")
 		face.Name = "WolverineFace"
 		face.Face = Enum.NormalId.Front
