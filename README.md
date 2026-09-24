@@ -169,3 +169,12 @@ src/shared/   Config, Skins, Util
 - **Death ray** shoves Wolverine back harder and more constantly the closer he is (up to 3.2x within 18 studs).
 - **Intro**: Wolverine floats in the atrium's adamantium tank, wakes, smashes out through the glass, lands, crosses his forearms and the claws shoot out in an X, then roars (his camera films it). Timings: `Config.Intro`.
 - **Kill scream** after every rip-in-half. **Molten sparks** fly when his claws tear through metal or hit a Sentinel.
+
+### Store & AFK
+- **STORE** (lobby dock): four coin packs — 500 coins (R$49), 1,200 (R$99, +20%), 3,000 (R$199, +50%), 7,000 (R$399, +75%).
+  Create a Developer Product for each at that price (Creator Dashboard > your experience > Monetization > Developer Products)
+  and paste the IDs into `Config.CoinPacks` (`ProductId`). Purchases are recorded in the player's save so they're never granted twice.
+- **AFK** (lobby dock): toggles sitting out. AFK players aren't put in matches, don't count toward the player minimum and have 0% Wolverine chance.
+  Idling ~2 minutes turns it on automatically.
+- **Death-ray push-through**: when a Sentinel's beam is on Wolverine, mash **F** (tap Sniff on mobile) to fight it; fill the meter past halfway and he braces and walks slowly into the beam.
+- **Speeds**: Wolverine's upright run is 15% slower than a survivor sprint; on all fours he's 15% faster.

@@ -9,6 +9,7 @@ local Interface = require(script.Parent:WaitForChild("Interface"))
 local Effects = require(script.Parent:WaitForChild("Effects"))
 require(script.Parent:WaitForChild("Shop"))
 local Daily = require(script.Parent:WaitForChild("Daily"))
+require(script.Parent:WaitForChild("Store"))
 local Anims = require(script.Parent:WaitForChild("Anims"))
 local SlashFX = require(script.Parent:WaitForChild("SlashFX"))
 local Minigame = require(script.Parent:WaitForChild("Minigame"))
@@ -107,6 +108,12 @@ local function activate(name)
 		return
 	end
 	if player:GetAttribute("Role") == "Wolverine" and not ReplicatedStorage:GetAttribute("Released") then
+		return
+	end
+	-- under a Sentinel death ray, F (Sniff) is mashed to force through it
+	if name == "Sniff" and workspace:GetServerTimeNow() - (player:GetAttribute("BeamedAt") or 0) < 0.4 then
+		Ability:FireServer("Resist")
+		Effects.ResistPress()
 		return
 	end
 	-- pressing the blast key again while it's charging cancels it

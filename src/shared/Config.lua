@@ -43,13 +43,15 @@ Config.Wolverine = {
 	HealDelay = 3, -- seconds after taking damage before healing starts
 	Scale = 1.15,
 	WalkSpeed = 17,
-	SprintSpeed = 24,
-	TopSprintSpeed = 30,
-	FeralSpeed = 31, -- running on all fours
-	FeralTopSpeed = 37,
+	-- Upright he runs 15% SLOWER than a sprinting survivor; on all fours he's
+	-- 15% FASTER (so survivors can outrun him until he drops to all fours).
+	SprintSpeed = Config.Survivor.SprintSpeed * 0.85,
+	TopSprintSpeed = Config.Survivor.TopSpeed * 0.85,
+	FeralSpeed = Config.Survivor.SprintSpeed * 1.15, -- running on all fours
+	FeralTopSpeed = Config.Survivor.TopSpeed * 1.15,
 	FeralStamina = 4.5,
 	FeralRegen = 0.6,
-	ShredSpeed = 19, -- moving faster than this tears through walls in his path
+	ShredSpeed = 18, -- moving faster than this tears through walls in his path
 }
 
 -- Sprint momentum: after Delay seconds of running you accelerate to top
@@ -81,7 +83,10 @@ Config.Sentinel = {
 	-- Laser burns through walls and flashes Wolverine's adamantium skeleton
 	-- Death ray: charge, then a 3s aimable beam that pushes him back; the suit
 	-- is sluggish for 3s after firing.
-	Laser = { Cooldown = 12, Charge = 0.6, Duration = 3, DPS = 24, Range = 260, Slow = 1.5, WallsBurned = 8, Push = 22, CloseRange = 18, CloseMult = 3.2, Recover = 3 },
+	Laser = { Cooldown = 12, Charge = 0.6, Duration = 3, DPS = 24, Range = 260, Slow = 1.5, WallsBurned = 8, Push = 22, CloseRange = 18, CloseMult = 3.2,
+		-- Wolverine mashing F while beamed: Presses/sec for full resist; past
+		-- Threshold he braces and walks into the beam at Walk x speed
+		Resist = { Presses = 7, Threshold = 0.5, Walk = 0.38 }, Recover = 3 },
 	Pulse = { Cooldown = 18, Charge = 2, Radius = 20, Stun = 3, Damage = 12, CancelCooldown = 3 },
 }
 
@@ -96,6 +101,21 @@ Config.Fart = {
 -- Create a Developer Product (80 Robux) in the Creator Dashboard under
 -- your experience > Monetization > Developer Products, then paste its ID here.
 Config.GuaranteedWolverineProductId = 0
+
+-- Coin packs (Store button). For each pack create a Developer Product in the
+-- Creator Dashboard (Monetization > Developer Products) at the Robux price
+-- below, then paste its ID into ProductId. Bigger packs give a bonus.
+-- Roughly: a round earns ~70-100 coins; claws cost 400-2200, suits 1000-3000.
+Config.CoinPacks = {
+	{ Id = "Handful", Name = "Handful of Coins", Coins = 500, Robux = 49, Bonus = "", ProductId = 0 },
+	{ Id = "Pouch", Name = "Pouch of Coins", Coins = 1200, Robux = 99, Bonus = "+20% BONUS", ProductId = 0 },
+	{ Id = "Crate", Name = "Crate of Coins", Coins = 3000, Robux = 199, Bonus = "+50% BONUS", ProductId = 0 },
+	{ Id = "Vault", Name = "Weapon X Vault", Coins = 7000, Robux = 399, Bonus = "+75% BONUS", ProductId = 0 },
+}
+
+-- AFK: players marked AFK sit out matches. Roblox fires Player.Idled after
+-- ~2 minutes without input; that marks you AFK automatically.
+Config.AutoAfk = true
 
 -- Every round you play without being Wolverine adds this much weight to
 -- your odds (everyone starts at weight 1).

@@ -108,7 +108,9 @@ RunService.Heartbeat:Connect(function(dt)
 			if Status.Has(player, "Boost") then
 				speed += Config.AdrenalineBonus
 			end
-			if Status.Has(player, "Slowed") then
+			if Status.Has(player, "Bracing") then
+				speed *= Config.Sentinel.Laser.Resist.Walk -- forcing his way up the death ray
+			elseif Status.Has(player, "Slowed") then
 				speed *= 0.55
 			end
 			if Status.Has(player, "Gassed") then

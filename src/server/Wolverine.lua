@@ -854,12 +854,31 @@ local function sniff(player, root)
 	end
 end
 
+-- How hard he's fighting the beam right now: presses in the last second
+-- against Config.Sentinel.Laser.Resist.Presses, 0..1.
+local resistPresses = {}
+function Wolverine.ResistLevel()
+	local now = os.clock()
+	while resistPresses[1] and now - resistPresses[1] > 1 do
+		table.remove(resistPresses, 1)
+	end
+	return math.clamp(#resistPresses / Config.Sentinel.Laser.Resist.Presses, 0, 1)
+end
+
 function Wolverine.Handle(player, ability, arg)
 	if player ~= Round.Wolverine or not Round.Released then
 		return
 	end
 	if ability == "Feral" then
 		Movement.SetInput(player, "Feral", arg == true)
+		return
+	end
+	if ability == "Resist" then
+		-- mashing F under a death ray (see Wolverine.ResistLevel)
+		local now = os.clock()
+		if now - (resistPresses[#resistPresses] or 0) >= 0.045 then
+			table.insert(resistPresses, now)
+		end
 		return
 	end
 	local char = player.Character

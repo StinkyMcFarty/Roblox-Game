@@ -20,20 +20,25 @@
       </Item>
       <Item class="RemoteEvent" referent="4">
         <Properties>
+          <string name="Name">Afk</string>
+        </Properties>
+      </Item>
+      <Item class="RemoteEvent" referent="5">
+        <Properties>
           <string name="Name">Fx</string>
         </Properties>
       </Item>
-      <Item class="RemoteFunction" referent="5">
+      <Item class="RemoteFunction" referent="6">
         <Properties>
           <string name="Name">Shop</string>
         </Properties>
       </Item>
     </Item>
-    <Item class="Folder" referent="6">
+    <Item class="Folder" referent="7">
       <Properties>
         <string name="Name">Shared</string>
       </Properties>
-      <Item class="ModuleScript" referent="7">
+      <Item class="ModuleScript" referent="8">
         <Properties>
           <string name="Name">Config</string>
           <string name="Source"><![CDATA[-- Every tunable number in the game lives here.
@@ -81,13 +86,15 @@ Config.Wolverine = {
 	HealDelay = 3, -- seconds after taking damage before healing starts
 	Scale = 1.15,
 	WalkSpeed = 17,
-	SprintSpeed = 24,
-	TopSprintSpeed = 30,
-	FeralSpeed = 31, -- running on all fours
-	FeralTopSpeed = 37,
+	-- Upright he runs 15% SLOWER than a sprinting survivor; on all fours he's
+	-- 15% FASTER (so survivors can outrun him until he drops to all fours).
+	SprintSpeed = Config.Survivor.SprintSpeed * 0.85,
+	TopSprintSpeed = Config.Survivor.TopSpeed * 0.85,
+	FeralSpeed = Config.Survivor.SprintSpeed * 1.15, -- running on all fours
+	FeralTopSpeed = Config.Survivor.TopSpeed * 1.15,
 	FeralStamina = 4.5,
 	FeralRegen = 0.6,
-	ShredSpeed = 19, -- moving faster than this tears through walls in his path
+	ShredSpeed = 18, -- moving faster than this tears through walls in his path
 }
 
 -- Sprint momentum: after Delay seconds of running you accelerate to top
@@ -119,7 +126,10 @@ Config.Sentinel = {
 	-- Laser burns through walls and flashes Wolverine's adamantium skeleton
 	-- Death ray: charge, then a 3s aimable beam that pushes him back; the suit
 	-- is sluggish for 3s after firing.
-	Laser = { Cooldown = 12, Charge = 0.6, Duration = 3, DPS = 24, Range = 260, Slow = 1.5, WallsBurned = 8, Push = 22, CloseRange = 18, CloseMult = 3.2, Recover = 3 },
+	Laser = { Cooldown = 12, Charge = 0.6, Duration = 3, DPS = 24, Range = 260, Slow = 1.5, WallsBurned = 8, Push = 22, CloseRange = 18, CloseMult = 3.2,
+		-- Wolverine mashing F while beamed: Presses/sec for full resist; past
+		-- Threshold he braces and walks into the beam at Walk x speed
+		Resist = { Presses = 7, Threshold = 0.5, Walk = 0.38 }, Recover = 3 },
 	Pulse = { Cooldown = 18, Charge = 2, Radius = 20, Stun = 3, Damage = 12, CancelCooldown = 3 },
 }
 
@@ -134,6 +144,21 @@ Config.Fart = {
 -- Create a Developer Product (80 Robux) in the Creator Dashboard under
 -- your experience > Monetization > Developer Products, then paste its ID here.
 Config.GuaranteedWolverineProductId = 0
+
+-- Coin packs (Store button). For each pack create a Developer Product in the
+-- Creator Dashboard (Monetization > Developer Products) at the Robux price
+-- below, then paste its ID into ProductId. Bigger packs give a bonus.
+-- Roughly: a round earns ~70-100 coins; claws cost 400-2200, suits 1000-3000.
+Config.CoinPacks = {
+	{ Id = "Handful", Name = "Handful of Coins", Coins = 500, Robux = 49, Bonus = "", ProductId = 0 },
+	{ Id = "Pouch", Name = "Pouch of Coins", Coins = 1200, Robux = 99, Bonus = "+20% BONUS", ProductId = 0 },
+	{ Id = "Crate", Name = "Crate of Coins", Coins = 3000, Robux = 199, Bonus = "+50% BONUS", ProductId = 0 },
+	{ Id = "Vault", Name = "Weapon X Vault", Coins = 7000, Robux = 399, Bonus = "+75% BONUS", ProductId = 0 },
+}
+
+-- AFK: players marked AFK sit out matches. Roblox fires Player.Idled after
+-- ~2 minutes without input; that marks you AFK automatically.
+Config.AutoAfk = true
 
 -- Every round you play without being Wolverine adds this much weight to
 -- your odds (everyone starts at weight 1).
@@ -216,7 +241,7 @@ return Config
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="8">
+      <Item class="ModuleScript" referent="9">
         <Properties>
           <string name="Name">Skins</string>
           <string name="Source"><![CDATA[-- Wolverine skins. Prices are in Coins (earned by playing).
@@ -343,7 +368,7 @@ return Skins
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="9">
+      <Item class="ModuleScript" referent="10">
         <Properties>
           <string name="Name">Util</string>
           <string name="Source"><![CDATA[local Debris = game:GetService("Debris")
@@ -522,15 +547,15 @@ return Util
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="10">
+  <Item class="ServerScriptService" referent="11">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Folder" referent="11">
+    <Item class="Folder" referent="12">
       <Properties>
         <string name="Name">Server</string>
       </Properties>
-      <Item class="ModuleScript" referent="12">
+      <Item class="ModuleScript" referent="13">
         <Properties>
           <string name="Name">Bots</string>
           <string name="Source"><![CDATA[-- Bot survivors so a round is playable with only 1-2 real players.
@@ -727,7 +752,7 @@ return Bots
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="13">
+      <Item class="ModuleScript" referent="14">
         <Properties>
           <string name="Name">Combat</string>
           <string name="Source"><![CDATA[-- Hits, wounds, wall shredding and the rip-in-half finisher.
@@ -1358,7 +1383,7 @@ return Combat
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="14">
+      <Item class="ModuleScript" referent="15">
         <Properties>
           <string name="Name">Costumes</string>
           <string name="Source"><![CDATA[-- Everything that makes characters look good: Wolverine suits (textures +
@@ -2128,7 +2153,7 @@ return Costumes
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="15">
+      <Item class="ModuleScript" referent="16">
         <Properties>
           <string name="Name">Facility</string>
           <string name="Source"><![CDATA[-- The arena: one huge Weapon X facility, built entirely from code.
@@ -4882,7 +4907,7 @@ return Facility
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="16">
+      <Item class="ModuleScript" referent="17">
         <Properties>
           <string name="Name">Fart</string>
           <string name="Source"><![CDATA[-- Survivor counter to Wolverine's Sniff: a green gas cloud out the back.
@@ -5025,7 +5050,7 @@ return Fart
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Script" referent="17">
+      <Item class="Script" referent="18">
         <Properties>
           <string name="Name">GameManager</string>
           <token name="RunContext">0</token>
@@ -5146,9 +5171,30 @@ local function minPlayers()
 	return TESTING and 1 or Config.MinPlayers
 end
 
+-- Players who'll take part in the next match (AFK players sit it out)
+local function activePlayers()
+	local list = {}
+	for _, p in Players:GetPlayers() do
+		if not p:GetAttribute("AFK") then
+			table.insert(list, p)
+		end
+	end
+	return list
+end
+
+Remotes:WaitForChild("Afk").OnServerEvent:Connect(function(player, on)
+	if type(on) ~= "boolean" then
+		return
+	end
+	player:SetAttribute("AFK", on or nil)
+	PlayerData.PublishChances()
+end)
+
 ---------------------------------------------------------------------------
 -- Players
 ---------------------------------------------------------------------------
+
+local blockyDescription -- defined below; used by the lobby respawn handler
 
 local function onPlayerAdded(player)
 	local ls = Instance.new("Folder")
@@ -5263,7 +5309,7 @@ end
 -- Everyone plays on the classic blocky body (their own clothes, colours, face
 -- and accessories stay; bundle body parts and scaling are removed).
 local descCache = {}
-local function blockyDescription(p)
+blockyDescription = function(p)
 	local d = descCache[p]
 	if not d then
 		local ok, base = pcall(function()
@@ -5294,7 +5340,7 @@ local function loadBlocky(p)
 end
 
 local function runRound()
-	local list = Players:GetPlayers()
+	local list = activePlayers()
 	if #list < minPlayers() then
 		return
 	end
@@ -5461,8 +5507,9 @@ end
 
 while true do
 	ReplicatedStorage:SetAttribute("InRound", false)
-	while #Players:GetPlayers() < minPlayers() do
-		setStatus(("Waiting for players (%d/%d)"):format(#Players:GetPlayers(), minPlayers()))
+	while #activePlayers() < minPlayers() do
+		local afk = #Players:GetPlayers() - #activePlayers()
+		setStatus(("Waiting for players (%d/%d)%s"):format(#activePlayers(), minPlayers(), afk > 0 and ("  •  %d AFK"):format(afk) or ""))
 		task.wait(1)
 	end
 	local ends = now() + Config.IntermissionTime
@@ -5470,7 +5517,7 @@ while true do
 	local ok = true
 	while now() < ends do
 		task.wait(0.25)
-		if #Players:GetPlayers() < minPlayers() then
+		if #activePlayers() < minPlayers() then
 			ok = false
 			break
 		end
@@ -5496,7 +5543,7 @@ end
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="18">
+      <Item class="ModuleScript" referent="19">
         <Properties>
           <string name="Name">Hiding</string>
           <string name="Source"><![CDATA[-- Hiding spots (lockers, wardrobes, dumpsters, freezer). Hidden survivors are
@@ -5648,7 +5695,7 @@ return Hiding
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="19">
+      <Item class="ModuleScript" referent="20">
         <Properties>
           <string name="Name">MapBuilder</string>
           <string name="Source"><![CDATA[-- Builds the whole map from code: a snowed-in Weapon X compound at night.
@@ -7720,7 +7767,7 @@ return MapBuilder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="20">
+      <Item class="ModuleScript" referent="21">
         <Properties>
           <string name="Name">Movement</string>
           <string name="Source"><![CDATA[-- Server-authoritative walk speeds, sprint/feral stamina and status slowdowns.
@@ -7833,7 +7880,9 @@ RunService.Heartbeat:Connect(function(dt)
 			if Status.Has(player, "Boost") then
 				speed += Config.AdrenalineBonus
 			end
-			if Status.Has(player, "Slowed") then
+			if Status.Has(player, "Bracing") then
+				speed *= Config.Sentinel.Laser.Resist.Walk -- forcing his way up the death ray
+			elseif Status.Has(player, "Slowed") then
 				speed *= 0.55
 			end
 			if Status.Has(player, "Gassed") then
@@ -7886,7 +7935,7 @@ return Movement
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="21">
+      <Item class="ModuleScript" referent="22">
         <Properties>
           <string name="Name">PlayerData</string>
           <string name="Source"><![CDATA[-- Saved player data: coins, skins, daily challenges, login streak and
@@ -7964,7 +8013,7 @@ function PlayerData.Save(player)
 	for id in d.Owned do
 		table.insert(owned, id)
 	end
-	pcall(function()
+	local ok = pcall(function()
 		store:SetAsync("p_" .. player.UserId, {
 			Coins = d.Coins,
 			Owned = owned,
@@ -7981,8 +8030,10 @@ function PlayerData.Save(player)
 			LastLogin = d.LastLogin,
 			Streak = d.Streak,
 			Daily = d.Daily,
+			Receipts = d.Receipts,
 		})
 	end)
+	return ok
 end
 
 function PlayerData.AddCoins(player, amount, reason)
@@ -8013,6 +8064,7 @@ function PlayerData.Load(player)
 		Streak = 0,
 		Daily = freshDaily(),
 		Pity = 0, -- rounds played in a row without being Wolverine (this session)
+		Receipts = {}, -- recent Robux PurchaseIds already granted (never grant twice)
 	}
 	if store then
 		local ok, saved = pcall(function()
@@ -8042,6 +8094,13 @@ function PlayerData.Load(player)
 				data.Claw = saved.Claw
 			end
 			data.Tokens = tonumber(saved.Tokens) or 0
+			if type(saved.Receipts) == "table" then
+				for _, id in saved.Receipts do
+					if type(id) == "string" then
+						table.insert(data.Receipts, id)
+					end
+				end
+			end
 			data.LastLogin = saved.LastLogin or ""
 			data.Streak = tonumber(saved.Streak) or 0
 			if type(saved.Daily) == "table" and saved.Daily.Day == today() then
@@ -8186,7 +8245,14 @@ local function weight(player)
 end
 
 function PlayerData.PublishChances()
-	local list = Players:GetPlayers()
+	local list = {}
+	for _, p in Players:GetPlayers() do
+		if p:GetAttribute("AFK") then
+			p:SetAttribute("WolverineChance", 0) -- sitting out
+		else
+			table.insert(list, p)
+		end
+	end
 	local total = 0
 	for _, p in list do
 		total += weight(p)
@@ -8241,26 +8307,69 @@ end
 -- Robux: guaranteed Wolverine next round
 ---------------------------------------------------------------------------
 
-local granted = {}
-MarketplaceService.ProcessReceipt = function(receipt)
-	if granted[receipt.PurchaseId] then
-		return Enum.ProductPurchaseDecision.PurchaseGranted
+-- Every grant is recorded in the player's save (Receipts) before we tell
+-- Roblox it's done, so a purchase can never be given twice or lost.
+local function alreadyGranted(d, purchaseId)
+	for _, id in d.Receipts do
+		if id == purchaseId then
+			return true
+		end
 	end
+	return false
+end
+
+local function packFor(productId)
+	for _, pack in Config.CoinPacks do
+		if pack.ProductId ~= 0 and pack.ProductId == productId then
+			return pack
+		end
+	end
+	return nil
+end
+
+MarketplaceService.ProcessReceipt = function(receipt)
 	local player = Players:GetPlayerByUserId(receipt.PlayerId)
 	local d = player and cache[player]
 	if not d then
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
-	if receipt.ProductId == Config.GuaranteedWolverineProductId then
-		d.Tokens += 1
-		granted[receipt.PurchaseId] = true
-		publish(player)
-		PlayerData.Save(player)
-		PlayerData.PublishChances()
-		fx(player, "Announce", { Text = "You WILL be Wolverine next round.", Color = Color3.fromRGB(255, 205, 30), Duration = 4 })
+	local purchaseId = tostring(receipt.PurchaseId)
+	if alreadyGranted(d, purchaseId) then
 		return Enum.ProductPurchaseDecision.PurchaseGranted
 	end
-	return Enum.ProductPurchaseDecision.NotProcessedYet
+
+	local pack = packFor(receipt.ProductId)
+	local isToken = receipt.ProductId == Config.GuaranteedWolverineProductId and Config.GuaranteedWolverineProductId ~= 0
+	if not (pack or isToken) then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+
+	-- apply, record, save; undo if the save fails so Roblox retries later
+	local before = { Coins = d.Coins, Tokens = d.Tokens }
+	if pack then
+		d.Coins += pack.Coins
+	else
+		d.Tokens += 1
+	end
+	table.insert(d.Receipts, purchaseId)
+	while #d.Receipts > 60 do
+		table.remove(d.Receipts, 1)
+	end
+	if store and not PlayerData.Save(player) then
+		d.Coins, d.Tokens = before.Coins, before.Tokens
+		table.remove(d.Receipts)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+
+	publish(player)
+	if pack then
+		fx(player, "Coins", { Amount = pack.Coins, Reason = pack.Name })
+		fx(player, "Announce", { Text = ("+%d COINS — thanks for the support!"):format(pack.Coins), Color = Color3.fromRGB(255, 205, 30), Duration = 3 })
+	else
+		PlayerData.PublishChances()
+		fx(player, "Announce", { Text = "You WILL be Wolverine next round.", Color = Color3.fromRGB(255, 205, 30), Duration = 4 })
+	end
+	return Enum.ProductPurchaseDecision.PurchaseGranted
 end
 
 Players.PlayerRemoving:Connect(function(player)
@@ -8279,7 +8388,7 @@ return PlayerData
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="22">
+      <Item class="ModuleScript" referent="23">
         <Properties>
           <string name="Name">Posture</string>
           <string name="Source"><![CDATA[-- Code-driven "animations": offsets Motor6D.C0 on R15 rigs so no animation
@@ -8408,7 +8517,7 @@ return Posture
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="23">
+      <Item class="ModuleScript" referent="24">
         <Properties>
           <string name="Name">Round</string>
           <string name="Source"><![CDATA[-- Shared round state used by every server module.
@@ -8434,7 +8543,7 @@ return Round
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="24">
+      <Item class="ModuleScript" referent="25">
         <Properties>
           <string name="Name">Sentinel</string>
           <string name="Source"><![CDATA[-- The counter (like the Hulkbuster): survivors reboot 3 Sentinel terminals,
@@ -8890,6 +8999,7 @@ local function laser(player, char, root, aim)
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	local burnedTotal = 0
 	local lastKnock, lastReveal = 0, 0
+	local bracing = false
 	local t0 = os.clock()
 	local last = os.clock()
 	player:SetAttribute("Beaming", true)
@@ -8956,22 +9066,45 @@ local function laser(player, char, root, aim)
 				lastReveal = os.clock()
 				Wolverine.RevealSkeleton()
 			end
-			-- push him back; the closer he is, the harder and more constant the
-			-- shove, so he can't just walk into the beam and keep swinging
+			Round.Wolverine:SetAttribute("BeamedAt", workspace:GetServerTimeNow())
+			-- he can fight it: mashing F braces him and he forces his way up the beam
+			local resist = Wolverine.ResistLevel()
+			local nowBracing = resist >= cfg.Resist.Threshold
+			if nowBracing then
+				Status.Apply(Round.Wolverine, "Bracing", 0.25)
+				if not bracing then
+					VFX.Anim(wChar, "Brace")
+				end
+			elseif bracing then
+				VFX.StopAnim(wChar, "Brace")
+			end
+			bracing = nowBracing
+			-- otherwise push him back; the closer he is, the harder and more
+			-- constant the shove, so he can't just walk in and keep swinging
 			local close = wRoot and math.clamp(1 - (wRoot.Position - origin).Magnitude / cfg.CloseRange, 0, 1) or 0
-			if wRoot and os.clock() - lastKnock > 0.3 - 0.14 * close then
+			if wRoot and not bracing and os.clock() - lastKnock > 0.3 - 0.14 * close then
 				lastKnock = os.clock()
+				local give = 1 - 0.6 * resist -- a half-hearted mash still softens it
 				Util.FireClient(Fx, Round.Wolverine, "Knock", {
-					Velocity = Util.Flat(dir) * cfg.Push * (1 + (cfg.CloseMult - 1) * close) + Vector3.new(0, 3 + 4 * close, 0),
+					Velocity = Util.Flat(dir) * cfg.Push * (1 + (cfg.CloseMult - 1) * close) * give + Vector3.new(0, 3 + 4 * close, 0),
 					Duration = 0.18 + 0.1 * close,
 				})
 			end
+		elseif bracing and wChar then
+			bracing = false
+			VFX.StopAnim(wChar, "Brace")
 		end
 		Fx:FireAllClients("LaserBeam", { Char = char, From = origin, To = endPos, Hit = hitW, Burns = burns })
 		task.wait(0.07)
 	end
 	player:SetAttribute("Beaming", nil)
 	laserAim[player] = nil
+	if bracing then
+		local _, wChar = wolverineParts()
+		if wChar then
+			VFX.StopAnim(wChar, "Brace")
+		end
+	end
 	Fx:FireAllClients("LaserEnd", { Char = char })
 	VFX.StopAnim(char, "DeathRay")
 	-- the core has to cool down: sluggish for a few seconds
@@ -9081,7 +9214,7 @@ return Sentinel
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="25">
+      <Item class="ModuleScript" referent="26">
         <Properties>
           <string name="Name">Status</string>
           <string name="Source"><![CDATA[-- Timed status effects: Stunned, Slowed, Frozen, Busy, Immune, Boost.
@@ -9119,7 +9252,7 @@ return Status
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="26">
+      <Item class="ModuleScript" referent="27">
         <Properties>
           <string name="Name">VFX</string>
           <string name="Source"><![CDATA[-- Crisp combat visuals, created on the server so everyone sees them.
@@ -9322,7 +9455,7 @@ return VFX
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="27">
+      <Item class="ModuleScript" referent="28">
         <Properties>
           <string name="Name">Wolverine</string>
           <string name="Source"><![CDATA[-- Wolverine: transformation, intro (SNIKT + roar), abilities, healing factor
@@ -10181,12 +10314,31 @@ local function sniff(player, root)
 	end
 end
 
+-- How hard he's fighting the beam right now: presses in the last second
+-- against Config.Sentinel.Laser.Resist.Presses, 0..1.
+local resistPresses = {}
+function Wolverine.ResistLevel()
+	local now = os.clock()
+	while resistPresses[1] and now - resistPresses[1] > 1 do
+		table.remove(resistPresses, 1)
+	end
+	return math.clamp(#resistPresses / Config.Sentinel.Laser.Resist.Presses, 0, 1)
+end
+
 function Wolverine.Handle(player, ability, arg)
 	if player ~= Round.Wolverine or not Round.Released then
 		return
 	end
 	if ability == "Feral" then
 		Movement.SetInput(player, "Feral", arg == true)
+		return
+	end
+	if ability == "Resist" then
+		-- mashing F under a death ray (see Wolverine.ResistLevel)
+		local now = os.clock()
+		if now - (resistPresses[#resistPresses] or 0) >= 0.045 then
+			table.insert(resistPresses, now)
+		end
 		return
 	end
 	local char = player.Character
@@ -10339,18 +10491,18 @@ return Wolverine
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="28">
+  <Item class="StarterPlayer" referent="29">
     <Properties>
       <string name="Name">StarterPlayer</string>
       <token name="AvatarJointUpgrade">1</token>
       <bool name="EnableMouseLockOption">false</bool>
       <token name="GameSettingsAvatar">1</token>
     </Properties>
-    <Item class="StarterCharacterScripts" referent="29">
+    <Item class="StarterCharacterScripts" referent="30">
       <Properties>
         <string name="Name">StarterCharacterScripts</string>
       </Properties>
-      <Item class="Script" referent="30">
+      <Item class="Script" referent="31">
         <Properties>
           <string name="Name">Health</string>
           <token name="RunContext">0</token>
@@ -10361,15 +10513,15 @@ return Wolverine
         </Properties>
       </Item>
     </Item>
-    <Item class="StarterPlayerScripts" referent="31">
+    <Item class="StarterPlayerScripts" referent="32">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="32">
+      <Item class="Folder" referent="33">
         <Properties>
           <string name="Name">Client</string>
         </Properties>
-        <Item class="ModuleScript" referent="33">
+        <Item class="ModuleScript" referent="34">
           <Properties>
             <string name="Name">AnimClips</string>
             <string name="Source"><![CDATA[-- Keyframed animation clips (R15). Poses are joint rotations in degrees:
@@ -10636,6 +10788,23 @@ Clips.CrossSnikt = {
 	},
 }
 
+-- Forcing his way up a Sentinel death ray: forearms crossed over his face,
+-- head tucked, leaning into it. Upper body only so he can keep walking.
+local BRACE = {
+	Waist = { -16, 0, 0 }, Neck = { -18, 0, 0 },
+	RShoulder = { 92, 30, -42 }, RElbow = { 78, 0, 0 },
+	LShoulder = { 92, -30, 42 }, LElbow = { 78, 0, 0 },
+}
+Clips.Brace = {
+	Hold = true,
+	Tremble = true,
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.14, Ease = "Out", Pose = BRACE },
+		{ T = 0.4, Pose = BRACE },
+	},
+}
+
 -- Quick snarl after every kill
 Clips.Snarl = {
 	Tremble = true,
@@ -10809,7 +10978,7 @@ return Clips
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="34">
+        <Item class="ModuleScript" referent="35">
           <Properties>
             <string name="Name">Anims</string>
             <string name="Source"><![CDATA[-- Client animation engine. Runs on every client for every character, so all
@@ -11578,7 +11747,7 @@ return Anims
 ]]></string>
           </Properties>
         </Item>
-        <Item class="LocalScript" referent="35">
+        <Item class="LocalScript" referent="36">
           <Properties>
             <string name="Name">ClientMain</string>
             <string name="Source"><![CDATA[-- Input + role handling. PC keys, gamepad and mobile touch buttons.
@@ -11592,6 +11761,7 @@ local Interface = require(script.Parent:WaitForChild("Interface"))
 local Effects = require(script.Parent:WaitForChild("Effects"))
 require(script.Parent:WaitForChild("Shop"))
 local Daily = require(script.Parent:WaitForChild("Daily"))
+require(script.Parent:WaitForChild("Store"))
 local Anims = require(script.Parent:WaitForChild("Anims"))
 local SlashFX = require(script.Parent:WaitForChild("SlashFX"))
 local Minigame = require(script.Parent:WaitForChild("Minigame"))
@@ -11690,6 +11860,12 @@ local function activate(name)
 		return
 	end
 	if player:GetAttribute("Role") == "Wolverine" and not ReplicatedStorage:GetAttribute("Released") then
+		return
+	end
+	-- under a Sentinel death ray, F (Sniff) is mashed to force through it
+	if name == "Sniff" and workspace:GetServerTimeNow() - (player:GetAttribute("BeamedAt") or 0) < 0.4 then
+		Ability:FireServer("Resist")
+		Effects.ResistPress()
 		return
 	end
 	-- pressing the blast key again while it's charging cancels it
@@ -12053,7 +12229,7 @@ end)
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="36">
+        <Item class="ModuleScript" referent="37">
           <Properties>
             <string name="Name">Daily</string>
             <string name="Source"><![CDATA[-- Daily challenges, login streak, Wolverine odds and the Robux pass.
@@ -12356,7 +12532,7 @@ return Daily
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="37">
+        <Item class="ModuleScript" referent="38">
           <Properties>
             <string name="Name">Effects</string>
             <string name="Source"><![CDATA[-- Client-only atmosphere: camera shake, snowfall, flickering lights,
@@ -12367,6 +12543,7 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local CollectionService = game:GetService("CollectionService")
 local Lighting = game:GetService("Lighting")
+local UserInputService = game:GetService("UserInputService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Interface = require(script.Parent.Interface)
@@ -12518,6 +12695,80 @@ function Effects.Impulse(root, velocity, duration)
 		att:Destroy()
 	end)
 end
+
+---------------------------------------------------------------------------
+-- Death-ray resist prompt (Wolverine): "MASH F" with a fill meter
+---------------------------------------------------------------------------
+
+local resistPresses = {}
+local resistGui = Instance.new("ScreenGui")
+resistGui.Name = "BeamResist"
+resistGui.ResetOnSpawn = false
+resistGui.Enabled = false
+resistGui.Parent = player:WaitForChild("PlayerGui")
+local resistFrame = Instance.new("Frame")
+resistFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+resistFrame.Position = UDim2.fromScale(0.5, 0.7)
+resistFrame.Size = UDim2.fromOffset(300, 58)
+resistFrame.BackgroundColor3 = Color3.fromRGB(14, 12, 20)
+resistFrame.BackgroundTransparency = 0.2
+resistFrame.Parent = resistGui
+Instance.new("UICorner", resistFrame).CornerRadius = UDim.new(0, 10)
+local resistStroke = Instance.new("UIStroke", resistFrame)
+resistStroke.Color = Color3.fromRGB(255, 60, 40)
+resistStroke.Thickness = 2
+local resistScale = Instance.new("UIScale", resistFrame)
+local resistText = Instance.new("TextLabel")
+resistText.Position = UDim2.fromOffset(10, 4)
+resistText.Size = UDim2.new(1, -20, 0, 26)
+resistText.BackgroundTransparency = 1
+resistText.Font = Enum.Font.GothamBlack
+resistText.TextScaled = true
+resistText.TextColor3 = Color3.new(1, 1, 1)
+resistText.Parent = resistFrame
+local resistBar = Instance.new("Frame")
+resistBar.Position = UDim2.fromOffset(12, 36)
+resistBar.Size = UDim2.new(1, -24, 0, 12)
+resistBar.BackgroundColor3 = Color3.fromRGB(40, 36, 48)
+resistBar.Parent = resistFrame
+Instance.new("UICorner", resistBar).CornerRadius = UDim.new(1, 0)
+local resistFill = Instance.new("Frame")
+resistFill.Size = UDim2.fromScale(0, 1)
+resistFill.BackgroundColor3 = Color3.fromRGB(255, 120, 40)
+resistFill.Parent = resistBar
+Instance.new("UICorner", resistFill).CornerRadius = UDim.new(1, 0)
+local resistMark = Instance.new("Frame") -- the brace threshold
+resistMark.AnchorPoint = Vector2.new(0.5, 0.5)
+resistMark.Position = UDim2.fromScale(Config.Sentinel.Laser.Resist.Threshold, 0.5)
+resistMark.Size = UDim2.new(0, 2, 1, 6)
+resistMark.BackgroundColor3 = Color3.new(1, 1, 1)
+resistMark.Parent = resistBar
+
+function Effects.ResistPress()
+	table.insert(resistPresses, os.clock())
+	resistScale.Scale = 1.08
+	TweenService:Create(resistScale, TweenInfo.new(0.12), { Scale = 1 }):Play()
+end
+
+RunService.RenderStepped:Connect(function()
+	local beamed = player:GetAttribute("Role") == "Wolverine"
+		and workspace:GetServerTimeNow() - (player:GetAttribute("BeamedAt") or 0) < 0.4
+	resistGui.Enabled = beamed
+	if not beamed then
+		table.clear(resistPresses)
+		return
+	end
+	local now = os.clock()
+	while resistPresses[1] and now - resistPresses[1] > 1 do
+		table.remove(resistPresses, 1)
+	end
+	local level = math.clamp(#resistPresses / Config.Sentinel.Laser.Resist.Presses, 0, 1)
+	resistFill.Size = UDim2.fromScale(level, 1)
+	local bracing = level >= Config.Sentinel.Laser.Resist.Threshold
+	resistFill.BackgroundColor3 = bracing and Color3.fromRGB(255, 220, 90) or Color3.fromRGB(255, 120, 40)
+	local key = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled and "TAP SNIFF" or "MASH F"
+	resistText.Text = bracing and "PUSHING THROUGH — KEEP MASHING!" or (key .. " TO PUSH THROUGH THE BEAM")
+end)
 
 ---------------------------------------------------------------------------
 -- Intro camera (Wolverine only): watch yourself smash out of the tank
@@ -12996,7 +13247,7 @@ return Effects
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="38">
+        <Item class="ModuleScript" referent="39">
           <Properties>
             <string name="Name">Interface</string>
             <string name="Source"><![CDATA[-- HUD built entirely from code.
@@ -13890,7 +14141,7 @@ return Interface
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="39">
+        <Item class="ModuleScript" referent="40">
           <Properties>
             <string name="Name">Minigame</string>
             <string name="Source"><![CDATA[-- Sentinel console repair minigames. Each console this round has its own
@@ -14398,7 +14649,7 @@ return Minigame
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="40">
+        <Item class="ModuleScript" referent="41">
           <Properties>
             <string name="Name">Shop</string>
             <string name="Source"><![CDATA[-- Wolverine shop: suits + claws, and the left-side menu dock.
@@ -14733,7 +14984,7 @@ return Shop
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="41">
+        <Item class="ModuleScript" referent="42">
           <Properties>
             <string name="Name">SlashFX</string>
             <string name="Source"><![CDATA[-- Crisp anime-style slash VFX, drawn on each client every frame so they stay smooth.
@@ -15673,7 +15924,225 @@ return SlashFX
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="42">
+        <Item class="ModuleScript" referent="43">
+          <Properties>
+            <string name="Name">Store</string>
+            <string name="Source"><![CDATA[-- Lobby dock: STORE (buy coin packs with Robux) and AFK (sit out matches).
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local MarketplaceService = game:GetService("MarketplaceService")
+local TweenService = game:GetService("TweenService")
+
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local UIKit = require(script.Parent:WaitForChild("UIKit"))
+local Shop = require(script.Parent:WaitForChild("Shop"))
+local AfkRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Afk")
+
+local player = Players.LocalPlayer
+local new, corner, stroke, gradient = UIKit.new, UIKit.Corner, UIKit.Stroke, UIKit.Gradient
+local K = UIKit.Colors
+
+local gui = new("ScreenGui", { Name = "Store", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 5 }, player:WaitForChild("PlayerGui"))
+
+local function commas(n)
+	local s = tostring(n)
+	while true do
+		local k
+		s, k = s:gsub("^(-?%d+)(%d%d%d)", "%1,%2")
+		if k == 0 then
+			return s
+		end
+	end
+end
+
+---------------------------------------------------------------------------
+-- Store window: four coin packs
+---------------------------------------------------------------------------
+
+local window = UIKit.Window(gui, "COIN STORE", UDim2.fromOffset(720, 400), K.Yellow)
+local w = window.Frame
+
+local row = new("Frame", { Position = UDim2.fromOffset(20, 72), Size = UDim2.new(1, -40, 0, 270), BackgroundTransparency = 1, ZIndex = 31 }, w)
+new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 12), HorizontalAlignment = Enum.HorizontalAlignment.Center }, row)
+
+local message = new("TextLabel", {
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 1, -14),
+	Size = UDim2.new(1, -40, 0, 20),
+	BackgroundTransparency = 1,
+	Font = Enum.Font.GothamBold,
+	TextScaled = true,
+	TextColor3 = Color3.fromRGB(190, 190, 200),
+	Text = "Coins buy suits and claws in the Armory. Bigger packs give bonus coins.",
+	ZIndex = 31,
+}, w)
+
+-- a little pile of drawn coins, bigger for bigger packs
+local function coinPile(parent, tier)
+	local pile = new("Frame", { Size = UDim2.new(1, 0, 0, 96), Position = UDim2.fromOffset(0, 14), BackgroundTransparency = 1, ZIndex = 33 }, parent)
+	local layout = {
+		{ { 0, 0, 44 } },
+		{ { -16, 6, 38 }, { 16, -2, 42 } },
+		{ { -26, 10, 34 }, { 26, 8, 34 }, { 0, -6, 44 } },
+		{ { -30, 14, 32 }, { 30, 12, 32 }, { -12, -4, 38 }, { 14, -10, 42 }, { 0, 16, 30 } },
+	}
+	for i, c in layout[tier] do
+		UIKit.Coin(pile, c[3], {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, c[1], 0.5, c[2]),
+			ZIndex = 34 + i,
+			Rotation = (i % 2 == 0) and 12 or -8,
+		})
+	end
+	return pile
+end
+
+local priceLabels = {}
+for i, pack in Config.CoinPacks do
+	local card = new("Frame", { Size = UDim2.fromOffset(152, 262), BackgroundColor3 = Color3.new(1, 1, 1), LayoutOrder = i, ZIndex = 32 }, row)
+	corner(card, 14)
+	gradient(card, Color3.fromRGB(48, 40, 22), Color3.fromRGB(20, 18, 14))
+	stroke(card, i == #Config.CoinPacks and K.Yellow or Color3.fromRGB(110, 90, 40), i == #Config.CoinPacks and 2.5 or 1.5)
+	coinPile(card, i)
+	if pack.Bonus ~= "" then
+		local ribbon = new("TextLabel", {
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0, -10),
+			Size = UDim2.fromOffset(112, 22),
+			BackgroundColor3 = K.Red,
+			Font = Enum.Font.GothamBlack,
+			TextScaled = true,
+			TextColor3 = Color3.new(1, 1, 1),
+			Text = pack.Bonus,
+			ZIndex = 40,
+		}, card)
+		corner(ribbon, 11)
+		new("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4) }, ribbon)
+	end
+	local amount = new("TextLabel", {
+		Position = UDim2.fromOffset(8, 116),
+		Size = UDim2.new(1, -16, 0, 34),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.LuckiestGuy,
+		TextScaled = true,
+		TextColor3 = K.Yellow,
+		Text = commas(pack.Coins),
+		ZIndex = 33,
+	}, card)
+	new("UIStroke", { Thickness = 2 }, amount)
+	new("TextLabel", {
+		Position = UDim2.fromOffset(8, 152),
+		Size = UDim2.new(1, -16, 0, 18),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamBold,
+		TextScaled = true,
+		TextColor3 = Color3.fromRGB(210, 205, 190),
+		Text = pack.Name,
+		ZIndex = 33,
+	}, card)
+	local buy, buyLabel = UIKit.Button(card, {
+		Text = "R$ " .. pack.Robux,
+		Color = K.Green,
+		Size = UDim2.new(1, -20, 0, 46),
+		Position = UDim2.new(0, 10, 1, -58),
+		ZIndex = 34,
+	})
+	priceLabels[i] = buyLabel
+	buy.Activated:Connect(function()
+		if pack.ProductId == 0 then
+			message.Text = "This pack isn't set up yet (add its Developer Product ID in Config.CoinPacks)."
+			message.TextColor3 = K.Red
+			return
+		end
+		MarketplaceService:PromptProductPurchase(player, pack.ProductId)
+	end)
+end
+
+-- show the real Robux price from the Creator Dashboard once the product exists
+task.spawn(function()
+	for i, pack in Config.CoinPacks do
+		if pack.ProductId ~= 0 then
+			local ok, info = pcall(function()
+				return MarketplaceService:GetProductInfo(pack.ProductId, Enum.InfoType.Product)
+			end)
+			if ok and info and info.PriceInRobux then
+				priceLabels[i].Text = "R$ " .. info.PriceInRobux
+			end
+		end
+	end
+end)
+
+MarketplaceService.PromptProductPurchaseFinished:Connect(function(userId, productId, purchased)
+	if userId ~= player.UserId or not purchased then
+		return
+	end
+	for _, pack in Config.CoinPacks do
+		if pack.ProductId == productId then
+			message.Text = ("+%s coins! Spend them in the Armory."):format(commas(pack.Coins))
+			message.TextColor3 = K.Green
+		end
+	end
+end)
+
+local storeButton = Shop.DockButton("STORE", "💰", K.Green, 4)
+storeButton.Activated:Connect(function()
+	message.TextColor3 = Color3.fromRGB(190, 190, 200)
+	window.Toggle()
+end)
+
+---------------------------------------------------------------------------
+-- AFK toggle
+---------------------------------------------------------------------------
+
+local afkButton, afkLabel = Shop.DockButton("AFK: OFF", "💤", Color3.fromRGB(120, 124, 140), 5)
+
+local banner = new("TextLabel", {
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 58),
+	Size = UDim2.fromOffset(460, 34),
+	BackgroundColor3 = Color3.fromRGB(20, 22, 30),
+	BackgroundTransparency = 0.15,
+	Font = Enum.Font.GothamBlack,
+	TextScaled = true,
+	TextColor3 = Color3.fromRGB(170, 200, 255),
+	Text = "YOU'RE AFK — sitting out matches. Press AFK to play again.",
+	Visible = false,
+}, gui)
+corner(banner, 10)
+stroke(banner, Color3.fromRGB(90, 120, 200), 1.5)
+new("UIPadding", { PaddingTop = UDim.new(0, 7), PaddingBottom = UDim.new(0, 7), PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, banner)
+
+local function showAfk()
+	local on = player:GetAttribute("AFK") == true
+	afkLabel.Text = on and "AFK: ON" or "AFK: OFF"
+	UIKit.Recolor(afkButton, on and K.Blue or Color3.fromRGB(120, 124, 140))
+	banner.Visible = on
+	if on then
+		banner.TextTransparency = 1
+		TweenService:Create(banner, TweenInfo.new(0.3), { TextTransparency = 0 }):Play()
+	end
+end
+player:GetAttributeChangedSignal("AFK"):Connect(showAfk)
+showAfk()
+
+afkButton.Activated:Connect(function()
+	AfkRemote:FireServer(not (player:GetAttribute("AFK") == true))
+end)
+
+-- Roblox fires Idled after ~2 minutes with no input: sit them out automatically
+if Config.AutoAfk then
+	player.Idled:Connect(function()
+		if not player:GetAttribute("AFK") then
+			AfkRemote:FireServer(true)
+		end
+	end)
+end
+
+return {}
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="44">
           <Properties>
             <string name="Name">UIKit</string>
             <string name="Source"><![CDATA[-- Shared UI building blocks: animated buttons, panels, gradients.
@@ -16076,7 +16545,7 @@ return UIKit
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="43">
+  <Item class="Workspace" referent="45">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>

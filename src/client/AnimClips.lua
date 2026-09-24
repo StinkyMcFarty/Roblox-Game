@@ -262,6 +262,23 @@ Clips.CrossSnikt = {
 	},
 }
 
+-- Forcing his way up a Sentinel death ray: forearms crossed over his face,
+-- head tucked, leaning into it. Upper body only so he can keep walking.
+local BRACE = {
+	Waist = { -16, 0, 0 }, Neck = { -18, 0, 0 },
+	RShoulder = { 92, 30, -42 }, RElbow = { 78, 0, 0 },
+	LShoulder = { 92, -30, 42 }, LElbow = { 78, 0, 0 },
+}
+Clips.Brace = {
+	Hold = true,
+	Tremble = true,
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.14, Ease = "Out", Pose = BRACE },
+		{ T = 0.4, Pose = BRACE },
+	},
+}
+
 -- Quick snarl after every kill
 Clips.Snarl = {
 	Tremble = true,

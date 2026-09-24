@@ -73,7 +73,7 @@ function PlayerData.Save(player)
 	for id in d.Owned do
 		table.insert(owned, id)
 	end
-	pcall(function()
+	local ok = pcall(function()
 		store:SetAsync("p_" .. player.UserId, {
 			Coins = d.Coins,
 			Owned = owned,
@@ -90,8 +90,10 @@ function PlayerData.Save(player)
 			LastLogin = d.LastLogin,
 			Streak = d.Streak,
 			Daily = d.Daily,
+			Receipts = d.Receipts,
 		})
 	end)
+	return ok
 end
 
 function PlayerData.AddCoins(player, amount, reason)
@@ -122,6 +124,7 @@ function PlayerData.Load(player)
 		Streak = 0,
 		Daily = freshDaily(),
 		Pity = 0, -- rounds played in a row without being Wolverine (this session)
+		Receipts = {}, -- recent Robux PurchaseIds already granted (never grant twice)
 	}
 	if store then
 		local ok, saved = pcall(function()
@@ -151,6 +154,13 @@ function PlayerData.Load(player)
 				data.Claw = saved.Claw
 			end
 			data.Tokens = tonumber(saved.Tokens) or 0
+			if type(saved.Receipts) == "table" then
+				for _, id in saved.Receipts do
+					if type(id) == "string" then
+						table.insert(data.Receipts, id)
+					end
+				end
+			end
 			data.LastLogin = saved.LastLogin or ""
 			data.Streak = tonumber(saved.Streak) or 0
 			if type(saved.Daily) == "table" and saved.Daily.Day == today() then
@@ -295,7 +305,14 @@ local function weight(player)
 end
 
 function PlayerData.PublishChances()
-	local list = Players:GetPlayers()
+	local list = {}
+	for _, p in Players:GetPlayers() do
+		if p:GetAttribute("AFK") then
+			p:SetAttribute("WolverineChance", 0) -- sitting out
+		else
+			table.insert(list, p)
+		end
+	end
 	local total = 0
 	for _, p in list do
 		total += weight(p)
@@ -350,26 +367,69 @@ end
 -- Robux: guaranteed Wolverine next round
 ---------------------------------------------------------------------------
 
-local granted = {}
-MarketplaceService.ProcessReceipt = function(receipt)
-	if granted[receipt.PurchaseId] then
-		return Enum.ProductPurchaseDecision.PurchaseGranted
+-- Every grant is recorded in the player's save (Receipts) before we tell
+-- Roblox it's done, so a purchase can never be given twice or lost.
+local function alreadyGranted(d, purchaseId)
+	for _, id in d.Receipts do
+		if id == purchaseId then
+			return true
+		end
 	end
+	return false
+end
+
+local function packFor(productId)
+	for _, pack in Config.CoinPacks do
+		if pack.ProductId ~= 0 and pack.ProductId == productId then
+			return pack
+		end
+	end
+	return nil
+end
+
+MarketplaceService.ProcessReceipt = function(receipt)
 	local player = Players:GetPlayerByUserId(receipt.PlayerId)
 	local d = player and cache[player]
 	if not d then
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
-	if receipt.ProductId == Config.GuaranteedWolverineProductId then
-		d.Tokens += 1
-		granted[receipt.PurchaseId] = true
-		publish(player)
-		PlayerData.Save(player)
-		PlayerData.PublishChances()
-		fx(player, "Announce", { Text = "You WILL be Wolverine next round.", Color = Color3.fromRGB(255, 205, 30), Duration = 4 })
+	local purchaseId = tostring(receipt.PurchaseId)
+	if alreadyGranted(d, purchaseId) then
 		return Enum.ProductPurchaseDecision.PurchaseGranted
 	end
-	return Enum.ProductPurchaseDecision.NotProcessedYet
+
+	local pack = packFor(receipt.ProductId)
+	local isToken = receipt.ProductId == Config.GuaranteedWolverineProductId and Config.GuaranteedWolverineProductId ~= 0
+	if not (pack or isToken) then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+
+	-- apply, record, save; undo if the save fails so Roblox retries later
+	local before = { Coins = d.Coins, Tokens = d.Tokens }
+	if pack then
+		d.Coins += pack.Coins
+	else
+		d.Tokens += 1
+	end
+	table.insert(d.Receipts, purchaseId)
+	while #d.Receipts > 60 do
+		table.remove(d.Receipts, 1)
+	end
+	if store and not PlayerData.Save(player) then
+		d.Coins, d.Tokens = before.Coins, before.Tokens
+		table.remove(d.Receipts)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+
+	publish(player)
+	if pack then
+		fx(player, "Coins", { Amount = pack.Coins, Reason = pack.Name })
+		fx(player, "Announce", { Text = ("+%d COINS — thanks for the support!"):format(pack.Coins), Color = Color3.fromRGB(255, 205, 30), Duration = 3 })
+	else
+		PlayerData.PublishChances()
+		fx(player, "Announce", { Text = "You WILL be Wolverine next round.", Color = Color3.fromRGB(255, 205, 30), Duration = 4 })
+	end
+	return Enum.ProductPurchaseDecision.PurchaseGranted
 end
 
 Players.PlayerRemoving:Connect(function(player)

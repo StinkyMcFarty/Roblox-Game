@@ -451,6 +451,7 @@ local function laser(player, char, root, aim)
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	local burnedTotal = 0
 	local lastKnock, lastReveal = 0, 0
+	local bracing = false
 	local t0 = os.clock()
 	local last = os.clock()
 	player:SetAttribute("Beaming", true)
@@ -517,22 +518,45 @@ local function laser(player, char, root, aim)
 				lastReveal = os.clock()
 				Wolverine.RevealSkeleton()
 			end
-			-- push him back; the closer he is, the harder and more constant the
-			-- shove, so he can't just walk into the beam and keep swinging
+			Round.Wolverine:SetAttribute("BeamedAt", workspace:GetServerTimeNow())
+			-- he can fight it: mashing F braces him and he forces his way up the beam
+			local resist = Wolverine.ResistLevel()
+			local nowBracing = resist >= cfg.Resist.Threshold
+			if nowBracing then
+				Status.Apply(Round.Wolverine, "Bracing", 0.25)
+				if not bracing then
+					VFX.Anim(wChar, "Brace")
+				end
+			elseif bracing then
+				VFX.StopAnim(wChar, "Brace")
+			end
+			bracing = nowBracing
+			-- otherwise push him back; the closer he is, the harder and more
+			-- constant the shove, so he can't just walk in and keep swinging
 			local close = wRoot and math.clamp(1 - (wRoot.Position - origin).Magnitude / cfg.CloseRange, 0, 1) or 0
-			if wRoot and os.clock() - lastKnock > 0.3 - 0.14 * close then
+			if wRoot and not bracing and os.clock() - lastKnock > 0.3 - 0.14 * close then
 				lastKnock = os.clock()
+				local give = 1 - 0.6 * resist -- a half-hearted mash still softens it
 				Util.FireClient(Fx, Round.Wolverine, "Knock", {
-					Velocity = Util.Flat(dir) * cfg.Push * (1 + (cfg.CloseMult - 1) * close) + Vector3.new(0, 3 + 4 * close, 0),
+					Velocity = Util.Flat(dir) * cfg.Push * (1 + (cfg.CloseMult - 1) * close) * give + Vector3.new(0, 3 + 4 * close, 0),
 					Duration = 0.18 + 0.1 * close,
 				})
 			end
+		elseif bracing and wChar then
+			bracing = false
+			VFX.StopAnim(wChar, "Brace")
 		end
 		Fx:FireAllClients("LaserBeam", { Char = char, From = origin, To = endPos, Hit = hitW, Burns = burns })
 		task.wait(0.07)
 	end
 	player:SetAttribute("Beaming", nil)
 	laserAim[player] = nil
+	if bracing then
+		local _, wChar = wolverineParts()
+		if wChar then
+			VFX.StopAnim(wChar, "Brace")
+		end
+	end
 	Fx:FireAllClients("LaserEnd", { Char = char })
 	VFX.StopAnim(char, "DeathRay")
 	-- the core has to cool down: sluggish for a few seconds

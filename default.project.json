@@ -17,6 +17,9 @@
         },
         "Shop": {
           "$className": "RemoteFunction"
+        },
+        "Afk": {
+          "$className": "RemoteEvent"
         }
       }
     },

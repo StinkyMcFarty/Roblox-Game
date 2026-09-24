@@ -6,6 +6,7 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local CollectionService = game:GetService("CollectionService")
 local Lighting = game:GetService("Lighting")
+local UserInputService = game:GetService("UserInputService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Interface = require(script.Parent.Interface)
@@ -157,6 +158,80 @@ function Effects.Impulse(root, velocity, duration)
 		att:Destroy()
 	end)
 end
+
+---------------------------------------------------------------------------
+-- Death-ray resist prompt (Wolverine): "MASH F" with a fill meter
+---------------------------------------------------------------------------
+
+local resistPresses = {}
+local resistGui = Instance.new("ScreenGui")
+resistGui.Name = "BeamResist"
+resistGui.ResetOnSpawn = false
+resistGui.Enabled = false
+resistGui.Parent = player:WaitForChild("PlayerGui")
+local resistFrame = Instance.new("Frame")
+resistFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+resistFrame.Position = UDim2.fromScale(0.5, 0.7)
+resistFrame.Size = UDim2.fromOffset(300, 58)
+resistFrame.BackgroundColor3 = Color3.fromRGB(14, 12, 20)
+resistFrame.BackgroundTransparency = 0.2
+resistFrame.Parent = resistGui
+Instance.new("UICorner", resistFrame).CornerRadius = UDim.new(0, 10)
+local resistStroke = Instance.new("UIStroke", resistFrame)
+resistStroke.Color = Color3.fromRGB(255, 60, 40)
+resistStroke.Thickness = 2
+local resistScale = Instance.new("UIScale", resistFrame)
+local resistText = Instance.new("TextLabel")
+resistText.Position = UDim2.fromOffset(10, 4)
+resistText.Size = UDim2.new(1, -20, 0, 26)
+resistText.BackgroundTransparency = 1
+resistText.Font = Enum.Font.GothamBlack
+resistText.TextScaled = true
+resistText.TextColor3 = Color3.new(1, 1, 1)
+resistText.Parent = resistFrame
+local resistBar = Instance.new("Frame")
+resistBar.Position = UDim2.fromOffset(12, 36)
+resistBar.Size = UDim2.new(1, -24, 0, 12)
+resistBar.BackgroundColor3 = Color3.fromRGB(40, 36, 48)
+resistBar.Parent = resistFrame
+Instance.new("UICorner", resistBar).CornerRadius = UDim.new(1, 0)
+local resistFill = Instance.new("Frame")
+resistFill.Size = UDim2.fromScale(0, 1)
+resistFill.BackgroundColor3 = Color3.fromRGB(255, 120, 40)
+resistFill.Parent = resistBar
+Instance.new("UICorner", resistFill).CornerRadius = UDim.new(1, 0)
+local resistMark = Instance.new("Frame") -- the brace threshold
+resistMark.AnchorPoint = Vector2.new(0.5, 0.5)
+resistMark.Position = UDim2.fromScale(Config.Sentinel.Laser.Resist.Threshold, 0.5)
+resistMark.Size = UDim2.new(0, 2, 1, 6)
+resistMark.BackgroundColor3 = Color3.new(1, 1, 1)
+resistMark.Parent = resistBar
+
+function Effects.ResistPress()
+	table.insert(resistPresses, os.clock())
+	resistScale.Scale = 1.08
+	TweenService:Create(resistScale, TweenInfo.new(0.12), { Scale = 1 }):Play()
+end
+
+RunService.RenderStepped:Connect(function()
+	local beamed = player:GetAttribute("Role") == "Wolverine"
+		and workspace:GetServerTimeNow() - (player:GetAttribute("BeamedAt") or 0) < 0.4
+	resistGui.Enabled = beamed
+	if not beamed then
+		table.clear(resistPresses)
+		return
+	end
+	local now = os.clock()
+	while resistPresses[1] and now - resistPresses[1] > 1 do
+		table.remove(resistPresses, 1)
+	end
+	local level = math.clamp(#resistPresses / Config.Sentinel.Laser.Resist.Presses, 0, 1)
+	resistFill.Size = UDim2.fromScale(level, 1)
+	local bracing = level >= Config.Sentinel.Laser.Resist.Threshold
+	resistFill.BackgroundColor3 = bracing and Color3.fromRGB(255, 220, 90) or Color3.fromRGB(255, 120, 40)
+	local key = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled and "TAP SNIFF" or "MASH F"
+	resistText.Text = bracing and "PUSHING THROUGH — KEEP MASHING!" or (key .. " TO PUSH THROUGH THE BEAM")
+end)
 
 ---------------------------------------------------------------------------
 -- Intro camera (Wolverine only): watch yourself smash out of the tank

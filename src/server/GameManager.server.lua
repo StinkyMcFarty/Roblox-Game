@@ -115,9 +115,30 @@ local function minPlayers()
 	return TESTING and 1 or Config.MinPlayers
 end
 
+-- Players who'll take part in the next match (AFK players sit it out)
+local function activePlayers()
+	local list = {}
+	for _, p in Players:GetPlayers() do
+		if not p:GetAttribute("AFK") then
+			table.insert(list, p)
+		end
+	end
+	return list
+end
+
+Remotes:WaitForChild("Afk").OnServerEvent:Connect(function(player, on)
+	if type(on) ~= "boolean" then
+		return
+	end
+	player:SetAttribute("AFK", on or nil)
+	PlayerData.PublishChances()
+end)
+
 ---------------------------------------------------------------------------
 -- Players
 ---------------------------------------------------------------------------
+
+local blockyDescription -- defined below; used by the lobby respawn handler
 
 local function onPlayerAdded(player)
 	local ls = Instance.new("Folder")
@@ -232,7 +253,7 @@ end
 -- Everyone plays on the classic blocky body (their own clothes, colours, face
 -- and accessories stay; bundle body parts and scaling are removed).
 local descCache = {}
-local function blockyDescription(p)
+blockyDescription = function(p)
 	local d = descCache[p]
 	if not d then
 		local ok, base = pcall(function()
@@ -263,7 +284,7 @@ local function loadBlocky(p)
 end
 
 local function runRound()
-	local list = Players:GetPlayers()
+	local list = activePlayers()
 	if #list < minPlayers() then
 		return
 	end
@@ -430,8 +451,9 @@ end
 
 while true do
 	ReplicatedStorage:SetAttribute("InRound", false)
-	while #Players:GetPlayers() < minPlayers() do
-		setStatus(("Waiting for players (%d/%d)"):format(#Players:GetPlayers(), minPlayers()))
+	while #activePlayers() < minPlayers() do
+		local afk = #Players:GetPlayers() - #activePlayers()
+		setStatus(("Waiting for players (%d/%d)%s"):format(#activePlayers(), minPlayers(), afk > 0 and ("  •  %d AFK"):format(afk) or ""))
 		task.wait(1)
 	end
 	local ends = now() + Config.IntermissionTime
@@ -439,7 +461,7 @@ while true do
 	local ok = true
 	while now() < ends do
 		task.wait(0.25)
-		if #Players:GetPlayers() < minPlayers() then
+		if #activePlayers() < minPlayers() then
 			ok = false
 			break
 		end
