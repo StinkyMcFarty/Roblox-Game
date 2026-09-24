@@ -9,6 +9,34 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Clips = require(script.Parent:WaitForChild("AnimClips"))
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+
+-- All-fours footfalls: heavy padded thumps with a claw click, on the stride.
+local function pawStep(st, root, pitch)
+	st.Paws = st.Paws or {}
+	if #st.Paws == 0 then
+		for i = 1, 4 do
+			local snd = Instance.new("Sound")
+			snd.Name = "Paw"
+			snd.SoundId = Config.Sounds.Paw
+			snd.Volume = 0.9
+			snd.RollOffMaxDistance = 120
+			snd.RollOffMinDistance = 8
+			snd.Parent = root
+			st.Paws[i] = snd
+		end
+	end
+	st.PawIndex = (st.PawIndex or 0) % #st.Paws + 1
+	local snd = st.Paws[st.PawIndex]
+	if snd.Parent ~= root then
+		snd.Parent = root
+	end
+	snd.PlaybackSpeed = pitch * (0.92 + math.random() * 0.16)
+	snd.TimePosition = 0
+	snd:Play()
+end
+local TAU = math.pi * 2
+local PAW_HITS = { 0.25, 0.6, 0.25 + math.pi, 0.6 + math.pi }
 
 local Anims = {}
 print("[Anims] animation engine running")
@@ -288,6 +316,43 @@ local function prowlPose(s, c)
 	}
 end
 
+-- Sentinel walking: a heavy mech stomp. Stiff armoured torso, arms held out
+-- by the pauldrons, short hydraulic strides and a hard drop on each footfall.
+local function stompPose(s, c)
+	local plant = math.abs(s) ^ 4
+	return {
+		Root = CFrame.new(0, math.abs(c) * 0.1 - 0.12 - plant * 0.12, 0) * CFrame.Angles(rad(-6), rad(3 * s), rad(3 * s)),
+		Waist = CFrame.Angles(rad(-2), rad(-5 * s), 0),
+		Neck = CFrame.Angles(rad(4 + plant * 3), rad(3 * s), 0),
+		RShoulder = CFrame.Angles(rad(4 - 14 * s), 0, rad(14)),
+		LShoulder = CFrame.Angles(rad(4 + 14 * s), 0, rad(-14)),
+		RElbow = CFrame.Angles(rad(18 + 8 * math.max(0, -s)), 0, 0),
+		LElbow = CFrame.Angles(rad(18 + 8 * math.max(0, s)), 0, 0),
+		RHip = CFrame.Angles(rad(26 * s + 6), 0, rad(4)),
+		LHip = CFrame.Angles(rad(-26 * s + 6), 0, rad(-4)),
+		RKnee = CFrame.Angles(rad(-(10 + 38 * math.max(0, -s))), 0, 0),
+		LKnee = CFrame.Angles(rad(-(10 + 38 * math.max(0, s))), 0, 0),
+		RAnkle = CFrame.Angles(rad(-8 * s + 4), 0, 0),
+		LAnkle = CFrame.Angles(rad(8 * s + 4), 0, 0),
+	}
+end
+
+-- Sentinel standing: wide armoured stance, systems idling.
+local function sentinelIdle(t)
+	local hum = math.sin(t * 1.3)
+	return {
+		Root = CFrame.new(0, -0.08 + hum * 0.02, 0),
+		Waist = CFrame.Angles(0, rad(math.sin(t * 0.3) * 4), 0),
+		Neck = CFrame.Angles(rad(3), rad(math.sin(t * 0.45) * 14), 0),
+		RShoulder = CFrame.Angles(rad(4), 0, rad(14)),
+		LShoulder = CFrame.Angles(rad(4), 0, rad(-14)),
+		RElbow = CFrame.Angles(rad(14), 0, 0),
+		LElbow = CFrame.Angles(rad(14), 0, 0),
+		RHip = CFrame.Angles(0, 0, rad(5)),
+		LHip = CFrame.Angles(0, 0, rad(-5)),
+	}
+end
+
 -- Wolverine on all fours: a smooth bounding lope. The spine stretches as
 -- the front paws reach and bunches as the back legs drive; the head stays
 -- level and locked forward while the body flows underneath it.
@@ -471,16 +536,39 @@ step:Connect(function(a, b)
 				loop = role == "Wolverine" and "Hunt" or "Flee"
 			elseif role == "Wolverine" and speed > 1.5 and not airborne then
 				loop = "Prowl"
+			elseif role == "Sentinel" and speed > 1.5 and not airborne then
+				loop = "Stomp"
 			end
 		end
 		if loop then
 			st.Loop = loop
 		end
 		st.LoopBlend = math.clamp(st.LoopBlend + (loop and dt * 7 or -dt * 7), 0, 1)
-		st.Phase += dt * math.max(speed, st.Loop == "Prowl" and 6 or 10) * (st.Loop == "Gallop" and 0.36 or st.Loop == "Prowl" and 0.55 or 0.5)
+		local prevPhase = st.Phase
+		st.Phase += dt * math.max(speed, (st.Loop == "Prowl" or st.Loop == "Stomp") and 6 or 10) * (st.Loop == "Gallop" and 0.36 or st.Loop == "Prowl" and 0.55 or st.Loop == "Stomp" and 0.42 or 0.5)
+
+		-- all-fours footfalls replace the normal running sound
+		local running = root:FindFirstChild("Running")
+		local galloping = st.Loop == "Gallop" and loop == "Gallop"
+		if running and running:IsA("Sound") then
+			if galloping then
+				st.RunVolume = st.RunVolume or running.Volume
+				running.Volume = 0
+			elseif st.RunVolume then
+				running.Volume = st.RunVolume
+				st.RunVolume = nil
+			end
+		end
+		if galloping and st.LoopBlend > 0.5 then
+			for i, off in PAW_HITS do
+				if math.floor((prevPhase - off) / TAU) ~= math.floor((st.Phase - off) / TAU) then
+					pawStep(st, root, i > 2 and 0.85 or 1.08)
+				end
+			end
+		end
 
 		-- predator idle blend (Wolverine standing / walking slowly, no clip)
-		local wantIdle = role == "Wolverine" and not st.Clip and not loop and not root.Anchored
+		local wantIdle = (role == "Wolverine" or role == "Sentinel") and not st.Clip and not loop and not root.Anchored
 		st.IdleBlend = math.clamp((st.IdleBlend or 0) + (wantIdle and dt * 3 or -dt * 6), 0, 1)
 
 		-- breathing: calm when rested, ragged panting when out of stamina / after sprinting
@@ -500,6 +588,8 @@ step:Connect(function(a, b)
 				pose = huntPose(s, c, attr(char, "RunBuild"))
 			elseif st.Loop == "Prowl" then
 				pose = prowlPose(s, c)
+			elseif st.Loop == "Stomp" then
+				pose = stompPose(s, c)
 			else
 				local look = 0
 				if now > st.NextLook and wolverineNear(root) then
@@ -513,7 +603,7 @@ step:Connect(function(a, b)
 				pose = fleePose(s, c, look, attr(char, "RunBuild"))
 			end
 		end
-		local idle = st.IdleBlend > 0 and predatorIdle(now) or nil
+		local idle = st.IdleBlend > 0 and (role == "Sentinel" and sentinelIdle(now) or predatorIdle(now)) or nil
 
 		-- one-shot clip on top
 		local clipPose, clipWeight = nil, 0

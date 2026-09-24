@@ -397,4 +397,90 @@ function SlashFX.HitFlash(position, color, size, victim)
 	end)
 end
 
+---------------------------------------------------------------------------
+-- Sentinel laser
+---------------------------------------------------------------------------
+
+local LASER_RED = Color3.fromRGB(255, 50, 40)
+local function starFlare(pos, color, size, life)
+	local cam = workspace.CurrentCamera
+	if not cam then
+		return
+	end
+	local ribbons, spikes = {}, {}
+	for i = 1, 8 do
+		local r = takeRibbon(5, i <= 2 and WHITE or color, i <= 2 and 6 or 3)
+		table.insert(ribbons, r)
+		spikes[i] = { R = r, A = (i <= 2 and (i * math.pi / 2 + 0.6) or math.random() * math.pi * 2), L = (i <= 2 and 5 or 1.5 + math.random() * 2) * size, W = (i <= 2 and 0.35 or 0.12) * size }
+	end
+	run(ribbons, function(t)
+		local k = t / life
+		if k >= 1 then
+			return false
+		end
+		local cf = cam.CFrame
+		local p = pos + (cf.Position - pos).Unit * 0.8
+		for i, sp in spikes do
+			local d = cf.RightVector * math.cos(sp.A) + cf.UpVector * math.sin(sp.A)
+			if i <= 2 then
+				local half = sp.L * (0.4 + 0.6 * outExpo(math.min(1, t / 0.05))) / 2
+				setNeedle(sp.R, p - d * half, p + d * half, sp.W * (1 - k), k < 0.4 and 0 or (k - 0.4) / 0.6)
+			else
+				local r0 = 0.3 * size + sp.L * outQuad(k)
+				setNeedle(sp.R, p + d * r0, p + d * (r0 + sp.L * (1 - k)), sp.W * (1 - k), k)
+			end
+		end
+		return true
+	end)
+end
+
+function SlashFX.Laser(from, to, burns, hitTarget)
+	if not (from and to) then
+		return
+	end
+	local core = takeRibbon(2, WHITE, 8)
+	local glow = takeRibbon(2, LASER_RED, 4)
+	local halo = takeRibbon(2, LASER_RED, 2)
+	local LIFE = 0.42
+	local pts = { from, to }
+	run({ core, glow, halo }, function(t)
+		local k = t / LIFE
+		if k >= 1 then
+			return false
+		end
+		local on = outExpo(math.min(1, t / 0.04))
+		local fade = k < 0.35 and 1 or (1 - (k - 0.35) / 0.65)
+		local shimmer = 1 + math.sin(t * 90) * 0.12
+		local w = on * fade * shimmer
+		setRibbon(core, pts, { 0.34 * w, 0.28 * w }, 0)
+		setRibbon(glow, pts, { 1.1 * w, 0.9 * w }, 0.25 + 0.5 * (1 - fade))
+		setRibbon(halo, pts, { 2.6 * w, 2.2 * w }, 0.7 + 0.3 * (1 - fade))
+		return true
+	end)
+	-- muzzle, burn-through points, impact
+	starFlare(from, LASER_RED, 0.7, 0.25)
+	for _, b in burns or {} do
+		starFlare(b, Color3.fromRGB(255, 150, 60), 0.8, 0.3)
+	end
+	if hitTarget then
+		SlashFX.HitFlash(to, LASER_RED, 1.3)
+	else
+		starFlare(to, Color3.fromRGB(255, 150, 60), 1, 0.35)
+	end
+	local light = Instance.new("Part")
+	light.Anchored, light.CanCollide, light.CanQuery, light.CanTouch, light.Transparency = true, false, false, false, 1
+	light.Size = Vector3.one * 0.2
+	light.Position = (from + to) / 2
+	light.Parent = workspace
+	local pl = Instance.new("PointLight")
+	pl.Color = LASER_RED
+	pl.Range = math.min(60, (to - from).Magnitude / 2 + 10)
+	pl.Brightness = 4
+	pl.Parent = light
+	TweenService:Create(pl, TweenInfo.new(LIFE), { Brightness = 0 }):Play()
+	task.delay(LIFE + 0.05, function()
+		light:Destroy()
+	end)
+end
+
 return SlashFX

@@ -287,6 +287,31 @@ local function runRound()
 		Fx:FireAllClients("TimeBonus", { Seconds = Config.KillTimeBonus })
 	end)
 
+	-- watchdog: anyone flung outside the facility (or through the floor) is put back
+	task.spawn(function()
+		while Round.Active and Round.Map == map do
+			local list = {}
+			for p in Round.Survivors do
+				table.insert(list, p.Character)
+			end
+			if wolverine.Character then
+				table.insert(list, wolverine.Character)
+			end
+			for _, char in list do
+				local root = char and char:FindFirstChild("HumanoidRootPart")
+				if root and not root.Anchored then
+					local pos = root.Position
+					if math.abs(pos.X) > 158 or math.abs(pos.Z) > 138 or pos.Y < -6 or pos.Y > 60 then
+						local spot = spawns[math.random(#spawns)]
+						char:PivotTo(spot.CFrame + Vector3.new(0, 3, 0))
+						root.AssemblyLinearVelocity = Vector3.zero
+					end
+				end
+			end
+			task.wait(1)
+		end
+	end)
+
 	local result
 	local surviveClock = os.clock()
 	while true do

@@ -145,7 +145,7 @@ function Bots.Fill(count, spawns)
 			bot:SetAttribute("Sprinting", false)
 			model.Parent = (Round.Map and Round.Map:FindFirstChild("Debris")) or workspace
 			local spot = spawns[math.random(#spawns)]
-			model:PivotTo(spot.CFrame + Vector3.new(math.random(-4, 4), 3, math.random(-4, 4)))
+			model:PivotTo(spot.CFrame + Vector3.new(math.random(-10, 10) / 10, 3, math.random(-10, 10) / 10))
 			pcall(Costumes.DressScientist, model)
 			local root = Util.Root(model)
 			if root then

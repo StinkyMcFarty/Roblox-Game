@@ -265,6 +265,8 @@ Fx.OnClientEvent:Connect(function(kind, data)
 		if not (data.Char == player.Character and os.clock() - lastPredictedSlash < 0.6) then
 			SlashFX.Arc(data.Char, data.Side, data.Color)
 		end
+	elseif kind == "Laser" then
+		SlashFX.Laser(data.From, data.To, data.Burns, data.Hit)
 	elseif kind == "HitFlash" then
 		SlashFX.HitFlash(data.Position, data.Color, data.Size, data.Victim)
 	elseif kind == "AnimStop" then

@@ -323,29 +323,6 @@ local function punch(player, char, root)
 	end
 end
 
-local function beamSegment(from, to, width, color, transparency)
-	local len = (to - from).Magnitude
-	local p = Instance.new("Part")
-	p.Shape = Enum.PartType.Cylinder
-	p.Anchored = true
-	p.CanCollide = false
-	p.CanQuery = false
-	p.CanTouch = false
-	p.Material = Enum.Material.Neon
-	p.Color = color
-	p.Transparency = transparency
-	p.Size = Vector3.new(len, width, width)
-	p.CFrame = CFrame.lookAt((from + to) / 2, to) * CFrame.Angles(0, math.rad(90), 0)
-	p.Parent = workspace
-	TweenService:Create(p, TweenInfo.new(0.35, Enum.EasingStyle.Quad), {
-		Size = Vector3.new(len, 0.05, 0.05),
-		Transparency = 1,
-	}):Play()
-	Debris:AddItem(p, 0.4)
-	return p
-end
-
--- Hitscan chest laser. Burns through a few breakable walls on the way.
 local function laser(player, char, root, aim)
 	local cfg = Config.Sentinel.Laser
 	local torso = Util.Torso(char) or root
@@ -361,7 +338,6 @@ local function laser(player, char, root, aim)
 
 	VFX.Anim(char, "Laser")
 	Util.Sound(Config.Sounds.Laser, root, { Volume = 2, Pitch = 0.4, Range = 250 })
-	Util.Burst(origin, Util.SparkProps, 20, 1)
 
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
@@ -371,6 +347,8 @@ local function laser(player, char, root, aim)
 	local burned = 0
 	local endPos = origin + dir * cfg.Range
 	local _, wChar = wolverineParts()
+	local burnPoints = {}
+	local hitWolverine = false
 
 	while remaining > 0 do
 		params.FilterDescendantsInstances = ignore
@@ -380,6 +358,7 @@ local function laser(player, char, root, aim)
 		end
 		if wChar and hit.Instance:IsDescendantOf(wChar) then
 			endPos = hit.Position
+			hitWolverine = true
 			Wolverine.Damage(cfg.Damage * power(player))
 			Wolverine.RevealSkeleton()
 			Status.Apply(Round.Wolverine, "Slowed", cfg.Slow)
@@ -389,19 +368,17 @@ local function laser(player, char, root, aim)
 		if hit.Instance:GetAttribute("Breakable") and burned < cfg.WallsBurned then
 			burned += 1
 			Combat.BreakPart(hit.Instance, hit.Position - dir * 3, 25)
-			Util.Burst(hit.Position, Util.SparkProps, 25, 1.5)
+			table.insert(burnPoints, hit.Position)
 			remaining -= (hit.Position - from).Magnitude
 			from = hit.Position
 		else
 			endPos = hit.Position
-			Util.Burst(hit.Position, Util.SparkProps, 25, 1.5)
 			break
 		end
 	end
 
-	-- Hot core + wide glow
-	beamSegment(origin, endPos, 0.5, Color3.fromRGB(255, 250, 220), 0)
-	beamSegment(origin, endPos, 1.6, Color3.fromRGB(255, 60, 40), 0.55)
+	-- drawn crisp on every client (SlashFX.Laser): core + glow + flares
+	Fx:FireAllClients("Laser", { From = origin, To = endPos, Burns = burnPoints, Hit = hitWolverine })
 end
 
 local function pulse(player, char, root)

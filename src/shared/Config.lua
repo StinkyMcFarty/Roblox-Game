@@ -101,7 +101,7 @@ Config.DailyChallenges = {
 }
 
 -- Daily login reward: Base + PerStreakDay * (streak - 1), capped at MaxStreak days
-Config.WallRegen = 20 -- seconds before shredded walls/props grow back
+Config.WallRegen = 10 -- seconds before shredded walls/props grow back
 Config.DailyReward = { Base = 50, PerStreakDay = 25, MaxStreak = 7 }
 
 -- Sounds ----------------------------------------------------------------
@@ -130,6 +130,7 @@ Config.Sounds = {
 	Tear = "rbxasset://sounds/impact_water.mp3",
 	UIHover = "rbxasset://sounds/swordslash.wav",
 	UIClick = "rbxasset://sounds/unsheath.wav",
+	Paw = "rbxasset://sounds/action_jump_land.mp3", -- all-fours footfalls
 }
 
 -- CRISP SFX: original sounds synthesised by tools/generate_sfx.py live in
@@ -139,7 +140,7 @@ Config.Sounds = {
 Config.UploadedSounds = {
 	Snikt = 0, Slash = 117112770329180, Whoosh = 0, Stab = 0, Impact = 0, Leap = 0, Land = 0,
 	Roar = 84386454545822, Snarl = 0, Tear = 0, Gore = 0, Break = 0, Heartbeat = 0, Fart = 0,
-	Sniff = 0, Laser = 0, Punch = 0, Terminal = 0, UIHover = 0, UIClick = 0,
+	Sniff = 0, Laser = 0, Punch = 0, Terminal = 0, UIHover = 0, UIClick = 0, Paw = 0,
 }
 Config.Sounds.Snarl = Config.Sounds.Snarl or ""
 for name, id in Config.UploadedSounds do

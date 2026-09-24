@@ -1665,7 +1665,7 @@ function MapBuilder.BuildLobby()
 		if not (x > -47 and x < 52) then
 			block(lobby, Vector3.new(1.8, H, 1.4), CFrame.new(x, Y + H / 2, -hz + 1.2), M.Metal, rgb(58, 60, 66))
 		end
-		if not (x > -24 and x < 12) then
+		if not (x > -24 and x < 31) then
 			block(lobby, Vector3.new(1.8, H, 1.4), CFrame.new(x, Y + H / 2, hz - 1.2), M.Metal, rgb(58, 60, 66))
 		end
 	end
@@ -1785,7 +1785,7 @@ function MapBuilder.BuildLobby()
 	local Skins = require(ReplicatedStorage.Shared.Skins)
 	local Costumes = require(script.Parent.Costumes)
 	local cz = hz - 6.5
-	local rackTitle = block(lobby, Vector3.new(24, 2.6, 0.2), CFrame.new(17, Y + 13.5, hz - 1.6) * CFrame.Angles(0, math.pi, 0), M.SmoothPlastic, rgb(18, 18, 22))
+	local rackTitle = block(lobby, Vector3.new(24, 2.6, 0.2), CFrame.new(17, Y + 13.5, hz - 2.3) * CFrame.Angles(0, math.pi, 0), M.SmoothPlastic, rgb(18, 18, 22))
 	surfaceText(rackTitle, Enum.NormalId.Back, { Text = "CLAW COLLECTION", Font = Enum.Font.LuckiestGuy, TextColor3 = rgb(210, 230, 255) })
 	for i, id in Skins.ClawOrder do
 		local item = Skins.Claws[id]

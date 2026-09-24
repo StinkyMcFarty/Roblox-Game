@@ -540,11 +540,16 @@ function Costumes.DressScientist(char)
 end
 
 function Costumes.DressSentinel(char)
-	local ARMOR, ARMOR2 = rgb(98, 102, 178), rgb(76, 78, 150)
-	local MAG, FACE, MECH = rgb(176, 84, 178), rgb(208, 172, 112), rgb(26, 26, 32)
+	-- palette from the comics: periwinkle armour, magenta limbs, violet helmet,
+	-- gold skull face, dark mechanical joints
+	local ARMOR, ARMOR2 = rgb(112, 116, 196), rgb(84, 86, 160)
+	local MAG, HELM, FACE, MECH = rgb(182, 88, 184), rgb(124, 78, 164), rgb(212, 176, 112), rgb(24, 24, 30)
 	local F = "SentinelGear"
 	local function g(anchor, name, size, color, mat, offset, props)
 		return Costumes.Gear(char, anchor, name, size, color, mat or M.SmoothPlastic, offset, props, F)
+	end
+	local function round(anchor, name, size, color, offset)
+		return g(anchor, name, size, color, M.SmoothPlastic, offset, { Mesh = Enum.MeshType.Sphere })
 	end
 
 	for _, d in char:GetChildren() do
@@ -559,58 +564,78 @@ function Costumes.DressSentinel(char)
 			end
 		end
 	end
+	local old = char:FindFirstChild(F)
+	if old then
+		old:Destroy()
+	end
 
 	local head = char:FindFirstChild("Head")
 	if head then
 		local hs = head.Size
-		g(head, "Helmet", Vector3.new(hs.X * 1.22, hs.Y * 1.12, hs.Z * 1.22), ARMOR, M.SmoothPlastic, CFrame.new(0, hs.Y * 0.1, hs.Z * 0.06), { Mesh = Enum.MeshType.Sphere })
-		g(head, "Crest", Vector3.new(hs.X * 0.3, hs.Y * 0.2, hs.Z * 1.1), ARMOR2, M.SmoothPlastic, CFrame.new(0, hs.Y * 0.62, hs.Z * 0.05))
-		g(head, "FacePlate", Vector3.new(hs.X * 0.8, hs.Y * 0.78, 0.14), FACE, M.Metal, CFrame.new(0, -hs.Y * 0.05, -hs.Z * 0.56), { Reflectance = 0.1 })
-		g(head, "Jaw", Vector3.new(hs.X * 0.62, hs.Y * 0.28, 0.2), FACE:Lerp(Color3.new(0, 0, 0), 0.15), M.Metal, CFrame.new(0, -hs.Y * 0.36, -hs.Z * 0.52))
+		round(head, "Helmet", Vector3.new(hs.X * 1.2, hs.Y * 1.1, hs.Z * 1.25), HELM, CFrame.new(0, hs.Y * 0.14, hs.Z * 0.08))
+		g(head, "HelmetBand", Vector3.new(hs.X * 1.18, hs.Y * 0.14, hs.Z * 1.2), HELM:Lerp(Color3.new(0, 0, 0), 0.25), M.SmoothPlastic, CFrame.new(0, hs.Y * 0.18, hs.Z * 0.06))
+		for i = -1, 1 do -- ridges over the dome
+			g(head, "Ridge", Vector3.new(hs.X * 0.1, hs.Y * 0.16, hs.Z * 1.1), HELM:Lerp(Color3.new(1, 1, 1), 0.1), M.SmoothPlastic, CFrame.new(i * hs.X * 0.26, hs.Y * 0.58, hs.Z * 0.06))
+		end
+		-- the skull face: brow, cheekbones, grille mouth
+		g(head, "FacePlate", Vector3.new(hs.X * 0.78, hs.Y * 0.62, 0.16), FACE, M.Metal, CFrame.new(0, -hs.Y * 0.08, -hs.Z * 0.56), { Reflectance = 0.12 })
+		g(head, "Brow", Vector3.new(hs.X * 0.84, hs.Y * 0.14, 0.24), FACE:Lerp(Color3.new(0, 0, 0), 0.25), M.Metal, CFrame.new(0, hs.Y * 0.2, -hs.Z * 0.6))
 		for s = -1, 1, 2 do
-			local eye = g(head, "Eye", Vector3.new(hs.X * 0.2, hs.Y * 0.08, 0.05), rgb(255, 40, 40), M.Neon,
-				CFrame.new(s * hs.X * 0.19, hs.Y * 0.1, -hs.Z * 0.64) * CFrame.Angles(0, 0, rad(s * 10)))
+			g(head, "Cheek", Vector3.new(hs.X * 0.2, hs.Y * 0.2, 0.2), FACE:Lerp(Color3.new(0, 0, 0), 0.15), M.Metal, CFrame.new(s * hs.X * 0.28, -hs.Y * 0.08, -hs.Z * 0.6) * CFrame.Angles(0, rad(s * 18), 0))
+			g(head, "Socket", Vector3.new(hs.X * 0.24, hs.Y * 0.14, 0.05), rgb(30, 12, 12), M.SmoothPlastic, CFrame.new(s * hs.X * 0.18, hs.Y * 0.06, -hs.Z * 0.64))
+			local eye = g(head, "Eye", Vector3.new(hs.X * 0.16, hs.Y * 0.07, 0.05), rgb(255, 40, 40), M.Neon, CFrame.new(s * hs.X * 0.18, hs.Y * 0.06, -hs.Z * 0.67))
 			local l = Instance.new("PointLight")
 			l.Color = rgb(255, 40, 40)
 			l.Range = 5
 			l.Brightness = 1.5
 			l.Parent = eye
+			g(head, "EarDisc", Vector3.new(0.14, hs.Y * 0.44, hs.Y * 0.44), HELM:Lerp(Color3.new(0, 0, 0), 0.2), M.SmoothPlastic, CFrame.new(s * hs.X * 0.6, 0, 0), { Shape = Enum.PartType.Cylinder })
 		end
-		for i = 0, 2 do -- mouth grille
-			g(head, "Grille", Vector3.new(hs.X * 0.36, 0.035, 0.03), rgb(60, 45, 30), M.Metal, CFrame.new(0, -hs.Y * (0.26 + i * 0.07), -hs.Z * 0.64))
+		g(head, "Jaw", Vector3.new(hs.X * 0.56, hs.Y * 0.24, 0.2), FACE:Lerp(Color3.new(0, 0, 0), 0.12), M.Metal, CFrame.new(0, -hs.Y * 0.36, -hs.Z * 0.52))
+		for i = 0, 3 do
+			g(head, "Teeth", Vector3.new(0.04, hs.Y * 0.14, 0.03), rgb(60, 44, 28), M.Metal, CFrame.new((i - 1.5) * hs.X * 0.1, -hs.Y * 0.33, -hs.Z * 0.63))
 		end
 	end
 
 	local torso = char:FindFirstChild("UpperTorso")
 	if torso then
 		local s = torso.Size
-		g(torso, "ChestPlate", Vector3.new(s.X * 1.3, s.Y * 0.58, s.Z * 1.3), ARMOR, M.SmoothPlastic, CFrame.new(0, s.Y * 0.2, 0))
-		for sx = -1, 1, 2 do -- pec plates
-			g(torso, "Pec", Vector3.new(s.X * 0.58, s.Y * 0.36, 0.25), ARMOR2, M.SmoothPlastic,
-				CFrame.new(sx * s.X * 0.3, s.Y * 0.2, -s.Z * 0.68) * CFrame.Angles(0, rad(sx * 12), 0))
+		-- broad armoured chest over a dark mechanical core
+		g(torso, "ChestPlate", Vector3.new(s.X * 1.34, s.Y * 0.56, s.Z * 1.34), ARMOR, M.SmoothPlastic, CFrame.new(0, s.Y * 0.22, 0))
+		for sx = -1, 1, 2 do
+			g(torso, "Pec", Vector3.new(s.X * 0.62, s.Y * 0.4, 0.3), ARMOR, M.SmoothPlastic, CFrame.new(sx * s.X * 0.32, s.Y * 0.2, -s.Z * 0.7) * CFrame.Angles(rad(-6), rad(sx * 14), 0))
+			g(torso, "PecEdge", Vector3.new(s.X * 0.6, 0.08, 0.34), ARMOR2, M.SmoothPlastic, CFrame.new(sx * s.X * 0.32, s.Y * 0.0, -s.Z * 0.72) * CFrame.Angles(0, rad(sx * 14), 0))
+			g(torso, "Lat", Vector3.new(0.3, s.Y * 0.5, s.Z * 1.1), ARMOR2, M.SmoothPlastic, CFrame.new(sx * s.X * 0.66, s.Y * 0.12, 0))
+			-- exposed pistons down the sides
+			g(torso, "Piston", Vector3.new(0.14, s.Y * 0.6, 0.14), rgb(150, 150, 160), M.Metal, CFrame.new(sx * s.X * 0.42, -s.Y * 0.3, -s.Z * 0.3), { Reflectance = 0.3 })
 		end
-		local core = g(torso, "Core", Vector3.one * s.X * 0.26, rgb(255, 220, 150), M.Neon, CFrame.new(0, s.Y * 0.28, -s.Z * 0.76), { Shape = Enum.PartType.Ball })
-		g(torso, "CoreRing", Vector3.new(0.12, s.X * 0.36, s.X * 0.36), ARMOR2, M.Metal, CFrame.new(0, s.Y * 0.28, -s.Z * 0.7) * CFrame.Angles(0, rad(90), 0), { Shape = Enum.PartType.Cylinder })
+		local core = g(torso, "Core", Vector3.new(0.14, s.X * 0.24, s.X * 0.24), rgb(255, 236, 190), M.Neon, CFrame.new(0, s.Y * 0.26, -s.Z * 0.9) * CFrame.Angles(0, rad(90), 0), { Shape = Enum.PartType.Cylinder })
+		g(torso, "CoreRing", Vector3.new(0.14, s.X * 0.36, s.X * 0.36), rgb(40, 40, 48), M.Metal, CFrame.new(0, s.Y * 0.26, -s.Z * 0.86) * CFrame.Angles(0, rad(90), 0), { Shape = Enum.PartType.Cylinder })
 		local l = Instance.new("PointLight")
-		l.Color = rgb(255, 190, 110)
-		l.Range = 12
+		l.Color = rgb(255, 200, 130)
+		l.Range = 14
 		l.Brightness = 3
 		l.Parent = core
-		-- exposed mechanical abdomen ribs
-		for i = 0, 3 do
-			g(torso, "Rib", Vector3.new(s.X * (0.78 - i * 0.05), 0.1, s.Z * 1.05), rgb(14, 14, 18), M.Metal, CFrame.new(0, -s.Y * (0.12 + i * 0.1), 0))
+		-- segmented abdomen: dark frame with violet plates
+		g(torso, "Abdomen", Vector3.new(s.X * 0.7, s.Y * 0.5, s.Z * 1.05), MECH, M.Metal, CFrame.new(0, -s.Y * 0.28, 0))
+		for i = 0, 2 do
 			for sx = -1, 1, 2 do
-				g(torso, "AbPlate", Vector3.new(s.X * 0.22, s.Y * 0.07, 0.1), ARMOR2, M.SmoothPlastic, CFrame.new(sx * s.X * 0.13, -s.Y * (0.12 + i * 0.1), -s.Z * 0.55))
+				g(torso, "AbPlate", Vector3.new(s.X * 0.24, s.Y * 0.12, 0.14), ARMOR2, M.SmoothPlastic, CFrame.new(sx * s.X * 0.14, -s.Y * (0.1 + i * 0.15), -s.Z * 0.56) * CFrame.Angles(0, rad(sx * 6), 0))
 			end
 		end
-		g(torso, "Collar", Vector3.new(s.X * 0.9, s.Y * 0.14, s.Z * 1.2), ARMOR2, M.SmoothPlastic, CFrame.new(0, s.Y * 0.52, 0))
+		g(torso, "Collar", Vector3.new(s.X * 0.8, s.Y * 0.16, s.Z * 1.2), ARMOR2, M.SmoothPlastic, CFrame.new(0, s.Y * 0.54, 0))
+		g(torso, "Neck", Vector3.new(s.X * 0.34, s.Y * 0.22, s.Z * 0.5), MECH, M.Metal, CFrame.new(0, s.Y * 0.62, 0))
+		g(torso, "BackPack", Vector3.new(s.X * 0.9, s.Y * 0.6, s.Z * 0.5), ARMOR2, M.SmoothPlastic, CFrame.new(0, s.Y * 0.16, s.Z * 0.72))
 	end
 
 	local lower = char:FindFirstChild("LowerTorso")
 	if lower then
 		local s = lower.Size
-		g(lower, "Pelvis", Vector3.new(s.X * 1.15, s.Y * 0.8, s.Z * 1.2), MAG, M.SmoothPlastic, CFrame.new(0, -s.Y * 0.05, 0))
-		g(lower, "Waist", Vector3.new(s.X * 1.02, s.Y * 0.2, s.Z * 1.05), rgb(14, 14, 18), M.Metal, CFrame.new(0, s.Y * 0.42, 0))
+		g(lower, "Belt", Vector3.new(s.X * 1.06, s.Y * 0.5, s.Z * 1.1), MECH, M.Metal, CFrame.new(0, s.Y * 0.3, 0))
+		g(lower, "Codpiece", Vector3.new(s.X * 0.42, s.Y * 1.2, 0.2), ARMOR2, M.SmoothPlastic, CFrame.new(0, -s.Y * 0.2, -s.Z * 0.58))
+		for sx = -1, 1, 2 do
+			g(lower, "HipPlate", Vector3.new(s.X * 0.42, s.Y * 1.3, s.Z * 1.1), MAG, M.SmoothPlastic, CFrame.new(sx * s.X * 0.4, -s.Y * 0.25, 0) * CFrame.Angles(0, 0, rad(sx * 6)))
+		end
 	end
 
 	for _, n in { "RightUpperArm", "LeftUpperArm" } do
@@ -618,47 +643,105 @@ function Costumes.DressSentinel(char)
 		if p then
 			local s = p.Size
 			local side = n:sub(1, 5) == "Right" and 1 or -1
-			g(p, "Pauldron", Vector3.new(s.X * 2.3, s.Y * 0.8, s.Z * 2.1), ARMOR, M.SmoothPlastic, CFrame.new(side * s.X * 0.18, s.Y * 0.28, 0), { Mesh = Enum.MeshType.Sphere })
-			g(p, "PauldronRim", Vector3.new(s.X * 2.1, s.Y * 0.12, s.Z * 1.95), ARMOR2, M.SmoothPlastic, CFrame.new(side * s.X * 0.18, -s.Y * 0.02, 0), { Mesh = Enum.MeshType.Sphere })
+			round(p, "Pauldron", Vector3.new(s.X * 2.4, s.Y * 0.95, s.Z * 2.2), ARMOR, CFrame.new(side * s.X * 0.2, s.Y * 0.3, 0))
+			round(p, "PauldronRim", Vector3.new(s.X * 2.2, s.Y * 0.3, s.Z * 2.05), ARMOR2, CFrame.new(side * s.X * 0.2, s.Y * 0.02, 0))
+			g(p, "Bicep", Vector3.new(s.X * 1.35, s.Y * 0.62, s.Z * 1.35), MAG, M.SmoothPlastic, CFrame.new(0, -s.Y * 0.18, 0))
 		end
 	end
 	for _, n in { "RightLowerArm", "LeftLowerArm" } do
 		local p = char:FindFirstChild(n)
 		if p then
 			local s = p.Size
-			g(p, "Forearm", Vector3.new(s.X * 1.55, s.Y * 0.95, s.Z * 1.5), MAG, M.SmoothPlastic, CFrame.new(0, -s.Y * 0.02, 0))
-			g(p, "ForearmPlate", Vector3.new(s.X * 1.1, s.Y * 0.7, 0.1), ARMOR2, M.SmoothPlastic, CFrame.new(0, 0, -s.Z * 0.78))
+			round(p, "Elbow", Vector3.new(s.X * 1.3, s.Y * 0.4, s.Z * 1.3), MECH, CFrame.new(0, s.Y * 0.42, 0))
+			g(p, "Gauntlet", Vector3.new(s.X * 1.6, s.Y * 0.95, s.Z * 1.6), ARMOR, M.SmoothPlastic, CFrame.new(0, -s.Y * 0.06, 0))
+			g(p, "GauntletPlate", Vector3.new(s.X * 1.2, s.Y * 0.7, 0.14), ARMOR2, M.SmoothPlastic, CFrame.new(0, -s.Y * 0.04, -s.Z * 0.82))
+			g(p, "Cuff", Vector3.new(s.X * 1.7, s.Y * 0.14, s.Z * 1.7), ARMOR2, M.SmoothPlastic, CFrame.new(0, -s.Y * 0.5, 0))
 		end
 	end
 	for _, n in { "RightHand", "LeftHand" } do
 		local p = char:FindFirstChild(n)
 		if p then
-			g(p, "Gauntlet", p.Size * Vector3.new(1.4, 1.1, 1.4), rgb(40, 40, 46), M.Metal, CFrame.identity)
+			g(p, "Fist", p.Size * Vector3.new(1.4, 1.4, 1.4), rgb(40, 40, 50), M.Metal, CFrame.new(0, -p.Size.Y * 0.1, 0))
 		end
 	end
 	for _, n in { "RightUpperLeg", "LeftUpperLeg" } do
 		local p = char:FindFirstChild(n)
 		if p then
 			local s = p.Size
-			g(p, "Thigh", Vector3.new(s.X * 1.45, s.Y * 0.9, s.Z * 1.45), MAG, M.SmoothPlastic, CFrame.new(0, 0.02, 0))
+			g(p, "Thigh", Vector3.new(s.X * 1.5, s.Y * 0.95, s.Z * 1.5), MAG, M.SmoothPlastic, CFrame.new(0, 0.02, 0))
+			g(p, "ThighPlate", Vector3.new(s.X * 1.1, s.Y * 0.6, 0.14), MAG:Lerp(Color3.new(1, 1, 1), 0.08), M.SmoothPlastic, CFrame.new(0, 0.05, -s.Z * 0.78))
 		end
 	end
 	for _, n in { "RightLowerLeg", "LeftLowerLeg" } do
 		local p = char:FindFirstChild(n)
 		if p then
 			local s = p.Size
-			g(p, "Knee", Vector3.new(s.X * 1.7, s.Y * 0.5, s.Z * 1.8), ARMOR, M.SmoothPlastic, CFrame.new(0, s.Y * 0.42, -s.Z * 0.1), { Mesh = Enum.MeshType.Sphere })
-			g(p, "Shin", Vector3.new(s.X * 1.7, s.Y * 1.05, s.Z * 1.75), ARMOR, M.SmoothPlastic, CFrame.new(0, -s.Y * 0.08, 0))
-			g(p, "ShinPlate", Vector3.new(s.X * 1.2, s.Y * 0.8, 0.12), ARMOR2, M.SmoothPlastic, CFrame.new(0, -s.Y * 0.05, -s.Z * 0.9))
+			round(p, "Knee", Vector3.new(s.X * 1.75, s.Y * 0.55, s.Z * 1.8), ARMOR, CFrame.new(0, s.Y * 0.44, -s.Z * 0.12))
+			g(p, "Shin", Vector3.new(s.X * 1.8, s.Y * 1.05, s.Z * 1.8), ARMOR, M.SmoothPlastic, CFrame.new(0, -s.Y * 0.1, 0))
+			g(p, "ShinPlate", Vector3.new(s.X * 1.3, s.Y * 0.8, 0.14), ARMOR2, M.SmoothPlastic, CFrame.new(0, -s.Y * 0.06, -s.Z * 0.92))
 		end
 	end
 	for _, n in { "RightFoot", "LeftFoot" } do
 		local p = char:FindFirstChild(n)
 		if p then
 			local s = p.Size
-			g(p, "Boot", Vector3.new(s.X * 1.9, s.Y * 1.6, s.Z * 1.5), ARMOR, M.SmoothPlastic, CFrame.new(0, s.Y * 0.2, -s.Z * 0.1))
+			g(p, "Boot", Vector3.new(s.X * 2, s.Y * 1.8, s.Z * 1.6), ARMOR, M.SmoothPlastic, CFrame.new(0, s.Y * 0.25, -s.Z * 0.12))
+			g(p, "Toe", Vector3.new(s.X * 1.9, s.Y * 1, s.Z * 0.5), ARMOR2, M.SmoothPlastic, CFrame.new(0, -s.Y * 0.1, -s.Z * 0.9))
 		end
 	end
+end
+
+-- A life-size Sentinel on display (anchored R15 frame wearing the suit).
+local STATUE = {
+	HumanoidRootPart = { Vector3.new(2, 2, 1), Vector3.new(0, 0, 0) },
+	UpperTorso = { Vector3.new(2, 1.6, 1), Vector3.new(0, 0.55, 0) },
+	LowerTorso = { Vector3.new(2, 0.4, 1), Vector3.new(0, -0.45, 0) },
+	Head = { Vector3.new(1.2, 1.2, 1.2), Vector3.new(0, 1.95, 0) },
+	RightUpperArm = { Vector3.new(1, 1.2, 1), Vector3.new(1.5, 0.75, 0) },
+	RightLowerArm = { Vector3.new(1, 1.1, 1), Vector3.new(1.5, -0.4, 0) },
+	RightHand = { Vector3.new(1, 0.3, 1), Vector3.new(1.5, -1.1, 0) },
+	LeftUpperArm = { Vector3.new(1, 1.2, 1), Vector3.new(-1.5, 0.75, 0) },
+	LeftLowerArm = { Vector3.new(1, 1.1, 1), Vector3.new(-1.5, -0.4, 0) },
+	LeftHand = { Vector3.new(1, 0.3, 1), Vector3.new(-1.5, -1.1, 0) },
+	RightUpperLeg = { Vector3.new(1, 1.2, 1), Vector3.new(0.5, -1.25, 0) },
+	RightLowerLeg = { Vector3.new(1, 1.1, 1), Vector3.new(0.5, -2.4, 0) },
+	RightFoot = { Vector3.new(1, 0.3, 1), Vector3.new(0.5, -3.1, 0) },
+	LeftUpperLeg = { Vector3.new(1, 1.2, 1), Vector3.new(-0.5, -1.25, 0) },
+	LeftLowerLeg = { Vector3.new(1, 1.1, 1), Vector3.new(-0.5, -2.4, 0) },
+	LeftFoot = { Vector3.new(1, 0.3, 1), Vector3.new(-0.5, -3.1, 0) },
+}
+-- `base` = where the feet stand, facing -Z
+function Costumes.SentinelStatue(parent, base, scale)
+	local model = Instance.new("Model")
+	model.Name = "SentinelStatue"
+	local root = base * CFrame.new(0, 3.25 * scale, 0)
+	for name, info in STATUE do
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Anchored = true
+		p.CanCollide = name ~= "HumanoidRootPart"
+		p.Size = info[1] * scale
+		local cf = root * CFrame.new(info[2] * scale)
+		-- arms hang slightly away from the body, fists by the thighs
+		local side = name:find("Right") and 1 or name:find("Left") and -1 or 0
+		if name:find("Arm") or name:find("Hand") then
+			local pivot = root * CFrame.new(side * 1.5 * scale, 1.2 * scale, 0)
+			cf = pivot * CFrame.Angles(rad(-4), 0, rad(side * 9)) * pivot:Inverse() * cf
+		end
+		p.CFrame = cf
+		p.Transparency = name == "HumanoidRootPart" and 1 or 0
+		p.TopSurface = Enum.SurfaceType.Smooth
+		p.BottomSurface = Enum.SurfaceType.Smooth
+		p.Parent = model
+	end
+	Costumes.DressSentinel(model)
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.Anchored = true
+		end
+	end
+	model.Parent = parent
+	return model
 end
 
 return Costumes

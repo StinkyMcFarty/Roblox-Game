@@ -26,8 +26,10 @@ local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local Costumes = require(script.Parent.Costumes)
 
 local Facility = {}
+Facility.DoorBoxes = {}
 
 local rgb = Color3.fromRGB
 local M = Enum.Material
@@ -714,6 +716,8 @@ local function openingFrame(parent, st, frame, o, H)
 			end
 		end
 	end
+	-- doorway volume (used by the layout test)
+	table.insert(Facility.DoorBoxes, { CFrame = at(o.Top / 2, c), Size = Vector3.new(T + 4, o.Top - 0.4, w - 0.6) })
 	-- keep-out zone
 	local centre = at(0, c).Position
 	local along = frame.LookVector
@@ -852,15 +856,10 @@ end
 -- Floors & ceilings
 ---------------------------------------------------------------------------
 
-local FLOORS = {
-	Grate = { Size = 8, Mat = M.DiamondPlate, Color = rgb(74, 70, 64), Seam = rgb(22, 21, 20) },
-	DarkTile = { Size = 6, Mat = M.SmoothPlastic, Color = rgb(64, 68, 74), Seam = rgb(40, 43, 48) },
-	LabTile = { Size = 4, Mat = M.CeramicTiles, Color = rgb(128, 134, 140), Seam = rgb(78, 82, 88) },
-	Corridor = { Size = 6, Mat = M.Slate, Color = rgb(84, 94, 104), Seam = rgb(40, 44, 50) },
-	Hangar = { Size = 12, Mat = M.Concrete, Color = rgb(112, 114, 116), Seam = rgb(56, 58, 60) },
-	Rubber = { Size = 6, Mat = M.Rubber, Color = rgb(40, 42, 46), Seam = rgb(20, 21, 24) },
-	Carpet = { Size = 8, Mat = M.Carpet, Color = rgb(58, 62, 72), Seam = rgb(40, 42, 50) },
-}
+local TILE = { Size = 5, Mat = M.CeramicTiles, Color = rgb(96, 100, 106), Seam = rgb(52, 55, 60) }
+local FLOORS = setmetatable({}, { __index = function()
+	return TILE
+end })
 
 local function floorTiles(parent, r, kind, x0, z0, x1, z1)
 	local f = FLOORS[kind]
@@ -1523,6 +1522,9 @@ local function buildAtrium(parent)
 		end
 		-- brackets back to the wall
 		for x = a.X + 2, b.X, 8 do
+			if math.abs(x) < 10 then
+				continue
+			end
 			wedge(parent, Vector3.new(0.3, 2.4, 2.4), CFrame.new(x, cwY - 1.45, mid.Z - inner * (W / 2 - 1.2)) * CFrame.Angles(0, inner > 0 and 0 or math.pi, 0) * CFrame.Angles(math.pi, 0, 0), M.Metal, rgb(40, 38, 36))
 		end
 		for _, seg in { { a.X, gap - 2.6 }, { gap + 2.6, b.X } } do
@@ -1653,13 +1655,13 @@ local function buildFoundry(parent)
 	ceiling(parent, r, "Truss")
 	-- molten channel across the hall, with grates and three bridges
 	local cz = -94
-	P(parent, Vector3.new(r.x1 - r.x0 - 4, 0.3, 5), CFrame.new(0, F + 0.15, cz), M.Metal, rgb(34, 32, 30))
-	local lava = D(parent, Vector3.new(r.x1 - r.x0 - 6, 0.1, 3), CFrame.new(0, F + 0.34, cz), M.Neon, rgb(255, 110, 20))
-	for x = r.x0 + 6, r.x1 - 6, 14 do
+	P(parent, Vector3.new(r.x1 - r.x0 - 16, 0.3, 5), CFrame.new(0, F + 0.15, cz), M.Metal, rgb(34, 32, 30))
+	local lava = D(parent, Vector3.new(r.x1 - r.x0 - 18, 0.1, 3), CFrame.new(0, F + 0.34, cz), M.Neon, rgb(255, 110, 20))
+	for x = r.x0 + 10, r.x1 - 10, 14 do
 		pointLight(D(parent, Vector3.new(0.2, 0.2, 0.2), CFrame.new(x, F + 1, cz), M.SmoothPlastic, Color3.new(), { Transparency = 1 }), 16, 1.8, rgb(255, 120, 40))
 	end
-	local cover = P(parent, Vector3.new(r.x1 - r.x0 - 6, 0.12, 3.2), CFrame.new(0, F + 0.46, cz), M.Metal, rgb(20, 20, 20), { Transparency = 0.9 })
-	for x = r.x0 + 4, r.x1 - 4, 0.9 do
+	local cover = P(parent, Vector3.new(r.x1 - r.x0 - 18, 0.12, 3.2), CFrame.new(0, F + 0.46, cz), M.Metal, rgb(20, 20, 20), { Transparency = 0.9 })
+	for x = r.x0 + 10, r.x1 - 10, 0.9 do
 		D(parent, Vector3.new(0.22, 0.18, 3.2), CFrame.new(x, F + 0.46, cz), M.Metal, rgb(30, 28, 26))
 	end
 	for _, x in { -30, 0, 30 } do
@@ -1721,8 +1723,8 @@ local function buildFoundry(parent)
 		end
 	end
 	-- wall piping with valves
-	pipe(parent, { Vector3.new(-54, F + 3, -60), Vector3.new(-54, F + 3, -136), Vector3.new(-54, F + 20, -136) }, 1.6, rgb(120, 70, 30), M.Metal)
-	pipe(parent, { Vector3.new(54, F + 4, -136), Vector3.new(54, F + 4, -62), Vector3.new(54, F + 18, -62) }, 1.4, rgb(90, 96, 104), M.Foil)
+	pipe(parent, { Vector3.new(-54, F + 3, -60), Vector3.new(-54, F + 3, -89), Vector3.new(-54, F + 14, -89), Vector3.new(-54, F + 14, -106), Vector3.new(-54, F + 3, -106), Vector3.new(-54, F + 3, -136), Vector3.new(-54, F + 20, -136) }, 1.6, rgb(120, 70, 30), M.Metal)
+	pipe(parent, { Vector3.new(54, F + 4, -136), Vector3.new(54, F + 4, -106), Vector3.new(54, F + 14, -106), Vector3.new(54, F + 14, -89), Vector3.new(54, F + 4, -89), Vector3.new(54, F + 4, -62), Vector3.new(54, F + 18, -62) }, 1.4, rgb(90, 96, 104), M.Foil)
 	pipe(parent, { Vector3.new(-50, F + 22, -138), Vector3.new(50, F + 22, -138) }, 2.2, rgb(60, 58, 56), M.Metal)
 	for _, z in { -80, -110, -128 } do
 		valveWheel(parent, Vector3.new(-52.8, F + 3, z), Vector3.new(1, 0, 0), 1.6)
@@ -1743,33 +1745,6 @@ end
 ---------------------------------------------------------------------------
 -- SENTINEL HANGAR
 ---------------------------------------------------------------------------
-
-local function sentinelFigure(parent, base)
-	local purple = rgb(112, 36, 150)
-	local grey = rgb(150, 154, 160)
-	local dark = rgb(40, 40, 46)
-	local s = 1.9
-	local function b(size, off, color, mat)
-		return D(parent, size * s, CFrame.new(base + off * s), mat or M.Metal, color, { Reflectance = 0.1 })
-	end
-	b(Vector3.new(1.2, 3.4, 1.2), Vector3.new(-0.8, 1.7, 0), grey)
-	b(Vector3.new(1.2, 3.4, 1.2), Vector3.new(0.8, 1.7, 0), grey)
-	b(Vector3.new(1.5, 0.6, 1.9), Vector3.new(-0.8, 0.3, -0.2), purple)
-	b(Vector3.new(1.5, 0.6, 1.9), Vector3.new(0.8, 0.3, -0.2), purple)
-	b(Vector3.new(3.2, 1.2, 1.8), Vector3.new(0, 3.9, 0), purple)
-	b(Vector3.new(3.8, 3, 2.2), Vector3.new(0, 5.9, 0), purple)
-	b(Vector3.new(2.4, 1.6, 0.3), Vector3.new(0, 5.6, -1.15), grey)
-	local core = b(Vector3.new(0.9, 0.9, 0.2), Vector3.new(0, 6.3, -1.25), rgb(255, 210, 60), M.Neon)
-	_ = core
-	for _, x in { -2.7, 2.7 } do
-		b(Vector3.new(1.8, 1.4, 1.8), Vector3.new(x, 7, 0), purple)
-		b(Vector3.new(1.1, 2.6, 1.1), Vector3.new(x, 5.2, 0), grey)
-		b(Vector3.new(1.4, 1.8, 1.4), Vector3.new(x, 3.1, 0), purple)
-	end
-	b(Vector3.new(1.6, 1.7, 1.6), Vector3.new(0, 8.3, 0), purple)
-	b(Vector3.new(1.3, 0.35, 0.1), Vector3.new(0, 8.5, -0.82), rgb(255, 210, 60), M.Neon)
-	b(Vector3.new(1.7, 0.4, 1.7), Vector3.new(0, 9.2, 0), dark)
-end
 
 local function buildHangar(parent)
 	local r = ROOM.Hangar
@@ -1797,7 +1772,7 @@ local function buildHangar(parent)
 	dummy.Name = "Dummy"
 	for _, x in { -16, 16 } do
 		local c = Vector3.new(x, F + 0.8, 118)
-		sentinelFigure(dummy, c)
+		Costumes.SentinelStatue(dummy, CFrame.new(c), 2.3)
 		-- cradle: back frame, clamps, umbilicals, gantry
 		D(pod, Vector3.new(10, 22, 1.2), CFrame.new(c + Vector3.new(0, 11, 4.4)), M.Metal, rgb(46, 44, 42))
 		for _, cx in { -4.6, 4.6 } do
@@ -2137,7 +2112,7 @@ local function buildCommand(parent)
 	end
 	waitingChairs(parent, CFrame.new(-97, F, 53), 4)
 	conferenceTable(parent, CFrame.new(-82, F, 40), 16)
-	screen(parent, CFrame.new(-57.4, F + 7, 40) * CFrame.Angles(0, math.rad(90), 0), 9, 5, "schematic", rgb(90, 200, 255))
+	screen(parent, CFrame.new(-57.4, F + 7, 18) * CFrame.Angles(0, math.rad(90), 0), 9, 5, "schematic", rgb(90, 200, 255))
 	for i = 0, 3 do
 		local body = P(parent, Vector3.new(3, 5, 2.4), CFrame.new(-106, F + 2.5, 24 + i * 3.2), M.Metal, rgb(96, 100, 104))
 		breakable(body)
@@ -2218,7 +2193,7 @@ local function buildReactor(parent)
 	end
 	hidingSpot(CFrame.lookAt(Vector3.new(154, F, -134), Vector3.new(108, F, -98)), "Locker")
 	spawnAt(138, -76)
-	spawnAt(80, -70)
+	spawnAt(128, -118)
 end
 
 ---------------------------------------------------------------------------
@@ -2433,7 +2408,7 @@ local function buildReception(parent)
 	sofa(parent, CFrame.new(-100, F, 94) * CFrame.Angles(0, math.rad(-90), 0), 3)
 	sofa(parent, CFrame.new(-94, F, 84) * CFrame.Angles(0, math.pi, 0), 2)
 	coffeeTable(parent, CFrame.new(-94, F, 94) * CFrame.Angles(0, math.rad(90), 0))
-	screen(parent, CFrame.new(-107.3, F + 7, 94) * CFrame.Angles(0, math.rad(-90), 0), 5, 3, "logo", rgb(90, 200, 255))
+	screen(parent, CFrame.new(-107.3, F + 7, 86) * CFrame.Angles(0, math.rad(-90), 0), 5, 3, "logo", rgb(90, 200, 255))
 	local cs = CFrame.new(-58, F, 128) * CFrame.Angles(0, math.rad(90), 0)
 	P(parent, Vector3.new(6, 3.2, 2.4), cs * CFrame.new(0, 1.6, 0), M.WoodPlanks, rgb(60, 44, 32))
 	D(parent, Vector3.new(1.4, 1.8, 1.4), cs * CFrame.new(-1.6, 4.1, 0.2), M.Metal, rgb(30, 30, 32))
@@ -2552,7 +2527,7 @@ local function buildWalls(parent)
 	wallRun(parent, 42, -42 + 0.7, 42, 42 - 0.7, 40, "Industrial", { door(41.3, 14, 13), window(17.3, 12), window(65.3, 12) })
 	-- Ring outer walls
 	wallRun(parent, -56, -56, 56, -56, 30, "Concrete", { door(56, 12, 12), door(20, 8, 10), door(92, 8, 10) }, { Extend = 0.7 })
-	wallRun(parent, -56, 56, 56, 56, 34, "Concrete", { door(56, 16, 14), door(20, 8, 10), door(92, 8, 10) }, { Extend = 0.7 })
+	wallRun(parent, -56, 56, 56, 56, 34, "Concrete", { door(56, 16, 12.4), door(20, 8, 10), door(92, 8, 10) }, { Extend = 0.7 })
 	wallRun(parent, -56, -56 + 0.7, -56, 56 - 0.7, 20, "Concrete", { door(55.3, 10, 11), door(19.3, 8, 10), door(91.3, 8, 10) })
 	wallRun(parent, 56, -56 + 0.7, 56, 56 - 0.7, 20, "Concrete", { door(55.3, 10, 11), door(19.3, 8, 10), door(91.3, 8, 10) })
 	-- North/south wing separators
@@ -2595,6 +2570,7 @@ end
 local function build()
 	rng = Random.new(20260924)
 	doorZones = {}
+	Facility.DoorBoxes = {}
 	spawnPoints = {}
 	wallCount = 0
 	lightBudget = 0

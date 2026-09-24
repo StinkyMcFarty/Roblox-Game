@@ -366,6 +366,16 @@ def terminal():
     return finish(reverb(mix(a, b), 0.3, 0.2), 0.7)
 
 
+def paw():
+    """All-fours footfall: padded thump, a scuff of grit and a claw tick on the floor."""
+    t = t_axis(0.25)
+    thump = np.sin(2 * np.pi * (95 - 180 * np.minimum(t, 0.25)) * t) * env(0.25, 0.002, 0.05)
+    pad_ = lowpass(noise(0.12), 700) * env(0.12, 0.001, 0.03)
+    scuff = pad(bandpass(noise(0.09), 1500, 5000) * env(0.09, 0.004, 0.035) * 0.35, 0.012)
+    clicks = mix(*[pad(highpass(noise(0.006), 4500) * env(0.006, 0.0003, 0.0015) * 0.5, 0.004 + k * 0.011) for k in range(3)])
+    return finish(reverb(mix(thump * 1.3, pad_ * 0.8, scuff, clicks), 0.18, 0.08), 0.85)
+
+
 def ui_hover():
     return finish(whoosh(0.13, 2200, 7000, 1.0), 0.6)
 
@@ -381,7 +391,7 @@ SOUNDS = {
     "Stab": stab, "Impact": impact, "Leap": leap, "Land": land, "Roar": roar, "Snarl": snarl,
     "Tear": tear, "Gore": gore, "Break": wall_break, "Heartbeat": heartbeat, "Fart": fart,
     "Sniff": sniff, "Laser": laser, "Punch": punch, "Terminal": terminal,
-    "UIHover": ui_hover, "UIClick": ui_click,
+    "UIHover": ui_hover, "UIClick": ui_click, "Paw": paw,
 }
 
 
