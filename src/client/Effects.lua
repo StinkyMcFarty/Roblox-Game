@@ -67,6 +67,11 @@ local function applyZone(lobby)
 	end
 	local target = lobby and DAY or NIGHT
 	TweenService:Create(Lighting, TweenInfo.new(1.2), target):Play()
+	local bloom = Lighting:FindFirstChildOfClass("BloomEffect")
+	if bloom then
+		-- the lobby is daylit: keep glow tight and subtle there
+		TweenService:Create(bloom, TweenInfo.new(1.2), lobby and { Intensity = 0.35, Size = 14, Threshold = 1.6 } or { Intensity = 0.9, Size = 26, Threshold = 1.15 }):Play()
+	end
 	local atmo = Lighting:FindFirstChildOfClass("Atmosphere")
 	if atmo then
 		TweenService:Create(atmo, TweenInfo.new(1.2), { Density = lobby and 0.25 or 0.3, Haze = lobby and 0.8 or 1.2 }):Play()
@@ -281,36 +286,78 @@ end
 -- Dread: vignette + heartbeat when Wolverine is near
 ---------------------------------------------------------------------------
 
-local heartbeat
-if Config.Sounds.Heartbeat ~= "" then
-	heartbeat = Instance.new("Sound")
-	heartbeat.SoundId = Config.Sounds.Heartbeat
-	heartbeat.Looped = true
-	heartbeat.Volume = 0
-	heartbeat.Parent = workspace.CurrentCamera
-	heartbeat:Play()
+-- Terror radius: a heartbeat that speeds up as he closes in (lub-dub beats
+-- scheduled by hand so the tempo tracks distance), plus chase music when he's
+-- right on you. Works with the built-in thump until a heartbeat is uploaded.
+local TERROR_RADIUS = 90
+local CHASE_RADIUS = 36
+local uploadedBeat = (Config.UploadedSounds.Heartbeat or 0) ~= 0
+local function beatSound(pitch)
+	local s = Instance.new("Sound")
+	s.SoundId = uploadedBeat and Config.Sounds.Heartbeat or "rbxasset://sounds/action_jump_land.mp3"
+	s.PlaybackSpeed = pitch
+	s.Parent = workspace.CurrentCamera
+	return s
 end
+local lub, dub = beatSound(uploadedBeat and 1 or 0.34), beatSound(uploadedBeat and 1 or 0.3)
+local chase
+if Config.Sounds.Chase and Config.Sounds.Chase ~= "" then
+	chase = Instance.new("Sound")
+	chase.SoundId = Config.Sounds.Chase
+	chase.Looped = true
+	chase.Volume = 0
+	chase.Parent = workspace.CurrentCamera
+end
+local nextBeat, chaseHold, chaseVol = 0, 0, 0
 
-RunService.Heartbeat:Connect(function()
+RunService.Heartbeat:Connect(function(dt)
 	local role = player:GetAttribute("Role")
 	local level = 0
-	if role == "Survivor" or role == "Sentinel" then
+	local inRound = ReplicatedStorage:GetAttribute("InRound") == true
+	if inRound and (role == "Survivor" or role == "Sentinel") then
 		local wName = ReplicatedStorage:GetAttribute("Wolverine")
 		local wPlayer = wName and Players:FindFirstChild(wName)
 		local wRoot = wPlayer and wPlayer.Character and wPlayer.Character:FindFirstChild("HumanoidRootPart")
 		local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 		if wRoot and myRoot then
 			local d = (wRoot.Position - myRoot.Position).Magnitude
-			level = math.clamp(1 - (d - 12) / 80, 0, 1)
+			level = math.clamp(1 - (d - 10) / (TERROR_RADIUS - 10), 0, 1)
 			if level > 0.75 then
 				shake = math.max(shake, (level - 0.75) * 0.5)
+			end
+			if d < CHASE_RADIUS then
+				chaseHold = os.clock() + 4
 			end
 		end
 	end
 	Interface.SetDanger(level)
-	if heartbeat then
-		heartbeat.Volume = level * 1.5
-		heartbeat.PlaybackSpeed = 1 + level * 0.6
+
+	-- heartbeat: 60 bpm at the edge of the radius, 170 bpm when he's on you
+	local now = os.clock()
+	if level > 0.02 and now >= nextBeat then
+		local bpm = 60 + 110 * level ^ 1.3
+		nextBeat = now + 60 / bpm
+		local vol = (uploadedBeat and 0.6 or 1.1) * (0.35 + 0.65 * level)
+		lub.Volume = vol
+		lub:Play()
+		task.delay(math.clamp(0.28 - level * 0.12, 0.14, 0.28), function()
+			dub.Volume = vol * 0.75
+			dub:Play()
+		end)
+	elseif level <= 0.02 then
+		nextBeat = now
+	end
+
+	-- chase music fades in fast, lingers a few seconds after you break away
+	if chase then
+		local want = (inRound and now < chaseHold) and 0.9 or 0
+		chaseVol += (want - chaseVol) * math.min(1, dt * (want > chaseVol and 3 or 0.7))
+		chase.Volume = chaseVol
+		if chaseVol > 0.01 and not chase.IsPlaying then
+			chase:Play()
+		elseif chaseVol <= 0.01 and chase.IsPlaying then
+			chase:Stop()
+		end
 	end
 end)
 

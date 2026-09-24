@@ -134,7 +134,7 @@ RunService.Heartbeat:Connect(function(dt)
 				player:SetAttribute("Feral", feralActive)
 			end
 
-			if math.abs(s.Stamina - s.SentStamina) > 0.02 or (s.Stamina == 1 and s.SentStamina ~= 1) then
+			if math.abs(s.Stamina - s.SentStamina) > 0.01 or (s.Stamina == 1 and s.SentStamina ~= 1) then
 				s.SentStamina = s.Stamina
 				player:SetAttribute("Stamina", s.Stamina)
 			end

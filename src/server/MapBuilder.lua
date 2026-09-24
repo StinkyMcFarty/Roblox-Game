@@ -1753,13 +1753,14 @@ function MapBuilder.BuildLobby()
 	-- SUIT GALLERY (east) -----------------------------------------------
 	local gx = hx - 12
 	block(lobby, Vector3.new(20, 1, 70), CFrame.new(gx + 2, Y + 0.5, 0), M.Marble, rgb(26, 26, 30))
-	block(lobby, Vector3.new(0.3, 0.2, 70), CFrame.new(gx - 8, Y + 1.05, 0), M.Neon, rgb(255, 190, 30))
+	block(lobby, Vector3.new(0.3, 0.2, 70), CFrame.new(gx - 8, Y + 1.05, 0), M.Neon, rgb(255, 228, 196))
 	block(lobby, Vector3.new(3, 0.5, 70), CFrame.new(gx - 9.5, Y + 0.25, 0), M.Marble, rgb(34, 34, 38))
 	local galleryTitle = block(lobby, Vector3.new(30, 4, 0.3), CFrame.new(hx - 1.6, Y + 23, 0) * CFrame.Angles(0, math.rad(90), 0), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
 	local _, gt = surfaceText(galleryTitle, Enum.NormalId.Front, { Text = "SUIT GALLERY", Font = Enum.Font.LuckiestGuy, TextColor3 = rgb(255, 200, 30) })
 	make("UIStroke", gt, { Thickness = 6 })
 	for z = -30, 30, 6 do
-		block(lobby, Vector3.new(0.3, 16, 0.3), CFrame.new(hx - 1.3, Y + 10, z), M.Neon, rgb(255, 170, 40), { Transparency = 0.2 })
+		block(lobby, Vector3.new(0.5, 16, 0.5), CFrame.new(hx - 1.2, Y + 10, z), M.Metal, rgb(30, 30, 34))
+		block(lobby, Vector3.new(0.2, 15, 0.2), CFrame.new(hx - 1.5, Y + 10, z), M.Neon, rgb(255, 226, 190))
 	end
 	local pedestals = Instance.new("Folder")
 	pedestals.Name = "Pedestals"
@@ -1952,6 +1953,13 @@ function MapBuilder.BuildLobby()
 	sign(lobby, CFrame.new(-6, Y + H - 3.6, hz - 1.6), Vector3.new(30, 2.6, 0.3), "WEAPON X  •  HOLDING FACILITY 7", rgb(255, 200, 30), rgb(18, 18, 22))
 
 	lobby.Parent = workspace
+	-- soften every neon light in the lobby so bloom stays crisp instead of hazy
+	for _, d in lobby:GetDescendants() do
+		if d:IsA("BasePart") and d.Material == M.Neon then
+			local h, sat, v = d.Color:ToHSV()
+			d.Color = Color3.fromHSV(h, sat * 0.7, v * 0.62)
+		end
+	end
 	return lobby
 end
 

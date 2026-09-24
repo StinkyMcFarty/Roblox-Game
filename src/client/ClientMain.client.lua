@@ -11,6 +11,10 @@ require(script.Parent:WaitForChild("Shop"))
 local Daily = require(script.Parent:WaitForChild("Daily"))
 local Anims = require(script.Parent:WaitForChild("Anims"))
 local SlashFX = require(script.Parent:WaitForChild("SlashFX"))
+local Minigame = require(script.Parent:WaitForChild("Minigame"))
+_G.WolverineShake = function(i)
+	Effects.Shake(i)
+end
 
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local Ability = Remotes:WaitForChild("Ability")
@@ -33,9 +37,9 @@ local ROLE_KIT = {
 		{ Name = "Fart", Label = "Fart", Desc = "Gas cloud throws off his Sniff", Icon = "💨", KeyText = "G", Key = Enum.KeyCode.G, Cooldown = Config.Fart.Cooldown, Color = Color3.fromRGB(150, 210, 50) },
 	},
 	Sentinel = {
-		{ Name = "Punch", Label = "Punch", Desc = "Stun + knockback", Icon = "👊", KeyText = "M1", Key = Enum.KeyCode.ButtonR2, Cooldown = S.Punch.Cooldown, Click = true, Color = Color3.fromRGB(200, 160, 255) },
-		{ Name = "Laser", Label = "Laser", Desc = "Burns through walls, exposes bone", Icon = "🔴", KeyText = "Q", Key = Enum.KeyCode.Q, Cooldown = S.Laser.Cooldown, Color = Color3.fromRGB(255, 90, 60) },
-		{ Name = "Pulse", Label = "Inhibitor Pulse", Desc = "Stuns him if he's close", Icon = "💥", KeyText = "E", Key = Enum.KeyCode.E, Cooldown = S.Pulse.Cooldown, Color = Color3.fromRGB(255, 210, 60) },
+		{ Name = "Punch", Label = "Hydraulic Smash", Desc = "Piston-driven haymaker. Stuns and launches him", Icon = "👊", KeyText = "M1", Key = Enum.KeyCode.ButtonR2, Cooldown = S.Punch.Cooldown, Click = true, Color = Color3.fromRGB(200, 160, 255) },
+		{ Name = "Laser", Label = "Death Ray", Desc = "Melts through walls. Burns him to the adamantium", Icon = "🔴", KeyText = "Q", Key = Enum.KeyCode.Q, Cooldown = S.Laser.Cooldown, Color = Color3.fromRGB(255, 90, 60) },
+		{ Name = "Pulse", Label = "Inhibitor Blast", Desc = "Mutant-suppression shockwave. Locks him in place", Icon = "💥", KeyText = "E", Key = Enum.KeyCode.E, Cooldown = S.Pulse.Cooldown, Color = Color3.fromRGB(255, 210, 60) },
 	},
 }
 
@@ -45,7 +49,7 @@ local ROLE_HOLDS = {
 		{ Name = "FeralHold", Label = "All Fours", Desc = "Fastest. Burns stamina", Icon = "🐺", KeyText = "C", Attr = "Feral", Color = Color3.fromRGB(255, 140, 30) },
 	},
 	Sentinel = {
-		{ Name = "LinkHold", Label = "Link", Desc = "Stay near the other suit: 1.6x power", Icon = "🔗", KeyText = "30m", Attr = "Linked", Color = Color3.fromRGB(190, 140, 255) },
+		{ Name = "LinkHold", Label = "Twin Link", Desc = "Fight beside the other suit: 1.6x power", Icon = "🔗", KeyText = "30m", Attr = "Linked", Color = Color3.fromRGB(190, 140, 255) },
 	},
 	Survivor = {
 		{ Name = "SprintHold", Label = "Sprint", Desc = "Run for your life", Icon = "🏃", KeyText = "SHIFT", Attr = "Sprinting", Color = Color3.fromRGB(80, 170, 255) },
@@ -56,12 +60,12 @@ local ROLE_HOLDS = {
 local ROLE_TITLE = {
 	Wolverine = { "WOLVERINE", YELLOW },
 	Survivor = { "WEAPON X SCIENTIST", Color3.fromRGB(120, 200, 255) },
-	Sentinel = { "SENTINEL SYSTEMS", Color3.fromRGB(190, 140, 255) },
+	Sentinel = { "SENTINEL MK. I", Color3.fromRGB(190, 140, 255) },
 }
 
 local HINTS = {
 	Wolverine = "Shift: sprint   C / Ctrl: run on all fours\nRunning into walls tears through them. Hit anyone 3 times to rip them in half.",
-	Sentinel = "M1 punch stuns him. Q laser burns through walls. E pulse stuns everything close.\nThe suit dies in " .. S.Duration .. "s — make it count.",
+	Sentinel = "MUTANT-HUNTER ONLINE. M1 Hydraulic Smash · Q Death Ray · E Inhibitor Blast.\nLink up with the other suit for 1.6x power. Core burns out in " .. S.Duration .. "s.",
 	Survivor = "Subject X is loose. Reboot the 3 Sentinel Protocol consoles (Foundry, Genetics Lab, Command Centre), then suit up in the Hangar.\nShift: sprint. G: fart (hides your scent). He tears through walls — keep moving.",
 	Lobby = "Waiting for the next round.",
 	Dead = "You were torn apart. Wait for the next round.",
@@ -70,7 +74,7 @@ local HINTS = {
 local readyAt = {}
 local slashSide = 0
 local lastPredictedSlash = -1
-local PREDICT = { Pounce = "Pounce", Stab = "Impale", Sniff = "Sniff", Punch = "Punch", Laser = "Laser", Pulse = "Pulse", Fart = "Fart" }
+local PREDICT = { Pounce = "Pounce", Stab = "Impale", Sniff = "Sniff", Punch = "Punch", Laser = "DeathRay", Pulse = "Pulse", Fart = "Fart" }
 local currentKit = {}
 
 local function kitEntry(name)
@@ -285,6 +289,39 @@ RunServiceSL:BindToRenderStep("AltShiftLock", Enum.RenderPriority.Camera.Value +
 	end
 end)
 
+-- While the death ray is live: stream the aim point and turn the suit to face it
+local aimClock = 0
+game:GetService("RunService").RenderStepped:Connect(function(dt)
+	if not player:GetAttribute("Beaming") then
+		return
+	end
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if not (root and hum) then
+		return
+	end
+	local target = aimPoint()
+	local flat = Vector3.new(target.X - root.Position.X, 0, target.Z - root.Position.Z)
+	if flat.Magnitude > 1 then
+		hum.AutoRotate = false
+		root.CFrame = root.CFrame:Lerp(CFrame.lookAt(root.Position, root.Position + flat), math.min(1, dt * 8))
+	end
+	aimClock += dt
+	if aimClock > 0.066 then
+		aimClock = 0
+		Ability:FireServer("LaserAim", target)
+	end
+end)
+player:GetAttributeChangedSignal("Beaming"):Connect(function()
+	if not player:GetAttribute("Beaming") and not shiftLock then
+		local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+		if hum then
+			hum.AutoRotate = true
+		end
+	end
+end)
+
 UserInputService.JumpRequest:Connect(function()
 	if player:GetAttribute("Hidden") then
 		Ability:FireServer("Unhide")
@@ -329,8 +366,41 @@ Fx.OnClientEvent:Connect(function(kind, data)
 		if not (data.Char == player.Character and os.clock() - lastPredictedSlash < 0.6) then
 			SlashFX.Arc(data.Char, data.Side, data.Color)
 		end
-	elseif kind == "Laser" then
-		SlashFX.Laser(data.From, data.To, data.Burns, data.Hit)
+	elseif kind == "Minigame" then
+		local term = data.Terminal
+		Minigame.Start(term, data.Challenge, function(ok, cancelled)
+			Ability:FireServer("TerminalResult", { Terminal = term, Ok = ok, Cancel = cancelled })
+		end)
+	elseif kind == "Noise" then
+		-- a survivor botched a repair: Wolverine sees where the alarm went off
+		local p = Instance.new("Part")
+		p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch, p.Transparency = true, false, false, false, 1
+		p.Size = Vector3.one
+		p.Position = data.Position
+		p.Parent = workspace
+		local bb = Instance.new("BillboardGui")
+		bb.AlwaysOnTop = true
+		bb.Size = UDim2.fromOffset(90, 40)
+		bb.Parent = p
+		local t = Instance.new("TextLabel")
+		t.BackgroundTransparency = 1
+		t.Size = UDim2.fromScale(1, 1)
+		t.Font = Enum.Font.GothamBlack
+		t.TextScaled = true
+		t.TextColor3 = Color3.fromRGB(255, 70, 60)
+		t.TextStrokeTransparency = 0.3
+		t.Text = "⚠ " .. (data.Text or "NOISE")
+		t.Parent = bb
+		game:GetService("TweenService"):Create(t, TweenInfo.new(5), { TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
+		game:GetService("Debris"):AddItem(p, 5.2)
+	elseif kind == "LaserCharge" then
+		SlashFX.LaserCharge(data.Char, data.Time)
+	elseif kind == "LaserBeam" then
+		SlashFX.BeamUpdate(data.Char, data.From, data.To, data.Hit, data.Burns)
+	elseif kind == "LaserEnd" then
+		SlashFX.BeamEnd(data.Char)
+	elseif kind == "Smash" then
+		SlashFX.Smash(data.Char, data.Position, data.Dir, data.Hit)
 	elseif kind == "HitFlash" then
 		SlashFX.HitFlash(data.Position, data.Color, data.Size, data.Victim)
 	elseif kind == "AnimStop" then

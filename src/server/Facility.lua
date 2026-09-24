@@ -81,12 +81,17 @@ end
 
 -- decoration: never collides / blocks queries (so only wall cores get broken)
 local DECO = { CanCollide = false, CanQuery = false, CanTouch = false }
+-- Decoration is solid (nothing visible can be walked through) but never
+-- query-able, so only wall cores get broken. Invisible helpers stay ghost.
 local function D(parent, size, cf, mat, color, extra)
 	local p = P(parent, size, cf, mat, color, DECO)
 	if extra then
 		for k, v in extra do
 			p[k] = v
 		end
+	end
+	if p.Transparency < 0.95 and not (extra and extra.CanCollide == false) then
+		p.CanCollide = true
 	end
 	return p
 end
@@ -529,7 +534,7 @@ local function decorate(core, st, at, w, y0, y1, full, idx)
 	local function band(yA, yB, extraT, color, mat, extra)
 		local a, b = math.max(yA, y0), math.min(yB, y1)
 		if b - a > 0.02 then
-			return D(core, Vector3.new(T + extraT, b - a, w), at((a + b) / 2), mat or M.SmoothPlastic, color, extra)
+			return D(core, Vector3.new(T + extraT, b - a, w - 0.03), at((a + b) / 2), mat or M.SmoothPlastic, color, extra)
 		end
 	end
 	if st.Kind == "Office" then
@@ -689,7 +694,7 @@ local function openingFrame(parent, st, frame, o, H)
 		end
 	end
 	local headerH = st.Kind == "Industrial" and 1.6 or 0.7
-	local header = D(parent, Vector3.new(T + jambT + 0.02, headerH, w + jambT * 2 - 0.2), at(o.Top + headerH / 2 - 0.1, c), mat, frameColor)
+	local header = D(parent, Vector3.new(T + jambT + 0.02, headerH, w + jambT * 2), at(o.Top + headerH / 2 - 0.1, c), mat, frameColor)
 	if st.Kind == "Industrial" then
 		hazard(header, N.Right, w + jambT * 2, 16)
 		hazard(header, N.Left, w + jambT * 2, 16)
@@ -856,13 +861,12 @@ end
 -- Floors & ceilings
 ---------------------------------------------------------------------------
 
-local TILE = { Size = 5, Mat = M.CeramicTiles, Color = rgb(96, 100, 106), Seam = rgb(52, 55, 60) }
-local FLOORS = setmetatable({}, { __index = function()
-	return TILE
-end })
+-- One floor everywhere: 4-stud tiles with dark grout, two alternating greys,
+-- per-tile shade variation, concrete grain, and the odd cracked or scuffed tile.
+local TILE = { Size = 4, Mat = M.Concrete, A = rgb(104, 108, 114), B = rgb(88, 92, 98), Seam = rgb(34, 36, 40) }
 
-local function floorTiles(parent, r, kind, x0, z0, x1, z1)
-	local f = FLOORS[kind]
+local function floorTiles(parent, r, _kind, x0, z0, x1, z1)
+	local f = TILE
 	x0, z0, x1, z1 = x0 or r.x0, z0 or r.z0, x1 or r.x1, z1 or r.z1
 	local s = f.Size
 	local nx, nz = math.max(1, math.floor((x1 - x0) / s + 0.5)), math.max(1, math.floor((z1 - z0) / s + 0.5))
@@ -870,7 +874,24 @@ local function floorTiles(parent, r, kind, x0, z0, x1, z1)
 	P(parent, Vector3.new(x1 - x0, 0.08, z1 - z0), CFrame.new((x0 + x1) / 2, F - 0.12, (z0 + z1) / 2), M.SmoothPlastic, f.Seam)
 	for i = 0, nx - 1 do
 		for j = 0, nz - 1 do
-			P(parent, Vector3.new(sx - 0.12, 0.12, sz - 0.12), CFrame.new(x0 + (i + 0.5) * sx, F - 0.06, z0 + (j + 0.5) * sz), f.Mat, vary(f.Color, 0.06))
+			-- checker keyed to world position so tiles line up across rooms
+			local wx, wz = x0 + (i + 0.5) * sx, z0 + (j + 0.5) * sz
+			local even = (math.floor(wx / s) + math.floor(wz / s)) % 2 == 0
+			local roll = rng:NextNumber()
+			local base = even and f.A or f.B
+			if roll < 0.04 then
+				base = base:Lerp(rgb(70, 66, 58), 0.35) -- stained
+			end
+			local tile = P(parent, Vector3.new(sx - 0.16, 0.12, sz - 0.16), CFrame.new(wx, F - 0.06, wz), f.Mat, vary(base, 0.1))
+			if roll > 0.965 then
+				-- a hairline crack across the tile
+				local a = rng:NextNumber(-0.8, 0.8)
+				D(tile, Vector3.new(0.05, 0.02, sz * 0.8), CFrame.new(wx, F + 0.01, wz) * CFrame.Angles(0, a, 0), M.SmoothPlastic, rgb(40, 42, 46))
+				D(tile, Vector3.new(0.04, 0.02, sz * 0.35), CFrame.new(wx, F + 0.012, wz) * CFrame.Angles(0, a + 0.7, 0) * CFrame.new(0, 0, -sz * 0.2), M.SmoothPlastic, rgb(40, 42, 46))
+			elseif roll > 0.94 then
+				-- boot scuff
+				D(tile, Vector3.new(rng:NextNumber(0.8, 1.8), 0.02, rng:NextNumber(0.2, 0.4)), CFrame.new(wx + rng:NextNumber(-1, 1), F + 0.01, wz + rng:NextNumber(-1, 1)) * CFrame.Angles(0, rng:NextNumber(0, 3), 0), M.SmoothPlastic, rgb(58, 60, 64), { Transparency = 0.35 })
+			end
 		end
 	end
 end
@@ -960,7 +981,7 @@ local function ceiling(parent, r, kind)
 			D(parent, Vector3.new(0.08, 0.06, sz - band * 2), CFrame.new(x, y - 0.23, cz), M.SmoothPlastic, rgb(120, 126, 132))
 		end
 		for z = r.z0 + band + 4, r.z1 - band - 1, 4 do
-			D(parent, Vector3.new(sx - band * 2, 0.06, 0.08), CFrame.new(cx, y - 0.23, z), M.SmoothPlastic, rgb(120, 126, 132))
+			D(parent, Vector3.new(sx - band * 2, 0.06, 0.08), CFrame.new(cx, y - 0.235, z), M.SmoothPlastic, rgb(120, 126, 132))
 		end
 		local k = 0
 		for x = r.x0 + band + 6, r.x1 - band - 4, 12 do
@@ -1088,8 +1109,8 @@ local function desk(parent, cf, w, withScreens)
 		D(parent, Vector3.new(1.8, 0.1, 0.6), cf * CFrame.new(0, 3.2, 0.6), M.SmoothPlastic, rgb(30, 30, 34))
 	end
 	-- papers
-	for _ = 1, 3 do
-		D(parent, Vector3.new(0.85, 0.03, 1.1), cf * CFrame.new(rng:NextNumber(-w / 2 + 0.6, w / 2 - 0.6), 3.14, rng:NextNumber(-1, 0.4)) * CFrame.Angles(0, rng:NextNumber(-0.6, 0.6), 0), M.SmoothPlastic, rgb(236, 236, 230))
+	for k = 1, 3 do
+		D(parent, Vector3.new(0.85, 0.03, 1.1), cf * CFrame.new(rng:NextNumber(-w / 2 + 0.6, w / 2 - 0.6), 3.14 + k * 0.006, rng:NextNumber(-1, 0.4)) * CFrame.Angles(0, rng:NextNumber(-0.6, 0.6), 0), M.SmoothPlastic, rgb(236, 236, 230))
 	end
 end
 
@@ -1102,7 +1123,7 @@ local function crate(parent, cf, s, label)
 	end
 	for _, x in { -s / 2 + 0.15, s / 2 - 0.15 } do
 		for _, z in { -s / 2 + 0.15, s / 2 - 0.15 } do
-			D(body, Vector3.new(0.34, s, 0.34), cf * CFrame.new(x, s / 2, z), M.Metal, rgb(36, 38, 34))
+			D(body, Vector3.new(0.34, s + 0.06, 0.34), cf * CFrame.new(x, s / 2 + 0.01, z), M.Metal, rgb(36, 38, 34))
 		end
 	end
 	local lab = D(body, Vector3.new(s * 0.7, s * 0.3, 0.05), cf * CFrame.new(0, s * 0.55, -s / 2 - 0.03), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
@@ -1258,9 +1279,9 @@ local function console(parent, pos, facing, name)
 	D(model, Vector3.new(7, 0.05, 5), cf * CFrame.new(0, 0.03, -0.6), M.SmoothPlastic, rgb(50, 52, 56))
 	make("ProximityPrompt", body, {
 		Name = "TerminalPrompt",
-		ActionText = "Reboot",
+		ActionText = "Repair",
 		ObjectText = "Sentinel Protocol",
-		HoldDuration = Config.Sentinel.HoldTime,
+		HoldDuration = 0.25,
 		MaxActivationDistance = 9,
 		RequiresLineOfSight = false,
 	})
@@ -1286,9 +1307,9 @@ local function hidingSpot(cf, kind)
 		return breakable(P(model, size, cf * CFrame.new(offset), k.Material, color or k.Color))
 	end
 	panel(Vector3.new(s.X, s.Y, t), Vector3.new(0, s.Y / 2, s.Z / 2 - t / 2))
-	panel(Vector3.new(t, s.Y, s.Z), Vector3.new(-s.X / 2 + t / 2, s.Y / 2, 0))
-	panel(Vector3.new(t, s.Y, s.Z), Vector3.new(s.X / 2 - t / 2, s.Y / 2, 0))
-	panel(Vector3.new(s.X, t, s.Z), Vector3.new(0, s.Y - t / 2, 0))
+	panel(Vector3.new(t, s.Y - t, s.Z - t * 2), Vector3.new(-s.X / 2 + t / 2, (s.Y - t) / 2, 0))
+	panel(Vector3.new(t, s.Y - t, s.Z - t * 2), Vector3.new(s.X / 2 - t / 2, (s.Y - t) / 2, 0))
+	panel(Vector3.new(s.X + 0.04, t, s.Z + 0.04), Vector3.new(0, s.Y - t / 2 + 0.005, 0))
 	local door = panel(Vector3.new(s.X - 0.1, s.Y - 0.1, t), Vector3.new(0, s.Y / 2, -s.Z / 2 + t / 2), vary(k.Color, 0.08))
 	D(door, Vector3.new(0.2, 1, 0.2), cf * CFrame.new(s.X * 0.32, s.Y * 0.5, -s.Z / 2 - 0.1), M.Metal, rgb(30, 30, 32))
 	if kind == "Locker" or kind == "Cabinet" then
@@ -1517,7 +1538,7 @@ local function buildAtrium(parent)
 		for x = a.X, b.X, 4 do
 			D(parent, Vector3.new(0.3, 0.3, W), CFrame.new(x, cwY - 0.8, mid.Z), M.Metal, rgb(40, 38, 36))
 			if math.abs(x - gap) > 3 then
-				D(parent, Vector3.new(0.25, 3.4, 0.25), CFrame.new(x, cwY + 1.9, edgeZ), M.Metal, rgb(222, 170, 28))
+				D(parent, Vector3.new(0.25, 3.5, 0.25), CFrame.new(x, cwY + 1.95, edgeZ), M.Metal, rgb(222, 170, 28))
 			end
 		end
 		-- brackets back to the wall
@@ -1662,7 +1683,7 @@ local function buildFoundry(parent)
 	end
 	local cover = P(parent, Vector3.new(r.x1 - r.x0 - 18, 0.12, 3.2), CFrame.new(0, F + 0.46, cz), M.Metal, rgb(20, 20, 20), { Transparency = 0.9 })
 	for x = r.x0 + 10, r.x1 - 10, 0.9 do
-		D(parent, Vector3.new(0.22, 0.18, 3.2), CFrame.new(x, F + 0.46, cz), M.Metal, rgb(30, 28, 26))
+		D(parent, Vector3.new(0.22, 0.18, 3.26), CFrame.new(x, F + 0.47, cz), M.Metal, rgb(30, 28, 26))
 	end
 	for _, x in { -30, 0, 30 } do
 		local deck = D(parent, Vector3.new(6, 0.3, 6), CFrame.new(x, F + 0.6, cz), M.DiamondPlate, rgb(80, 76, 70))
@@ -1735,7 +1756,6 @@ local function buildFoundry(parent)
 	crate(parent, CFrame.new(46, F, -76), 4.5, "ADAMANTIUM ORE")
 	crate(parent, CFrame.new(46, F + 4.5, -76) * CFrame.Angles(0, 0.3, 0), 3.5, "FRAGILE")
 	-- the terminal
-	console(ROOT:FindFirstChild("Terminals"), Vector3.new(26, F, -70), Vector3.new(0, 0, 1), "Terminal_Foundry")
 	hidingSpot(CFrame.lookAt(Vector3.new(-50, F, -104), Vector3.new(0, F, -104)), "Crate")
 	spawnAt(-20, -70)
 	spawnAt(20, -110)
@@ -1772,7 +1792,7 @@ local function buildHangar(parent)
 	dummy.Name = "Dummy"
 	for _, x in { -16, 16 } do
 		local c = Vector3.new(x, F + 0.8, 118)
-		Costumes.SentinelStatue(dummy, CFrame.new(c), 2.3)
+		Costumes.SentinelStatue(dummy, CFrame.new(c), Config.Sentinel.Scale)
 		-- cradle: back frame, clamps, umbilicals, gantry
 		D(pod, Vector3.new(10, 22, 1.2), CFrame.new(c + Vector3.new(0, 11, 4.4)), M.Metal, rgb(46, 44, 42))
 		for _, cx in { -4.6, 4.6 } do
@@ -1799,15 +1819,6 @@ local function buildHangar(parent)
 	local podium = CFrame.new(0, F + 0.8, 106)
 	P(pod, Vector3.new(6, 3.4, 3), podium * CFrame.new(0, 1.7, 0), M.Metal, rgb(40, 42, 48))
 	screen(pod, podium * CFrame.new(0, 4.6, 0.6) * CFrame.Angles(math.rad(-15), math.pi, 0), 4.4, 2.2, "schematic", rgb(200, 120, 255))
-	make("ProximityPrompt", base, {
-		Name = "PodPrompt",
-		ActionText = "Enter Sentinel Suit",
-		ObjectText = "Sentinel Pod",
-		HoldDuration = Config.Sentinel.PodHoldTime,
-		MaxActivationDistance = 14,
-		RequiresLineOfSight = false,
-		Enabled = false,
-	})
 	pod.Parent = ROOT
 
 	-- giant sealed bay door on the south wall
@@ -1977,7 +1988,6 @@ local function buildGenetics(parent)
 			plant(parent, Vector3.new(x, F, 52.5), 0.9)
 		end
 	end
-	console(ROOT:FindFirstChild("Terminals"), Vector3.new(100, F, 18), Vector3.new(-1, 0, 0), "Terminal_Genetics")
 	hidingSpot(CFrame.lookAt(Vector3.new(104, F, -12), Vector3.new(0, F, -12)), "Cabinet")
 	spawnAt(70, 0)
 	spawnAt(96, -22)
@@ -2106,7 +2116,6 @@ local function buildCommand(parent)
 		local cx, cz = (rm.x0 + rm.x1) / 2 * s, (rm.z0 + rm.z1) / 2 * s
 		D(parent, Vector3.new((rm.x1 - rm.x0) * s - 0.1, rm.h * s * 1.5, (rm.z1 - rm.z0) * s - 0.1), CFrame.new(hp + Vector3.new(cx, 3.1 + rm.h * s * 0.75, cz)), M.ForceField, rm.Id == "Atrium" and rgb(255, 80, 60) or rgb(90, 200, 255))
 	end
-	console(ROOT:FindFirstChild("Terminals"), Vector3.new(-66, F, -20), Vector3.new(0, 0, 1), "Terminal_Command")
 	for _, p in { { -104, 50 }, { -60, 50 } } do
 		plant(parent, Vector3.new(p[1], F, p[2]), 1)
 	end
@@ -2185,7 +2194,7 @@ local function buildReactor(parent)
 		local p0 = c + Vector3.new(math.cos(a0) * 15, 10, math.sin(a0) * 15)
 		local p1 = c + Vector3.new(math.cos(a1) * 15, 10, math.sin(a1) * 15)
 		local mid = (p0 + p1) / 2
-		D(parent, Vector3.new(4.2, 0.3, (p1 - p0).Magnitude + 0.1), CFrame.lookAt(mid, mid + (p1 - p0)) , M.DiamondPlate, rgb(66, 66, 62))
+		D(parent, Vector3.new(4.2 - (k % 2) * 0.04, 0.3, (p1 - p0).Magnitude + 0.1), CFrame.lookAt(mid, mid + (p1 - p0)) * CFrame.new(0, (k % 2) * 0.015, 0), M.DiamondPlate, rgb(66, 66, 62))
 		cyl(parent, p0 + (p0 - c).Unit * 2 + Vector3.new(0, 3, 0), p1 + (p1 - c).Unit * 2 + Vector3.new(0, 3, 0), 0.18, M.Metal, rgb(222, 170, 28), nil, true)
 		if k % 4 == 0 then
 			cyl(parent, Vector3.new(p0.X, F, p0.Z) + (p0 - c).Unit * 2, p0 + (p0 - c).Unit * 2, 0.4, M.Metal, rgb(40, 40, 42), nil, true)
@@ -2206,7 +2215,7 @@ local function shelf(parent, cf, len)
 		P(parent, Vector3.new(0.3, 12, 3), cf * CFrame.new(x, 6, 0), M.Metal, frameC)
 	end
 	for y = 0.4, 11.4, 2.75 do
-		D(parent, Vector3.new(len, 0.2, 3), cf * CFrame.new(0, y, 0), M.Metal, frameC, { CanCollide = true })
+		D(parent, Vector3.new(len, 0.2, 2.94), cf * CFrame.new(0, y, 0), M.Metal, frameC, { CanCollide = true })
 		local x = -len / 2 + 0.6
 		while x < len / 2 - 1 do
 			local w = rng:NextNumber(1.2, 2.2)
@@ -2587,7 +2596,7 @@ local function build()
 	local structure = folder("Structure")
 	local props = folder("Props")
 	local spawns = folder("Spawns")
-	folder("Terminals")
+	local terminalsFolder = folder("Terminals")
 	folder("HidingSpots")
 	folder("Debris")
 
@@ -2615,6 +2624,26 @@ local function build()
 	buildReception(props)
 	buildSurgery(props)
 
+	-- every candidate Sentinel console; three are picked (from different wings) each round
+	local TERMINAL_SPOTS = {
+		{ "Foundry", Vector3.new(26, F, -70), Vector3.new(0, 0, 1) },
+		{ "Genetics", Vector3.new(100, F, 18), Vector3.new(-1, 0, 0) },
+		{ "Genetics", Vector3.new(64, F, 12), Vector3.new(1, 0, 0) },
+		{ "Cryo", Vector3.new(135, F, 2), Vector3.new(0, 0, -1) },
+		{ "Command", Vector3.new(-66, F, -20), Vector3.new(0, 0, 1) },
+		{ "Servers", Vector3.new(-113, F, -30), Vector3.new(-1, 0, 0) },
+		{ "Reactor", Vector3.new(86, F, -110), Vector3.new(1, 0, 0) },
+		{ "Archive", Vector3.new(-117, F, -74), Vector3.new(0, 0, 1) },
+		{ "Canteen", Vector3.new(60, F, 110), Vector3.new(1, 0, 0) },
+		{ "Quarters", Vector3.new(144, F, 62), Vector3.new(0, 0, 1) },
+		{ "Reception", Vector3.new(-100, F, 62), Vector3.new(0, 0, 1) },
+		{ "Hangar", Vector3.new(-38, F, 88), Vector3.new(1, 0, 0) },
+	}
+	for i, spot in TERMINAL_SPOTS do
+		local m = console(terminalsFolder, spot[2], spot[3], ("Terminal_%s_%d"):format(spot[1], i))
+		m:SetAttribute("Wing", spot[1])
+	end
+
 	for i, p in spawnPoints do
 		local s = P(spawns, Vector3.new(2, 1, 2), CFrame.new(p + Vector3.new(0, 0.5, 0)), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false, CanQuery = false })
 		s.Name = "Spawn" .. i
@@ -2641,6 +2670,39 @@ function Facility.Build()
 		print(("[Facility] built: %d parts, %d lights"):format(count, template:GetAttribute("Lights") or 0))
 	end
 	local map = template:Clone()
+	-- this round's three consoles: random spots in different wings, each with
+	-- a different repair challenge, outlined in faint green so they can be found
+	local terminals = map:FindFirstChild("Terminals")
+	if terminals then
+		local list = terminals:GetChildren()
+		for i = #list, 2, -1 do
+			local j = math.random(i)
+			list[i], list[j] = list[j], list[i]
+		end
+		local challenges = { "Calibrate", "Wires", "Sequence", "Frequency", "Pressure" }
+		for i = #challenges, 2, -1 do
+			local j = math.random(i)
+			challenges[i], challenges[j] = challenges[j], challenges[i]
+		end
+		local used, kept = {}, 0
+		for _, term in list do
+			local wing = term:GetAttribute("Wing")
+			if kept < 3 and not used[wing] then
+				used[wing] = true
+				kept += 1
+				term:SetAttribute("Challenge", challenges[kept])
+				local h = Instance.new("Highlight")
+				h.Name = "Finder"
+				h.FillTransparency = 1
+				h.OutlineColor = Color3.fromRGB(80, 255, 140)
+				h.OutlineTransparency = 0.55
+				h.DepthMode = Enum.HighlightDepthMode.Occluded
+				h.Parent = term
+			else
+				term:Destroy()
+			end
+		end
+	end
 	map.Parent = workspace
 	return map
 end

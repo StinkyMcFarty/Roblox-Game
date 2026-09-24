@@ -135,6 +135,19 @@ local function onPlayerAdded(player)
 		PlayerData.PublishChances()
 	end)
 
+	-- lobby auto-spawns: turn them blocky once their avatar has loaded
+	player.CharacterAppearanceLoaded:Connect(function(char)
+		if player:GetAttribute("BlockyLoad") then
+			player:SetAttribute("BlockyLoad", nil)
+			return
+		end
+		local hum = char:FindFirstChildOfClass("Humanoid")
+		if hum and not Round.Survivors[player] and Round.Wolverine ~= player then
+			pcall(function()
+				hum:ApplyDescription(blockyDescription(player))
+			end)
+		end
+	end)
 	player.CharacterAdded:Connect(function(char)
 		if not Round.Survivors[player] and Round.Wolverine ~= player then
 			player:SetAttribute("Role", "Lobby")
@@ -179,6 +192,8 @@ Ability.OnServerEvent:Connect(function(player, name, arg)
 		Fart.Use(player)
 	elseif name == "Unhide" then
 		Hiding.Leave(player)
+	elseif name == "TerminalResult" then
+		Sentinel.TerminalResult(player, arg)
 	elseif role == "Wolverine" then
 		Wolverine.Handle(player, name, arg)
 	elseif role == "Sentinel" then
@@ -212,6 +227,39 @@ local function shuffle(t)
 		t[i], t[j] = t[j], t[i]
 	end
 	return t
+end
+
+-- Everyone plays on the classic blocky body (their own clothes, colours, face
+-- and accessories stay; bundle body parts and scaling are removed).
+local descCache = {}
+local function blockyDescription(p)
+	local d = descCache[p]
+	if not d then
+		local ok, base = pcall(function()
+			return Players:GetHumanoidDescriptionFromUserId(math.max(1, p.UserId))
+		end)
+		d = ok and base or Instance.new("HumanoidDescription")
+		for _, k in { "Head", "Torso", "LeftArm", "RightArm", "LeftLeg", "RightLeg" } do
+			d[k] = 0
+		end
+		d.HeightScale, d.WidthScale, d.DepthScale, d.HeadScale = 1, 1, 1, 1
+		d.BodyTypeScale, d.ProportionScale = 0, 0
+		descCache[p] = d
+	end
+	return d:Clone()
+end
+Players.PlayerRemoving:Connect(function(p)
+	descCache[p] = nil
+end)
+local function loadBlocky(p)
+	p:SetAttribute("BlockyLoad", true)
+	local ok = pcall(function()
+		p:LoadCharacterWithHumanoidDescription(blockyDescription(p))
+	end)
+	if not ok then
+		p:SetAttribute("BlockyLoad", nil)
+		p:LoadCharacter()
+	end
 end
 
 local function runRound()
@@ -250,7 +298,7 @@ local function runRound()
 	local spawns = shuffle(map:WaitForChild("Spawns"):GetChildren())
 	local wolverineSpawn = map:WaitForChild("WolverineSpawn").CFrame
 	for i, p in list do
-		p:LoadCharacter()
+		loadBlocky(p)
 		local char = p.Character
 		if char then
 			if p == wolverine then
@@ -285,31 +333,6 @@ local function runRound()
 			Text = ("%s ripped %s in half  +%ds"):format(killer.DisplayName, victim.DisplayName, Config.KillTimeBonus),
 		})
 		Fx:FireAllClients("TimeBonus", { Seconds = Config.KillTimeBonus })
-	end)
-
-	-- watchdog: anyone flung outside the facility (or through the floor) is put back
-	task.spawn(function()
-		while Round.Active and Round.Map == map do
-			local list = {}
-			for p in Round.Survivors do
-				table.insert(list, p.Character)
-			end
-			if wolverine.Character then
-				table.insert(list, wolverine.Character)
-			end
-			for _, char in list do
-				local root = char and char:FindFirstChild("HumanoidRootPart")
-				if root and not root.Anchored then
-					local pos = root.Position
-					if math.abs(pos.X) > 158 or math.abs(pos.Z) > 138 or pos.Y < -6 or pos.Y > 60 then
-						local spot = spawns[math.random(#spawns)]
-						char:PivotTo(spot.CFrame + Vector3.new(0, 3, 0))
-						root.AssemblyLinearVelocity = Vector3.zero
-					end
-				end
-			end
-			task.wait(1)
-		end
 	end)
 
 	local result
@@ -400,7 +423,7 @@ local function runRound()
 		Status.Reset(p)
 		Movement.Reset(p)
 		task.spawn(function()
-			p:LoadCharacter()
+			loadBlocky(p)
 		end)
 	end
 end
@@ -432,7 +455,7 @@ while true do
 			for _, p in Players:GetPlayers() do
 				p:SetAttribute("Role", "Lobby")
 				task.spawn(function()
-					p:LoadCharacter()
+					loadBlocky(p)
 				end)
 			end
 			task.wait(3)

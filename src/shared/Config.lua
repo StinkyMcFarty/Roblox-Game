@@ -8,7 +8,7 @@ Config.MinPlayers = 2 -- real players needed to start a round in the live game
 -- never spawns bots.
 Config.BotFill = 5
 Config.IntermissionTime = 20
-Config.RoundTime = 150 -- seconds survivors must last (after the intro)
+Config.RoundTime = 180 -- seconds survivors must last (after the intro)
 Config.KillTimeBonus = 15 -- Wolverine gets this much extra time per kill
 Config.EndScreenTime = 6
 
@@ -56,7 +56,7 @@ Config.SprintRamp = { Delay = 0.9, Time = 2.2 }
 Config.Abilities = {
 	Slash = { Cooldown = 0.55, Range = 8, Width = 8 },
 	Pounce = { Cooldown = 9, Forward = 78, Up = 52, GrabRadius = 7, Window = 1.2 },
-	Stab = { Cooldown = 6, Range = 8, Lunge = 60 },
+	Stab = { Cooldown = 6, Range = 10, Width = 8, Lunge = 60 },
 	Sniff = { Cooldown = 25, Duration = 5 }, -- only 5s of tracking so he can't wallhack all round
 }
 
@@ -64,19 +64,21 @@ Config.Abilities = {
 Config.Sentinel = {
 	HoldTime = 4,
 	PodHoldTime = 2,
-	Duration = 45, -- the suit powers down after this
+	Duration = 90, -- the suit powers down after this
 	Armor = 4, -- Wolverine hits needed to destroy it (the last one rips it in half)
 	Suits = 2, -- how many survivors can suit up per round
 	-- Teamwork: suits within LinkRange of each other are "linked" and hit hard.
-	-- Alone they barely scratch him (his healing outpaces them).
+	-- Two suits apart barely scratch him; the last suit standing hits at 1x.
 	LinkRange = 30,
 	LinkedMultiplier = 1.6,
 	SoloMultiplier = 0.5,
 	WalkSpeed = 18,
-	Scale = 1.35,
+	Scale = 1.8, -- same size as the docked suits in the Hangar
 	Punch = { Cooldown = 0.9, Damage = 40, Range = 9, Stun = 0.6, Knockback = 70 },
 	-- Laser burns through walls and flashes Wolverine's adamantium skeleton
-	Laser = { Cooldown = 4, Damage = 30, Range = 260, Slow = 2.5, WallsBurned = 3 },
+	-- Death ray: charge, then a 3s aimable beam that pushes him back; the suit
+	-- is sluggish for 3s after firing.
+	Laser = { Cooldown = 12, Charge = 0.6, Duration = 3, DPS = 24, Range = 260, Slow = 1.5, WallsBurned = 8, Push = 22, Recover = 3 },
 	Pulse = { Cooldown = 18, Radius = 16, Stun = 2.2, Damage = 10 },
 }
 
@@ -141,7 +143,7 @@ Config.UploadedSounds = {
 	Snikt = 0, Slash = 117112770329180, Whoosh = 0, Stab = 0, Impact = 0, Leap = 0, Land = 0,
 	Roar = 84386454545822, Snarl = 0, Tear = 0, Gore = 0, Break = 0, Heartbeat = 0, Fart = 0,
 	Sniff = 0, Laser = 0, Punch = 0, Terminal = 0, UIHover = 0, UIClick = 0, Paw = 90700737432630,
-	PounceHit = 140573962847729, Impale = 100362323212257,
+	PounceHit = 140573962847729, Impale = 100362323212257, DeathRay = 0, Chase = 0,
 }
 Config.Sounds.Snarl = Config.Sounds.Snarl or ""
 for name, id in Config.UploadedSounds do
@@ -154,5 +156,7 @@ end
 -- reuse the (clean) slash rather than the old built-in sword sounds.
 Config.Sounds.PounceHit = Config.Sounds.PounceHit or Config.Sounds.Slash
 Config.Sounds.Impale = Config.Sounds.Impale or Config.Sounds.Slash
+Config.Sounds.DeathRay = Config.Sounds.DeathRay or Config.Sounds.Laser
+Config.Sounds.Chase = Config.Sounds.Chase or ""
 
 return Config

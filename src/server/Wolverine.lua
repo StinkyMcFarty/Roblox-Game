@@ -525,14 +525,31 @@ local function stab(player, char, root)
 	local cfg = Config.Abilities.Stab
 	VFX.Anim(char, "Impale")
 
-	task.wait(0.14)
-	if not (char.Parent and Util.IsAlive(char)) then
-		return
-	end
-	local cf = root.CFrame * CFrame.new(0, 0, -cfg.Range / 2)
-	Combat.BreakInBox(cf, Vector3.new(6, 9, cfg.Range), root.Position, 65)
-	local target = Combat.FindTargets(cf, Vector3.new(6, 8, cfg.Range + 1))[1]
-	if not target or Status.Has(target.Player, "Immune") then
+	-- sweep the hitbox through the whole lunge instead of one frame
+	task.wait(0.06)
+	local target
+	local t0 = os.clock()
+	local broke = false
+	repeat
+		if not (char.Parent and Util.IsAlive(char)) then
+			return
+		end
+		local cf = root.CFrame * CFrame.new(0, 0, -cfg.Range / 2 + 1)
+		if not broke and os.clock() - t0 > 0.08 then
+			broke = true
+			Combat.BreakInBox(cf, Vector3.new(6, 9, cfg.Range), root.Position, 65)
+		end
+		for _, cand in Combat.FindTargets(cf, Vector3.new(cfg.Width, 10, cfg.Range + 2)) do
+			if not Status.Has(cand.Player, "Immune") then
+				target = cand
+				break
+			end
+		end
+		if not target then
+			task.wait()
+		end
+	until target or os.clock() - t0 > 0.3
+	if not target then
 		task.wait(0.3)
 		VFX.StopAnim(char, "Impale")
 		return

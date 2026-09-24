@@ -324,14 +324,37 @@ def heartbeat():
 
 
 def fart():
-    dur = 0.85
-    t = t_axis(dur)
-    f = 85 + 25 * np.sin(2 * np.pi * 3 * t) + lowpass(rng.normal(0, 1, len(t)), 30) * 25
-    phase = 2 * np.pi * np.cumsum(f) / SR
-    buzz = signal.square(phase, duty=0.3) * (1 + 0.6 * lowpass(rng.normal(0, 1, len(t)), 60))
-    x = lowpass(buzz, 700) + lowpass(noise(dur), 400) * 0.4
-    shape = env(dur, 0.02, 0.6) * (0.6 + 0.4 * np.sin(2 * np.pi * 9 * t) ** 2)
-    return finish(reverb(x * shape, 0.25, 0.1))
+    """A real one: flappy sphincter buzz (pulse train through a fleshy
+    resonance) that bends up then sags, breathy rasp, and a wet sputter tail."""
+    dur = 1.35
+    n = int(SR * dur)
+    t = np.arange(n) / SR
+    # pitch contour: quick rise, wobbling sustain, sagging end
+    f = 72 + 38 * np.sin(np.pi * np.clip(t / 0.9, 0, 1)) ** 0.6
+    f += lowpass(rng.normal(0, 1, n), 12) * 14  # wobble
+    f += 6 * np.sin(2 * np.pi * 7.5 * t)
+    f *= np.where(t > 0.95, 1 - (t - 0.95) * 0.6, 1)
+    ph = np.cumsum(f) / SR
+    frac = ph % 1
+    cyc = np.floor(ph)
+    # each cycle: a sharp flap open then a soft close
+    flap = np.where(frac < 0.18, np.sin(np.pi * frac / 0.18), -0.35 * np.sin(np.pi * (frac - 0.18) / 0.82))
+    # irregular flap strength + sputter gaps near the end
+    strength = 0.7 + 0.5 * lowpass(rng.normal(0, 1, n), 25)
+    sputter = np.ones(n)
+    tail = t > 0.95
+    gaps = rng.random(int(cyc.max()) + 2) < 0.45
+    sputter[tail] = np.where(gaps[cyc[tail].astype(int)], 0.08, 1.0)
+    src = flap * strength * sputter
+    # fleshy resonances + a little brassy edge
+    body = resonator(src, 180, 90) * 0.7 + resonator(src, 420, 160) * 1.1 + resonator(src, 900, 300) * 0.6
+    body += lowpass(src, 1400) * 0.3
+    # breathy air rushing through, gated by the flaps
+    air = bandpass(noise(dur), 250, 2200) * (0.3 + 0.7 * np.clip(flap, 0, 1)) * 0.35
+    x = body / (np.max(np.abs(body)) + 1e-9) + air
+    amp = np.clip(t / 0.03, 0, 1) * np.where(t > 1.2, np.clip((1.35 - t) / 0.15, 0, 1), 1)
+    x = np.tanh(x * 1.6) * amp
+    return finish(reverb(highpass(x, 45, 2), 0.2, 0.08), 0.85, 0.05)
 
 
 def sniff():
@@ -405,6 +428,75 @@ def impale():
     return finish(reverb(highpass(x, 50, 2), 0.3, 0.12), 0.72, 0.05)
 
 
+def death_ray():
+    """Charge whine (0.35s) into a screaming, distorted beam blast (~0.9s) with crackle."""
+    ch = 0.35
+    t = t_axis(ch)
+    f = 180 * (12 ** (t / ch))  # rising whine
+    whine = np.sin(2 * np.pi * np.cumsum(f) / SR + 3 * np.sin(2 * np.pi * 37 * t)) * (t / ch) ** 1.5
+    whine += bandpass(noise(ch), 2000, 8000) * (t / ch) ** 3 * 0.4
+    bd = 1.0
+    tb = t_axis(bd)
+    envb = np.minimum(1, tb / 0.01) * np.exp(-np.maximum(tb - 0.55, 0) / 0.18)
+    saw = signal.sawtooth(2 * np.pi * 55 * tb) + 0.6 * signal.sawtooth(2 * np.pi * 110.7 * tb)
+    scream = np.sin(2 * np.pi * np.cumsum(1400 + 500 * np.sin(2 * np.pi * 11 * tb)) / SR)
+    ringmod = scream * np.sin(2 * np.pi * 317 * tb)
+    crackle = highpass(noise(bd), 3000) * (rng.random(len(tb)) < 0.02) * 6
+    hiss = bandpass(noise(bd), 1500, 9000) * 0.5
+    trem = 1 + 0.25 * np.sin(2 * np.pi * 42 * tb)
+    blast = (saw * 0.8 + ringmod * 0.6 + scream * 0.3 + hiss + lowpass(crackle, 9000) * 0.5) * trem
+    blast = np.tanh(blast * 2.2) * envb
+    tt = t_axis(0.6)
+    boom = np.sin(2 * np.pi * (70 - 40 * np.minimum(tt / 0.4, 1)) * tt) * env(0.6, 0.002, 0.25) * 1.2
+    x = mix(whine * 0.6, pad(blast, ch), pad(boom, ch))
+    return finish(reverb(highpass(x, 35, 2), 0.5, 0.18), 0.9, 0.1)
+
+
+def chase():
+    """8-bar chase loop at 150 BPM: pounding low drums, pulsing bass ostinato,
+    dissonant string stabs and metal hits. Loops seamlessly."""
+    bpm = 150
+    beat = 60 / bpm
+    bars = 4
+    dur = beat * 4 * bars
+    n = int(SR * dur)
+    out = np.zeros(n)
+    def put(x, at):
+        i = int(at * SR) % n
+        seg = x[: n - i]
+        out[i:i + len(seg)] += seg
+        if len(x) > len(seg):
+            out[: len(x) - len(seg)] += x[len(seg):]
+    kick_t = t_axis(0.35)
+    kick = np.sin(2 * np.pi * (48 + 90 * np.exp(-kick_t * 30)) * kick_t) * env(0.35, 0.001, 0.18) * 1.2
+    tom_t = t_axis(0.3)
+    tom = np.sin(2 * np.pi * (95 + 60 * np.exp(-tom_t * 20)) * tom_t) * env(0.3, 0.001, 0.12)
+    hit = mix(ring([1310, 2210, 3470], 0.5, 0.1) * 0.5, highpass(noise(0.05), 2000) * env(0.05, 0.001, 0.01))
+    for b in range(bars * 4):
+        at = b * beat
+        put(kick, at)
+        if b % 2 == 1:
+            put(tom * 0.7, at + beat * 0.5)
+            put(tom * 0.5, at + beat * 0.75)
+        if b % 8 == 7:
+            put(hit * 0.8, at + beat * 0.5)
+    # 8th-note bass ostinato (E minor-ish with a b2 for dread)
+    notes = [41.2, 41.2, 43.65, 41.2, 41.2, 49.0, 46.25, 43.65]
+    bt = t_axis(beat / 2)
+    for i in range(bars * 8):
+        f0 = notes[i % 8]
+        tone = (signal.sawtooth(2 * np.pi * f0 * bt) + 0.5 * signal.square(2 * np.pi * f0 * 2 * bt)) * env(beat / 2, 0.004, beat * 0.3)
+        put(lowpass(tone, 600) * 0.45, i * beat / 2)
+    # string stabs: dissonant cluster on bar starts
+    st_t = t_axis(beat * 1.5)
+    for bar in range(bars):
+        cluster = sum(signal.sawtooth(2 * np.pi * f * st_t) for f in (329.6, 349.2, 493.9)) / 3
+        stab = bandpass(cluster, 300, 3500) * env(beat * 1.5, 0.01, beat * 0.7) * 0.35
+        put(stab, bar * beat * 4)
+    x = np.tanh(out * 0.9)
+    return finish(reverb(x, 0.35, 0.12)[:n], 0.85, 0.0)
+
+
 def ui_hover():
     return finish(whoosh(0.13, 2200, 7000, 1.0), 0.6)
 
@@ -420,7 +512,7 @@ SOUNDS = {
     "Stab": stab, "Impact": impact, "Leap": leap, "Land": land, "Roar": roar, "Snarl": snarl,
     "Tear": tear, "Gore": gore, "Break": wall_break, "Heartbeat": heartbeat, "Fart": fart,
     "Sniff": sniff, "Laser": laser, "Punch": punch, "Terminal": terminal,
-    "UIHover": ui_hover, "UIClick": ui_click, "Paw": paw, "PounceHit": pounce_hit, "Impale": impale,
+    "UIHover": ui_hover, "UIClick": ui_click, "Paw": paw, "PounceHit": pounce_hit, "Impale": impale, "DeathRay": death_ray, "Chase": chase,
 }
 
 

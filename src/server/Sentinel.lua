@@ -29,6 +29,9 @@ local GREY = Color3.fromRGB(120, 124, 132)
 local GLOW = Color3.fromRGB(255, 210, 60)
 
 local cooldowns = {}
+local repairStart, repairLock = {}, {}
+local finishTerminal = nil
+local CHALLENGE_NAMES = { Calibrate = "Recalibrate", Wires = "Reroute Power", Sequence = "Override Code", Frequency = "Tune Frequency", Pressure = "Balance Pressure" }
 local suitsLeft = 0
 local links = {} -- [Player] = Beam
 
@@ -41,9 +44,10 @@ end
 ---------------------------------------------------------------------------
 
 local function unlockPod(pod)
-	local prompt = pod:FindFirstChild("PodPrompt", true)
-	if prompt then
-		prompt.Enabled = true
+	for _, prompt in pod:GetDescendants() do
+		if prompt.Name == "PodPrompt" and prompt:IsA("ProximityPrompt") then
+			prompt.Enabled = true
+		end
 	end
 	local beacon = pod:FindFirstChild("Beacon")
 	if beacon then
@@ -60,6 +64,10 @@ end
 function Sentinel.SetupRound(map)
 	suitsLeft = Config.Sentinel.Suits
 	cooldowns = {}
+	repairStart, repairLock = {}, {}
+	for _, p in game:GetService("Players"):GetPlayers() do
+		p:SetAttribute("Repairing", nil)
+	end
 	local terminals = map:FindFirstChild("Terminals")
 	local pod = map:FindFirstChild("SentinelPod")
 	local total = terminals and #terminals:GetChildren() or 0
@@ -68,11 +76,45 @@ function Sentinel.SetupRound(map)
 	ReplicatedStorage:SetAttribute("TerminalsTotal", total)
 	ReplicatedStorage:SetAttribute("SuitOnline", false)
 
+	-- terminals: pressing E opens that console's repair minigame on the client;
+	-- the result comes back through Sentinel.TerminalResult
+	finishTerminal = function(term, player)
+		term:SetAttribute("Done", true)
+		local prompt = term:FindFirstChild("TerminalPrompt", true)
+		if prompt then
+			prompt.Enabled = false
+		end
+		local finder = term:FindFirstChild("Finder")
+		if finder then
+			finder:Destroy()
+		end
+		local screen = term:FindFirstChild("Screen")
+		if screen then
+			screen.Color = Color3.fromRGB(60, 255, 120)
+			local light = screen:FindFirstChildOfClass("PointLight")
+			if light then
+				light.Color = screen.Color
+			end
+			local label = screen:FindFirstChild("Label", true)
+			if label then
+				label.Text = "ONLINE"
+			end
+			Util.Sound(Config.Sounds.Terminal, screen, { Volume = 1.5, Range = 120 })
+		end
+		done += 1
+		PlayerData.AddCoins(player, Skins.Rewards.Terminal, "Rebooted a terminal")
+		ReplicatedStorage:SetAttribute("Terminals", done)
+		announce(("%s rebooted a terminal (%d/%d)"):format(player.DisplayName, done, total), GLOW)
+		if done >= total and pod then
+			ReplicatedStorage:SetAttribute("SuitOnline", true)
+			unlockPod(pod)
+		end
+	end
 	if terminals then
 		for _, term in terminals:GetChildren() do
 			local prompt = term:FindFirstChild("TerminalPrompt", true)
 			if prompt then
-				prompt.HoldDuration = Config.Sentinel.HoldTime
+				prompt.ObjectText = "Sentinel Protocol — " .. (CHALLENGE_NAMES[term:GetAttribute("Challenge")] or "Repair")
 				prompt.Triggered:Connect(function(player)
 					if term:GetAttribute("Done") or not Round.Active then
 						return
@@ -80,61 +122,94 @@ function Sentinel.SetupRound(map)
 					if player:GetAttribute("Role") ~= "Survivor" or not Round.Survivors[player] then
 						return
 					end
-					term:SetAttribute("Done", true)
-					prompt.Enabled = false
-					local screen = term:FindFirstChild("Screen")
-					if screen then
-						screen.Color = Color3.fromRGB(60, 255, 120)
-						local light = screen:FindFirstChildOfClass("PointLight")
-						if light then
-							light.Color = screen.Color
-						end
-						local label = screen:FindFirstChild("Label", true)
-						if label then
-							label.Text = "ONLINE"
-						end
-						Util.Sound(Config.Sounds.Terminal, screen, { Volume = 1.5, Range = 120 })
+					if player:GetAttribute("Repairing") or (repairLock[player] or 0) > os.clock() then
+						return
 					end
-					done += 1
-					PlayerData.AddCoins(player, Skins.Rewards.Terminal, "Rebooted a terminal")
-					ReplicatedStorage:SetAttribute("Terminals", done)
-					announce(("%s rebooted a terminal (%d/%d)"):format(player.DisplayName, done, total), GLOW)
-					if done >= total and pod then
-						ReplicatedStorage:SetAttribute("SuitOnline", true)
-						unlockPod(pod)
-					end
+					player:SetAttribute("Repairing", term.Name)
+					repairStart[player] = os.clock()
+					Fx:FireClient(player, "Minigame", { Terminal = term, Challenge = term:GetAttribute("Challenge") })
 				end)
 			end
 		end
 	end
 
 	if pod then
-		local prompt = pod:FindFirstChild("PodPrompt", true)
-		if prompt then
+		-- each docked suit has its own prompt: press E and step into that suit
+		for _, prompt in pod:GetDescendants() do
+			if not (prompt.Name == "PodPrompt" and prompt:IsA("ProximityPrompt")) then
+				continue
+			end
 			prompt.HoldDuration = Config.Sentinel.PodHoldTime
 			prompt.Triggered:Connect(function(player)
-				if suitsLeft <= 0 or not Round.Active then
+				if suitsLeft <= 0 or not Round.Active or not prompt.Enabled then
 					return
 				end
 				if player:GetAttribute("Role") ~= "Survivor" or not Round.Survivors[player] then
 					return
 				end
 				suitsLeft -= 1
-				prompt.ObjectText = ("Sentinel Pod (%d left)"):format(suitsLeft)
+				prompt.Enabled = false
+				local statue = prompt:FindFirstAncestor("SentinelStatue")
+				local spot = statue and statue:GetPivot()
+				if statue then
+					statue:Destroy()
+				end
 				if suitsLeft <= 0 then
-					prompt.Enabled = false
 					local beacon = pod:FindFirstChild("Beacon")
 					if beacon then
 						beacon.Transparency = 1
 					end
-					local dummy = pod:FindFirstChild("Dummy")
-					if dummy then
-						dummy:Destroy()
-					end
 				end
 				Sentinel.Become(player)
+				local char = player.Character
+				if spot and char then
+					char:PivotTo(CFrame.new(spot.Position + Vector3.new(0, 2, -4)) * spot.Rotation)
+				end
 			end)
 		end
+	end
+end
+
+-- Result of a repair minigame from the client. Validated: still a survivor,
+-- still at that console, and it took a believable amount of time.
+function Sentinel.TerminalResult(player, data)
+	if type(data) ~= "table" then
+		return
+	end
+	local term = data.Terminal
+	local started = repairStart[player]
+	if player:GetAttribute("Repairing") == nil then
+		return
+	end
+	local name = player:GetAttribute("Repairing")
+	player:SetAttribute("Repairing", nil)
+	repairStart[player] = nil
+	if typeof(term) ~= "Instance" or term.Name ~= name or not Round.Map or not term:IsDescendantOf(Round.Map) then
+		return
+	end
+	if term:GetAttribute("Done") or not Round.Active or not Round.Survivors[player] then
+		return
+	end
+	local root = Util.Root(player.Character)
+	local body = term:FindFirstChild("Body")
+	if not (root and body) or (root.Position - body.Position).Magnitude > 16 then
+		return
+	end
+	if data.Cancel then
+		return
+	end
+	if data.Ok == true and started and os.clock() - started >= 1.5 then
+		finishTerminal(term, player)
+	else
+		-- botched repair: alarm, and Wolverine hears exactly where you are
+		repairLock[player] = os.clock() + 4
+		local screen = term:FindFirstChild("Screen")
+		if screen then
+			Util.Sound(Config.Sounds.Terminal, screen, { Volume = 3, Pitch = 0.5, Range = 300 })
+			Util.Sound(Config.Sounds.Terminal, screen, { Volume = 3, Pitch = 0.45, Range = 300 })
+		end
+		Util.FireClient(Fx, Round.Wolverine, "Noise", { Position = body.Position, Text = "ALARM" })
+		Util.FireClient(Fx, player, "Announce", { Text = "REPAIR FAILED — ALARM TRIPPED", Color = Color3.fromRGB(255, 70, 60), Duration = 2.5 })
 	end
 end
 
@@ -240,7 +315,11 @@ local function isLinked(player)
 end
 
 local function power(player)
-	return isLinked(player) and Config.Sentinel.LinkedMultiplier or Config.Sentinel.SoloMultiplier
+	if isLinked(player) then
+		return Config.Sentinel.LinkedMultiplier
+	end
+	-- the last suit standing fights at full strength
+	return #sentinels() <= 1 and 1 or Config.Sentinel.SoloMultiplier
 end
 
 -- Energy tether between linked suits + "Linked" attribute for the HUD
@@ -306,79 +385,120 @@ local function punch(player, char, root)
 	VFX.Anim(char, "Punch")
 	task.wait(0.12) -- connect on the punch frame
 	local w, _, wRoot = wolverineParts()
-	if not wRoot then
-		return
+	local fist = root.CFrame * CFrame.new(0, 0.5, -3.2)
+	local hit = false
+	if wRoot then
+		local rel = root.CFrame:PointToObjectSpace(wRoot.Position)
+		if rel.Z < 1 and rel.Z > -cfg.Range and math.abs(rel.X) < 5 and math.abs(rel.Y) < 6 then
+			hit = true
+			local mult = power(player)
+			Wolverine.Damage(cfg.Damage * mult)
+			stunWolverine(cfg.Stun * mult)
+			local dir = Util.Flat(wRoot.Position - root.Position)
+			Fx:FireClient(w, "Knock", { Velocity = dir * cfg.Knockback + Vector3.new(0, 25, 0) })
+			Util.Sound(Config.Sounds.PounceHit, wRoot, { Volume = 2.5, Pitch = 0.55, Range = 220 })
+			Util.Sound(Config.Sounds.Punch, wRoot, { Volume = 2, Pitch = 0.6 })
+			Fx:FireAllClients("Shake", { Position = wRoot.Position, Intensity = 0.9, Radius = 45 })
+			Fx:FireAllClients("HitStop", { Attacker = char, Victim = w and w.Character, Duration = 0.1 })
+			fist = CFrame.new(wRoot.Position)
+		end
 	end
-	local rel = root.CFrame:PointToObjectSpace(wRoot.Position)
-	if rel.Z < 1 and rel.Z > -cfg.Range and math.abs(rel.X) < 5 and math.abs(rel.Y) < 6 then
-		local mult = power(player)
-		Wolverine.Damage(cfg.Damage * mult)
-		stunWolverine(cfg.Stun * mult)
-		local dir = Util.Flat(wRoot.Position - root.Position)
-		Fx:FireClient(w, "Knock", { Velocity = dir * cfg.Knockback + Vector3.new(0, 25, 0) })
-		Util.Sound(Config.Sounds.Punch, wRoot, { Volume = 2, Pitch = 0.6 })
-		Fx:FireAllClients("Shake", { Position = wRoot.Position, Intensity = 0.6, Radius = 40 })
-	else
-		Util.Sound(Config.Sounds.Lunge, root, { Pitch = 0.5 })
+	if not hit then
+		Util.Sound(Config.Sounds.Slash, root, { Pitch = 0.5, Volume = 1.3 })
+	end
+	Fx:FireAllClients("Smash", { Char = char, Position = fist.Position, Dir = root.CFrame.LookVector, Hit = hit })
+end
+
+-- aim updates streamed from the firing client while the beam is live
+local laserAim = {}
+function Sentinel.Aim(player, pos)
+	if typeof(pos) == "Vector3" and player:GetAttribute("Beaming") then
+		laserAim[player] = pos
 	end
 end
 
 local function laser(player, char, root, aim)
 	local cfg = Config.Sentinel.Laser
 	local torso = Util.Torso(char) or root
-	local origin = torso.Position + root.CFrame.LookVector * 1.8
-	local dir = root.CFrame.LookVector
-	if typeof(aim) == "Vector3" and (aim - origin).Magnitude > 2 then
-		dir = (aim - origin).Unit
-		-- Don't allow shooting backwards
-		if dir:Dot(root.CFrame.LookVector) < -0.2 then
-			dir = root.CFrame.LookVector
-		end
-	end
-
-	VFX.Anim(char, "Laser")
-	Util.Sound(Config.Sounds.Laser, root, { Volume = 2, Pitch = 0.4, Range = 250 })
+	laserAim[player] = typeof(aim) == "Vector3" and aim or nil
+	VFX.Anim(char, "DeathRay")
+	Util.Sound(Config.Sounds.DeathRay, root, { Volume = 2.8, Range = 320, Pitch = Config.UploadedSounds.DeathRay ~= 0 and 1 or 0.4 })
+	Fx:FireAllClients("LaserCharge", { Char = char, Time = cfg.Charge })
+	Status.Apply(player, "Slowed", cfg.Charge + cfg.Duration)
+	task.wait(cfg.Charge)
 
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
-	local ignore = { char }
-	local from = origin
-	local remaining = cfg.Range
-	local burned = 0
-	local endPos = origin + dir * cfg.Range
-	local _, wChar = wolverineParts()
-	local burnPoints = {}
-	local hitWolverine = false
-
-	while remaining > 0 do
-		params.FilterDescendantsInstances = ignore
-		local hit = workspace:Raycast(from, dir * remaining, params)
-		if not hit then
+	local burnedTotal = 0
+	local lastKnock, lastReveal = 0, 0
+	local t0 = os.clock()
+	local last = os.clock()
+	player:SetAttribute("Beaming", true)
+	while os.clock() - t0 < cfg.Duration do
+		if not (char.Parent and Util.IsAlive(char)) or player:GetAttribute("Role") ~= "Sentinel" or not Round.Active then
 			break
 		end
-		if wChar and hit.Instance:IsDescendantOf(wChar) then
-			endPos = hit.Position
-			hitWolverine = true
-			Wolverine.Damage(cfg.Damage * power(player))
-			Wolverine.RevealSkeleton()
+		local dt = os.clock() - last
+		last = os.clock()
+		local origin = torso.Position + root.CFrame.LookVector * 1.8 + Vector3.new(0, 0.6, 0)
+		local dir = root.CFrame.LookVector
+		local target = laserAim[player]
+		if target and (target - origin).Magnitude > 2 then
+			dir = (target - origin).Unit
+			if dir:Dot(root.CFrame.LookVector) < 0.1 then -- no shooting behind you
+				dir = root.CFrame.LookVector
+			end
+		end
+		local ignore = { char }
+		local from, remaining = origin, cfg.Range
+		local endPos = origin + dir * cfg.Range
+		local burns = {}
+		local _, wChar, wRoot = wolverineParts()
+		local hitW = false
+		while remaining > 0 do
+			params.FilterDescendantsInstances = ignore
+			local hit = workspace:Raycast(from, dir * remaining, params)
+			if not hit then
+				break
+			end
+			if wChar and hit.Instance:IsDescendantOf(wChar) then
+				endPos = hit.Position
+				hitW = true
+				break
+			end
+			if hit.Instance:GetAttribute("Breakable") and burnedTotal < cfg.WallsBurned then
+				burnedTotal += 1
+				Combat.BreakPart(hit.Instance, hit.Position - dir * 3, 25)
+				table.insert(burns, hit.Position)
+				remaining -= (hit.Position - from).Magnitude
+				from = hit.Position
+			else
+				endPos = hit.Position
+				break
+			end
+		end
+		if hitW then
+			Wolverine.Damage(cfg.DPS * dt * power(player))
 			Status.Apply(Round.Wolverine, "Slowed", cfg.Slow)
-			Fx:FireAllClients("Shake", { Position = hit.Position, Intensity = 0.5, Radius = 40 })
-			break
+			if os.clock() - lastReveal > 0.6 then
+				lastReveal = os.clock()
+				Wolverine.RevealSkeleton()
+			end
+			if os.clock() - lastKnock > 0.3 and wRoot then
+				lastKnock = os.clock()
+				Util.FireClient(Fx, Round.Wolverine, "Knock", { Velocity = Util.Flat(dir) * cfg.Push + Vector3.new(0, 3, 0) })
+			end
 		end
-		if hit.Instance:GetAttribute("Breakable") and burned < cfg.WallsBurned then
-			burned += 1
-			Combat.BreakPart(hit.Instance, hit.Position - dir * 3, 25)
-			table.insert(burnPoints, hit.Position)
-			remaining -= (hit.Position - from).Magnitude
-			from = hit.Position
-		else
-			endPos = hit.Position
-			break
-		end
+		Fx:FireAllClients("LaserBeam", { Char = char, From = origin, To = endPos, Hit = hitW, Burns = burns })
+		task.wait(0.07)
 	end
-
-	-- drawn crisp on every client (SlashFX.Laser): core + glow + flares
-	Fx:FireAllClients("Laser", { From = origin, To = endPos, Burns = burnPoints, Hit = hitWolverine })
+	player:SetAttribute("Beaming", nil)
+	laserAim[player] = nil
+	Fx:FireAllClients("LaserEnd", { Char = char })
+	VFX.StopAnim(char, "DeathRay")
+	-- the core has to cool down: sluggish for a few seconds
+	Status.Apply(player, "Slowed", cfg.Recover)
+	Util.FireClient(Fx, player, "Announce", { Text = "CORE VENTING", Color = Color3.fromRGB(255, 120, 80), Duration = cfg.Recover })
 end
 
 local function pulse(player, char, root)
@@ -415,6 +535,13 @@ function Sentinel.Handle(player, ability, arg)
 	local char = player.Character
 	local root = Util.Root(char)
 	if not (root and Util.IsAlive(char)) or Status.Has(player, "Busy") or Status.Has(player, "Frozen") then
+		return
+	end
+	if ability == "LaserAim" then
+		Sentinel.Aim(player, arg)
+		return
+	end
+	if player:GetAttribute("Beaming") then
 		return
 	end
 	local cfg = Config.Sentinel[ability]

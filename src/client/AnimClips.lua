@@ -265,6 +265,18 @@ Clips.Laser = {
 	},
 }
 
+-- Death ray: brace and wind the core up, then lean into the beam and hold it
+Clips.DeathRay = {
+	Hold = true,
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.3, Ease = "Out", Pose = { Waist = { -14, 0, 0 }, Neck = { -10, 0, 0 }, RShoulder = { -40, 0, 30 }, LShoulder = { -40, 0, -30 }, RElbow = { 70, 0, 0 }, LElbow = { 70, 0, 0 }, Root = { 0, 0, 0, 0, -0.5, 0.2 }, RHip = { 30, 0, 8 }, LHip = { -10, 0, -8 }, RKnee = { -40, 0, 0 }, LKnee = { -25, 0, 0 } } },
+		{ T = 0.6, Ease = "Back", Pose = { Waist = { 16, 0, 0 }, Neck = { 8, 0, 0 }, RShoulder = { -55, 0, 58 }, LShoulder = { -55, 0, -58 }, RElbow = { 20, 0, 0 }, LElbow = { 20, 0, 0 }, Root = { 6, 0, 0, 0, -0.45, 0 }, RHip = { 34, 0, 10 }, LHip = { -18, 0, -10 }, RKnee = { -36, 0, 0 }, LKnee = { -20, 0, 0 } } },
+		{ T = 1.2, Ease = "InOut", Pose = { Waist = { 18, 0, 0 }, Neck = { 9, 0, 0 }, RShoulder = { -58, 0, 60 }, LShoulder = { -58, 0, -60 }, RElbow = { 18, 0, 0 }, LElbow = { 18, 0, 0 }, Root = { 7, 0, 0, 0, -0.45, 0 }, RHip = { 34, 0, 10 }, LHip = { -18, 0, -10 }, RKnee = { -36, 0, 0 }, LKnee = { -20, 0, 0 } } },
+	},
+	Tremble = true,
+}
+
 Clips.Pulse = {
 	Keys = {
 		{ T = 0, Pose = REST },

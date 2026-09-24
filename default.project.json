@@ -44,7 +44,8 @@
         "GameSettingsAvatar": "R15",
         "AvatarJointUpgrade": {
           "Enum": 1
-        }
+        },
+        "EnableMouseLockOption": false
       }
     },
     "Lighting": {

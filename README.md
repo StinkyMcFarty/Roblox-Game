@@ -52,6 +52,8 @@ No copyrighted audio is used.
 
 Anything left at `0` uses a built-in Roblox sound instead. Roblox may ask you to verify your account before uploading audio.
 
+Also upload `DeathRay.ogg`, `Chase.ogg` (chase music), `Heartbeat.ogg` and `Fart.ogg`, then paste their IDs.
+
 **Upload at least `Slash.ogg` and `Roar.ogg`.** Without them, M1 uses Roblox's old sword sound and the roar is a pitched-down placeholder.
 
 ## How it plays
@@ -84,11 +86,15 @@ Anything left at `0` uses a built-in Roblox sound instead. Roblox may ask you to
 
 **The counter: Sentinel suit** (like the Hulkbuster)
 
-- Reboot the **3 Sentinel Protocol consoles** (Foundry, Genetics Lab, Command Centre). This unlocks the suits in the Sentinel Hangar. **Two** survivors can suit up.
+- Repair the **3 Sentinel Protocol consoles**. Their locations are random each round, and they're outlined in faint green. Each console has a different minigame (Recalibrate, Reroute Power, Override Code, Tune Frequency, Balance Pressure). Botching one trips an alarm that pings your location to Wolverine.
+- Once all three are repaired, press **E** at a docked suit in the Sentinel Hangar to step into it. **Two** survivors can suit up.
 - **Teamwork is required:** suits within 30 studs of each other are *linked* (energy tether, 1.6x damage, longer stuns). Alone they deal 0.5x damage, which his healing outpaces.
-- **M1 punch** (stuns + knockback), **Q laser** (burns through walls; on a hit it flashes Wolverine's **adamantium skeleton** before his flesh regrows), **E inhibitor pulse** (stun area).
+- **M1 Hydraulic Smash**: stuns him and knocks him back.
+- **Q Death Ray**: charges up, then fires an aimable beam for 3s. It burns through walls, pushes him back and flashes his **adamantium skeleton**. The suit is slowed for 3s afterwards.
+- **E Inhibitor Blast**: stuns everything nearby.
 - Other limits:
-  - Each suit lasts 45s.
+  - Each suit lasts 90s.
+  - The last suit standing hits at full (1x) power.
   - 4 Wolverine hits rip a suit in half.
 
 **Progression:** coins for surviving, kills, terminals and playing matches.

@@ -434,53 +434,320 @@ local function starFlare(pos, color, size, life)
 	end)
 end
 
-function SlashFX.Laser(from, to, burns, hitTarget)
-	if not (from and to) then
+-- ring of ribbon segments facing `normal`
+local function setRing(r, center, normal, radius, width, transparency)
+	local n = r.N
+	local side = normal:Cross(Vector3.new(0, 1, 0))
+	if side.Magnitude < 0.01 then
+		side = Vector3.new(1, 0, 0)
+	end
+	side = side.Unit
+	local up = side:Cross(normal).Unit
+	local pts, ws = table.create(n), table.create(n)
+	for i = 1, n do
+		local a = (i - 1) / (n - 1) * math.pi * 2
+		pts[i] = center + (side * math.cos(a) + up * math.sin(a)) * radius
+		ws[i] = width
+	end
+	setRibbon(r, pts, ws, transparency)
+end
+
+local function chestCF(char)
+	local torso = char and (char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso"))
+	if not torso then
+		return nil
+	end
+	return torso.CFrame * CFrame.new(0, torso.Size.Y * 0.26, -torso.Size.Z * 0.9), torso
+end
+
+-- Charge-up: energy streaks pulled into a swelling, flickering core; shock
+-- rings pulse outward and the whole area turns red.
+function SlashFX.LaserCharge(char, duration)
+	local c0, torso = chestCF(char)
+	local cam = workspace.CurrentCamera
+	if not (c0 and cam) then
 		return
 	end
-	local core = takeRibbon(2, WHITE, 8)
-	local glow = takeRibbon(2, LASER_RED, 4)
-	local halo = takeRibbon(2, LASER_RED, 2)
-	local LIFE = 0.42
-	local pts = { from, to }
-	run({ core, glow, halo }, function(t)
+	local LIFE = duration or 0.6
+	local orb = Instance.new("Part")
+	orb.Shape = Enum.PartType.Ball
+	orb.Anchored, orb.CanCollide, orb.CanQuery, orb.CanTouch, orb.CastShadow = true, false, false, false, false
+	orb.Material = Enum.Material.Neon
+	orb.Size = Vector3.one * 0.3
+	orb.Parent = workspace
+	local shell = orb:Clone()
+	shell.Material = Enum.Material.ForceField
+	shell.Color = LASER_RED
+	shell.Parent = workspace
+	local pl = Instance.new("PointLight")
+	pl.Color = LASER_RED
+	pl.Parent = orb
+	local ribbons, streaks, rings = {}, {}, {}
+	for i = 1, 16 do
+		local r = takeRibbon(5, i % 3 == 0 and WHITE or LASER_RED, 6)
+		table.insert(ribbons, r)
+		streaks[i] = { R = r, A = math.random() * math.pi * 2, D = 4 + math.random() * 4, Delay = math.random() * LIFE * 0.4 }
+	end
+	for i = 1, 3 do
+		local r = takeRibbon(24, i == 2 and WHITE or LASER_RED, 5)
+		table.insert(ribbons, r)
+		rings[i] = { R = r, Start = (i - 1) * LIFE / 3 }
+	end
+	if _G.WolverineShake and (cam.CFrame.Position - c0.Position).Magnitude < 40 then
+		_G.WolverineShake(0.25)
+	end
+	run(ribbons, function(t)
+		local k = t / LIFE
+		if k >= 1 or not torso.Parent then
+			orb:Destroy()
+			shell:Destroy()
+			return false
+		end
+		local c = chestCF(char) or c0
+		local jitter = 0.85 + math.random() * 0.3
+		orb.CFrame = c
+		orb.Size = Vector3.one * (0.3 + 2.4 * k * k) * jitter
+		orb.Color = LASER_RED:Lerp(WHITE, k)
+		shell.CFrame = c
+		shell.Size = orb.Size * 1.8
+		pl.Range = 6 + 30 * k
+		pl.Brightness = 1 + 8 * k
+		local cf = cam.CFrame
+		for _, st in streaks do
+			local q = math.clamp((t - st.Delay) / (LIFE - st.Delay), 0, 1)
+			local d = cf.RightVector * math.cos(st.A) + cf.UpVector * math.sin(st.A)
+			local r = st.D * (1 - q)
+			setNeedle(st.R, c.Position + d * r, c.Position + d * (r + 2 * (1 - q) + 0.2), 0.16 * (1 - q * 0.5), (q <= 0 or q >= 1) and 1 or 0)
+		end
+		for _, rg in rings do
+			local q = (t - rg.Start) / (LIFE / 2)
+			if q > 0 and q < 1 then
+				setRing(rg.R, c.Position, c.LookVector, 0.6 + 4 * outQuad(q), 0.12 * (1 - q), q)
+			else
+				hideRibbon(rg.R)
+			end
+		end
+		return true
+	end)
+end
+
+-- Persistent death ray per Sentinel, fed by the server ~15x a second and
+-- smoothed every frame so aiming feels fluid.
+local beams = {}
+
+local function buildBeam(char)
+	local COIL_N = 32
+	local b = {
+		Core = takeRibbon(2, WHITE, 10),
+		Inner = takeRibbon(2, Color3.fromRGB(255, 150, 120), 6),
+		Glow = takeRibbon(2, LASER_RED, 4),
+		Halo = takeRibbon(2, Color3.fromRGB(200, 10, 30), 2),
+		Coils = { takeRibbon(COIL_N, Color3.fromRGB(255, 90, 70), 6), takeRibbon(COIL_N, WHITE, 6) },
+		Muzzle = takeRibbon(24, WHITE, 6),
+		COIL_N = COIL_N,
+		Start = os.clock(),
+		LastUpdate = os.clock(),
+		Ending = nil,
+		Sparks = {},
+	}
+	b.Ribbons = { b.Core, b.Inner, b.Glow, b.Halo, b.Coils[1], b.Coils[2], b.Muzzle }
+	for i = 1, 14 do
+		local r = takeRibbon(5, i % 3 == 0 and WHITE or Color3.fromRGB(255, 170, 60), 5)
+		table.insert(b.Ribbons, r)
+		b.Sparks[i] = { R = r, T = -math.random() * 0.3 }
+	end
+	local holder = Instance.new("Part")
+	holder.Anchored, holder.CanCollide, holder.CanQuery, holder.CanTouch, holder.Transparency = true, false, false, false, 1
+	holder.Size = Vector3.one * 0.2
+	holder.Parent = workspace
+	local light = Instance.new("PointLight")
+	light.Color = LASER_RED
+	light.Brightness = 6
+	light.Range = 40
+	light.Parent = holder
+	local endLight = holder:Clone()
+	endLight.Parent = workspace
+	b.Holder, b.Light, b.EndHolder = holder, light, endLight
+	return b
+end
+
+function SlashFX.BeamUpdate(char, from, to, hit, burns)
+	if not (char and from and to) then
+		return
+	end
+	local b = beams[char]
+	if not b then
+		b = buildBeam(char)
+		b.From, b.To = from, to
+		b.TargetFrom, b.TargetTo = from, to
+		beams[char] = b
+		starFlare(from, LASER_RED, 1.4, 0.5)
+		if _G.WolverineShake then
+			_G.WolverineShake(0.35)
+		end
+		local cpts, cw = table.create(b.COIL_N), table.create(b.COIL_N)
+		run(b.Ribbons, function(t)
+			local now = os.clock()
+			-- safety: the server stopped talking
+			if not b.Ending and now - b.LastUpdate > 0.5 then
+				b.Ending = now
+			end
+			local fade = 1
+			if b.Ending then
+				fade = 1 - (now - b.Ending) / 0.25
+				if fade <= 0 then
+					b.Holder:Destroy()
+					b.EndHolder:Destroy()
+					if beams[char] == b then
+						beams[char] = nil
+					end
+					return false
+				end
+			end
+			local alpha = math.min(1, (now - (b.Frame or now)) * 18)
+			b.Frame = now
+			b.From = b.From:Lerp(b.TargetFrom, alpha)
+			b.To = b.To:Lerp(b.TargetTo, alpha)
+			local from2, to2 = b.From, b.To
+			local len = (to2 - from2).Magnitude
+			if len < 0.1 then
+				return true
+			end
+			local dir = (to2 - from2) / len
+			local on = outExpo(math.min(1, t / 0.06))
+			local surge = 1 + math.sin(t * 70) * 0.1 + (math.random() - 0.5) * 0.14
+			local w = on * fade * surge
+			local punch = 1 + math.max(0, 1 - t / 0.15) * 0.9
+			local pts = { from2, to2 }
+			setRibbon(b.Core, pts, { 0.7 * w * punch, 0.55 * w * punch }, 0)
+			setRibbon(b.Inner, pts, { 1.4 * w * punch, 1.1 * w * punch }, 0.1)
+			setRibbon(b.Glow, pts, { 2.8 * w * punch, 2.2 * w * punch }, 0.35)
+			setRibbon(b.Halo, pts, { 5.6 * w * punch, 4.6 * w * punch }, 0.78)
+			local side = dir:Cross(Vector3.new(0, 1, 0))
+			side = side.Magnitude > 0.01 and side.Unit or Vector3.new(1, 0, 0)
+			local up = side:Cross(dir).Unit
+			for ci, coil in b.Coils do
+				local phase = t * 26 + ci * math.pi
+				for i = 1, b.COIL_N do
+					local u = (i - 1) / (b.COIL_N - 1)
+					local a = phase + u * len * 0.8
+					local rad = 1.0 * w * (0.6 + 0.4 * math.sin(u * 14 + t * 30))
+					cpts[i] = from2 + dir * (u * len) + (side * math.cos(a) + up * math.sin(a)) * rad
+					cw[i] = 0.14 * w * (1 - u * 0.4)
+				end
+				setRibbon(coil, cpts, cw, 0.15)
+			end
+			setRing(b.Muzzle, from2 + dir * 0.6, dir, 1.3 + math.sin(t * 40) * 0.2, 0.18 * w, 0.2)
+			-- sparks spraying off the impact
+			for _, sp in b.Sparks do
+				sp.T += 1 / 60
+				local q = sp.T / 0.28
+				if q >= 1 and not b.Ending then
+					sp.T = 0
+					sp.D = (-dir + Vector3.new(math.random() - 0.5, math.random() * 0.9, math.random() - 0.5) * 1.8).Unit
+					sp.Speed = 14 + math.random() * 18
+					sp.Origin = to2
+					q = 0
+				end
+				if q > 0 and q < 1 and sp.D then
+					local p0 = sp.Origin + sp.D * sp.Speed * 0.28 * q + Vector3.new(0, -6 * q * q, 0)
+					setNeedle(sp.R, p0, p0 + sp.D * 1, 0.09, q)
+				else
+					hideRibbon(sp.R)
+				end
+			end
+			b.Holder.Position = (from2 + to2) / 2
+			b.Light.Range = math.min(60, len / 2 + 12)
+			b.Light.Brightness = 6 * fade
+			b.EndHolder.Position = to2 - dir * 1
+			return true
+		end)
+	end
+	b.TargetFrom, b.TargetTo = from, to
+	b.LastUpdate = os.clock()
+	b.Ending = nil
+	for _, p in burns or {} do
+		starFlare(p, Color3.fromRGB(255, 150, 60), 1.1, 0.45)
+	end
+	if hit and os.clock() - (b.LastHitFlash or 0) > 0.3 then
+		b.LastHitFlash = os.clock()
+		SlashFX.HitFlash(to, LASER_RED, 1.2)
+	end
+	if os.clock() - (b.LastScorch or 0) > 0.25 then
+		b.LastScorch = os.clock()
+		local dir = (to - from).Unit
+		local scorch = Instance.new("Part")
+		scorch.Shape = Enum.PartType.Cylinder
+		scorch.Anchored, scorch.CanCollide, scorch.CanQuery, scorch.CanTouch, scorch.CastShadow = true, false, false, false, false
+		scorch.Material = Enum.Material.Neon
+		scorch.Color = Color3.fromRGB(255, 120, 40)
+		scorch.Size = Vector3.new(0.06, 2.2, 2.2)
+		scorch.CFrame = CFrame.lookAt(to - dir * 0.05, to - dir) * CFrame.Angles(0, math.rad(90), 0)
+		scorch.Parent = workspace
+		TweenService:Create(scorch, TweenInfo.new(2.2), { Color = Color3.fromRGB(30, 20, 18), Transparency = 1, Size = Vector3.new(0.06, 1.4, 1.4) }):Play()
+		task.delay(2.3, function()
+			scorch:Destroy()
+		end)
+	end
+end
+
+function SlashFX.BeamEnd(char)
+	local b = beams[char]
+	if b and not b.Ending then
+		b.Ending = os.clock()
+		starFlare(b.To, Color3.fromRGB(255, 160, 80), 1.2, 0.4)
+	end
+end
+
+-- Sentinel M1: a hydraulic smash. Shock ring blasts off the fist, streaks
+-- spear forward and a heavy flare lands on contact.
+function SlashFX.Smash(char, position, dir, hit)
+	local cam = workspace.CurrentCamera
+	if not (position and dir and cam) then
+		return
+	end
+	dir = dir.Magnitude > 0.01 and dir.Unit or Vector3.new(0, 0, -1)
+	local gold = Color3.fromRGB(255, 210, 90)
+	local ribbons = {}
+	local rings = {}
+	for i = 1, 3 do
+		local r = takeRibbon(28, i == 1 and WHITE or gold, i == 1 and 6 or 3)
+		table.insert(ribbons, r)
+		rings[i] = { R = r, Delay = (i - 1) * 0.04, Size = (hit and 5 or 3.5) + i }
+	end
+	local streaks = {}
+	for i = 1, 10 do
+		local r = takeRibbon(5, i % 2 == 0 and WHITE or gold, 4)
+		table.insert(ribbons, r)
+		local side = dir:Cross(Vector3.new(0, 1, 0))
+		side = side.Magnitude > 0.01 and side.Unit or Vector3.new(1, 0, 0)
+		local up = side:Cross(dir).Unit
+		local a = math.random() * math.pi * 2
+		streaks[i] = { R = r, Off = (side * math.cos(a) + up * math.sin(a)) * (0.6 + math.random() * 1.6), L = 2 + math.random() * 3 }
+	end
+	local LIFE = 0.35
+	run(ribbons, function(t)
 		local k = t / LIFE
 		if k >= 1 then
 			return false
 		end
-		local on = outExpo(math.min(1, t / 0.04))
-		local fade = k < 0.35 and 1 or (1 - (k - 0.35) / 0.65)
-		local shimmer = 1 + math.sin(t * 90) * 0.12
-		local w = on * fade * shimmer
-		setRibbon(core, pts, { 0.34 * w, 0.28 * w }, 0)
-		setRibbon(glow, pts, { 1.1 * w, 0.9 * w }, 0.25 + 0.5 * (1 - fade))
-		setRibbon(halo, pts, { 2.6 * w, 2.2 * w }, 0.7 + 0.3 * (1 - fade))
+		for _, rg in rings do
+			local q = math.clamp((t - rg.Delay) / (LIFE - rg.Delay), 0, 1)
+			if q > 0 and q < 1 then
+				setRing(rg.R, position + dir * (0.5 + q * 1.5), dir, 0.5 + rg.Size * outQuad(q), 0.3 * (1 - q), q)
+			else
+				hideRibbon(rg.R)
+			end
+		end
+		for _, st in streaks do
+			local p0 = position + st.Off + dir * (1 + 6 * outQuad(k))
+			setNeedle(st.R, p0, p0 + dir * st.L * (1 - k), 0.12 * (1 - k), k)
+		end
 		return true
 	end)
-	-- muzzle, burn-through points, impact
-	starFlare(from, LASER_RED, 0.7, 0.25)
-	for _, b in burns or {} do
-		starFlare(b, Color3.fromRGB(255, 150, 60), 0.8, 0.3)
+	if hit then
+		SlashFX.HitFlash(position, gold, 1.5)
 	end
-	if hitTarget then
-		SlashFX.HitFlash(to, LASER_RED, 1.3)
-	else
-		starFlare(to, Color3.fromRGB(255, 150, 60), 1, 0.35)
-	end
-	local light = Instance.new("Part")
-	light.Anchored, light.CanCollide, light.CanQuery, light.CanTouch, light.Transparency = true, false, false, false, 1
-	light.Size = Vector3.one * 0.2
-	light.Position = (from + to) / 2
-	light.Parent = workspace
-	local pl = Instance.new("PointLight")
-	pl.Color = LASER_RED
-	pl.Range = math.min(60, (to - from).Magnitude / 2 + 10)
-	pl.Brightness = 4
-	pl.Parent = light
-	TweenService:Create(pl, TweenInfo.new(LIFE), { Brightness = 0 }):Play()
-	task.delay(LIFE + 0.05, function()
-		light:Destroy()
-	end)
 end
 
 return SlashFX

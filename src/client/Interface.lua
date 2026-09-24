@@ -361,49 +361,49 @@ new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.Layou
 
 local header = new("Frame", { Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, LayoutOrder = 0 }, panel)
 local headerText = new("TextLabel", {
-	Size = UDim2.new(1, -50, 1, 0),
+	Position = UDim2.fromOffset(2, 4),
+	Size = UDim2.new(1, -50, 0, 20),
 	BackgroundTransparency = 1,
-	Font = Enum.Font.LuckiestGuy,
-	TextScaled = true,
+	Font = Enum.Font.GothamBlack,
+	TextSize = 18,
 	TextXAlignment = Enum.TextXAlignment.Left,
 	TextColor3 = K.Yellow,
 	Text = "",
 }, header)
-new("UIStroke", { Thickness = 2 }, headerText)
+new("UIStroke", { Thickness = 1, Transparency = 0.5 }, headerText)
 local headerLine = new("Frame", { Position = UDim2.new(0, 0, 1, -2), Size = UDim2.new(1, 0, 0, 2), BorderSizePixel = 0, BackgroundColor3 = K.Yellow }, header)
 new("UIGradient", { Transparency = NumberSequence.new(0, 1) }, headerLine)
 
 local slots = {}
 
+-- Sleek cards in the same language as the stamina bar: dark translucent
+-- body, thin accent edge, round icon with a radial cooldown sweep, key pill.
 local function makeCard(a, order, isHold)
 	local accent = a.Color or K.Yellow
+	local h = isHold and 40 or 54
 	local card = new("Frame", {
 		Name = a.Name,
-		Size = UDim2.new(1, 0, 0, isHold and 44 or 62),
-		BackgroundColor3 = Color3.new(1, 1, 1),
+		Size = UDim2.new(1, 0, 0, h),
+		BackgroundColor3 = K.Ink,
+		BackgroundTransparency = 0.22,
 		LayoutOrder = order,
-		ClipsDescendants = true,
 	}, panel)
-	corner(card, 12)
-	gradient(card, Color3.fromRGB(36, 34, 42), Color3.fromRGB(16, 15, 20), 0)
-	local cardStroke = stroke(card, accent, 1.5, 0.55)
+	corner(card, 10)
+	local cardStroke = stroke(card, accent, 1, 0.7)
 	local scale = new("UIScale", {}, card)
+	local edge = new("Frame", { Position = UDim2.fromOffset(0, 8), Size = UDim2.new(0, 3, 1, -16), BackgroundColor3 = accent, BorderSizePixel = 0 }, card)
+	corner(edge, 2)
 
-	-- accent edge
-	local edge = new("Frame", { Size = UDim2.new(0, 5, 1, 0), BackgroundColor3 = accent, BorderSizePixel = 0 }, card)
-	gradient(edge, accent, darker(accent, 0.5))
-
-	-- icon tile
-	local tileSize = isHold and 32 or 46
-	local tile = new("Frame", {
-		Position = UDim2.new(0, 14, 0.5, -tileSize / 2),
+	-- round icon (CanvasGroup so the cooldown sweep is clipped to the circle)
+	local tileSize = isHold and 28 or 38
+	local tile = new("CanvasGroup", {
+		Position = UDim2.new(0, 12, 0.5, -tileSize / 2),
 		Size = UDim2.fromOffset(tileSize, tileSize),
 		BackgroundColor3 = Color3.new(1, 1, 1),
-		ClipsDescendants = true,
 	}, card)
-	corner(tile, 10)
-	gradient(tile, darker(accent, 0.8), darker(accent, 0.3))
-	local tileStroke = stroke(tile, accent, 2)
+	corner(tile, tileSize)
+	gradient(tile, darker(accent, 0.7), darker(accent, 0.28))
+	local tileStroke = stroke(tile, accent, 1.5, 0.1)
 	local icon = new("TextLabel", {
 		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
@@ -413,85 +413,78 @@ local function makeCard(a, order, isHold)
 		TextColor3 = K.White,
 		ZIndex = 2,
 	}, tile)
-	new("UIPadding", { PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6), PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }, icon)
+	new("UIPadding", { PaddingTop = UDim.new(0, 7), PaddingBottom = UDim.new(0, 7), PaddingLeft = UDim.new(0, 7), PaddingRight = UDim.new(0, 7) }, icon)
 	local art = ICON_ART[a.Name]
 	if art then
 		icon.Text = ""
 		art(tile)
 	end
-	-- sweep overlay that drains top->bottom as the cooldown finishes
 	local sweep = new("Frame", {
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.fromScale(0, 1),
 		Size = UDim2.fromScale(1, 0),
 		BackgroundColor3 = Color3.new(0, 0, 0),
-		BackgroundTransparency = 0.25,
+		BackgroundTransparency = 0.3,
 		BorderSizePixel = 0,
-		ZIndex = 3,
+		ZIndex = 7,
 	}, tile)
 	local countdown = new("TextLabel", {
 		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
-		Font = TITLE,
-		TextScaled = true,
+		Font = Enum.Font.GothamBold,
+		TextSize = isHold and 11 or 13,
 		Text = "",
 		TextColor3 = K.White,
-		ZIndex = 4,
+		ZIndex = 8,
 	}, tile)
-	new("UIStroke", { Thickness = 2 }, countdown)
-	new("UIPadding", { PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10) }, countdown)
 
 	-- text
-	local x = 14 + tileSize + 10
+	local x = 12 + tileSize + 10
 	local name = new("TextLabel", {
 		Position = UDim2.fromOffset(x, isHold and 6 or 9),
-		Size = UDim2.new(1, -x - 60, 0, isHold and 18 or 20),
+		Size = UDim2.new(1, -x - 56, 0, 16),
 		BackgroundTransparency = 1,
-		Font = TITLE,
-		TextScaled = true,
+		Font = Enum.Font.GothamBold,
+		TextSize = isHold and 13 or 15,
 		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
 		TextColor3 = K.White,
 		Text = string.upper(a.Label),
 	}, card)
 	new("TextLabel", {
-		Position = UDim2.fromOffset(x, isHold and 24 or 31),
-		Size = UDim2.new(1, -x - 60, 0, isHold and 14 or 24),
+		Position = UDim2.fromOffset(x, isHold and 22 or 27),
+		Size = UDim2.new(1, -x - 56, 0, isHold and 12 or 22),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.Gotham,
-		TextSize = isHold and 11 or 12,
+		TextSize = 11,
 		TextWrapped = true,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
-		TextColor3 = Color3.fromRGB(175, 170, 180),
+		TextColor3 = Color3.fromRGB(160, 164, 172),
 		Text = a.Desc or "",
 	}, card)
 
-	-- keycap
+	-- key pill
+	local capW = a.KeyText and #a.KeyText > 2 and 48 or 30
 	local cap = new("Frame", {
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -10, 0.5, 0),
-		Size = UDim2.fromOffset(a.KeyText and #a.KeyText > 2 and 52 or 38, 36),
-		BackgroundColor3 = Color3.fromRGB(10, 10, 12),
+		Size = UDim2.fromOffset(capW, 22),
+		BackgroundColor3 = Color3.fromRGB(34, 36, 42),
 	}, card)
-	corner(cap, 8)
-	local capTop = new("Frame", {
-		Size = UDim2.new(1, 0, 1, -4),
-		BackgroundColor3 = Color3.new(1, 1, 1),
-	}, cap)
-	corner(capTop, 8)
-	gradient(capTop, Color3.fromRGB(245, 245, 250), Color3.fromRGB(185, 185, 195))
+	corner(cap, 6)
+	stroke(cap, Color3.new(1, 1, 1), 1, 0.75)
 	new("TextLabel", {
 		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
-		Font = TITLE,
-		TextScaled = true,
+		Font = Enum.Font.GothamBold,
+		TextSize = 11,
 		Text = a.KeyText or "",
-		TextColor3 = Color3.fromRGB(25, 25, 30),
-	}, capTop)
-	new("UIPadding", { PaddingTop = UDim.new(0, 7), PaddingBottom = UDim.new(0, 7), PaddingLeft = UDim.new(0, 4), PaddingRight = UDim.new(0, 4) }, capTop)
+		TextColor3 = K.White,
+	}, cap)
 
-	-- ready flash
-	local flashFrame = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = accent, BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 5 }, card)
+	local flashFrame = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = accent, BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 9 }, card)
+	corner(flashFrame, 10)
 
 	slots[a.Name] = {
 		Card = card, Scale = scale, Stroke = cardStroke, TileStroke = tileStroke, Sweep = sweep, Countdown = countdown,
@@ -678,7 +671,22 @@ RunService.RenderStepped:Connect(function(dt)
 
 	-- Stamina
 	local target = math.clamp(player:GetAttribute("Stamina") or 1, 0, 1)
-	shownStamina += (target - shownStamina) * math.min(1, dt * 12)
+	-- never let the stamina bar run under the ability panel on narrow screens
+	if panel.AbsoluteSize.X > 0 then
+		local right = stamina.AbsolutePosition.X + stamina.AbsoluteSize.X
+		local want = gui.AbsoluteSize.X / 2 - stamina.AbsoluteSize.X / 2
+		if gui.AbsoluteSize.X / 2 + stamina.AbsoluteSize.X / 2 + 12 > panel.AbsolutePosition.X then
+			stamina.AnchorPoint = Vector2.new(0, 1)
+			stamina.Position = UDim2.new(0, 16, 1, -24)
+		elseif stamina.AnchorPoint.X ~= 0.5 then
+			stamina.AnchorPoint = Vector2.new(0.5, 1)
+			stamina.Position = UDim2.new(0.5, 0, 1, -24)
+		end
+		_ = right
+		_ = want
+	end
+	-- glide instead of stepping between the server's updates
+	shownStamina += (target - shownStamina) * math.min(1, dt * 4.5)
 	fill.Size = UDim2.fromScale(shownStamina, 1)
 	local wolverine = role == "Wolverine"
 	local draining = target < shownStamina - 0.001 or target < 0.999
@@ -716,8 +724,8 @@ RunService.RenderStepped:Connect(function(dt)
 	for _, s in slots do
 		if s.Hold then
 			local on = s.Attr and player:GetAttribute(s.Attr)
-			s.Stroke.Transparency = on and 0 or 0.55
-			s.Stroke.Thickness = on and 2.5 or 1.5
+			s.Stroke.Transparency = on and 0.1 or 0.7
+			s.Stroke.Thickness = on and 1.5 or 1
 			s.Name.TextColor3 = on and s.Accent or K.White
 		else
 			local remaining = s.ReadyAt - t
@@ -725,15 +733,15 @@ RunService.RenderStepped:Connect(function(dt)
 				s.Sweep.Size = UDim2.fromScale(1, math.clamp(remaining / s.Duration, 0, 1))
 				s.Countdown.Text = remaining >= 10 and tostring(math.ceil(remaining)) or ("%.1f"):format(remaining)
 				s.Icon.TextTransparency = 0.5
-				s.Stroke.Transparency = 0.8
+				s.Stroke.Transparency = 0.88
 			else
 				s.Sweep.Size = UDim2.fromScale(1, 0)
 				s.Countdown.Text = ""
 				s.Icon.TextTransparency = 0
 				-- ready glow pulse
 				local pulse = (math.sin(t * 3) + 1) / 2
-				s.Stroke.Transparency = 0.2 + pulse * 0.4
-				s.TileStroke.Thickness = 2 + pulse
+				s.Stroke.Transparency = 0.45 + pulse * 0.3
+				s.TileStroke.Thickness = 1.5 + pulse * 0.8
 				if s.WasCooling then
 					s.WasCooling = false
 					s.Scale.Scale = 1.1

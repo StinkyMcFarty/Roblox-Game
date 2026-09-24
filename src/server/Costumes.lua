@@ -546,6 +546,10 @@ function Costumes.DressSentinel(char)
 	local MAG, HELM, FACE, MECH = rgb(182, 88, 184), rgb(124, 78, 164), rgb(212, 176, 112), rgb(24, 24, 30)
 	local F = "SentinelGear"
 	local function g(anchor, name, size, color, mat, offset, props)
+		-- left-side armour is a hair larger so mirrored pieces never share a face
+		if anchor.Name:sub(1, 4) == "Left" then
+			size += Vector3.new(0.04, 0.04, 0.04)
+		end
 		return Costumes.Gear(char, anchor, name, size, color, mat or M.SmoothPlastic, offset, props, F)
 	end
 	local function round(anchor, name, size, color, offset)
@@ -567,6 +571,10 @@ function Costumes.DressSentinel(char)
 	local old = char:FindFirstChild(F)
 	if old then
 		old:Destroy()
+	end
+	local coat = char:FindFirstChild("LabCoat")
+	if coat then
+		coat:Destroy()
 	end
 
 	local head = char:FindFirstChild("Head")
@@ -601,7 +609,7 @@ function Costumes.DressSentinel(char)
 	if torso then
 		local s = torso.Size
 		-- broad armoured chest over a dark mechanical core
-		g(torso, "ChestPlate", Vector3.new(s.X * 1.34, s.Y * 0.56, s.Z * 1.34), ARMOR, M.SmoothPlastic, CFrame.new(0, s.Y * 0.22, 0))
+		g(torso, "ChestPlate", Vector3.new(s.X * 1.34, s.Y * 0.56, s.Z * 1.34), ARMOR, M.SmoothPlastic, CFrame.new(0, s.Y * 0.25, 0))
 		for sx = -1, 1, 2 do
 			g(torso, "Pec", Vector3.new(s.X * 0.62, s.Y * 0.4, 0.3), ARMOR, M.SmoothPlastic, CFrame.new(sx * s.X * 0.32, s.Y * 0.2, -s.Z * 0.7) * CFrame.Angles(rad(-6), rad(sx * 14), 0))
 			g(torso, "PecEdge", Vector3.new(s.X * 0.6, 0.08, 0.34), ARMOR2, M.SmoothPlastic, CFrame.new(sx * s.X * 0.32, s.Y * 0.0, -s.Z * 0.72) * CFrame.Angles(0, rad(sx * 14), 0))
@@ -623,7 +631,7 @@ function Costumes.DressSentinel(char)
 				g(torso, "AbPlate", Vector3.new(s.X * 0.24, s.Y * 0.12, 0.14), ARMOR2, M.SmoothPlastic, CFrame.new(sx * s.X * 0.14, -s.Y * (0.1 + i * 0.15), -s.Z * 0.56) * CFrame.Angles(0, rad(sx * 6), 0))
 			end
 		end
-		g(torso, "Collar", Vector3.new(s.X * 0.8, s.Y * 0.16, s.Z * 1.2), ARMOR2, M.SmoothPlastic, CFrame.new(0, s.Y * 0.54, 0))
+		g(torso, "Collar", Vector3.new(s.X * 0.8, s.Y * 0.16, s.Z * 1.26), ARMOR2, M.SmoothPlastic, CFrame.new(0, s.Y * 0.57, 0))
 		g(torso, "Neck", Vector3.new(s.X * 0.34, s.Y * 0.22, s.Z * 0.5), MECH, M.Metal, CFrame.new(0, s.Y * 0.62, 0))
 		g(torso, "BackPack", Vector3.new(s.X * 0.9, s.Y * 0.6, s.Z * 0.5), ARMOR2, M.SmoothPlastic, CFrame.new(0, s.Y * 0.16, s.Z * 0.72))
 	end
@@ -634,7 +642,7 @@ function Costumes.DressSentinel(char)
 		g(lower, "Belt", Vector3.new(s.X * 1.06, s.Y * 0.5, s.Z * 1.1), MECH, M.Metal, CFrame.new(0, s.Y * 0.3, 0))
 		g(lower, "Codpiece", Vector3.new(s.X * 0.42, s.Y * 1.2, 0.2), ARMOR2, M.SmoothPlastic, CFrame.new(0, -s.Y * 0.2, -s.Z * 0.58))
 		for sx = -1, 1, 2 do
-			g(lower, "HipPlate", Vector3.new(s.X * 0.42, s.Y * 1.3, s.Z * 1.1), MAG, M.SmoothPlastic, CFrame.new(sx * s.X * 0.4, -s.Y * 0.25, 0) * CFrame.Angles(0, 0, rad(sx * 6)))
+			g(lower, "HipPlate", Vector3.new(s.X * 0.42, s.Y * 1.3, s.Z * 1.18), MAG, M.SmoothPlastic, CFrame.new(sx * s.X * 0.4, -s.Y * 0.25, 0) * CFrame.Angles(0, 0, rad(sx * 6)))
 		end
 	end
 
@@ -645,7 +653,7 @@ function Costumes.DressSentinel(char)
 			local side = n:sub(1, 5) == "Right" and 1 or -1
 			round(p, "Pauldron", Vector3.new(s.X * 2.4, s.Y * 0.95, s.Z * 2.2), ARMOR, CFrame.new(side * s.X * 0.2, s.Y * 0.3, 0))
 			round(p, "PauldronRim", Vector3.new(s.X * 2.2, s.Y * 0.3, s.Z * 2.05), ARMOR2, CFrame.new(side * s.X * 0.2, s.Y * 0.02, 0))
-			g(p, "Bicep", Vector3.new(s.X * 1.35, s.Y * 0.62, s.Z * 1.35), MAG, M.SmoothPlastic, CFrame.new(0, -s.Y * 0.18, 0))
+			g(p, "Bicep", Vector3.new(s.X * 1.35, s.Y * 0.62, s.Z * 1.35), MAG, M.SmoothPlastic, CFrame.new(0, -s.Y * 0.14, 0))
 		end
 	end
 	for _, n in { "RightLowerArm", "LeftLowerArm" } do
@@ -686,7 +694,7 @@ function Costumes.DressSentinel(char)
 		if p then
 			local s = p.Size
 			g(p, "Boot", Vector3.new(s.X * 2, s.Y * 1.8, s.Z * 1.6), ARMOR, M.SmoothPlastic, CFrame.new(0, s.Y * 0.25, -s.Z * 0.12))
-			g(p, "Toe", Vector3.new(s.X * 1.9, s.Y * 1, s.Z * 0.5), ARMOR2, M.SmoothPlastic, CFrame.new(0, -s.Y * 0.1, -s.Z * 0.9))
+			g(p, "Toe", Vector3.new(s.X * 1.9, s.Y * 1, s.Z * 0.5), ARMOR2, M.SmoothPlastic, CFrame.new(0, -s.Y * 0.03, -s.Z * 0.9))
 		end
 	end
 end
@@ -735,6 +743,15 @@ function Costumes.SentinelStatue(parent, base, scale)
 		p.Parent = model
 	end
 	Costumes.DressSentinel(model)
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "PodPrompt"
+	prompt.ActionText = "Enter Sentinel Suit"
+	prompt.ObjectText = "Sentinel"
+	prompt.KeyboardKeyCode = Enum.KeyCode.E
+	prompt.MaxActivationDistance = 14
+	prompt.RequiresLineOfSight = false
+	prompt.Enabled = false
+	prompt.Parent = model:FindFirstChild("UpperTorso")
 	for _, d in model:GetDescendants() do
 		if d:IsA("BasePart") then
 			d.Anchored = true
