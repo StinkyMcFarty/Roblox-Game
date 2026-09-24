@@ -179,9 +179,9 @@ Config.Sounds = {
 -- Anything left at 0 falls back to the built-in sound above.
 Config.UploadedSounds = {
 	Snikt = 0, Slash = 117112770329180, Whoosh = 0, Stab = 0, Impact = 0, Leap = 0, Land = 0,
-	Roar = 84386454545822, Snarl = 0, Tear = 0, Gore = 0, Break = 0, Heartbeat = 0, Fart = 0,
+	Roar = 84386454545822, Snarl = 0, Tear = 0, Gore = 0, Break = 0, Heartbeat = 94699316471373, Fart = 130496994474771,
 	Sniff = 0, Laser = 0, Punch = 0, Terminal = 0, UIHover = 0, UIClick = 0, Paw = 90700737432630,
-	PounceHit = 140573962847729, Impale = 100362323212257, DeathRay = 0, Chase = 0,
+	PounceHit = 140573962847729, Impale = 100362323212257, DeathRay = 89285816836463, Chase = 71009071343057,
 }
 Config.Sounds.Snarl = Config.Sounds.Snarl or ""
 for name, id in Config.UploadedSounds do
@@ -11904,11 +11904,18 @@ RunService.Heartbeat:Connect(function(dt)
 		nextBeat = now + 60 / bpm
 		local vol = (uploadedBeat and 0.6 or 1.1) * (0.35 + 0.65 * level)
 		lub.Volume = vol
-		lub:Play()
-		task.delay(math.clamp(0.28 - level * 0.12, 0.14, 0.28), function()
-			dub.Volume = vol * 0.75
-			dub:Play()
-		end)
+		if uploadedBeat then
+			-- the uploaded file is a full lub-dub; tighten it as he closes in
+			lub.PlaybackSpeed = 1 + level * 0.45
+			lub.TimePosition = 0
+			lub:Play()
+		else
+			lub:Play()
+			task.delay(math.clamp(0.28 - level * 0.12, 0.14, 0.28), function()
+				dub.Volume = vol * 0.75
+				dub:Play()
+			end)
+		end
 	elseif level <= 0.02 then
 		nextBeat = now
 	end

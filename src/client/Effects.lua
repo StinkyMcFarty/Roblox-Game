@@ -339,11 +339,18 @@ RunService.Heartbeat:Connect(function(dt)
 		nextBeat = now + 60 / bpm
 		local vol = (uploadedBeat and 0.6 or 1.1) * (0.35 + 0.65 * level)
 		lub.Volume = vol
-		lub:Play()
-		task.delay(math.clamp(0.28 - level * 0.12, 0.14, 0.28), function()
-			dub.Volume = vol * 0.75
-			dub:Play()
-		end)
+		if uploadedBeat then
+			-- the uploaded file is a full lub-dub; tighten it as he closes in
+			lub.PlaybackSpeed = 1 + level * 0.45
+			lub.TimePosition = 0
+			lub:Play()
+		else
+			lub:Play()
+			task.delay(math.clamp(0.28 - level * 0.12, 0.14, 0.28), function()
+				dub.Volume = vol * 0.75
+				dub:Play()
+			end)
+		end
 	elseif level <= 0.02 then
 		nextBeat = now
 	end
