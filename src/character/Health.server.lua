@@ -1,0 +1,3 @@
+-- Replaces Roblox's default "Health" script so characters do NOT regenerate.
+-- Survivors stay wounded between Wolverine's hits; Wolverine heals through
+-- his own healing factor in ServerScriptService.Server.Wolverine.

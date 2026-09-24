@@ -1,0 +1,401 @@
+-- Hits, wounds, wall shredding and the rip-in-half finisher.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local Debris = game:GetService("Debris")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Util = require(ReplicatedStorage.Shared.Util)
+local Round = require(script.Parent.Round)
+local Status = require(script.Parent.Status)
+local Posture = require(script.Parent.Posture)
+local Hiding = require(script.Parent.Hiding)
+
+local Fx = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Fx")
+
+local Combat = {}
+
+local function debrisFolder()
+	local map = Round.Map
+	return (map and map:FindFirstChild("Debris")) or workspace
+end
+
+---------------------------------------------------------------------------
+-- Environment destruction
+---------------------------------------------------------------------------
+
+-- Trees fall over when their trunk is shredded.
+local function topple(part, origin)
+	local model = part.Parent
+	if not (model and model:IsA("Model")) then
+		return
+	end
+	local push = Util.Flat(part.Position - origin)
+	for _, p in model:GetDescendants() do
+		if p:IsA("BasePart") and p ~= part then
+			p.Anchored = false
+			p.CanCollide = false
+			p.AssemblyLinearVelocity = push * 12 + Vector3.new(0, 4, 0)
+			p.AssemblyAngularVelocity = push:Cross(Vector3.yAxis) * -1.5
+		end
+	end
+	model.Parent = debrisFolder()
+	Debris:AddItem(model, 7)
+end
+
+function Combat.BreakPart(part, origin, force)
+	if not part:GetAttribute("Breakable") or part:GetAttribute("Broken") then
+		return false
+	end
+	part:SetAttribute("Broken", true)
+	if part:GetAttribute("Topple") then
+		topple(part, origin)
+	end
+
+	local size, cf = part.Size, part.CFrame
+	local nx = math.clamp(math.ceil(size.X / 3.5), 1, 3)
+	local ny = math.clamp(math.ceil(size.Y / 4), 1, 3)
+	local nz = math.clamp(math.ceil(size.Z / 3.5), 1, 3)
+	local chunk = Vector3.new(size.X / nx, size.Y / ny, size.Z / nz)
+	local folder = debrisFolder()
+
+	for ix = 1, nx do
+		for iy = 1, ny do
+			for iz = 1, nz do
+				local offset = Vector3.new(
+					(ix - 0.5) * chunk.X - size.X / 2,
+					(iy - 0.5) * chunk.Y - size.Y / 2,
+					(iz - 0.5) * chunk.Z - size.Z / 2
+				)
+				local c = Instance.new("Part")
+				c.Size = chunk * 0.9
+				c.CFrame = cf * CFrame.new(offset) * CFrame.Angles(math.random() * 0.3, math.random() * 0.3, math.random() * 0.3)
+				c.Color = part.Color
+				c.Material = part.Material
+				c.Transparency = part.Transparency
+				c.Reflectance = part.Reflectance
+				c.TopSurface = Enum.SurfaceType.Smooth
+				c.BottomSurface = Enum.SurfaceType.Smooth
+				c.CanTouch = false
+				c.CanQuery = false
+				c.Parent = folder
+				local away = Util.Flat(c.Position - origin)
+				c.AssemblyLinearVelocity = away * force * (0.5 + math.random() * 0.7)
+					+ Vector3.new(0, 8 + math.random() * 22, 0)
+				c.AssemblyAngularVelocity = Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5) * 20
+				Debris:AddItem(c, 5)
+				task.delay(2, function()
+					if c.Parent then
+						c.CanCollide = false
+					end
+				end)
+			end
+		end
+	end
+	part:Destroy()
+	return true
+end
+
+-- Breaks every breakable map part inside a box. Returns how many broke.
+function Combat.BreakInBox(cframe, size, origin, force)
+	local map = Round.Map
+	if not map then
+		return 0
+	end
+	local params = OverlapParams.new()
+	params.FilterType = Enum.RaycastFilterType.Include
+	params.FilterDescendantsInstances = { map }
+	local n = 0
+	for _, p in workspace:GetPartBoundsInBox(cframe, size, params) do
+		if Combat.BreakPart(p, origin, force or 40) then
+			n += 1
+		end
+	end
+	if n > 0 then
+		Util.SoundAt(Config.Sounds.Break, cframe.Position, { Volume = 1.6, Pitch = 0.55 + math.random() * 0.2, Range = 260 })
+		Util.SoundAt(Config.Sounds.Slash, cframe.Position, { Volume = 1, Pitch = 0.7, Range = 180 })
+	end
+	return n
+end
+
+---------------------------------------------------------------------------
+-- Finding survivors
+---------------------------------------------------------------------------
+
+local function sorted(list, from)
+	table.sort(list, function(a, b)
+		return (a.Root.Position - from).Magnitude < (b.Root.Position - from).Magnitude
+	end)
+	return list
+end
+
+function Combat.FindTargets(cframe, size)
+	local found = {}
+	for player in Round.Survivors do
+		local char = player.Character
+		local root = Util.Root(char)
+		if root and Util.IsAlive(char) and not Status.Has(player, "Busy") then
+			local rel = cframe:PointToObjectSpace(root.Position)
+			if math.abs(rel.X) <= size.X / 2 and math.abs(rel.Y) <= size.Y / 2 and math.abs(rel.Z) <= size.Z / 2 then
+				table.insert(found, { Player = player, Char = char, Root = root })
+			end
+		end
+	end
+	return sorted(found, cframe.Position)
+end
+
+function Combat.FindNear(position, radius)
+	local found = {}
+	for player in Round.Survivors do
+		local char = player.Character
+		local root = Util.Root(char)
+		if root and Util.IsAlive(char) and not Status.Has(player, "Busy") then
+			if (root.Position - position).Magnitude <= radius then
+				table.insert(found, { Player = player, Char = char, Root = root })
+			end
+		end
+	end
+	return sorted(found, position)
+end
+
+---------------------------------------------------------------------------
+-- Hits
+---------------------------------------------------------------------------
+
+function Combat.Blood(part, amount)
+	if part then
+		Util.Burst(part, Util.BloodProps, amount or 30, 2)
+	end
+end
+
+-- Registers one hit. Returns "kill", "hit" or nil (not hittable right now).
+-- Drags a survivor out of their hiding spot (no-op if not hiding).
+function Combat.PullOut(victim)
+	if Hiding.IsHidden(victim) then
+		Hiding.Leave(victim, true)
+		return true
+	end
+	return false
+end
+
+function Combat.Hit(victim, ignoreImmunity)
+	if not Round.Survivors[victim] then
+		return nil
+	end
+	if Combat.PullOut(victim) then
+		ignoreImmunity = true
+	end
+	if not ignoreImmunity and Status.Has(victim, "Immune") then
+		return nil
+	end
+	if not Util.IsAlive(victim.Character) then
+		return nil
+	end
+	if victim:GetAttribute("Role") == "Sentinel" then
+		local armor = (victim:GetAttribute("Armor") or 1) - 1
+		victim:SetAttribute("Armor", armor)
+		return armor <= 0 and "kill" or "hit"
+	end
+	local hits = (victim:GetAttribute("Hits") or 0) + 1
+	victim:SetAttribute("Hits", hits)
+	return hits >= Config.HitsToKill and "kill" or "hit"
+end
+
+-- Non-lethal hit: blood, knockback, i-frames and an adrenaline burst.
+function Combat.Wound(killer, victim)
+	local char = victim.Character
+	local hum, root = Util.Humanoid(char), Util.Root(char)
+	if not (hum and root) then
+		return
+	end
+	if victim:GetAttribute("Role") == "Sentinel" then
+		hum.Health = hum.MaxHealth * math.max(0.05, (victim:GetAttribute("Armor") or 1) / Config.Sentinel.Armor)
+		Util.Burst(root, Util.SparkProps, 30, 2)
+	else
+		local hits = victim:GetAttribute("Hits") or 0
+		hum.Health = hum.MaxHealth * math.max(0.05, 1 - hits / Config.HitsToKill)
+		Combat.Blood(Util.Torso(char), 35)
+	end
+	Util.Sound(Config.Sounds.Slash, root, { Pitch = 0.8, Volume = 1.2 })
+	Util.Sound(Config.Sounds.Gore, root, { Pitch = 0.7, Volume = 0.8 })
+	Status.Apply(victim, "Immune", Config.HitImmunity)
+	Status.Apply(victim, "Boost", Config.AdrenalineTime)
+
+	local kRoot = Util.Root(killer.Character)
+	local dir = kRoot and Util.Flat(root.Position - kRoot.Position) or Util.Flat(-root.CFrame.LookVector)
+	Fx:FireClient(victim, "Knock", { Velocity = dir * 45 + Vector3.new(0, 22, 0) })
+	Fx:FireClient(victim, "Hurt", {})
+	Fx:FireClient(killer, "HitConfirm", {})
+end
+
+---------------------------------------------------------------------------
+-- The finisher: rip in half
+---------------------------------------------------------------------------
+
+local function bloodPool(position)
+	local result = workspace:Raycast(position + Vector3.new(0, 2, 0), Vector3.new(0, -20, 0), (function()
+		local p = RaycastParams.new()
+		p.FilterType = Enum.RaycastFilterType.Include
+		p.FilterDescendantsInstances = { Round.Map }
+		return p
+	end)())
+	if not result then
+		return
+	end
+	local pool = Instance.new("Part")
+	pool.Shape = Enum.PartType.Cylinder
+	pool.Anchored = true
+	pool.CanCollide = false
+	pool.CanQuery = false
+	pool.CanTouch = false
+	pool.Color = Color3.fromRGB(75, 0, 0)
+	pool.Material = Enum.Material.SmoothPlastic
+	pool.Reflectance = 0.15
+	pool.Size = Vector3.new(0.08, 1, 1)
+	pool.CFrame = CFrame.new(result.Position + Vector3.new(0, 0.05, 0)) * CFrame.Angles(0, 0, math.rad(90))
+	pool.Parent = debrisFolder()
+	TweenService:Create(pool, TweenInfo.new(2.5, Enum.EasingStyle.Quad), { Size = Vector3.new(0.08, 8, 8) }):Play()
+end
+
+local function tearEmitter(part, yOffset)
+	local att = Instance.new("Attachment")
+	att.Position = Vector3.new(0, yOffset, 0)
+	att.Parent = part
+	local pe = Instance.new("ParticleEmitter")
+	for k, v in Util.BloodProps do
+		pe[k] = v
+	end
+	pe.Rate = 45
+	pe.Speed = NumberRange.new(4, 12)
+	pe.Parent = att
+	task.delay(3, function()
+		pe.Enabled = false
+	end)
+end
+
+function Combat.RipInHalf(char, base)
+	local hum = Util.Humanoid(char)
+	local root = Util.Root(char)
+	if not (hum and root) then
+		return
+	end
+	hum.BreakJointsOnDeath = false
+	local upper, lower
+	local upperTorso = char:FindFirstChild("UpperTorso")
+	if upperTorso then
+		local waist = upperTorso:FindFirstChild("Waist")
+		if waist then
+			waist:Destroy()
+		end
+		upper, lower = upperTorso, char:FindFirstChild("LowerTorso")
+	else -- R6: the legs come off
+		local torso = char:FindFirstChild("Torso")
+		if torso then
+			for _, n in { "Right Hip", "Left Hip" } do
+				local j = torso:FindFirstChild(n)
+				if j then
+					j:Destroy()
+				end
+			end
+		end
+		upper, lower = torso, char:FindFirstChild("Right Leg")
+	end
+
+	for _, d in char:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.Anchored = false
+			d.CanCollide = d.Name ~= "HumanoidRootPart"
+		end
+	end
+	hum.PlatformStand = true
+	hum.Health = 0
+	for _, d in char:GetDescendants() do
+		if d:IsA("BasePart") then
+			pcall(function()
+				d:SetNetworkOwner(nil)
+			end)
+		end
+	end
+
+	local side = base.RightVector
+	if upper then
+		tearEmitter(upper, -upper.Size.Y / 2)
+		upper.AssemblyLinearVelocity = side * 20 + Vector3.new(0, 26, 0) - base.LookVector * 6
+		upper.AssemblyAngularVelocity = base.LookVector * 8
+	end
+	if lower then
+		tearEmitter(lower, lower.Size.Y / 2)
+		lower.AssemblyLinearVelocity = -side * 20 + Vector3.new(0, 14, 0)
+		lower.AssemblyAngularVelocity = -base.LookVector * 8
+	end
+	local leftLeg = char:FindFirstChild("Left Leg")
+	if leftLeg and not upperTorso then
+		leftLeg.AssemblyLinearVelocity = -side * 16 + Vector3.new(0, 10, 0)
+	end
+	Combat.Blood(upper or root, 80)
+	Combat.Blood(lower or root, 60)
+	Util.Sound(Config.Sounds.Gore, root, { Volume = 2, Pitch = 0.5, Range = 200 })
+	Util.Sound(Config.Sounds.Slash, root, { Volume = 2, Pitch = 0.6, Range = 200 })
+	bloodPool(root.Position)
+end
+
+-- Full kill sequence. Yields ~1 second. Call with task.spawn.
+function Combat.Execute(killer, victim)
+	local kChar, vChar = killer.Character, victim.Character
+	local kRoot, vRoot = Util.Root(kChar), Util.Root(vChar)
+	if not (kRoot and vRoot and Util.IsAlive(vChar)) then
+		return
+	end
+	Round.Survivors[victim] = nil
+	victim:SetAttribute("Role", "Dead")
+	Status.Apply(killer, "Busy", 1.4)
+	Status.Apply(killer, "Frozen", 1.4)
+	Status.Apply(victim, "Busy", 10)
+	Status.Apply(victim, "Frozen", 10)
+
+	local look = Util.Flat(vRoot.Position - kRoot.Position)
+	local base = CFrame.lookAt(kRoot.Position, kRoot.Position + look)
+	kRoot.Anchored = true
+	vRoot.Anchored = true
+	kRoot.CFrame = base
+	vRoot.CFrame = base * CFrame.new(0, 0.5, -3) * CFrame.Angles(0, math.pi, 0)
+
+	-- Grab & lift
+	Posture.ArmsForward(kChar, 0.15)
+	Util.Sound(Config.Sounds.Lunge, kRoot, { Pitch = 0.8, Volume = 1.5 })
+	TweenService:Create(vRoot, TweenInfo.new(0.4, Enum.EasingStyle.Quad), {
+		CFrame = base * CFrame.new(0, 2.4, -2.7) * CFrame.Angles(0, math.pi, 0),
+	}):Play()
+	Fx:FireAllClients("Shake", { Position = kRoot.Position, Intensity = 0.7, Radius = 70 })
+	Fx:FireClient(victim, "Grabbed", {})
+	task.wait(0.55)
+
+	-- Tear
+	if vChar.Parent then
+		Posture.Set(kChar, "RShoulder", CFrame.Angles(math.rad(90), 0, math.rad(65)), 0.12)
+		Posture.Set(kChar, "LShoulder", CFrame.Angles(math.rad(90), 0, math.rad(-65)), 0.12)
+		Combat.RipInHalf(vChar, base)
+		Fx:FireAllClients("Shake", { Position = kRoot.Position, Intensity = 1.2, Radius = 90 })
+		Fx:FireAllClients("Gore", { Position = kRoot.Position, Victim = victim.Name })
+	end
+	task.wait(0.4)
+	Posture.RestoreAll(kChar, 0.25)
+	if kRoot.Parent then
+		kRoot.Anchored = false
+	end
+	Status.Clear(killer, "Frozen")
+	Status.Clear(killer, "Busy")
+	Round.FireKilled(victim, killer)
+end
+
+-- Convenience used by every Wolverine attack.
+function Combat.Resolve(killer, victim, ignoreImmunity)
+	local result = Combat.Hit(victim, ignoreImmunity)
+	if result == "kill" then
+		Combat.Execute(killer, victim)
+	elseif result == "hit" then
+		Combat.Wound(killer, victim)
+	end
+	return result
+end
+
+return Combat
