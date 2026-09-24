@@ -221,6 +221,14 @@ player:GetAttributeChangedSignal("Hidden"):Connect(function()
 	end
 end)
 
+-- This game is built for R15 bodies (elbows, knees, waist). Warn if not.
+player.CharacterAdded:Connect(function(char)
+	task.wait(1)
+	if char:FindFirstChild("Torso") and not char:FindFirstChild("UpperTorso") and game:GetService("RunService"):IsStudio() then
+		Interface.Announce("R6 avatar detected: set Game Settings > Avatar > Avatar Type to R15 for full animations", Color3.fromRGB(255, 170, 60), 8)
+	end
+end)
+
 player:GetAttributeChangedSignal("Role"):Connect(function()
 	applyRole(player:GetAttribute("Role"))
 end)

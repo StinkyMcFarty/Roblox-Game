@@ -31,20 +31,35 @@ local JOINTS = {
 	LAnkle = { "LeftFoot", "LeftAnkle" },
 }
 
+-- R6 bodies have fewer joints, and theirs are rotated; poses are converted
+-- into each R6 joint's frame so the same animations work on either rig.
+local R6_JOINTS = {
+	Root = { "HumanoidRootPart", "RootJoint" },
+	Neck = { "Torso", "Neck" },
+	RShoulder = { "Torso", "Right Shoulder" },
+	LShoulder = { "Torso", "Left Shoulder" },
+	RHip = { "Torso", "Right Hip" },
+	LHip = { "Torso", "Left Hip" },
+}
+
 local states = setmetatable({}, { __mode = "k" })
 
 local function getState(char)
 	local st = states[char]
 	if not st then
-		local motors = {}
-		for key, info in JOINTS do
+		local motors, conj = {}, {}
+		local r6 = char:FindFirstChild("Torso") ~= nil and char:FindFirstChild("UpperTorso") == nil
+		for key, info in (r6 and R6_JOINTS or JOINTS) do
 			local part = char:FindFirstChild(info[1])
 			local j = part and part:FindFirstChild(info[2])
 			if j and j:IsA("Motor6D") then
 				motors[key] = j
+				if r6 then
+					conj[key] = j.C0 - j.C0.Position
+				end
 			end
 		end
-		st = { Motors = motors, Phase = 0, LoopBlend = 0, Loop = nil, Clip = nil, NextLook = 0, LookUntil = 0, LookSide = 1 }
+		st = { Motors = motors, Conj = conj, Phase = 0, LoopBlend = 0, Loop = nil, Clip = nil, NextLook = 0, LookUntil = 0, LookSide = 1 }
 		states[char] = st
 	end
 	return st
@@ -344,6 +359,12 @@ local function springStep(sp, target, dt, key)
 		angle -= math.pi * 2
 	end
 	local err = axis * angle
+	if err ~= err or math.abs(angle) < 1e-5 then -- NaN / identity guard
+		err = Vector3.zero
+	end
+	if sp.Vel ~= sp.Vel then
+		sp.Vel = Vector3.zero
+	end
 	sp.Vel += (err * k - sp.Vel * d) * dt
 	local w = sp.Vel * dt
 	local mag = w.Magnitude
@@ -364,7 +385,7 @@ step:Connect(function(a, b)
 	for _, char in characters() do
 		local hum = char:FindFirstChildOfClass("Humanoid")
 		local root = char:FindFirstChild("HumanoidRootPart")
-		if not (hum and root and hum.RigType == Enum.HumanoidRigType.R15) then
+		if not (hum and root) then
 			continue
 		end
 		local st = getState(char)
@@ -458,7 +479,8 @@ step:Connect(function(a, b)
 		st.Springs = st.Springs or {}
 		for key, m in st.Motors do
 			if m.Parent then
-				local base = m.Transform
+				local R = st.Conj[key]
+				local base = R and (R * m.Transform * R:Inverse()) or m.Transform
 				local target = base
 				if idle and idle[key] then
 					target = target:Lerp(idle[key], st.IdleBlend)
@@ -481,13 +503,15 @@ step:Connect(function(a, b)
 					sp = { Cur = target, Vel = Vector3.zero }
 					st.Springs[key] = sp
 				end
+				local final
 				if layered or (st.JoltKick or 0) > 0.01 then
-					m.Transform = springStep(sp, target, dt, key)
+					final = springStep(sp, target, dt, key)
 				else
 					sp.Cur = target
 					sp.Vel = Vector3.zero
-					m.Transform = target
+					final = target
 				end
+				m.Transform = R and (R:Inverse() * final * R) or final
 			end
 		end
 		st.JoltKick = math.max(0, (st.JoltKick or 0) - dt * 2)

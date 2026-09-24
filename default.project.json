@@ -39,6 +39,9 @@
         "Health": {
           "$path": "src/character/Health.server.lua"
         }
+      },
+      "$properties": {
+        "GameSettingsAvatar": "R15"
       }
     },
     "Lighting": {

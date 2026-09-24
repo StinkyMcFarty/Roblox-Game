@@ -1566,7 +1566,7 @@ function MapBuilder.BuildLobby()
 	local hasTerrain = terrain() ~= nil
 	local groundY = hasTerrain and Y - 4 or Y - 0.2
 	if hasTerrain then
-		block(lobby, Vector3.new(W + 2, 4.6, D + 2), CFrame.new(0, Y - 2.3, 0), M.Concrete, rgb(96, 96, 100))
+		block(lobby, Vector3.new(W + 2, 4.4, D + 2), CFrame.new(0, Y - 2.35, 0), M.Concrete, rgb(96, 96, 100)) -- top sits 0.15 below the floor (no z-fighting)
 		block(lobby, Vector3.new(W + 3, 0.6, D + 3), CFrame.new(0, Y - 4.1, 0), M.Concrete, rgb(80, 80, 84))
 	else
 		block(lobby, Vector3.new(420, 4, 420), CFrame.new(0, Y - 2.2, 0), M.Snow, C.Snow)
@@ -1597,10 +1597,10 @@ function MapBuilder.BuildLobby()
 	block(lobby, Vector3.new(10, 0.1, D - 10), CFrame.new(0, Y + 0.05, 0), M.DiamondPlate, rgb(80, 84, 92))
 
 	-- X-Men logo in the floor: yellow ring broken by the X, worn paint
-	local logoY = Y + 0.17
+	local logoY = Y + 0.2
 	local LR, ringW = 10, 1.7
 	local yellow = rgb(232, 196, 58)
-	block(lobby, Vector3.new(0.08, LR * 2 + 4, LR * 2 + 4), CFrame.new(0, logoY - 0.02, 0) * CFrame.Angles(0, 0, math.rad(90)), M.Slate, rgb(20, 20, 24), { Shape = Enum.PartType.Cylinder })
+	block(lobby, Vector3.new(0.08, LR * 2 + 4, LR * 2 + 4), CFrame.new(0, logoY - 0.06, 0) * CFrame.Angles(0, 0, math.rad(90)), M.Slate, rgb(20, 20, 24), { Shape = Enum.PartType.Cylinder })
 	local armW = LR * 0.36
 	local function inGap(deg)
 		for _, g in { 45, 225 } do
@@ -1622,15 +1622,15 @@ function MapBuilder.BuildLobby()
 		end
 	end
 	-- the X: a thick stroke punching out through the ring gaps, and a thinner cross stroke
-	block(lobby, Vector3.new(armW, 0.07, LR * 2.12), CFrame.new(0, logoY + 0.005, 0) * CFrame.Angles(0, math.rad(45), 0), M.Concrete, yellow)
+	block(lobby, Vector3.new(armW, 0.07, LR * 2.12), CFrame.new(0, logoY + 0.03, 0) * CFrame.Angles(0, math.rad(45), 0), M.Concrete, yellow)
 	for _, sgn in { -1, 1 } do
-		block(lobby, Vector3.new(armW * 0.8, 0.07, LR * 0.62), CFrame.new(sgn * LR * 0.25, logoY + 0.005, -sgn * LR * 0.25) * CFrame.Angles(0, math.rad(-45), 0), M.Concrete, yellow)
+		block(lobby, Vector3.new(armW * 0.8, 0.07, LR * 0.62), CFrame.new(sgn * LR * 0.25, logoY + 0.065, -sgn * LR * 0.25) * CFrame.Angles(0, math.rad(-45), 0), M.Concrete, yellow)
 	end
 	-- black cut lines separating the X from the ring
 	for _, g in { 45, 225 } do
 		for _, off in { -1, 1 } do
 			local a0 = math.rad(g + off * 13)
-			block(lobby, Vector3.new(0.35, 0.09, ringW + 0.3), CFrame.new(math.cos(a0) * rMid, logoY + 0.01, math.sin(a0) * rMid) * CFrame.Angles(0, math.pi / 2 - a0, 0), M.Slate, rgb(20, 20, 24))
+			block(lobby, Vector3.new(0.35, 0.09, ringW + 0.3), CFrame.new(math.cos(a0) * rMid, logoY + 0.06, math.sin(a0) * rMid) * CFrame.Angles(0, math.pi / 2 - a0, 0), M.Slate, rgb(20, 20, 24))
 		end
 	end
 	-- worn / scuffed paint specks
@@ -1638,7 +1638,7 @@ function MapBuilder.BuildLobby()
 		local r = math.sqrt(rng:NextNumber()) * LR
 		local t = rng:NextNumber() * math.pi * 2
 		block(lobby, Vector3.new(rng:NextNumber(0.12, 0.5), 0.1, rng:NextNumber(0.12, 0.4)),
-			CFrame.new(math.cos(t) * r, logoY + 0.02, math.sin(t) * r) * CFrame.Angles(0, rng:NextNumber() * 6, 0), M.Slate, rgb(24, 22, 20), { CanCollide = false, CanQuery = false })
+			CFrame.new(math.cos(t) * r, logoY + 0.08, math.sin(t) * r) * CFrame.Angles(0, rng:NextNumber() * 6, 0), M.Slate, rgb(24, 22, 20), { CanCollide = false, CanQuery = false })
 	end
 	-- warm spotlight on the emblem
 	local emblemLamp = block(lobby, Vector3.new(1.4, 0.6, 1.4), CFrame.new(0, Y + H - 2.2, 8), M.Metal, C.DarkMetal)

@@ -3945,7 +3945,7 @@ function MapBuilder.BuildLobby()
 	local hasTerrain = terrain() ~= nil
 	local groundY = hasTerrain and Y - 4 or Y - 0.2
 	if hasTerrain then
-		block(lobby, Vector3.new(W + 2, 4.6, D + 2), CFrame.new(0, Y - 2.3, 0), M.Concrete, rgb(96, 96, 100))
+		block(lobby, Vector3.new(W + 2, 4.4, D + 2), CFrame.new(0, Y - 2.35, 0), M.Concrete, rgb(96, 96, 100)) -- top sits 0.15 below the floor (no z-fighting)
 		block(lobby, Vector3.new(W + 3, 0.6, D + 3), CFrame.new(0, Y - 4.1, 0), M.Concrete, rgb(80, 80, 84))
 	else
 		block(lobby, Vector3.new(420, 4, 420), CFrame.new(0, Y - 2.2, 0), M.Snow, C.Snow)
@@ -3976,10 +3976,10 @@ function MapBuilder.BuildLobby()
 	block(lobby, Vector3.new(10, 0.1, D - 10), CFrame.new(0, Y + 0.05, 0), M.DiamondPlate, rgb(80, 84, 92))
 
 	-- X-Men logo in the floor: yellow ring broken by the X, worn paint
-	local logoY = Y + 0.17
+	local logoY = Y + 0.2
 	local LR, ringW = 10, 1.7
 	local yellow = rgb(232, 196, 58)
-	block(lobby, Vector3.new(0.08, LR * 2 + 4, LR * 2 + 4), CFrame.new(0, logoY - 0.02, 0) * CFrame.Angles(0, 0, math.rad(90)), M.Slate, rgb(20, 20, 24), { Shape = Enum.PartType.Cylinder })
+	block(lobby, Vector3.new(0.08, LR * 2 + 4, LR * 2 + 4), CFrame.new(0, logoY - 0.06, 0) * CFrame.Angles(0, 0, math.rad(90)), M.Slate, rgb(20, 20, 24), { Shape = Enum.PartType.Cylinder })
 	local armW = LR * 0.36
 	local function inGap(deg)
 		for _, g in { 45, 225 } do
@@ -4001,15 +4001,15 @@ function MapBuilder.BuildLobby()
 		end
 	end
 	-- the X: a thick stroke punching out through the ring gaps, and a thinner cross stroke
-	block(lobby, Vector3.new(armW, 0.07, LR * 2.12), CFrame.new(0, logoY + 0.005, 0) * CFrame.Angles(0, math.rad(45), 0), M.Concrete, yellow)
+	block(lobby, Vector3.new(armW, 0.07, LR * 2.12), CFrame.new(0, logoY + 0.03, 0) * CFrame.Angles(0, math.rad(45), 0), M.Concrete, yellow)
 	for _, sgn in { -1, 1 } do
-		block(lobby, Vector3.new(armW * 0.8, 0.07, LR * 0.62), CFrame.new(sgn * LR * 0.25, logoY + 0.005, -sgn * LR * 0.25) * CFrame.Angles(0, math.rad(-45), 0), M.Concrete, yellow)
+		block(lobby, Vector3.new(armW * 0.8, 0.07, LR * 0.62), CFrame.new(sgn * LR * 0.25, logoY + 0.065, -sgn * LR * 0.25) * CFrame.Angles(0, math.rad(-45), 0), M.Concrete, yellow)
 	end
 	-- black cut lines separating the X from the ring
 	for _, g in { 45, 225 } do
 		for _, off in { -1, 1 } do
 			local a0 = math.rad(g + off * 13)
-			block(lobby, Vector3.new(0.35, 0.09, ringW + 0.3), CFrame.new(math.cos(a0) * rMid, logoY + 0.01, math.sin(a0) * rMid) * CFrame.Angles(0, math.pi / 2 - a0, 0), M.Slate, rgb(20, 20, 24))
+			block(lobby, Vector3.new(0.35, 0.09, ringW + 0.3), CFrame.new(math.cos(a0) * rMid, logoY + 0.06, math.sin(a0) * rMid) * CFrame.Angles(0, math.pi / 2 - a0, 0), M.Slate, rgb(20, 20, 24))
 		end
 	end
 	-- worn / scuffed paint specks
@@ -4017,7 +4017,7 @@ function MapBuilder.BuildLobby()
 		local r = math.sqrt(rng:NextNumber()) * LR
 		local t = rng:NextNumber() * math.pi * 2
 		block(lobby, Vector3.new(rng:NextNumber(0.12, 0.5), 0.1, rng:NextNumber(0.12, 0.4)),
-			CFrame.new(math.cos(t) * r, logoY + 0.02, math.sin(t) * r) * CFrame.Angles(0, rng:NextNumber() * 6, 0), M.Slate, rgb(24, 22, 20), { CanCollide = false, CanQuery = false })
+			CFrame.new(math.cos(t) * r, logoY + 0.08, math.sin(t) * r) * CFrame.Angles(0, rng:NextNumber() * 6, 0), M.Slate, rgb(24, 22, 20), { CanCollide = false, CanQuery = false })
 	end
 	-- warm spotlight on the emblem
 	local emblemLamp = block(lobby, Vector3.new(1.4, 0.6, 1.4), CFrame.new(0, Y + H - 2.2, 8), M.Metal, C.DarkMetal)
@@ -6620,6 +6620,7 @@ return Wolverine
   <Item class="StarterPlayer" referent="27">
     <Properties>
       <string name="Name">StarterPlayer</string>
+      <token name="GameSettingsAvatar">1</token>
     </Properties>
     <Item class="StarterCharacterScripts" referent="28">
       <Properties>
@@ -6984,20 +6985,35 @@ local JOINTS = {
 	LAnkle = { "LeftFoot", "LeftAnkle" },
 }
 
+-- R6 bodies have fewer joints, and theirs are rotated; poses are converted
+-- into each R6 joint's frame so the same animations work on either rig.
+local R6_JOINTS = {
+	Root = { "HumanoidRootPart", "RootJoint" },
+	Neck = { "Torso", "Neck" },
+	RShoulder = { "Torso", "Right Shoulder" },
+	LShoulder = { "Torso", "Left Shoulder" },
+	RHip = { "Torso", "Right Hip" },
+	LHip = { "Torso", "Left Hip" },
+}
+
 local states = setmetatable({}, { __mode = "k" })
 
 local function getState(char)
 	local st = states[char]
 	if not st then
-		local motors = {}
-		for key, info in JOINTS do
+		local motors, conj = {}, {}
+		local r6 = char:FindFirstChild("Torso") ~= nil and char:FindFirstChild("UpperTorso") == nil
+		for key, info in (r6 and R6_JOINTS or JOINTS) do
 			local part = char:FindFirstChild(info[1])
 			local j = part and part:FindFirstChild(info[2])
 			if j and j:IsA("Motor6D") then
 				motors[key] = j
+				if r6 then
+					conj[key] = j.C0 - j.C0.Position
+				end
 			end
 		end
-		st = { Motors = motors, Phase = 0, LoopBlend = 0, Loop = nil, Clip = nil, NextLook = 0, LookUntil = 0, LookSide = 1 }
+		st = { Motors = motors, Conj = conj, Phase = 0, LoopBlend = 0, Loop = nil, Clip = nil, NextLook = 0, LookUntil = 0, LookSide = 1 }
 		states[char] = st
 	end
 	return st
@@ -7297,6 +7313,12 @@ local function springStep(sp, target, dt, key)
 		angle -= math.pi * 2
 	end
 	local err = axis * angle
+	if err ~= err or math.abs(angle) < 1e-5 then -- NaN / identity guard
+		err = Vector3.zero
+	end
+	if sp.Vel ~= sp.Vel then
+		sp.Vel = Vector3.zero
+	end
 	sp.Vel += (err * k - sp.Vel * d) * dt
 	local w = sp.Vel * dt
 	local mag = w.Magnitude
@@ -7317,7 +7339,7 @@ step:Connect(function(a, b)
 	for _, char in characters() do
 		local hum = char:FindFirstChildOfClass("Humanoid")
 		local root = char:FindFirstChild("HumanoidRootPart")
-		if not (hum and root and hum.RigType == Enum.HumanoidRigType.R15) then
+		if not (hum and root) then
 			continue
 		end
 		local st = getState(char)
@@ -7411,7 +7433,8 @@ step:Connect(function(a, b)
 		st.Springs = st.Springs or {}
 		for key, m in st.Motors do
 			if m.Parent then
-				local base = m.Transform
+				local R = st.Conj[key]
+				local base = R and (R * m.Transform * R:Inverse()) or m.Transform
 				local target = base
 				if idle and idle[key] then
 					target = target:Lerp(idle[key], st.IdleBlend)
@@ -7434,13 +7457,15 @@ step:Connect(function(a, b)
 					sp = { Cur = target, Vel = Vector3.zero }
 					st.Springs[key] = sp
 				end
+				local final
 				if layered or (st.JoltKick or 0) > 0.01 then
-					m.Transform = springStep(sp, target, dt, key)
+					final = springStep(sp, target, dt, key)
 				else
 					sp.Cur = target
 					sp.Vel = Vector3.zero
-					m.Transform = target
+					final = target
 				end
+				m.Transform = R and (R:Inverse() * final * R) or final
 			end
 		end
 		st.JoltKick = math.max(0, (st.JoltKick or 0) - dt * 2)
@@ -7674,6 +7699,14 @@ player:GetAttributeChangedSignal("Hidden"):Connect(function()
 	if player:GetAttribute("Hidden") then
 		Interface.Announce("Hiding... he can still smell you. Jump to get out.", Color3.fromRGB(200, 200, 210), 3)
 		Interface.Flash(Color3.new(0, 0, 0), 0.6, 0.6)
+	end
+end)
+
+-- This game is built for R15 bodies (elbows, knees, waist). Warn if not.
+player.CharacterAdded:Connect(function(char)
+	task.wait(1)
+	if char:FindFirstChild("Torso") and not char:FindFirstChild("UpperTorso") and game:GetService("RunService"):IsStudio() then
+		Interface.Announce("R6 avatar detected: set Game Settings > Avatar > Avatar Type to R15 for full animations", Color3.fromRGB(255, 170, 60), 8)
 	end
 end)
 
