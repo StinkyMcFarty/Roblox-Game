@@ -280,7 +280,7 @@ end
 ---------------------------------------------------------------------------
 
 -- Every scent (a real survivor, a hiding spot or a fart decoy) is drawn the
--- same way, a glowing red body silhouette, so Wolverine can't tell a decoy
+-- same way, a red body outline seen through walls, so Wolverine can't tell a decoy
 -- from a person. Positions stream from the server (SniffUpdate), so it works
 -- at any range and doesn't depend on the target's character being loaded.
 local SCENT = Color3.fromRGB(255, 40, 40)
@@ -301,9 +301,9 @@ local function scentGhost(big)
 	for i, spec in GHOST_PARTS do
 		local p = Instance.new("Part")
 		p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch, p.CastShadow = true, false, false, false, false
-		p.Material = Enum.Material.Neon
+		p.Material = Enum.Material.SmoothPlastic
 		p.Color = SCENT
-		p.Transparency = 0.55
+		p.Transparency = 0.99 -- only the outline shows (Highlight skips fully transparent parts)
 		p.Size = spec[1] * scale
 		p:SetAttribute("Offset", spec[2] * scale)
 		p.Parent = model
@@ -314,28 +314,14 @@ local function scentGhost(big)
 	model.PrimaryPart = core
 	local hl = Instance.new("Highlight")
 	hl.FillColor = SCENT
-	hl.OutlineColor = Color3.fromRGB(255, 220, 220)
-	hl.FillTransparency = 0.45
+	hl.FillTransparency = 1
+	hl.OutlineColor = SCENT
+	hl.OutlineTransparency = 0
 	hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 	hl.Adornee = model
 	hl.Parent = model
-
-	local bb = Instance.new("BillboardGui")
-	bb.Size = UDim2.fromOffset(120, 30)
-	bb.StudsOffset = Vector3.new(0, 3.6 * scale, 0)
-	bb.AlwaysOnTop = true
-	bb.Adornee = core
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.fromScale(1, 1)
-	label.BackgroundTransparency = 1
-	label.Font = Enum.Font.GothamBlack
-	label.TextScaled = true
-	label.TextColor3 = Color3.fromRGB(255, 80, 80)
-	label.TextStrokeTransparency = 0
-	label.Parent = bb
-	bb.Parent = model
 	model.Parent = workspace.CurrentCamera
-	return { Model = model, Core = core, Label = label }
+	return { Model = model, Core = core }
 end
 
 local function placeGhost(m, cf)
@@ -369,7 +355,6 @@ local function syncScents(targets)
 				sniffMarks[t.Id] = m
 			end
 			m.Goal = CFrame.new(t.Position) * CFrame.Angles(0, tonumber(t.Yaw) or 0, 0)
-			m.Prefix = t.Hiding and "HIDING " or ""
 		end
 	end
 	for id, m in sniffMarks do
@@ -417,69 +402,15 @@ function Effects.Sniff(duration, targets)
 			wave:Destroy()
 		end)
 	end
-	-- screen-edge arrows toward every scent
-	local arrowGui = Instance.new("ScreenGui")
-	arrowGui.Name = "ScentArrows"
-	arrowGui.IgnoreGuiInset = true
-	arrowGui.ResetOnSpawn = false
-	arrowGui.Parent = player:WaitForChild("PlayerGui")
-	local arrows = {}
-
 	local conn = RunService.RenderStepped:Connect(function(dt)
-		local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-		local cam = workspace.CurrentCamera
-		local vp = cam.ViewportSize
 		local alpha = math.min(1, dt * 12)
-		for id, m in myMarks do
+		for _, m in myMarks do
 			m.CF = m.CF:Lerp(m.Goal, alpha)
 			placeGhost(m, m.CF)
-			local pos = m.CF.Position
-			local arrow = arrows[id]
-			if not arrow then
-				arrow = Instance.new("TextLabel")
-				arrow.AnchorPoint = Vector2.new(0.5, 0.5)
-				arrow.Size = UDim2.fromOffset(34, 34)
-				arrow.BackgroundTransparency = 1
-				arrow.Font = Enum.Font.GothamBlack
-				arrow.TextScaled = true
-				arrow.Text = "▲"
-				arrow.TextColor3 = Color3.fromRGB(255, 70, 70)
-				arrow.TextStrokeTransparency = 0.2
-				arrow.Parent = arrowGui
-				arrows[id] = arrow
-			end
-			if myRoot then
-				m.Label.Text = (m.Prefix or "") .. math.floor((pos - myRoot.Position).Magnitude) .. "m"
-			end
-			local sp, onScreen = cam:WorldToViewportPoint(pos)
-			if onScreen and sp.Z > 0 and sp.X > 0 and sp.X < vp.X and sp.Y > 0 and sp.Y < vp.Y then
-				arrow.Visible = false
-			else
-				-- point from screen centre toward the scent, pinned to the edge
-				local rel = cam.CFrame:PointToObjectSpace(pos)
-				local dir = Vector2.new(rel.X, -rel.Y)
-				if dir.Magnitude < 0.01 then
-					dir = Vector2.new(0, 1)
-				end
-				dir = dir.Unit
-				local c = vp / 2
-				local k = math.min((c.X - 40) / math.max(math.abs(dir.X), 1e-3), (c.Y - 40) / math.max(math.abs(dir.Y), 1e-3))
-				local at = c + dir * k
-				arrow.Visible = true
-				arrow.Position = UDim2.fromOffset(at.X, at.Y)
-				arrow.Rotation = math.deg(math.atan2(dir.Y, dir.X)) + 90
-			end
-		end
-		for id, arrow in arrows do
-			if not myMarks[id] then
-				arrow:Destroy()
-				arrows[id] = nil
-			end
 		end
 	end)
 	task.delay(duration, function()
 		conn:Disconnect()
-		arrowGui:Destroy()
 		for _, m in myMarks do
 			m.Model:Destroy()
 		end

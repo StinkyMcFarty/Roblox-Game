@@ -165,7 +165,7 @@ src/shared/   Config, Skins, Util
 ### Recent rules
 - **Pounce** only works while Wolverine is running on all fours (hold C / Ctrl).
 - **Fart gas**: if Wolverine runs into a fresh cloud (first 4s, within 7 studs) he's gassed for 2s: no attacks, 40% speed, covering his nose and coughing.
-- **Sniff** marks every survivor, hiding spot and gas decoy with the same red silhouette, live-tracked for 5s, so a decoy looks exactly like a person.
+- **Sniff** shows a red outline (through walls) on every survivor, hiding spot and gas decoy, live-tracked for 5s — no distances. A decoy looks exactly like a person.
 - **Death ray** shoves Wolverine back harder and more constantly the closer he is (up to 3.2x within 18 studs).
 - **Intro**: Wolverine floats in the atrium's adamantium tank, wakes, smashes out through the glass, lands, crosses his forearms and the claws shoot out in an X, then roars (his camera films it). Timings: `Config.Intro`.
 - **Kill scream** after every rip-in-half. **Molten sparks** fly when his claws tear through metal or hit a Sentinel.
