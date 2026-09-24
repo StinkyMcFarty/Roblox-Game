@@ -51,7 +51,7 @@ Config.MinPlayers = 2 -- real players needed to start a round in the live game
 -- never spawns bots.
 Config.BotFill = 6
 Config.IntermissionTime = 20
-Config.RoundTime = 180 -- seconds survivors must last (after the intro)
+Config.RoundTime = 210 -- seconds survivors must last (after the intro): 3m30s
 Config.KillTimeBonus = 15 -- Wolverine gets this much extra time per kill
 Config.EndScreenTime = 6
 
