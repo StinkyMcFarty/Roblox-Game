@@ -109,13 +109,15 @@ Skins.Claws = {
 }
 
 -- Coins handed out by the server
+-- Coins per match
 Skins.Rewards = {
-	Survive = 60,
-	Kill = 25,
-	WolverineWin = 100,
-	Terminal = 15,
-	SentinelTakedown = 150,
-	Participation = 10,
+	Survive = 150, -- still alive (scientist or Sentinel) when the match ends
+	Died = 50, -- ripped in half by Wolverine
+	SentinelTakedown = 200, -- landed the killing blow on Wolverine
+	Kill = 50, -- Wolverine: each survivor ripped in half
+	SentinelKill = 75, -- Wolverine: each Sentinel suit torn apart
+	WolverineWin = 100, -- Wolverine: nobody left alive
+	Terminal = 15, -- rebooting a Sentinel terminal
 }
 
 return Skins

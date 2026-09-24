@@ -297,6 +297,9 @@ function Combat.OnSuitDestroyed(player)
 	Util.SoundAt(Config.Sounds.Punch, pos, { Volume = 2, Pitch = 0.6, Range = 300 })
 	Fx:FireAllClients("Shake", { Position = pos, Intensity = 1.2, Radius = 90 })
 	announce(player.DisplayName .. "'s SENTINEL was torn apart! They're out of the suit.", Color3.fromRGB(255, 80, 80))
+	if Round.Wolverine then
+		PlayerData.AddCoins(Round.Wolverine, Skins.Rewards.SentinelKill, "Tore apart a Sentinel")
+	end
 end
 
 ---------------------------------------------------------------------------
@@ -412,7 +415,7 @@ local function punch(player, char, root)
 		if Combat.BoxOverlap(box, Vector3.new(9, 11, cfg.Range + 1), bcf, bsize) then
 			hit = true
 			local mult = power(player)
-			Wolverine.Damage(cfg.Damage * mult)
+			Wolverine.Damage(cfg.Damage * mult, player)
 			stunWolverine(cfg.Stun * mult)
 			local dir = Util.Flat(wRoot.Position - root.Position)
 			Fx:FireClient(w, "Knock", { Velocity = dir * cfg.Knockback + Vector3.new(0, 25, 0) })
@@ -512,7 +515,7 @@ local function laser(player, char, root, aim)
 			end
 		end
 		if hitW then
-			Wolverine.Damage(cfg.DPS * dt * power(player))
+			Wolverine.Damage(cfg.DPS * dt * power(player), player)
 			Status.Apply(Round.Wolverine, "Slowed", cfg.Slow)
 			if os.clock() - lastReveal > 0.6 then
 				lastReveal = os.clock()
@@ -612,7 +615,7 @@ local function pulse(player, char, root)
 		local bcf, bsize = Combat.BodyBox(wRoot)
 		local near = (wRoot.Position - root.Position).Magnitude <= cfg.Radius
 		if near or Combat.BoxOverlap(CFrame.new(root.Position), Vector3.one * cfg.Radius * 1.4, bcf, bsize) then
-			Wolverine.Damage(cfg.Damage * power(player))
+			Wolverine.Damage(cfg.Damage * power(player), player)
 			stunWolverine(cfg.Stun)
 			Wolverine.RevealSkeleton()
 		end

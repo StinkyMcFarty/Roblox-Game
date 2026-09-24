@@ -148,7 +148,8 @@ Config.GuaranteedWolverineProductId = 0
 -- Coin packs (Store button). For each pack create a Developer Product in the
 -- Creator Dashboard (Monetization > Developer Products) at the Robux price
 -- below, then paste its ID into ProductId. Bigger packs give a bonus.
--- Roughly: a round earns ~70-100 coins; claws cost 400-2200, suits 2000-6000.
+-- Roughly: a match pays 50 (died) to 150 (survived), more for kills and takedowns;
+-- claws cost 400-2200, suits 2000-6000.
 Config.CoinPacks = {
 	{ Id = "Handful", Name = "Handful of Coins", Coins = 500, Robux = 49, Bonus = "", ProductId = 0 },
 	{ Id = "Pouch", Name = "Pouch of Coins", Coins = 1200, Robux = 99, Bonus = "+20% BONUS", ProductId = 0 },
@@ -355,13 +356,15 @@ Skins.Claws = {
 }
 
 -- Coins handed out by the server
+-- Coins per match
 Skins.Rewards = {
-	Survive = 60,
-	Kill = 25,
-	WolverineWin = 100,
-	Terminal = 15,
-	SentinelTakedown = 150,
-	Participation = 10,
+	Survive = 150, -- still alive (scientist or Sentinel) when the match ends
+	Died = 50, -- ripped in half by Wolverine
+	SentinelTakedown = 200, -- landed the killing blow on Wolverine
+	Kill = 50, -- Wolverine: each survivor ripped in half
+	SentinelKill = 75, -- Wolverine: each Sentinel suit torn apart
+	WolverineWin = 100, -- Wolverine: nobody left alive
+	Terminal = 15, -- rebooting a Sentinel terminal
 }
 
 return Skins
@@ -5392,6 +5395,7 @@ local function runRound()
 	Round.Active = true
 	Round.Released = false
 	Round.WolverineDead = false
+	Round.WolverineKiller = nil
 	Round.WolverineLeft = false
 	Round.Survivors = {}
 	ReplicatedStorage:SetAttribute("Released", false)
@@ -5513,13 +5517,19 @@ local function runRound()
 			stat(p, "Wins", 1)
 			PlayerData.AddCoins(p, R.Survive, "Survived")
 		end
-		if result == "slain" and sentinelPlayer then
-			PlayerData.AddCoins(sentinelPlayer, R.SentinelTakedown, "Took down Wolverine")
+		local slayer = Round.WolverineKiller
+		if not (slayer and slayer.Parent) then
+			slayer = sentinelPlayer
+		end
+		if result == "slain" and slayer then
+			PlayerData.AddCoins(slayer, R.SentinelTakedown, "Took down Wolverine")
 		end
 	end
 	for _, p in list do
 		if p.Parent then
-			PlayerData.AddCoins(p, R.Participation, "Played a match")
+			if p ~= wolverine and not Round.Survivors[p] then
+				PlayerData.AddCoins(p, R.Died, "Played a match")
+			end
 			PlayerData.Progress(p, "PlayMatches", 1)
 		end
 	end
@@ -8577,6 +8587,7 @@ local Round = {
 	Map = nil,
 	EndTime = 0,
 	WolverineDead = false,
+	WolverineKiller = nil, -- the Sentinel pilot who landed the killing blow
 	WolverineLeft = false,
 }
 
@@ -8893,6 +8904,9 @@ function Combat.OnSuitDestroyed(player)
 	Util.SoundAt(Config.Sounds.Punch, pos, { Volume = 2, Pitch = 0.6, Range = 300 })
 	Fx:FireAllClients("Shake", { Position = pos, Intensity = 1.2, Radius = 90 })
 	announce(player.DisplayName .. "'s SENTINEL was torn apart! They're out of the suit.", Color3.fromRGB(255, 80, 80))
+	if Round.Wolverine then
+		PlayerData.AddCoins(Round.Wolverine, Skins.Rewards.SentinelKill, "Tore apart a Sentinel")
+	end
 end
 
 ---------------------------------------------------------------------------
@@ -9008,7 +9022,7 @@ local function punch(player, char, root)
 		if Combat.BoxOverlap(box, Vector3.new(9, 11, cfg.Range + 1), bcf, bsize) then
 			hit = true
 			local mult = power(player)
-			Wolverine.Damage(cfg.Damage * mult)
+			Wolverine.Damage(cfg.Damage * mult, player)
 			stunWolverine(cfg.Stun * mult)
 			local dir = Util.Flat(wRoot.Position - root.Position)
 			Fx:FireClient(w, "Knock", { Velocity = dir * cfg.Knockback + Vector3.new(0, 25, 0) })
@@ -9108,7 +9122,7 @@ local function laser(player, char, root, aim)
 			end
 		end
 		if hitW then
-			Wolverine.Damage(cfg.DPS * dt * power(player))
+			Wolverine.Damage(cfg.DPS * dt * power(player), player)
 			Status.Apply(Round.Wolverine, "Slowed", cfg.Slow)
 			if os.clock() - lastReveal > 0.6 then
 				lastReveal = os.clock()
@@ -9208,7 +9222,7 @@ local function pulse(player, char, root)
 		local bcf, bsize = Combat.BodyBox(wRoot)
 		local near = (wRoot.Position - root.Position).Magnitude <= cfg.Radius
 		if near or Combat.BoxOverlap(CFrame.new(root.Position), Vector3.one * cfg.Radius * 1.4, bcf, bsize) then
-			Wolverine.Damage(cfg.Damage * power(player))
+			Wolverine.Damage(cfg.Damage * power(player), player)
 			stunWolverine(cfg.Stun)
 			Wolverine.RevealSkeleton()
 		end
@@ -10470,7 +10484,7 @@ function Wolverine.MakeStatue(skinId, cframe, parent)
 end
 
 -- Called by the Sentinel.
-function Wolverine.Damage(amount)
+function Wolverine.Damage(amount, by)
 	local player = Round.Wolverine
 	local char = player and player.Character
 	local hum, root = Util.Humanoid(char), Util.Root(char)
@@ -10479,6 +10493,9 @@ function Wolverine.Damage(amount)
 	end
 	lastDamaged = os.clock()
 	hum:TakeDamage(amount)
+	if hum.Health <= 0 and by and not Round.WolverineKiller then
+		Round.WolverineKiller = by -- credited with the takedown
+	end
 	Fx:FireAllClients("HitStop", { Victim = char, Duration = 0 })
 	Util.Burst(root, Util.SparkProps, 25, 1.5) -- adamantium skeleton sparks
 end

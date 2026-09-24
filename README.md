@@ -178,3 +178,15 @@ src/shared/   Config, Skins, Util
   Idling ~2 minutes turns it on automatically.
 - **Death-ray push-through**: when a Sentinel's beam is on Wolverine, mash **F** (tap Sniff on mobile) to fight it; fill the meter past halfway and he braces and walks slowly into the beam.
 - **Speeds**: Wolverine's upright run is 15% slower than a survivor sprint; on all fours he's 15% faster.
+
+### Match coins
+| | Coins |
+|---|---|
+| Survive the match (scientist or Sentinel) | 150 |
+| Get ripped in half | 50 |
+| Land the killing blow on Wolverine | +200 |
+| Wolverine: each survivor ripped in half | 50 |
+| Wolverine: each Sentinel suit torn apart | 75 |
+| Wolverine: nobody left alive | +100 |
+| Reboot a terminal | +15 |
+All in `Skins.Rewards` (`src/shared/Skins.lua`).

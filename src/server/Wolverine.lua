@@ -962,7 +962,7 @@ function Wolverine.MakeStatue(skinId, cframe, parent)
 end
 
 -- Called by the Sentinel.
-function Wolverine.Damage(amount)
+function Wolverine.Damage(amount, by)
 	local player = Round.Wolverine
 	local char = player and player.Character
 	local hum, root = Util.Humanoid(char), Util.Root(char)
@@ -971,6 +971,9 @@ function Wolverine.Damage(amount)
 	end
 	lastDamaged = os.clock()
 	hum:TakeDamage(amount)
+	if hum.Health <= 0 and by and not Round.WolverineKiller then
+		Round.WolverineKiller = by -- credited with the takedown
+	end
 	Fx:FireAllClients("HitStop", { Victim = char, Duration = 0 })
 	Util.Burst(root, Util.SparkProps, 25, 1.5) -- adamantium skeleton sparks
 end

@@ -295,6 +295,7 @@ local function runRound()
 	Round.Active = true
 	Round.Released = false
 	Round.WolverineDead = false
+	Round.WolverineKiller = nil
 	Round.WolverineLeft = false
 	Round.Survivors = {}
 	ReplicatedStorage:SetAttribute("Released", false)
@@ -416,13 +417,19 @@ local function runRound()
 			stat(p, "Wins", 1)
 			PlayerData.AddCoins(p, R.Survive, "Survived")
 		end
-		if result == "slain" and sentinelPlayer then
-			PlayerData.AddCoins(sentinelPlayer, R.SentinelTakedown, "Took down Wolverine")
+		local slayer = Round.WolverineKiller
+		if not (slayer and slayer.Parent) then
+			slayer = sentinelPlayer
+		end
+		if result == "slain" and slayer then
+			PlayerData.AddCoins(slayer, R.SentinelTakedown, "Took down Wolverine")
 		end
 	end
 	for _, p in list do
 		if p.Parent then
-			PlayerData.AddCoins(p, R.Participation, "Played a match")
+			if p ~= wolverine and not Round.Survivors[p] then
+				PlayerData.AddCoins(p, R.Died, "Played a match")
+			end
 			PlayerData.Progress(p, "PlayMatches", 1)
 		end
 	end

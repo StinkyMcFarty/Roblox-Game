@@ -7,6 +7,7 @@ local Round = {
 	Map = nil,
 	EndTime = 0,
 	WolverineDead = false,
+	WolverineKiller = nil, -- the Sentinel pilot who landed the killing blow
 	WolverineLeft = false,
 }
 
