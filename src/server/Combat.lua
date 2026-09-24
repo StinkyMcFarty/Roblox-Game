@@ -218,15 +218,16 @@ function Combat.Wound(killer, victim, opts)
 		hum.Health = hum.MaxHealth * math.max(0.05, 1 - hits / Config.HitsToKill)
 		Combat.Blood(Util.Torso(char), 35)
 	end
-	Util.Sound(Config.Sounds.Slash, root, { Pitch = 0.8, Volume = 1.2 })
-	Util.Sound(Config.Sounds.Gore, root, { Pitch = 0.7, Volume = 0.8 })
+	Util.Sound(Config.Sounds.Impact, root, { Pitch = 0.95 + math.random() * 0.1, Volume = 1.1 })
+	Util.Sound(Config.Sounds.Gore, root, { Pitch = 0.8, Volume = 0.7 })
 	Status.Apply(victim, "Immune", Config.HitImmunity)
 	Status.Apply(victim, "Boost", Config.HitImmunity + Config.AdrenalineTime)
 	Status.Apply(killer, "Busy", Config.WolverineHitRecovery)
 
 	-- Crisp hit feedback
 	local torso = Util.Torso(char) or root
-	VFX.Impact(torso.Position, Color3.fromRGB(255, 50, 40), 1)
+	local kChar = killer and killer.Character
+	VFX.Impact(torso.Position, kChar and kChar:GetAttribute("ClawGlow") or Color3.fromRGB(255, 60, 50), 1, char)
 	VFX.WoundMarks(char)
 	VFX.IFrames(char, Config.HitImmunity)
 	VFX.ThrowTrail(char, Config.Throw.Tumble + 0.3)

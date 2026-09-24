@@ -457,6 +457,88 @@ end
 -- Sentinel armour (purple-blue plates, magenta limbs, gold face, glowing core)
 ---------------------------------------------------------------------------
 
+-- Survivors are Weapon X scientists: lab coat over their own avatar, ID badge,
+-- pens and safety glasses. Sized from each body part, so it fits any R15 avatar.
+function Costumes.DressScientist(char)
+	local old = char:FindFirstChild("LabCoat")
+	if old then
+		old:Destroy()
+	end
+	local coat = rgb(236, 238, 240)
+	local shade = rgb(214, 218, 222)
+	local function g(anchor, name, size, color, mat, offset, props)
+		return gear(char, anchor, name, size, color, mat or M.Fabric, offset, props, "LabCoat")
+	end
+	local torso = char:FindFirstChild("UpperTorso")
+	if torso then
+		local s = torso.Size
+		-- back + sides + shoulders, open at the front
+		g(torso, "CoatBack", Vector3.new(s.X * 1.08, s.Y * 1.02, 0.12), coat, nil, CFrame.new(0, 0, s.Z * 0.56))
+		for sx = -1, 1, 2 do
+			g(torso, "CoatSide", Vector3.new(0.12, s.Y * 1.02, s.Z * 1.12), coat, nil, CFrame.new(sx * s.X * 0.54, 0, 0))
+			g(torso, "CoatFront", Vector3.new(s.X * 0.36, s.Y * 1.02, 0.12), coat, nil, CFrame.new(sx * s.X * 0.36, 0, -s.Z * 0.56))
+			g(torso, "Shoulder", Vector3.new(s.X * 0.36, 0.12, s.Z * 1.12), coat, nil, CFrame.new(sx * s.X * 0.36, s.Y * 0.51, 0))
+			-- lapels
+			g(torso, "Lapel", Vector3.new(s.X * 0.14, s.Y * 0.42, 0.1), shade, nil, CFrame.new(sx * s.X * 0.22, s.Y * 0.28, -s.Z * 0.63) * CFrame.Angles(0, 0, math.rad(sx * 18)))
+			g(torso, "Seam", Vector3.new(0.05, s.Y * 0.9, 0.14), shade, nil, CFrame.new(sx * s.X * 0.2, -0.05, -s.Z * 0.57))
+		end
+		-- breast pocket with pens, ID badge on a lanyard
+		g(torso, "Pocket", Vector3.new(s.X * 0.22, s.Y * 0.2, 0.06), shade, nil, CFrame.new(-s.X * 0.34, s.Y * 0.12, -s.Z * 0.64))
+		local penColors = { rgb(30, 60, 200), rgb(200, 30, 30), rgb(20, 20, 20) }
+		for i = 1, 3 do
+			g(torso, "Pen", Vector3.new(0.05, s.Y * 0.18, 0.05), penColors[i], M.SmoothPlastic, CFrame.new(-s.X * 0.4 + i * s.X * 0.045, s.Y * 0.24, -s.Z * 0.66))
+		end
+		g(torso, "Lanyard", Vector3.new(0.04, s.Y * 0.4, 0.04), rgb(170, 30, 26), M.SmoothPlastic, CFrame.new(s.X * 0.18, s.Y * 0.2, -s.Z * 0.62) * CFrame.Angles(0, 0, math.rad(12)))
+		local badge = g(torso, "Badge", Vector3.new(s.X * 0.18, s.Y * 0.22, 0.04), rgb(245, 245, 245), M.SmoothPlastic, CFrame.new(s.X * 0.24, -s.Y * 0.04, -s.Z * 0.64))
+		g(torso, "BadgeStripe", Vector3.new(s.X * 0.18, s.Y * 0.05, 0.05), rgb(40, 90, 200), M.SmoothPlastic, CFrame.new(s.X * 0.24, s.Y * 0.05, -s.Z * 0.645))
+		local gui = Instance.new("SurfaceGui")
+		gui.Face = Enum.NormalId.Front
+		gui.LightInfluence = 1
+		gui.CanvasSize = Vector2.new(60, 70)
+		gui.Parent = badge
+		local t = Instance.new("TextLabel")
+		t.BackgroundTransparency = 1
+		t.Size = UDim2.fromScale(1, 0.6)
+		t.Position = UDim2.fromScale(0, 0.4)
+		t.TextScaled = true
+		t.Font = Enum.Font.Code
+		t.TextColor3 = rgb(20, 20, 20)
+		t.Text = "WX\nSTAFF"
+		t.Parent = gui
+	end
+	local lower = char:FindFirstChild("LowerTorso")
+	if lower then
+		local s = lower.Size
+		g(lower, "CoatWaist", Vector3.new(s.X * 1.1, s.Y * 1.1, s.Z * 1.14), coat, nil, CFrame.new(0, 0, 0.02))
+		for sx = -1, 1, 2 do
+			g(lower, "CoatTail", Vector3.new(s.X * 0.54, s.Y * 5.4, 0.12), coat, nil, CFrame.new(sx * s.X * 0.27, -s.Y * 2.6, s.Z * 0.62) * CFrame.Angles(math.rad(6), 0, math.rad(sx * 3)))
+			g(lower, "CoatFlap", Vector3.new(s.X * 0.34, s.Y * 5, 0.1), coat, nil, CFrame.new(sx * s.X * 0.4, -s.Y * 2.4, -s.Z * 0.62) * CFrame.Angles(math.rad(-5), 0, math.rad(sx * 5)))
+			g(lower, "CoatHem", Vector3.new(0.12, s.Y * 5.2, s.Z * 1.1), coat, nil, CFrame.new(sx * s.X * 0.56, -s.Y * 2.5, 0) * CFrame.Angles(0, 0, math.rad(sx * 4)))
+		end
+	end
+	for _, side in { "Left", "Right" } do
+		local ua = char:FindFirstChild(side .. "UpperArm")
+		if ua then
+			local s = ua.Size
+			g(ua, "Sleeve", Vector3.new(s.X * 1.12, s.Y * 1.02, s.Z * 1.12), coat, nil, CFrame.new())
+		end
+		local la = char:FindFirstChild(side .. "LowerArm")
+		if la then
+			local s = la.Size
+			g(la, "Cuff", Vector3.new(s.X * 1.14, s.Y * 0.7, s.Z * 1.14), coat, nil, CFrame.new(0, s.Y * 0.15, 0))
+		end
+	end
+	local head = char:FindFirstChild("Head")
+	if head then
+		local s = head.Size
+		g(head, "Glasses", Vector3.new(s.X * 0.86, s.Y * 0.18, 0.05), rgb(180, 220, 240), M.Glass, CFrame.new(0, s.Y * 0.1, -s.Z * 0.53), { Transparency = 0.55 })
+		g(head, "GlassesFrame", Vector3.new(s.X * 0.9, 0.05, 0.07), rgb(30, 30, 32), M.SmoothPlastic, CFrame.new(0, s.Y * 0.2, -s.Z * 0.54))
+		for sx = -1, 1, 2 do
+			g(head, "GlassesArm", Vector3.new(0.05, 0.05, s.Z * 0.6), rgb(30, 30, 32), M.SmoothPlastic, CFrame.new(sx * s.X * 0.46, s.Y * 0.18, -s.Z * 0.2))
+		end
+	end
+end
+
 function Costumes.DressSentinel(char)
 	local ARMOR, ARMOR2 = rgb(98, 102, 178), rgb(76, 78, 150)
 	local MAG, FACE, MECH = rgb(176, 84, 178), rgb(208, 172, 112), rgb(26, 26, 32)

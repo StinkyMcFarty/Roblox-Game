@@ -1404,18 +1404,10 @@ function MapBuilder.SetupTerrain()
 	local Mat = Enum.Material
 	t:Clear()
 	t:FillBlock(CFrame.new(0, -8, 0), Vector3.new(1400, 16, 1400), Mat.Snow)
-	-- frozen earth and packed snow showing through
-	for _ = 1, 70 do
-		local x, z = r:NextNumber(-HALF, HALF), r:NextNumber(-HALF, HALF)
-		local rad = r:NextNumber(5, 11)
-		t:FillBall(Vector3.new(x, -rad + 1.6, z), rad, r:NextNumber() < 0.6 and Mat.Ground or Mat.Glacier)
-	end
-	-- frozen pond with a snowy rim
-	t:FillCylinder(CFrame.new(-100, -2, 45), 4, 14, Mat.Ice)
-	-- hills ringing the fence
-	for i = 1, 40 do
-		local a = i / 40 * math.pi * 2 + r:NextNumber() * 0.1
-		local d = r:NextNumber(HALF + 30, HALF + 75)
+	-- the facility (324 x 284) sits in the middle; snow drifts and hills ring it
+	for i = 1, 48 do
+		local a = i / 48 * math.pi * 2 + r:NextNumber() * 0.1
+		local d = r:NextNumber(275, 320)
 		local rad = r:NextNumber(24, 44)
 		local pos = Vector3.new(math.cos(a) * d, -rad * 0.4, math.sin(a) * d)
 		t:FillBall(pos, rad, Mat.Snow)
@@ -1426,7 +1418,7 @@ function MapBuilder.SetupTerrain()
 	-- mountains on the horizon
 	for i = 1, 16 do
 		local a = i / 16 * math.pi * 2 + r:NextNumber() * 0.2
-		local d = r:NextNumber(340, 420)
+		local d = r:NextNumber(400, 480)
 		local rad = r:NextNumber(70, 115)
 		local pos = Vector3.new(math.cos(a) * d, -rad * 0.2, math.sin(a) * d)
 		t:FillBall(pos, rad, Mat.Rock)

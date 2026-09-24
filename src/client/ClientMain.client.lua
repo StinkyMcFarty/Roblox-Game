@@ -10,6 +10,7 @@ local Effects = require(script.Parent:WaitForChild("Effects"))
 require(script.Parent:WaitForChild("Shop"))
 local Daily = require(script.Parent:WaitForChild("Daily"))
 local Anims = require(script.Parent:WaitForChild("Anims"))
+local SlashFX = require(script.Parent:WaitForChild("SlashFX"))
 
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local Ability = Remotes:WaitForChild("Ability")
@@ -48,26 +49,27 @@ local ROLE_HOLDS = {
 	},
 	Survivor = {
 		{ Name = "SprintHold", Label = "Sprint", Desc = "Run for your life", Icon = "🏃", KeyText = "SHIFT", Attr = "Sprinting", Color = Color3.fromRGB(80, 170, 255) },
-		{ Name = "HideHold", Label = "Hide", Desc = "Lockers, wardrobes, dumpsters", Icon = "🚪", KeyText = "E", Attr = "Hidden", Color = Color3.fromRGB(160, 160, 170) },
+		{ Name = "HideHold", Label = "Hide", Desc = "Lockers, cabinets, crates, freezers", Icon = "🚪", KeyText = "E", Attr = "Hidden", Color = Color3.fromRGB(160, 160, 170) },
 	},
 }
 
 local ROLE_TITLE = {
 	Wolverine = { "WOLVERINE", YELLOW },
-	Survivor = { "SURVIVOR", Color3.fromRGB(120, 200, 255) },
+	Survivor = { "WEAPON X SCIENTIST", Color3.fromRGB(120, 200, 255) },
 	Sentinel = { "SENTINEL SYSTEMS", Color3.fromRGB(190, 140, 255) },
 }
 
 local HINTS = {
 	Wolverine = "Shift: sprint   C / Ctrl: run on all fours\nRunning into walls tears through them. Hit anyone 3 times to rip them in half.",
 	Sentinel = "M1 punch stuns him. Q laser burns through walls. E pulse stuns everything close.\nThe suit dies in " .. S.Duration .. "s — make it count.",
-	Survivor = "Shift: sprint. G: fart (hides your scent from his Sniff). Reboot the 3 Sentinel terminals.\nHe can go through walls. Walls won't save you.",
+	Survivor = "Subject X is loose. Reboot the 3 Sentinel Protocol consoles (Foundry, Genetics Lab, Command Centre), then suit up in the Hangar.\nShift: sprint. G: fart (hides your scent). He tears through walls — keep moving.",
 	Lobby = "Waiting for the next round.",
 	Dead = "You were torn apart. Wait for the next round.",
 }
 
 local readyAt = {}
 local slashSide = 0
+local lastPredictedSlash = -1
 local PREDICT = { Pounce = "Pounce", Stab = "Impale", Sniff = "Sniff", Punch = "Punch", Laser = "Laser", Pulse = "Pulse", Fart = "Fart" }
 local currentKit = {}
 
@@ -117,6 +119,16 @@ local function activate(name)
 	end
 	if predict then
 		Anims.Play(char, predict)
+	end
+	if name == "Slash" then
+		-- draw our own claw crescents on the strike frame (the server's copy is skipped)
+		local side = slashSide == 1 and "R" or "L"
+		lastPredictedSlash = os.clock()
+		task.delay(0.12, function()
+			if char.Parent and hum.Health > 0 then
+				SlashFX.Arc(char, side)
+			end
+		end)
 	end
 
 	local look = Vector3.new(root.CFrame.LookVector.X, 0, root.CFrame.LookVector.Z).Unit
@@ -249,6 +261,12 @@ Fx.OnClientEvent:Connect(function(kind, data)
 		if data.Victim then
 			Anims.Jolt(data.Victim, 1.2)
 		end
+	elseif kind == "Slash" then
+		if not (data.Char == player.Character and os.clock() - lastPredictedSlash < 0.6) then
+			SlashFX.Arc(data.Char, data.Side, data.Color)
+		end
+	elseif kind == "HitFlash" then
+		SlashFX.HitFlash(data.Position, data.Color, data.Size, data.Victim)
 	elseif kind == "AnimStop" then
 		Anims.Stop(data.Char, data.Clip)
 	elseif kind == "Announce" then

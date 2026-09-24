@@ -44,64 +44,18 @@ local function fxPart(props)
 	return p
 end
 
--- Three curved claw crescents in front of the attacker.
--- `color` tints the outer glow (claw skin colour).
+-- Three razor-thin claw crescents in front of the attacker, drawn by every client
+-- (client/SlashFX) so they render smoothly. `color` is the claw skin's glow.
 function VFX.ClawArc(root, side, color)
-	color = color or Color3.fromRGB(255, 80, 60)
-	local dir = side == "R" and 1 or -1
-	local base = root.CFrame * CFrame.new(0, 0.8, -3.2)
-	local segments = 7
-	local arcRadius = 3.4
-	local sweep = math.rad(110)
-	for claw = -1, 1 do
-		for i = 0, segments - 1 do
-			local a0 = -sweep / 2 + sweep * (i / segments)
-			local a1 = -sweep / 2 + sweep * ((i + 1) / segments)
-			local am = (a0 + a1) / 2
-			local segLen = arcRadius * (a1 - a0) * 1.08
-			-- thinner at the ends of the arc, thick in the middle
-			local thickness = 0.28 * (1 - math.abs(am) / (sweep / 2)) + 0.05
-			local cf = base
-				* CFrame.Angles(0, 0, math.rad(35 * dir))
-				* CFrame.new(claw * 0.55, 0, 0)
-				* CFrame.Angles(0, am * dir, 0)
-				* CFrame.new(0, 0, -arcRadius)
-				* CFrame.Angles(0, math.rad(90), 0)
-			local core = fxPart({ Size = Vector3.new(segLen, thickness, thickness * 0.5), CFrame = cf, Color = Color3.new(1, 1, 1), Transparency = 0 })
-			local glow = fxPart({ Size = Vector3.new(segLen, thickness * 2.8, thickness * 1.6), CFrame = cf, Color = color, Transparency = 0.55 })
-			local delay = i * 0.012
-			task.delay(delay, function()
-				TweenService:Create(core, TweenInfo.new(0.16, Enum.EasingStyle.Quad), { Transparency = 1, Size = core.Size * Vector3.new(1.2, 0.2, 0.2) }):Play()
-				TweenService:Create(glow, TweenInfo.new(0.2, Enum.EasingStyle.Quad), { Transparency = 1, Size = glow.Size * Vector3.new(1.3, 1.6, 1.6) }):Play()
-			end)
-			Debris:AddItem(core, 0.35)
-			Debris:AddItem(glow, 0.35)
-		end
+	if root and root.Parent then
+		Fx:FireAllClients("Slash", { Char = root.Parent, Side = side, Color = color })
 	end
 end
 
--- Fast bright flash + ring at a hit location.
-function VFX.Impact(position, color, size)
-	size = size or 1
-	color = color or Color3.fromRGB(255, 60, 40)
-	local ball = fxPart({ Shape = Enum.PartType.Ball, Size = Vector3.one * 0.6 * size, Position = position, Color = Color3.new(1, 1, 1), Transparency = 0 })
-	TweenService:Create(ball, TweenInfo.new(0.12, Enum.EasingStyle.Quad), { Size = Vector3.one * 4.5 * size, Transparency = 1 }):Play()
-	Debris:AddItem(ball, 0.2)
-	local ring = fxPart({
-		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(0.1, 1, 1) * size,
-		CFrame = CFrame.new(position) * CFrame.Angles(math.random() * math.pi, math.random() * math.pi, 0),
-		Color = color,
-		Transparency = 0.1,
-	})
-	TweenService:Create(ring, TweenInfo.new(0.22, Enum.EasingStyle.Quad), { Size = Vector3.new(0.05, 7, 7) * size, Transparency = 1 }):Play()
-	Debris:AddItem(ring, 0.3)
-	Util.Burst(position, Util.SparkProps, 18, 1)
-	local light = Instance.new("PointLight")
-	light.Color = color
-	light.Range = 14 * size
-	light.Brightness = 4
-	light.Parent = ball
+-- X-shaped star flare, needle burst and a white body flash at a hit location.
+-- `victim` (optional character) flashes white for a frame.
+function VFX.Impact(position, color, size, victim)
+	Fx:FireAllClients("HitFlash", { Position = position, Color = color, Size = size or 1, Victim = victim })
 end
 
 -- Red claw marks slashed across a victim for a moment.

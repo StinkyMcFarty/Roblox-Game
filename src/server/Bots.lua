@@ -9,6 +9,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Util = require(ReplicatedStorage.Shared.Util)
 local Round = require(script.Parent.Round)
 local Status = require(script.Parent.Status)
+local Costumes = require(script.Parent.Costumes)
 
 local Bots = {}
 
@@ -66,9 +67,14 @@ local function makeModel(index)
 	return model
 end
 
+-- wander between the facility's rooms (spawn points sit in every wing)
 local function randomPoint()
-	local r = 160
-	return Vector3.new(math.random(-r, r), 3, math.random(-r, r))
+	local spawns = Round.Map and Round.Map:FindFirstChild("Spawns")
+	local list = spawns and spawns:GetChildren() or {}
+	if #list > 0 then
+		return list[math.random(#list)].Position + Vector3.new(math.random(-6, 6), 0, math.random(-6, 6))
+	end
+	return Vector3.new(math.random(-100, 100), 3, math.random(-100, 100))
 end
 
 local function think(bot)
@@ -140,6 +146,7 @@ function Bots.Fill(count, spawns)
 			model.Parent = (Round.Map and Round.Map:FindFirstChild("Debris")) or workspace
 			local spot = spawns[math.random(#spawns)]
 			model:PivotTo(spot.CFrame + Vector3.new(math.random(-4, 4), 3, math.random(-4, 4)))
+			pcall(Costumes.DressScientist, model)
 			local root = Util.Root(model)
 			if root then
 				pcall(function()

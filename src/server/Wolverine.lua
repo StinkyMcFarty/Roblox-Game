@@ -80,6 +80,7 @@ local clawSet = nil
 local function makeClaws(char, clawId)
 	clawSkin = Skins.Claws[clawId] or Skins.Claws[Skins.DefaultClaw]
 	clawGlow = clawSkin.Glow
+	char:SetAttribute("ClawGlow", clawGlow)
 	clawSet = Costumes.BuildClaws(char, clawSkin, false)
 end
 
@@ -420,14 +421,13 @@ local function slash(player, char, root)
 	combo = combo % 2 + 1
 	local side = combo == 1 and "R" or "L"
 	VFX.Anim(char, side == "R" and "SlashR" or "SlashL")
-	Util.Sound(Config.Sounds.Whoosh, root, { Pitch = 0.95 + math.random() * 0.2, Volume = 1 })
 	-- land the hit on the strike frame of the animation (wind-up first)
 	task.delay(0.12, function()
 		if not (char.Parent and Util.IsAlive(char)) then
 			return
 		end
 		clawStreaks(root, side)
-		Util.Sound(Config.Sounds.Slash, root, { Pitch = 0.9 + math.random() * 0.25, Volume = 1.2 })
+		Util.Sound(Config.Sounds.Slash, root, { Pitch = 0.96 + math.random() * 0.1, Volume = 1.3 })
 		local cfg = Config.Abilities.Slash
 		local cf = root.CFrame * CFrame.new(0, 0, -cfg.Range / 2)
 		Combat.BreakInBox(cf, Vector3.new(cfg.Width, 9, cfg.Range), root.Position, 35)
@@ -456,7 +456,7 @@ local function pounceStrike(player, char, root, target)
 	Util.Sound(Config.Sounds.Stab, torso, { Volume = 2, Range = 200 })
 	Util.Sound(Config.Sounds.Impact, torso, { Volume = 2, Range = 200 })
 	VFX.Pierce(root, clawGlow)
-	VFX.Impact(torso.Position, clawGlow, 1.3)
+	VFX.Impact(torso.Position, clawGlow, 1.3, target.Char)
 	VFX.ExitSpray(target.Char, dir)
 	VFX.Shockwave(Vector3.new(target.Root.Position.X, groundY(target.Root.Position, { char, target.Char }) + 0.2, target.Root.Position.Z), 14)
 	Combat.Blood(torso, 40)

@@ -52,6 +52,8 @@ No copyrighted audio is used.
 
 Anything left at `0` uses a built-in Roblox sound instead. Roblox may ask you to verify your account before uploading audio.
 
+**Upload at least `Slash.ogg` and `Roar.ogg`.** Without them, M1 uses Roblox's old sword sound and the roar is a pitched-down placeholder.
+
 ## How it plays
 
 **Round:** 20s intermission. Then Wolverine wakes up locked inside the glass tank room of the Weapon X lab. After ~2.5s his claws pop out (**SNIKT!**), then he **roars** and every player's screen shakes. After 7s he's released. Survivors have **2:30** to last. **Every kill adds +15s.**
@@ -70,7 +72,7 @@ Anything left at `0` uses a built-in Roblox sound instead. Roblox may ask you to
 - It takes **3 hits to kill** a survivor. The 3rd hit, from any attack, triggers the finisher: he lifts them and **rips them in half**.
 - Hits 1 and 2 **throw** the survivor, who tumbles through the air with a trail. They get **2s of i-frames** (a visible white shimmer) and an adrenaline boost. Wolverine gets a short recovery, so there are no infinite combos.
 - The HUD shows animated ability cards (bottom-right) with keys, cooldown sweeps and "ready" flashes.
-- Crisp VFX: claw trails, crescent slash arcs, impact flashes, dust bursts, pounce shockwaves.
+- Crisp VFX: three razor-thin claw crescents on every M1, spark flecks, and an X-shaped star flare with a needle burst and a white body flash on hit. The client draws these every frame.
 - He has 600 HP and a healing factor.
 - **Sprint animations**: survivors get a panicked flee (they look back at him); Wolverine gets a low, heavy hunting run.
 
@@ -78,11 +80,11 @@ Anything left at `0` uses a built-in Roblox sound instead. Roblox may ask you to
 
 - Shift sprints (stamina).
 - **G = Fart** (once a minute): a green gas cloud. For 20s, Wolverine's Sniff points at the cloud instead of you.
-- **Hide** in lockers, wardrobes, dumpsters and the diner freezer. His Sniff still marks the spot "HIDING", and clawing or smashing the spot drags you out. Hiding only works while his Sniff is on cooldown.
+- **Hide** in lockers, cabinets, crates and cold-store freezers. His Sniff still marks the spot "HIDING", and clawing or smashing the spot drags you out. Hiding only works while his Sniff is on cooldown.
 
 **The counter: Sentinel suit** (like the Hulkbuster)
 
-- Reboot the **3 Sentinel terminals** (cabin, warehouse, diner). This unlocks the pod in the container yard. **Two** survivors can suit up.
+- Reboot the **3 Sentinel Protocol consoles** (Foundry, Genetics Lab, Command Centre). This unlocks the suits in the Sentinel Hangar. **Two** survivors can suit up.
 - **Teamwork is required:** suits within 30 studs of each other are *linked* (energy tether, 1.6x damage, longer stuns). Alone they deal 0.5x damage, which his healing outpaces.
 - **M1 punch** (stuns + knockback), **Q laser** (burns through walls; on a hit it flashes Wolverine's **adamantium skeleton** before his flesh regrows), **E inhibitor pulse** (stun area).
 - Other limits:
@@ -108,21 +110,33 @@ A Weapon X holding hangar on a snowy mountain ledge:
 - a fireplace lounge with a live "Top Hunters" leaderboard
 - a hanging screen showing the round timer
 
-## Map
+## Map: the Weapon X facility
 
-A snowed-in Alkali Lake / Weapon X compound at night:
+One huge underground complex (320 × 280 studs), built entirely from code. It has 17 rooms, and every wall is detailed on both sides.
 
-- the lab, with its adamantium tank room
-- a warehouse with catwalks
-- Joe's Diner and its gas station
-- four log cabins
-- a shipping-container yard with the Sentinel pod
-- guard gate, watchtowers with sweeping searchlights, flickering street lamps, fire barrels
-- pine forest, mountains, falling snow, fog
+| Wing | What's in it |
+|---|---|
+| **Subject X Containment** (atrium, 40 high) | armoured glass cell (he smashes out), adamantium tank with bubbling fluid, ceiling ring rig, catwalks + stairs, consoles, giant screens, alarm beacons |
+| **Containment Ring** | bunker corridors: red pipe columns, orange stripe, grate ceiling, service pipes, windows into the atrium |
+| **Adamantium Foundry** | three molten crucibles, lava channel with bridges, gantry crane + ladle, conveyor and forge press, bar pallets, valve piping |
+| **Sentinel Hangar** | two docked Sentinel suits in cradles (the pod), sealed bay door, scaffolding, crane, tool chests, spare Sentinel head |
+| **Genetics Lab / Cryo Vault** | lab benches with microscopes, beakers and monitors, DNA hologram, fume hoods, cryo pods with frozen specimens, cold mist |
+| **Command Centre / Server Core** | 3×3 video wall, curved console rows, facility holo-map, conference room, server aisles with blinking racks |
+| **Reactor Core** | glowing reactor column with catwalk ring, coolant loops, turbines, transformers, control desks |
+| **Records Archive** | shelving aisles of boxes, reading desk, filing cabinets, copier |
+| **Staff Canteen / Quarters** | round tables and stools, serving line, vending machines, bunk rooms, lockers, lounge |
+| **Medical Reception / Surgical Theatre** | reception desk, waiting chairs, sofas and plants, the Weapon X operating table, robot arms, injection tanks, x-ray boxes |
 
-Also on the map: power lines, rooftop AC units and a satellite dish, generators, woodpiles, pallets and cones, an abandoned truck, benches, a phone booth, a blood trail out of the lab, and hiding spots.
+Surface detail (stencils, hazard stripes, grilles, screens, signs) is drawn with SurfaceGuis, so it needs no uploads. When Subject X is released:
 
-Almost every wall is breakable, and trees fall when he slashes their trunks. The map rebuilds each round.
+- alarm beacons spin
+- alarm strips pulse
+- door lamps flash red
+- the screens keep ticking
+
+Survivors play **Weapon X scientists** in lab coats. They reboot three Sentinel Protocol consoles (Foundry, Genetics Lab, Command Centre), then suit up in the Hangar.
+
+Every inner wall can be torn through. The outer shell can't. The facility is built once and cloned fresh each round.
 
 ## Editing
 
@@ -131,10 +145,10 @@ All tuning lives in `src/shared/Config.lua` (speeds, cooldowns, timers, rewards)
 To live-sync code into Studio, install [Rojo](https://rojo.space) and run `rojo serve`. To rebuild the place file, run `rojo build -o SurviveTheWolverine.rbxlx`.
 
 ```
-src/server/   GameManager (rounds), Wolverine, Sentinel, Combat, VFX, MapBuilder,
+src/server/   GameManager (rounds), Wolverine, Sentinel, Combat, VFX, Facility (arena), MapBuilder (lobby),
               Movement, Hiding, Fart, Bots, PlayerData (saves, dailies, Robux)
 src/client/   ClientMain (controls), Interface (HUD), UIKit (animated UI),
-              Anims (sprints), Effects (shake, snow, sniff, dread),
+              Anims (sprints), SlashFX (claw arcs, hit flares), Effects (shake, snow, sniff, alarms),
               Shop (suits/claws), Daily (challenges)
 src/shared/   Config, Skins, Util
 ```

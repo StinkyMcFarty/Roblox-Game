@@ -69,7 +69,7 @@ local function applyZone(lobby)
 	TweenService:Create(Lighting, TweenInfo.new(1.2), target):Play()
 	local atmo = Lighting:FindFirstChildOfClass("Atmosphere")
 	if atmo then
-		TweenService:Create(atmo, TweenInfo.new(1.2), { Density = lobby and 0.25 or 0.42, Haze = lobby and 0.8 or 2.2 }):Play()
+		TweenService:Create(atmo, TweenInfo.new(1.2), { Density = lobby and 0.25 or 0.3, Haze = lobby and 0.8 or 1.2 }):Play()
 	end
 end
 RunService.Heartbeat:Connect(function()
@@ -341,6 +341,10 @@ flakes.SpreadAngle = Vector2.new(15, 15)
 flakes.Parent = snow
 
 local baseCFrames = setmetatable({}, { __mode = "k" })
+local roofClock, screenClock = 0, 0
+local roofParams = RaycastParams.new()
+roofParams.FilterType = Enum.RaycastFilterType.Exclude
+roofParams.FilterDescendantsInstances = { workspace.CurrentCamera }
 local flickerClock = 0
 RunService.RenderStepped:Connect(function(dt)
 	local cam = workspace.CurrentCamera
@@ -367,7 +371,59 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 
+	-- no snow indoors: stop emitting when there's a roof over the camera
+	roofClock += dt
+	if roofClock > 0.4 then
+		roofClock = 0
+		local hit = workspace:Raycast(cam.CFrame.Position, Vector3.new(0, 120, 0), roofParams)
+		flakes.Enabled = hit == nil
+	end
+
+	-- facility alarm: once Subject X is loose, beacons spin and alarm strips pulse
 	local t = os.clock()
+	local alarm = ReplicatedStorage:GetAttribute("Released") == true and ReplicatedStorage:GetAttribute("InRound") == true
+	local pulse = 0.5 + 0.5 * math.sin(t * 6)
+	for _, b in CollectionService:GetTagged("AlarmBeacon") do
+		local beam = b:FindFirstChild("Beam")
+		if beam then
+			beam.Brightness = alarm and 6 or 0
+		end
+		if alarm then
+			local base = baseCFrames[b]
+			if not base then
+				base = b.CFrame
+				baseCFrames[b] = base
+			end
+			b.CFrame = base * CFrame.Angles(0, t * 5, 0)
+		end
+		b.Color = alarm and Color3.fromRGB(255, 40 + 40 * pulse, 30) or Color3.fromRGB(90, 20, 18)
+	end
+	for _, p in CollectionService:GetTagged("Alarm") do
+		p.Transparency = alarm and (0.6 - 0.6 * pulse) or 0
+	end
+	for _, p in CollectionService:GetTagged("DoorLamp") do
+		p.Color = alarm and (pulse > 0.5 and Color3.fromRGB(255, 40, 30) or Color3.fromRGB(80, 10, 8)) or Color3.fromRGB(70, 255, 120)
+	end
+	-- live screens: flicker LEDs, blink warnings, jiggle bar charts
+	screenClock += dt
+	if screenClock > 0.15 then
+		screenClock = 0
+		local screens = CollectionService:GetTagged("LiveScreen")
+		for _ = 1, math.min(#screens, 12) do
+			local disp = screens[math.random(1, #screens)]
+			local gui = disp and disp:FindFirstChildOfClass("SurfaceGui")
+			if gui then
+				for _, d in gui:GetDescendants() do
+					if d.Name == "Blink" and d:IsA("GuiObject") then
+						d.Visible = math.random() < 0.7
+					elseif d.Name == "Bar" and d:IsA("Frame") then
+						d.Size = UDim2.fromScale(d.Size.X.Scale, math.clamp(d.Size.Y.Scale + (math.random() - 0.5) * 0.2, 0.1, 0.85))
+					end
+				end
+			end
+		end
+	end
+
 	for _, p in CollectionService:GetTagged("Searchlight") do
 		if p:IsA("BasePart") then
 			local base = baseCFrames[p]

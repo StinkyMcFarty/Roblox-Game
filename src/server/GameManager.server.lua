@@ -9,6 +9,8 @@ local Round = require(Server.Round)
 local Status = require(Server.Status)
 local Movement = require(Server.Movement)
 local MapBuilder = require(Server.MapBuilder)
+local Facility = require(Server.Facility)
+local Costumes = require(Server.Costumes)
 local Wolverine = require(Server.Wolverine)
 local Sentinel = require(Server.Sentinel)
 local PlayerData = require(Server.PlayerData)
@@ -31,6 +33,7 @@ Players.RespawnTime = 4
 MapBuilder.SetupLighting()
 MapBuilder.SetupTerrain()
 local lobby = MapBuilder.BuildLobby()
+task.defer(Facility.Build) -- pre-build the facility template during the first intermission
 
 -- Lobby: statues, live status screen and leaderboard
 task.spawn(function()
@@ -218,7 +221,7 @@ local function runRound()
 	end
 
 	setStatus("Building the facility...")
-	local map = MapBuilder.Build()
+	local map = Facility.Build()
 	Round.Map = map
 	Round.Active = true
 	Round.Released = false
@@ -256,6 +259,10 @@ local function runRound()
 				p:SetAttribute("Role", "Survivor")
 				local spot = spawns[(i - 1) % #spawns + 1]
 				char:PivotTo(spot.CFrame + Vector3.new(0, 3, 0))
+				task.spawn(function()
+					char:WaitForChild("UpperTorso", 5)
+					pcall(Costumes.DressScientist, char)
+				end)
 			end
 		end
 	end

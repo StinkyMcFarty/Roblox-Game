@@ -54,7 +54,7 @@ local function unlockPod(pod)
 		light.Brightness = 4
 		light.Range = 30
 	end
-	announce("SENTINEL SUIT ONLINE — get to the container yard!", GLOW)
+	announce("SENTINEL PROTOCOL ONLINE — get to the Sentinel Hangar!", GLOW)
 end
 
 function Sentinel.SetupRound(map)

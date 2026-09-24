@@ -127,11 +127,31 @@ def snikt():
 
 
 def slash():
-    """Claw whoosh with a wet cutting tail."""
-    w = whoosh(0.26, 700, 3800, 1.0)
-    cut = pad(bandpass(noise(0.12), 1800, 6000) * env(0.12, 0.001, 0.05), 0.14)
-    wet = pad(lowpass(noise(0.2), 900) * env(0.2, 0.004, 0.08) * 0.8, 0.15)
-    return finish(reverb(mix(w, cut * 0.9, wet), 0.3, 0.15))
+    """Clean modern claw slice: a tight air-cut 'shk', three quick blade edges and a
+    bright steel shimmer. Short, crisp envelopes (no long airy whoosh = no 'wind')."""
+    dur = 0.55
+    parts = []
+    # air cut: high band that zips downward, very fast attack, ~45 ms body
+    cut = sweep_band(noise(0.16), 9500, 3200, 0.5, 24) * env(0.16, 0.0015, 0.045, 5)
+    parts.append(cut * 1.3)
+    # three blade edges, 9 ms apart (three claws), each a crisp high click + short hiss
+    for k in range(3):
+        edge = highpass(noise(0.05), 4500) * env(0.05, 0.0004, 0.012, 6)
+        parts.append(pad(edge * (0.9 - k * 0.2), 0.008 + k * 0.009))
+    # steel shimmer: inharmonic partials with a slight downward glide, fast decay
+    t = t_axis(dur)
+    shimmer = np.zeros_like(t)
+    for i, f in enumerate([3150, 4720, 6380, 8210, 10400]):
+        glide = f * (1 - 0.035 * np.minimum(t / 0.2, 1))
+        shimmer += np.sin(2 * np.pi * np.cumsum(glide) / SR + i) * np.exp(-t / (0.075 - i * 0.009)) / (1 + i * 0.5)
+    parts.append(pad(shimmer * 0.3, 0.01))
+    # a touch of low weight so it doesn't feel thin (not a boom)
+    tt = t_axis(0.08)
+    parts.append(np.sin(2 * np.pi * (160 - 700 * tt) * tt) * env(0.08, 0.001, 0.025) * 0.35)
+    x = mix(*parts)
+    x = highpass(x, 120, 2)
+    x = np.tanh(x * 1.4)
+    return finish(reverb(x, 0.22, 0.1), 0.7, 0.05)
 
 
 def stab():
@@ -166,31 +186,98 @@ def land():
     return finish(reverb(mix(thud * 1.5, debris), 0.5, 0.2))
 
 
-def growl(dur, f_base, f_peak, rough=0.9):
-    """Formant-filtered roughened pulse wave: a beast's voice."""
+def resonator(x, f, bw):
+    """Two-pole formant resonance at f Hz with bandwidth bw Hz."""
+    r = np.exp(-np.pi * bw / SR)
+    th = 2 * np.pi * f / SR
+    return signal.lfilter([1 - r], [1, -2 * r * np.cos(th), r * r], x)
+
+
+def voice(dur, contour, rough=1.0, vowels=None, seed_shift=0.0):
+    """Glottal-pulse beast voice: jittered pitch, period-doubling rasp, formant vowel
+    morph, aspiration noise and asymmetric overdrive (a throat being torn open)."""
     t = t_axis(dur)
-    contour = f_base + (f_peak - f_base) * np.sin(np.pi * np.clip(t / dur, 0, 1)) ** 0.7
-    jitter = lowpass(rng.normal(0, 1, len(t)), 40) * 6
-    f = contour + jitter + np.sin(2 * np.pi * 5.5 * t) * 3
-    phase = 2 * np.pi * np.cumsum(f) / SR
-    src = signal.sawtooth(phase) + 0.5 * signal.sawtooth(phase * 0.5)
-    rasp = 1 + rough * lowpass(rng.normal(0, 1, len(t)), 70) * 0.6
-    src = src * rasp
-    breath = highpass(noise(dur), 900) * 0.35
-    voice = src + breath
-    formants = [(650, 1.0), (1150, 0.6), (2500, 0.28), (3400, 0.15)]
-    out = sum(bandpass(voice, f0 * 0.82, f0 * 1.18, 2) * g for f0, g in formants)
-    out += lowpass(voice, 300) * 0.9
-    out = np.tanh(out * 2.2)
-    shape = env(dur, 0.12, dur * 0.8) * np.clip(np.sin(np.pi * np.clip(t / dur, 0, 1)) * 1.6, 0, 1)
-    return out * shape
+    n = len(t)
+    f = contour(t) * (1 + lowpass(rng.normal(0, 1, n), 25) * 0.035)  # jitter
+    f += np.sin(2 * np.pi * (6.2 + seed_shift) * t) * f * 0.02  # tremble
+    ph = np.cumsum(f) / SR
+    frac = ph % 1.0
+    # LF-ish glottal pulse: sharp closure each period
+    pulse = np.where(frac < 0.6, np.sin(np.pi * frac / 0.6) ** 2, -1.8 * np.sin(np.pi * (frac - 0.6) / 0.4) ** 3)
+    # period doubling / subharmonic rasp: alternate cycles get louder/quieter
+    cyc = np.floor(ph)
+    sub = 1 + rough * 0.55 * np.where(cyc % 2 == 0, 1, -1) * (0.6 + 0.4 * lowpass(rng.normal(0, 1, n), 8))
+    shimmer = 1 + rough * 0.35 * lowpass(rng.normal(0, 1, n), 60)
+    src = pulse * sub * shimmer
+    # pre-emphasis: a torn, bright throat instead of a muffled hum
+    src = signal.lfilter([1, -0.97], [1], src)
+    src = signal.lfilter([1, -0.9], [1], src)
+    src /= np.max(np.abs(src)) + 1e-9
+    asp = highpass(noise(dur), 900) * (0.03 + 0.03 * rough)
+    src = src + asp
+    vowels = vowels or [(0.0, (600, 1050, 2400, 3300)), (0.25, (820, 1250, 2550, 3500)), (1.0, (650, 1000, 2450, 3300))]
+    # morph formants over time by crossfading three filtered versions
+    out = np.zeros(n)
+    u = t / dur
+    for i, (pos, fs) in enumerate(vowels):
+        nxt = vowels[i + 1][0] if i + 1 < len(vowels) else 2
+        prv = vowels[i - 1][0] if i > 0 else -1
+        w = np.clip(np.minimum((u - prv) / max(pos - prv, 1e-3), (nxt - u) / max(nxt - pos, 1e-3)), 0, 1)
+        y = sum(resonator(src, f0, bw) * g for f0, bw, g in zip(fs, (120, 140, 190, 260), (1.0, 0.9, 0.55, 0.35)))
+        out += y * w
+    out += lowpass(src, 300) * 0.15  # chest
+    out = out / (np.max(np.abs(out)) + 1e-9)
+    # presence: the ragged 1-4 kHz edge of a screaming throat
+    out = out + bandpass(out, 1000, 2600, 2) * 4.0 + bandpass(out, 2600, 4500, 2) * 6.0
+    out = out / (np.max(np.abs(out)) + 1e-9)
+    out = np.tanh(out * 2.4 + 0.2) - np.tanh(0.2)  # asymmetric overdrive
+    return out
+
+
+def growl(dur, f_base, f_peak, rough=0.9):
+    contour = lambda t: f_base + (f_peak - f_base) * np.sin(np.pi * np.clip(t / dur, 0, 1)) ** 0.7
+    shape = env(dur, 0.1, dur * 0.8) * np.clip(np.sin(np.pi * np.clip(t_axis(dur) / dur, 0, 1)) * 1.6, 0, 1)
+    return voice(dur, contour, rough) * shape
 
 
 def roar():
-    main = growl(2.0, 85, 140)
-    sub = growl(2.0, 42, 70, 0.5) * 0.7
-    top = growl(2.0, 170, 260, 1.2) * 0.25
-    return finish(reverb(mix(main, sub, top), 0.9, 0.3), 0.95)
+    """Logan's berserker roar: a sharp inhale snarl, then a huge raw yell that
+    climbs, cracks into rasp and sags, stacked with an octave-down beast layer,
+    a cinematic sub hit and a big concrete-lab reverb."""
+    dur = 2.6
+    t = t_axis(dur)
+
+    def contour(tt):
+        rise = 118 + 72 * (1 - np.exp(-tt / 0.18))  # snaps up to ~190 Hz
+        sag = np.clip((tt - 0.9) / 1.6, 0, 1) ** 1.3 * 70
+        return rise - sag
+
+    # amplitude: slam in, sustain with strain swells, long ragged tail
+    amp = np.clip(t / 0.06, 0, 1) * (1 - np.clip((t - 1.3) / 1.3, 0, 1) ** 1.6)
+    amp *= 1 + 0.15 * np.sin(2 * np.pi * 2.3 * t) * (t > 0.3)
+    layers = []
+    for k, (det, rough, g) in enumerate([(1.0, 1.1, 1.0), (1.012, 1.3, 0.7), (0.988, 0.9, 0.7)]):
+        layers.append(voice(dur, lambda tt, d=det: contour(tt) * d, rough, seed_shift=k * 0.7) * g)
+    beast = voice(dur, lambda tt: contour(tt) * 0.5, 1.6,
+                  vowels=[(0.0, (420, 820, 2100, 3000)), (1.0, (380, 760, 2000, 2900))], seed_shift=2) * 0.8
+    scream = highpass(voice(dur, lambda tt: contour(tt) * 2.0, 1.4, seed_shift=3), 1800) * 0.25
+    body = mix(*layers, beast, scream)
+    # post-EQ: tame boom, push the torn 1-4 kHz yell forward
+    body = highpass(body, 90, 2) - lowpass(body, 220, 2) * 0.45
+    body = body + bandpass(body, 900, 2200, 2) * 3.5 + bandpass(body, 2200, 4800, 2) * 5.0
+    body = body / (np.max(np.abs(body)) + 1e-9) * amp
+
+    # short snarling inhale before the roar
+    inh_d = 0.32
+    inhale = bandpass(noise(inh_d), 900, 5200) * np.linspace(0.2, 1, int(SR * inh_d)) ** 2
+    inhale *= 1 + 0.6 * np.sin(2 * np.pi * 38 * t_axis(inh_d))
+    # cinematic hit on the roar onset
+    ht = t_axis(1.2)
+    hit = np.sin(2 * np.pi * (58 - 26 * np.minimum(ht / 0.6, 1)) * ht) * env(1.2, 0.003, 0.5) * 0.9
+    x = mix(inhale * 0.35, pad(body, inh_d), pad(hit, inh_d))
+    x = highpass(x, 35, 2)
+    x = np.tanh(x / (np.max(np.abs(x)) + 1e-9) * 1.8)
+    return finish(reverb(reverb(x, 1.6, 0.28), 0.35, 0.15), 0.95, 0.3)
 
 
 def snarl():
