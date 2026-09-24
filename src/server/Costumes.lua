@@ -157,15 +157,172 @@ local function wolverineHair(char, head, color, opts)
 		CFrame.new(0, hs.Y * (0.6 + 0.1 * tuft), hs.Z * 0.12) * CFrame.Angles(rad(-16), 0, 0), "WedgePart")
 end
 
+---------------------------------------------------------------------------
+-- Wolverine faces. The avatar's round head is hidden and the suit gets a
+-- block head of the same size; the face is drawn on its flat front with a
+-- SurfaceGui (frames), so it always sits flat, stays sharp and needs no
+-- uploaded images. Styles: "Logan", "Comic", "WeaponX", "OldMan".
+---------------------------------------------------------------------------
+
+local INK = rgb(18, 14, 12)
+
+local function box(parent, x, y, w, h, color, rot, z, round, stroke)
+	local f = Instance.new("Frame")
+	f.AnchorPoint = Vector2.new(0.5, 0.5)
+	f.Position = UDim2.fromOffset(x, y)
+	f.Size = UDim2.fromOffset(w, h)
+	f.Rotation = rot or 0
+	f.BackgroundColor3 = color
+	f.BorderSizePixel = 0
+	f.ZIndex = z or 1
+	if round then
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(0, round)
+		c.Parent = f
+	end
+	if stroke then
+		local st = Instance.new("UIStroke")
+		st.Color = INK
+		st.Thickness = stroke
+		st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		st.Parent = f
+	end
+	f.Parent = parent
+	return f
+end
+
+local function faceChops(g, color, z)
+	for _, s in { -1, 1 } do
+		local cx = 256 + s * 216
+		box(g, cx, 300, 64, 230, color, 0, z, 10, 5)
+		box(g, 256 + s * 150, 394, 128, 44, color, s * 14, z, 14, 5)
+	end
+end
+
+local function faceEyes(g, iris, z)
+	for _, s in { -1, 1 } do
+		local cx = 256 + s * 80
+		box(g, cx, 224, 92, 38, rgb(250, 248, 242), 0, z, 16, 4)
+		box(g, cx - s * 10, 228, 28, 28, iris, 0, z + 1, 14)
+		box(g, cx - s * 10, 228, 12, 12, INK, 0, z + 2, 6)
+		box(g, cx, 206, 108, 14, INK, -s * 12, z + 3, 4) -- heavy angry lid
+	end
+end
+
+local function faceBrows(g, color, z)
+	for _, s in { -1, 1 } do
+		box(g, 256 + s * 84, 166, 134, 30, color, -s * 16, z, 6, 4)
+		box(g, 256 + s * 11, 192, 4, 26, rgb(120, 70, 50), -s * 10, z) -- scowl creases
+	end
+end
+
+local function faceNose(g, z)
+	box(g, 252, 296, 8, 46, rgb(150, 92, 66), 0, z, 4)
+	box(g, 262, 318, 28, 8, rgb(150, 92, 66), 0, z, 4)
+end
+
+local function faceSnarl(g, z, y)
+	y = y or 372
+	box(g, 256, y, 196, 64, rgb(96, 22, 24), 0, z, 18, 5)
+	box(g, 256, y, 164, 32, rgb(246, 242, 228), 0, z + 1, 6)
+	box(g, 256, y, 164, 3, rgb(150, 140, 120), 0, z + 2)
+	for k = -3, 3 do
+		box(g, 256 + k * 22, y, 3, 32, rgb(150, 140, 120), 0, z + 2)
+	end
+end
+
+local FACE_STYLES = {
+	Logan = function(g, hair)
+		faceChops(g, rgb(58, 40, 28), 2)
+		faceBrows(g, hair or rgb(40, 28, 20), 3)
+		faceEyes(g, rgb(92, 70, 44), 3)
+		faceNose(g, 2)
+		faceSnarl(g, 3)
+	end,
+	Comic = function(g, _, skinTone)
+		-- bare jaw under the yellow mask
+		box(g, 256, 404, 520, 240, skinTone, 0, 1, nil, 5)
+		faceChops(g, rgb(20, 20, 26), 2)
+		for _, s in { -1, 1 } do
+			local cx = 256 + s * 86
+			box(g, cx, 214, 176, 86, rgb(16, 16, 22), -s * 16, 2, 12, 4) -- black mask round the eyes
+			box(g, cx - s * 6, 222, 100, 26, rgb(255, 255, 255), -s * 14, 3, 4) -- blank white comic eyes
+		end
+		faceSnarl(g, 3, 380)
+	end,
+	WeaponX = function(g)
+		faceChops(g, rgb(58, 40, 28), 2)
+		faceNose(g, 2)
+		faceSnarl(g, 3)
+		for _, sc in { { 170, 300, 28 }, { 350, 316, -24 } } do -- stitched scars
+			box(g, sc[1], sc[2], 8, 96, rgb(150, 30, 30), sc[3], 4, 4)
+			for k = -1, 1 do
+				box(g, sc[1] + k * math.sin(math.rad(sc[3])) * -28, sc[2] + k * 28, 22, 4, INK, sc[3], 5)
+			end
+		end
+	end,
+	OldMan = function(g, hair)
+		local grey = hair or rgb(184, 182, 176)
+		faceEyes(g, rgb(90, 110, 120), 3)
+		faceBrows(g, grey, 4)
+		faceNose(g, 2)
+		-- full beard: jaw to jaw
+		box(g, 256, 440, 520, 190, grey, 0, 2, nil, 5)
+		for _, s in { -1, 1 } do
+			box(g, 256 + s * 222, 300, 76, 260, grey, 0, 2, 10, 5)
+		end
+		box(g, 256, 376, 96, 18, rgb(70, 30, 30), 0, 3, 6, 4) -- grim mouth
+		box(g, 256, 350, 220, 32, rgb(206, 204, 198), 0, 4, 14, 4) -- moustache
+		for k = -3, 3 do
+			box(g, 256 + k * 36, 450, 4, 44, rgb(140, 138, 132), 0, 3)
+		end
+	end,
+}
+
+-- Hide the avatar's head and weld a block head of the same size in its place
+-- with the drawn face on its front. Returns the new head part.
+local function faceBlock(char, head, style, hair, skinTone)
+	for _, d in head:GetChildren() do
+		if d:IsA("Decal") or d:IsA("Texture") or d:IsA("SurfaceAppearance") or d.ClassName == "FaceControls" then
+			d:Destroy()
+		end
+	end
+	head.Transparency = 1
+	if not head:GetAttribute("FaceGuard") then
+		head:SetAttribute("FaceGuard", true)
+		pcall(function()
+			-- the avatar finishes loading after we dress and re-adds its face
+			head.ChildAdded:Connect(function(d)
+				task.defer(function()
+					if d.Parent == head and (d:IsA("Decal") or d:IsA("Texture")) then
+						d:Destroy()
+					end
+				end)
+			end)
+		end)
+	end
+	local blk = gear(char, head, "HeadBlock", head.Size, head.Color, M.SmoothPlastic, CFrame.new())
+	local g = Instance.new("SurfaceGui")
+	g.Name = "Face"
+	g.Face = Enum.NormalId.Front
+	g.SizingMode = Enum.SurfaceGuiSizingMode.FixedSize
+	g.CanvasSize = Vector2.new(512, 512)
+	g.LightInfluence = 1
+	g.ClipsDescendants = true
+	g.Parent = blk
+	FACE_STYLES[style](g, hair, skinTone)
+	return blk
+end
+
 local function comicGear(char, head)
 	local YEL, BLU, BLK = rgb(238, 184, 20), rgb(28, 56, 140), rgb(18, 18, 22)
 	if head then
 		local hs = head.Size
 		head.Color = YEL
 		-- sculpted cowl over the top of the head
-		-- (kept above the brow line so it never cuts through the face)
-		gear(char, head, "Cowl", Vector3.new(hs.X * 1.08, hs.Y * 0.44, hs.Z * 1.08), YEL, M.SmoothPlastic,
-			CFrame.new(0, hs.Y * 0.47, hs.Z * 0.03), { Mesh = Enum.MeshType.Sphere })
+		-- fitted cowl over the top of the (block) head, above the brow line
+		gear(char, head, "Cowl", Vector3.new(hs.X * 1.06, hs.Y * 0.3, hs.Z * 1.06), YEL, M.SmoothPlastic,
+			CFrame.new(0, hs.Y * 0.4, hs.Z * 0.01))
 		-- the iconic swept-back fins
 		for s = -1, 1, 2 do
 			gear(char, head, "Fin", Vector3.new(0.1, hs.Y * 0.95, hs.Z * 0.62), BLK, M.SmoothPlastic,
@@ -200,15 +357,15 @@ local function weaponXGear(char, head)
 	local GUN, DARK = rgb(58, 58, 62), rgb(34, 34, 38)
 	if head then
 		local hs = head.Size
-		gear(char, head, "Helmet", Vector3.new(hs.X * 1.16, hs.Y * 0.8, hs.Z * 1.18), GUN, M.Metal,
-			CFrame.new(0, hs.Y * 0.3, hs.Z * 0.03), { Mesh = Enum.MeshType.Sphere, Reflectance = 0.08 })
-		gear(char, head, "Band", Vector3.new(hs.Y * 0.3, hs.X * 1.2, hs.Z * 1.2), DARK, M.Metal,
-			CFrame.new(0, hs.Y * 0.1, 0) * CFrame.Angles(0, 0, rad(90)), { Shape = Enum.PartType.Cylinder })
-		-- glowing red visor band wrapping the eyes
-		local visor = gear(char, head, "Visor", Vector3.new(hs.X * 0.8, hs.Y * 0.09, 0.06), rgb(255, 40, 40), M.Neon, CFrame.new(0, hs.Y * 0.1, -hs.Z * 0.61))
+		-- helmet shell and visor band, boxed to fit the block head
+		gear(char, head, "Helmet", Vector3.new(hs.X * 1.1, hs.Y * 0.56, hs.Z * 1.1), GUN, M.Metal,
+			CFrame.new(0, hs.Y * 0.25, hs.Z * 0.01), { Reflectance = 0.08 })
+		gear(char, head, "Band", Vector3.new(hs.X * 1.14, hs.Y * 0.2, hs.Z * 1.14), DARK, M.Metal, CFrame.new(0, hs.Y * 0.07, 0))
+		-- glowing red visor wrapping the eyes
+		local visor = gear(char, head, "Visor", Vector3.new(hs.X * 0.9, hs.Y * 0.09, 0.05), rgb(255, 40, 40), M.Neon, CFrame.new(0, hs.Y * 0.07, -(hs.Z * 0.57 + 0.025)))
 		for s = -1, 1, 2 do
-			gear(char, head, "Visor", Vector3.new(hs.Z * 0.38, hs.Y * 0.09, 0.06), rgb(255, 40, 40), M.Neon,
-				CFrame.new(s * hs.X * 0.5, hs.Y * 0.1, -hs.Z * 0.45) * CFrame.Angles(0, rad(s * -50), 0))
+			gear(char, head, "Visor", Vector3.new(0.05, hs.Y * 0.09, hs.Z * 0.5), rgb(255, 40, 40), M.Neon,
+				CFrame.new(s * (hs.X * 0.57 + 0.025), hs.Y * 0.07, -hs.Z * 0.25))
 			-- ear cans + bolts
 			gear(char, head, "EarCan", Vector3.new(0.28, hs.Y * 0.5, hs.Y * 0.5), DARK, M.Metal,
 				CFrame.new(s * hs.X * 0.62, hs.Y * 0.05, 0), { Shape = Enum.PartType.Cylinder })
@@ -220,7 +377,7 @@ local function weaponXGear(char, head)
 		l.Range = 8
 		l.Brightness = 2
 		l.Parent = visor
-		gear(char, head, "Ridge", Vector3.new(hs.X * 0.16, hs.Y * 0.14, hs.Z * 0.95), DARK, M.Metal, CFrame.new(0, hs.Y * 0.68, hs.Z * 0.02))
+		gear(char, head, "Ridge", Vector3.new(hs.X * 0.16, hs.Y * 0.14, hs.Z * 0.95), DARK, M.Metal, CFrame.new(0, hs.Y * 0.57, hs.Z * 0.02))
 		for i = -1, 1 do -- cable ports on the dome
 			gear(char, head, "Port", Vector3.new(0.18, 0.22, 0.22), rgb(120, 120, 125), M.Metal,
 				CFrame.new(i * hs.X * 0.22, hs.Y * 0.55, hs.Z * 0.4) * CFrame.Angles(0, 0, rad(90)), { Shape = Enum.PartType.Cylinder })
@@ -456,6 +613,9 @@ function Costumes.Dress(char, skinId)
 		weaponXGear(char, head)
 	elseif skinId == "OldManLogan" then
 		oldManGear(char)
+	end
+	if head and skin.FaceStyle and FACE_STYLES[skin.FaceStyle] and not asset(tex.Face) then
+		faceBlock(char, head, skin.FaceStyle, skin.FaceHair, skinTone)
 	end
 	if skin.Hair and (skin.HairAccessoryId or 0) == 0 then
 		wolverineHair(char, head, skin.Hair.Color, skin.Hair)
