@@ -977,6 +977,212 @@ local function buildWilderness(env, props)
 	end
 end
 
+
+---------------------------------------------------------------------------
+-- Extra detail pass: the stuff that makes it feel lived-in (and abandoned)
+---------------------------------------------------------------------------
+
+local function powerLine(parent, a, b, spacing)
+	local dir = (b - a).Unit
+	local len = (b - a).Magnitude
+	local side = dir:Cross(Vector3.yAxis)
+	local poles = {}
+	for t = 0, len, spacing do
+		local p = a + dir * t
+		block(parent, Vector3.new(0.9, 20, 0.9), CFrame.new(p + Vector3.new(0, 10, 0)), M.Wood, rgb(70, 52, 36))
+		block(parent, Vector3.new(0.5, 0.5, 7), CFrame.lookAt(p + Vector3.new(0, 18.5, 0), p + Vector3.new(0, 18.5, 0) + side), M.Wood, rgb(70, 52, 36))
+		for _, o in { -3, 0, 3 } do
+			block(parent, Vector3.new(0.3, 0.5, 0.3), CFrame.new(p + side * o + Vector3.new(0, 19, 0)), M.SmoothPlastic, rgb(120, 140, 120))
+		end
+		table.insert(poles, p)
+	end
+	for i = 1, #poles - 1 do
+		for _, o in { -3, 0, 3 } do
+			local p0 = poles[i] + side * o + Vector3.new(0, 19.2, 0)
+			local p1 = poles[i + 1] + side * o + Vector3.new(0, 19.2, 0)
+			local mid = (p0 + p1) / 2 - Vector3.new(0, 1.2, 0)
+			for _, seg in { { p0, mid }, { mid, p1 } } do
+				local l = (seg[2] - seg[1]).Magnitude
+				block(parent, Vector3.new(0.08, 0.08, l), CFrame.lookAt((seg[1] + seg[2]) / 2, seg[2]), M.SmoothPlastic, rgb(20, 20, 20), { CanCollide = false, CanQuery = false })
+			end
+		end
+	end
+end
+
+local function acUnit(parent, pos)
+	block(parent, Vector3.new(4, 2.6, 3), CFrame.new(pos + Vector3.new(0, 1.3, 0)), M.Metal, rgb(150, 152, 156))
+	block(parent, Vector3.new(2.4, 0.2, 2.4), CFrame.new(pos + Vector3.new(0, 2.7, 0)), M.DiamondPlate, rgb(60, 62, 66))
+	block(parent, Vector3.new(3.8, 0.25, 2.8), CFrame.new(pos + Vector3.new(0, 2.8, 0)), M.Snow, C.Snow, { CanCollide = false })
+end
+
+local function vent(parent, pos)
+	block(parent, Vector3.new(1.4, 3, 1.4), CFrame.new(pos + Vector3.new(0, 1.5, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, rgb(120, 122, 128), { Shape = Enum.PartType.Cylinder })
+	block(parent, Vector3.new(2.2, 0.4, 2.2), CFrame.new(pos + Vector3.new(0, 3.2, 0)), M.Metal, rgb(90, 92, 98))
+end
+
+local function woodpile(parent, pos, facing)
+	local cf = CFrame.lookAt(pos, pos + facing)
+	for row = 0, 2 do
+		for i = 0, 4 - row do
+			block(parent, Vector3.new(4, 0.9, 0.9), cf * CFrame.new(0, 0.5 + row * 0.8, -1.8 + i * 0.95 + row * 0.45) * CFrame.Angles(0, math.rad(90), 0), M.Wood, vary(rgb(110, 76, 46), 0.15), { Shape = Enum.PartType.Cylinder })
+		end
+	end
+	block(parent, Vector3.new(1.4, 2.4, 2.4), cf * CFrame.new(2.8, 0.7, 1) * CFrame.Angles(0, 0, math.rad(90)), M.Wood, rgb(90, 62, 40), { Shape = Enum.PartType.Cylinder })
+	block(parent, Vector3.new(0.2, 1.6, 0.2), cf * CFrame.new(2.8, 2.2, 1) * CFrame.Angles(0, 0, math.rad(20)), M.Wood, rgb(80, 56, 36))
+	block(parent, Vector3.new(0.1, 0.5, 0.7), cf * CFrame.new(2.55, 2.9, 1) * CFrame.Angles(0, 0, math.rad(20)), M.Metal, rgb(140, 140, 145))
+end
+
+local function pallet(parent, cf)
+	for i = -1, 1 do
+		block(parent, Vector3.new(4, 0.25, 0.8), cf * CFrame.new(0, 0.55, i * 1.5), M.WoodPlanks, rgb(150, 115, 70))
+		block(parent, Vector3.new(0.6, 0.45, 4), cf * CFrame.new(i * 1.7, 0.22, 0), M.WoodPlanks, rgb(130, 98, 60))
+	end
+end
+
+local function cone(parent, pos)
+	block(parent, Vector3.new(1.2, 0.2, 1.2), CFrame.new(pos + Vector3.new(0, 0.1, 0)), M.SmoothPlastic, rgb(40, 40, 40))
+	for i = 0, 2 do
+		local w = 0.9 - i * 0.25
+		block(parent, Vector3.new(w, 0.5, w), CFrame.new(pos + Vector3.new(0, 0.45 + i * 0.5, 0)), M.SmoothPlastic, i == 1 and rgb(240, 240, 240) or rgb(240, 110, 20))
+	end
+end
+
+local function barrier(parent, cf)
+	block(parent, Vector3.new(6, 1, 2), cf * CFrame.new(0, 0.5, 0), M.Concrete, rgb(170, 170, 165))
+	block(parent, Vector3.new(6, 2, 1), cf * CFrame.new(0, 2, 0), M.Concrete, rgb(170, 170, 165))
+	block(parent, Vector3.new(6.05, 0.4, 1.05), cf * CFrame.new(0, 2.4, 0), M.SmoothPlastic, rgb(230, 60, 40))
+end
+
+local function truck(parent, cf)
+	breakable(block(parent, Vector3.new(7, 5, 6), cf * CFrame.new(0, 3.3, -7), M.SmoothPlastic, rgb(30, 60, 110)))
+	breakable(block(parent, Vector3.new(6.6, 2, 0.2), cf * CFrame.new(0, 4.6, -10.05), M.Glass, rgb(40, 50, 60), { Transparency = 0.2 }))
+	breakable(block(parent, Vector3.new(7.4, 7.5, 16), cf * CFrame.new(0, 4.6, 4), M.CorrugatedSteel, rgb(200, 200, 205)))
+	block(parent, Vector3.new(7, 0.3, 15.6), cf * CFrame.new(0, 8.5, 4), M.Snow, C.Snow, { CanCollide = false })
+	for _, z in { -7, 1, 8 } do
+		for _, x in { -3.3, 3.3 } do
+			block(parent, Vector3.new(1.2, 3, 3), cf * CFrame.new(x, 1.5, z), M.SmoothPlastic, rgb(20, 20, 22), { Shape = Enum.PartType.Cylinder })
+		end
+	end
+	local p = cf.Position
+	zone(p.X, p.Z, 10, 24)
+end
+
+local function bench(parent, cf)
+	block(parent, Vector3.new(6, 0.4, 1.8), cf * CFrame.new(0, 1.6, 0), M.WoodPlanks, rgb(110, 76, 46))
+	block(parent, Vector3.new(6, 1.6, 0.3), cf * CFrame.new(0, 2.6, 0.8), M.WoodPlanks, rgb(110, 76, 46))
+	for _, x in { -2.6, 2.6 } do
+		block(parent, Vector3.new(0.3, 1.6, 1.6), cf * CFrame.new(x, 0.8, 0), M.Metal, C.DarkMetal)
+	end
+	block(parent, Vector3.new(5.6, 0.2, 1.6), cf * CFrame.new(0, 1.9, 0), M.Snow, C.Snow, { CanCollide = false })
+end
+
+local function phoneBooth(parent, cf)
+	breakable(block(parent, Vector3.new(3.5, 8, 3.5), cf * CFrame.new(0, 4, 0), M.Glass, rgb(160, 30, 30), { Transparency = 0.3 }))
+	block(parent, Vector3.new(3.7, 0.6, 3.7), cf * CFrame.new(0, 8.3, 0), M.SmoothPlastic, rgb(150, 20, 20))
+	local lamp = block(parent, Vector3.new(2.4, 0.5, 0.2), cf * CFrame.new(0, 7.7, -1.8), M.Neon, rgb(255, 245, 220))
+	light(lamp, { Range = 10, Brightness = 1, Color = rgb(255, 240, 210) })
+	CollectionService:AddTag(lamp, "Flicker")
+end
+
+local function generator(parent, cf)
+	block(parent, Vector3.new(6, 4, 3.5), cf * CFrame.new(0, 2, 0), M.Metal, rgb(200, 160, 30))
+	block(parent, Vector3.new(6.2, 0.5, 3.7), cf * CFrame.new(0, 4.2, 0), M.Metal, C.DarkMetal)
+	block(parent, Vector3.new(0.6, 3, 0.6), cf * CFrame.new(2.3, 5.5, 1), M.Metal, rgb(60, 60, 60), { Shape = Enum.PartType.Cylinder })
+	local led = block(parent, Vector3.new(0.3, 0.3, 0.1), cf * CFrame.new(-2, 3, -1.8), M.Neon, rgb(60, 255, 90))
+	light(led, { Range = 4, Brightness = 1, Color = rgb(60, 255, 90) })
+	sign(parent, cf * CFrame.new(0.6, 2.4, -1.8), Vector3.new(2.6, 1.4, 0.05), "⚡ DANGER", rgb(20, 20, 20), rgb(240, 200, 30))
+	block(parent, Vector3.new(6, 0.25, 3.3), cf * CFrame.new(0, 4.5, 0), M.Snow, C.Snow, { CanCollide = false })
+	local p = cf.Position
+	zone(p.X, p.Z, 8, 6)
+end
+
+local function bush(parent, pos, size)
+	block(parent, Vector3.one * size, CFrame.new(pos + Vector3.new(0, size * 0.25, 0)), M.Grass, vary(rgb(40, 70, 44), 0.2), { Shape = Enum.PartType.Ball })
+	block(parent, Vector3.one * size * 0.7, CFrame.new(pos + Vector3.new(size * 0.35, size * 0.1, size * 0.2)), M.Grass, vary(rgb(34, 60, 40), 0.2), { Shape = Enum.PartType.Ball })
+	block(parent, Vector3.new(size * 0.8, 0.2, size * 0.8), CFrame.new(pos + Vector3.new(0, size * 0.72, 0)), M.Snow, C.Snow, { CanCollide = false })
+end
+
+local function buildDetails(env, props)
+	-- Power lines along the main roads
+	powerLine(props, Vector3.new(-9, 0, 64), Vector3.new(-9, 0, 172), 27)
+	powerLine(props, Vector3.new(70, 0, -9), Vector3.new(172, 0, -9), 34)
+	powerLine(props, Vector3.new(-172, 0, 9), Vector3.new(-70, 0, 9), 34)
+
+	-- Rooftops: AC units, vents, satellite dish, antenna
+	local labRoof = 15 + 0.4 + 1.3
+	for _, p in { Vector3.new(-30, labRoof, -20), Vector3.new(-12, labRoof, 22), Vector3.new(25, labRoof, -8), Vector3.new(34, labRoof, 20) } do
+		acUnit(props, p)
+	end
+	for _, p in { Vector3.new(-38, labRoof, 6), Vector3.new(0, labRoof, -26), Vector3.new(14, labRoof, 26), Vector3.new(38, labRoof, -28) } do
+		vent(props, p)
+	end
+	local dish = Vector3.new(-20, labRoof, -4)
+	block(props, Vector3.new(1, 5, 1), CFrame.new(dish + Vector3.new(0, 2.5, 0)), M.Metal, C.DarkMetal)
+	block(props, Vector3.new(0.6, 8, 8), CFrame.new(dish + Vector3.new(0, 6, 0)) * CFrame.Angles(0, math.rad(40), math.rad(55)), M.Metal, rgb(210, 212, 216), { Shape = Enum.PartType.Cylinder })
+	local ant = Vector3.new(30, labRoof, 4)
+	block(props, Vector3.new(0.5, 26, 0.5), CFrame.new(ant + Vector3.new(0, 13, 0)), M.Metal, rgb(180, 50, 40))
+	local blink = block(props, Vector3.new(0.9, 0.9, 0.9), CFrame.new(ant + Vector3.new(0, 26.4, 0)), M.Neon, rgb(255, 30, 30), { Shape = Enum.PartType.Ball })
+	light(blink, { Range = 20, Brightness = 2, Color = rgb(255, 40, 40) })
+	CollectionService:AddTag(blink, "Flicker")
+	for _, p in { Vector3.new(105, 16 + 0.4 + 1.3, -130), Vector3.new(135, 17.7, -105) } do
+		acUnit(props, p)
+	end
+	acUnit(props, Vector3.new(128, 11 + 0.4 + 1.3, 93))
+	vent(props, Vector3.new(106, 12.7, 95))
+
+	-- Lab exterior: big pipes + generators
+	for _, y in { 3, 5 } do
+		block(props, Vector3.new(60, 1.2, 1.2), CFrame.new(0, y, -36.4), M.Metal, rgb(110, 80, 50), { Shape = Enum.PartType.Cylinder })
+	end
+	generator(props, CFrame.new(-50, 0, -20) * CFrame.Angles(0, math.rad(90), 0))
+	generator(props, CFrame.new(50, 0, 22) * CFrame.Angles(0, math.rad(-90), 0))
+
+	-- Blood trail dragged out of the lab's front door
+	for i = 0, 14 do
+		local p = Vector3.new(math.sin(i * 0.5) * 2, 0.23, 37 + i * 1.6)
+		block(props, Vector3.new(rng:NextNumber(0.8, 1.6), 0.05, rng:NextNumber(1, 1.8)), CFrame.new(p) * CFrame.Angles(0, rng:NextNumber() * 0.6, 0), M.SmoothPlastic, C.Blood, { CanCollide = false, CanQuery = false })
+	end
+
+	-- Cabin woodpiles
+	for _, c in { Vector3.new(-125, 0, -112), Vector3.new(-42, 0, 140), Vector3.new(38, 0, -148), Vector3.new(152, 0, 30) } do
+		woodpile(props, c + Vector3.new(-14, 0, -5), Vector3.new(1, 0, 0))
+		bush(props, c + Vector3.new(12.5, 0, 9.5), 3)
+	end
+
+	-- Warehouse yard: pallets, cones, truck
+	for i = 0, 3 do
+		pallet(props, CFrame.new(98 + i * 5, 0, -143) * CFrame.Angles(0, rng:NextNumber() * 0.3, 0))
+	end
+	pallet(props, CFrame.new(98, 0.8, -143))
+	for i = 0, 4 do
+		cone(props, Vector3.new(88 + i * 4, 0.2, -90))
+	end
+	truck(props, CFrame.new(158, 0, -122))
+
+	-- Gate: concrete barriers
+	for i = -1, 1, 2 do
+		barrier(props, CFrame.new(i * 12, 0, HALF - 30) * CFrame.Angles(0, math.rad(i * 10), 0))
+	end
+	for i = 0, 3 do
+		cone(props, Vector3.new(-6 + i * 4, 0.2, HALF - 26))
+	end
+
+	-- Diner front: benches, phone booth, bushes
+	bench(props, CFrame.new(100, 0, 114) * CFrame.Angles(0, math.pi, 0))
+	bench(props, CFrame.new(136, 0, 114) * CFrame.Angles(0, math.pi, 0))
+	phoneBooth(props, CFrame.new(96, 0, 118))
+	for _, x in { 106, 112, 124, 130 } do
+		bush(props, Vector3.new(x, 0, 113), 2.2)
+	end
+
+	-- Tire tracks in the snow along roads
+	for _, t in { { 0, 90, 130 }, { 0, -90, 130 } } do
+		for _, off in { -2.2, 2.2 } do
+			block(env, Vector3.new(0.9, 0.04, t[3] * 0.6), CFrame.new(t[1] + off, 0.23, t[2]), M.Snow, C.SnowShade, { CanCollide = false })
+		end
+	end
+end
+
 ---------------------------------------------------------------------------
 -- Public
 ---------------------------------------------------------------------------
@@ -1013,63 +1219,392 @@ function MapBuilder.SetupLighting()
 	make("BloomEffect", Lighting, { Intensity = 0.7, Size = 28, Threshold = 1.4 })
 end
 
+-- The lobby: a Weapon X holding hangar on a snowy mountain ledge.
+-- Returns the lobby model; statues are added by Wolverine.MakeStatue.
+local function surfaceText(p, face, props)
+	local gui = make("SurfaceGui", p, {
+		Face = face or Enum.NormalId.Front,
+		SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud,
+		PixelsPerStud = 40,
+		LightInfluence = 0,
+	})
+	local label = make("TextLabel", gui, {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		TextScaled = true,
+		Font = Enum.Font.GothamBlack,
+		TextColor3 = Color3.new(1, 1, 1),
+	})
+	for k, v in props do
+		label[k] = v
+	end
+	return gui, label
+end
+
+local function ruleCard(parent, cf, icon, heading, body, accent)
+	local p = block(parent, Vector3.new(15, 11, 0.4), cf, M.SmoothPlastic, rgb(16, 16, 20))
+	local gui = make("SurfaceGui", p, { Face = Enum.NormalId.Front, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 40, LightInfluence = 0 })
+	local bg = make("Frame", gui, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0 })
+	make("UIGradient", bg, { Rotation = 90, Color = ColorSequence.new(rgb(40, 34, 38), rgb(10, 9, 12)) })
+	make("UIStroke", bg, { Color = accent, Thickness = 8, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
+	local top = make("Frame", bg, { Size = UDim2.new(1, 0, 0, 16), BackgroundColor3 = accent, BorderSizePixel = 0 })
+	make("UIGradient", top, { Color = ColorSequence.new(accent, Color3.new(0, 0, 0)) })
+	make("TextLabel", bg, {
+		Position = UDim2.fromScale(0.05, 0.1),
+		Size = UDim2.fromScale(0.9, 0.32),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamBlack,
+		TextScaled = true,
+		Text = icon,
+	})
+	local h = make("TextLabel", bg, {
+		Position = UDim2.fromScale(0.05, 0.44),
+		Size = UDim2.fromScale(0.9, 0.18),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.LuckiestGuy,
+		TextScaled = true,
+		TextColor3 = accent,
+		Text = heading,
+	})
+	make("UIStroke", h, { Thickness = 4 })
+	make("TextLabel", bg, {
+		Position = UDim2.fromScale(0.07, 0.64),
+		Size = UDim2.fromScale(0.86, 0.3),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamBold,
+		TextScaled = true,
+		TextWrapped = true,
+		TextColor3 = rgb(215, 210, 215),
+		Text = body,
+	})
+	-- neon underline + small spot lamp above the card
+	block(parent, Vector3.new(15, 0.25, 0.25), cf * CFrame.new(0, -5.8, -0.2), M.Neon, accent)
+	local lampArm = block(parent, Vector3.new(0.4, 0.4, 2.4), cf * CFrame.new(0, 6.6, -1.2), M.Metal, C.DarkMetal)
+	local head = block(parent, Vector3.new(1.4, 0.7, 1.4), cf * CFrame.new(0, 6.4, -2.4), M.Metal, C.DarkMetal)
+	make("SpotLight", head, { Face = Enum.NormalId.Bottom, Range = 16, Angle = 70, Brightness = 3, Color = rgb(255, 235, 210) })
+	return p, lampArm
+end
+
+-- Three glowing gouges ripped through steel, with bent metal flaps.
+local function clawGouge(parent, origin, length, tilt)
+	for i = -1, 1 do
+		local cf = origin * CFrame.Angles(0, 0, math.rad(tilt)) * CFrame.new(i * 2.2, 0, 0)
+		block(parent, Vector3.new(0.9, length, 0.3), cf, M.Slate, rgb(8, 6, 6))
+		for s = -1, 1, 2 do
+			block(parent, Vector3.new(0.14, length * 0.96, 0.32), cf * CFrame.new(s * 0.5, 0, 0), M.Neon, rgb(255, 120, 30))
+			-- torn flaps curling out of the cut
+			for f = -1, 1 do
+				block(parent, Vector3.new(0.6, 1.4, 0.1), cf * CFrame.new(s * 0.75, f * length * 0.3, -0.35) * CFrame.Angles(math.rad(-35), 0, math.rad(s * 35)), M.Metal, rgb(90, 92, 98))
+			end
+		end
+	end
+	local glow = block(parent, Vector3.new(1, 1, 1), origin * CFrame.new(0, 0, -1), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false })
+	light(glow, { Range = 14, Brightness = 2, Color = rgb(255, 120, 40) })
+end
+
+local function hangingLamp(parent, pos, color)
+	block(parent, Vector3.new(0.15, 6, 0.15), CFrame.new(pos + Vector3.new(0, 3, 0)), M.Metal, rgb(30, 30, 30))
+	local shade = block(parent, Vector3.new(1.6, 3.4, 3.4), CFrame.new(pos) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, rgb(40, 42, 46), { Shape = Enum.PartType.Cylinder })
+	local bulb = block(parent, Vector3.new(1.2, 1.2, 1.2), CFrame.new(pos - Vector3.new(0, 0.9, 0)), M.Neon, color, { Shape = Enum.PartType.Ball })
+	make("SpotLight", shade, { Face = Enum.NormalId.Left, Range = 40, Angle = 80, Brightness = 2.2, Color = color, Shadows = true })
+	return bulb
+end
+
+local function couch(parent, cf, color)
+	block(parent, Vector3.new(10, 1.6, 4), cf * CFrame.new(0, 1.2, 0), M.Fabric, color)
+	block(parent, Vector3.new(10, 3, 1.2), cf * CFrame.new(0, 2.6, 1.6), M.Fabric, color)
+	for _, x in { -5.3, 5.3 } do
+		block(parent, Vector3.new(0.9, 2.4, 4), cf * CFrame.new(x, 1.8, 0), M.Fabric, color)
+	end
+	for _, x in { -3.3, 0, 3.3 } do
+		block(parent, Vector3.new(3.1, 0.6, 3.4), cf * CFrame.new(x, 2.2, -0.2), M.Fabric, vary(color, 0.15))
+	end
+end
+
 function MapBuilder.BuildLobby()
 	local old = workspace:FindFirstChild("Lobby")
 	if old then
 		old:Destroy()
 	end
+	rng = Random.new(400)
 	local lobby = Instance.new("Model")
 	lobby.Name = "Lobby"
-	local y = 400
-	block(lobby, Vector3.new(80, 2, 80), CFrame.new(0, y - 1, 0), M.Slate, rgb(38, 40, 46))
-	block(lobby, Vector3.new(60, 0.1, 60), CFrame.new(0, y + 0.05, 0), M.DiamondPlate, rgb(60, 62, 70))
-	for _, d in { { 0, -40, 82, 2 }, { 0, 40, 82, 2 }, { -40, 0, 2, 82 }, { 40, 0, 2, 82 } } do
-		block(lobby, Vector3.new(d[3], 16, d[4]), CFrame.new(d[1], y + 8, d[2]), M.Concrete, rgb(55, 58, 66))
-		local strip = block(lobby, Vector3.new(d[3] == 2 and 0.3 or d[3], 0.4, d[4] == 2 and 0.3 or d[4]), CFrame.new(d[1] * 0.985, y + 3, d[2] * 0.985), M.Neon, rgb(200, 30, 30))
-		light(strip, { Range = 14, Brightness = 1, Color = rgb(255, 40, 40) })
+	local Y = 400
+	local W, D, H = 120, 90, 28
+	local hx, hz = W / 2, D / 2
+
+	-- Mountain ledge + backdrop
+	block(lobby, Vector3.new(420, 4, 420), CFrame.new(0, Y - 2.2, 0), M.Snow, C.Snow)
+	for _ = 1, 60 do
+		local a = rng:NextNumber() * math.pi * 2
+		local r = rng:NextNumber(80, 190)
+		tree(lobby, Vector3.new(math.cos(a) * r, Y - 0.2, math.sin(a) * r), rng:NextNumber(1.3, 2.2))
+	end
+	for i = 1, 10 do
+		local a = (i / 10) * math.pi * 2
+		local r = rng:NextNumber(260, 320)
+		local h = rng:NextNumber(90, 170)
+		local cf = CFrame.new(math.cos(a) * r, Y + h / 2 - 30, math.sin(a) * r) * CFrame.Angles(0, -a + math.rad(45), 0)
+		block(lobby, Vector3.new(150, h, 110), cf, M.Slate, vary(rgb(70, 74, 84), 0.2), { CanCollide = false })
+		block(lobby, Vector3.new(80, h * 0.25, 60), cf * CFrame.new(0, h * 0.42, 0), M.Snow, C.Snow, { CanCollide = false })
+	end
+
+	-- Floor: dark concrete, hazard border, steel walkway
+	block(lobby, Vector3.new(W, 1, D), CFrame.new(0, Y - 0.5, 0), M.Concrete, rgb(48, 48, 54))
+	for _, d in { { 0, -hz + 2, W - 2, 1.2 }, { 0, hz - 2, W - 2, 1.2 }, { -hx + 2, 0, 1.2, D - 2 }, { hx - 2, 0, 1.2, D - 2 } } do
+		block(lobby, Vector3.new(d[3], 0.06, d[4]), CFrame.new(d[1], Y + 0.03, d[2]), M.SmoothPlastic, C.Hazard)
+	end
+	for x = -hx + 6, hx - 6, 4 do
+		block(lobby, Vector3.new(0.9, 0.07, 1.25), CFrame.new(x, Y + 0.05, -hz + 2) * CFrame.Angles(0, math.rad(45), 0), M.SmoothPlastic, rgb(20, 20, 20))
+		block(lobby, Vector3.new(0.9, 0.07, 1.25), CFrame.new(x, Y + 0.05, hz - 2) * CFrame.Angles(0, math.rad(45), 0), M.SmoothPlastic, rgb(20, 20, 20))
+	end
+	block(lobby, Vector3.new(10, 0.1, D - 10), CFrame.new(0, Y + 0.05, 0), M.DiamondPlate, rgb(80, 84, 92))
+
+	-- Glowing X emblem in the floor
+	local ringY = Y + 0.12
+	block(lobby, Vector3.new(0.1, 22, 22), CFrame.new(0, ringY, 0) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, rgb(20, 20, 24), { Shape = Enum.PartType.Cylinder })
+	block(lobby, Vector3.new(0.12, 21, 21), CFrame.new(0, ringY + 0.01, 0) * CFrame.Angles(0, 0, math.rad(90)), M.Neon, rgb(170, 20, 20), { Shape = Enum.PartType.Cylinder })
+	block(lobby, Vector3.new(0.14, 19, 19), CFrame.new(0, ringY + 0.02, 0) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, rgb(20, 20, 24), { Shape = Enum.PartType.Cylinder })
+	for _, a in { 45, -45 } do
+		block(lobby, Vector3.new(2.2, 0.1, 17), CFrame.new(0, ringY + 0.05, 0) * CFrame.Angles(0, math.rad(a), 0), M.Neon, rgb(255, 190, 30))
 	end
 	make("SpawnLocation", lobby, {
-		Size = Vector3.new(12, 1, 12),
-		CFrame = CFrame.new(0, y + 0.5, 14),
+		Size = Vector3.new(12, 0.2, 12),
+		CFrame = CFrame.new(0, Y + 0.2, 0),
 		Neutral = true,
 		Duration = 0,
-		Material = M.Metal,
-		Color = rgb(70, 72, 80),
+		Transparency = 1,
+		CanCollide = false,
 	})
-	local board = block(lobby, Vector3.new(50, 14, 1), CFrame.new(0, y + 9, -38.5) * CFrame.Angles(0, math.pi, 0), M.SmoothPlastic, rgb(18, 18, 22))
-	local gui = make("SurfaceGui", board, {
-		Face = Enum.NormalId.Front,
-		SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud,
-		PixelsPerStud = 25,
-		LightInfluence = 0,
-	})
-	make("TextLabel", gui, {
-		Size = UDim2.fromScale(1, 0.4),
-		BackgroundTransparency = 1,
-		Text = "SURVIVE THE WOLVERINE",
-		TextScaled = true,
-		Font = Enum.Font.LuckiestGuy,
-		TextColor3 = rgb(255, 205, 30),
-	})
-	make("TextLabel", gui, {
-		Position = UDim2.fromScale(0.05, 0.42),
-		Size = UDim2.fromScale(0.9, 0.55),
-		BackgroundTransparency = 1,
-		TextWrapped = true,
-		TextScaled = true,
-		Font = Enum.Font.GothamBold,
-		TextColor3 = Color3.new(1, 1, 1),
-		Text = "One player becomes WOLVERINE. Everyone else: survive until the timer runs out.\n"
-			.. "3 hits and you're ripped in half. Every kill gives him more time.\n"
-			.. "Reboot the 3 Sentinel terminals to unlock the SENTINEL SUIT — the only thing that can fight back.",
-	})
-	for i = -1, 1 do
-		block(lobby, Vector3.new(0.6, 16, 0.2), CFrame.new(i * 3 + 18, y + 8, -37.9) * CFrame.Angles(0, 0, math.rad(25)), M.Neon, rgb(200, 20, 20))
+
+	-- Walls with pillars, pipes and windows (south)
+	local wallStyle = { Material = M.Concrete, Color = rgb(64, 64, 72), Vary = 0.05, Breakable = false }
+	wall(lobby, Vector3.new(-hx, 0, -hz + 0.5), Vector3.new(hx, 0, -hz + 0.5), Y, H, 1, wallStyle)
+	wall(lobby, Vector3.new(-hx + 0.5, 0, -hz), Vector3.new(-hx + 0.5, 0, hz), Y, H, 1, wallStyle)
+	wall(lobby, Vector3.new(hx - 0.5, 0, -hz), Vector3.new(hx - 0.5, 0, hz), Y, H, 1, wallStyle)
+	local windows = {}
+	for x = -45, 45, 18 do
+		table.insert(windows, { At = x + hx, Width = 12, Bottom = 5, Top = 20, Glass = true })
 	end
-	for _, p in { Vector3.new(-20, y, 20), Vector3.new(20, y, 20) } do
-		block(lobby, Vector3.new(10, 1.2, 3), CFrame.new(p + Vector3.new(0, 1, 0)), M.WoodPlanks, C.Wood)
+	wall(lobby, Vector3.new(-hx, 0, hz - 0.5), Vector3.new(hx, 0, hz - 0.5), Y, H, 1, wallStyle, windows)
+	for _, w in windows do -- window frames
+		local x = w.At - hx
+		block(lobby, Vector3.new(12.6, 0.6, 1.6), CFrame.new(x, Y + 5, hz - 0.5), M.Metal, C.DarkMetal)
+		block(lobby, Vector3.new(12.6, 0.6, 1.6), CFrame.new(x, Y + 20, hz - 0.5), M.Metal, C.DarkMetal)
+		block(lobby, Vector3.new(0.4, 15, 1.4), CFrame.new(x, Y + 12.5, hz - 0.5), M.Metal, C.DarkMetal)
 	end
+	for x = -hx, hx, 15 do
+		for _, z in { -hz + 1.2, hz - 1.2 } do
+			block(lobby, Vector3.new(1.8, H, 1.4), CFrame.new(x, Y + H / 2, z), M.Metal, rgb(58, 60, 66))
+		end
+	end
+	for z = -hz, hz, 15 do
+		for _, x in { -hx + 1.2, hx - 1.2 } do
+			block(lobby, Vector3.new(1.4, H, 1.8), CFrame.new(x, Y + H / 2, z), M.Metal, rgb(58, 60, 66))
+		end
+	end
+	for _, y in { H - 3, H - 4.4 } do
+		block(lobby, Vector3.new(W - 4, 0.8, 0.8), CFrame.new(0, Y + y, -hz + 2.2) * CFrame.Angles(0, math.rad(90), 0) * CFrame.Angles(0, math.rad(90), 0), M.Metal, rgb(110, 80, 50), { Shape = Enum.PartType.Cylinder })
+	end
+	-- Ceiling + trusses
+	block(lobby, Vector3.new(W, 1, D), CFrame.new(0, Y + H + 0.5, 0), M.Metal, rgb(30, 31, 36))
+	for z = -hz + 10, hz - 10, 15 do
+		block(lobby, Vector3.new(W, 1.4, 0.8), CFrame.new(0, Y + H - 0.7, z), M.Metal, rgb(52, 54, 60))
+		for x = -hx + 5, hx - 5, 10 do
+			block(lobby, Vector3.new(0.4, 2.4, 0.4), CFrame.new(x, Y + H - 2, z) * CFrame.Angles(0, 0, math.rad(35)), M.Metal, rgb(52, 54, 60))
+		end
+	end
+	-- Hanging lamps: warm light pools with a few red ones for menace
+	for x = -40, 40, 20 do
+		for z = -24, 24, 24 do
+			local red = (x == -40 and z == 24) or (x == 40 and z == -24)
+			local bulb = hangingLamp(lobby, Vector3.new(x, Y + H - 7, z), red and rgb(255, 60, 40) or rgb(255, 214, 160))
+			if red then
+				CollectionService:AddTag(bulb, "Flicker")
+			end
+		end
+	end
+
+	-- RULES WALL (north) -----------------------------------------------
+	local rz = -hz + 1.3
+	block(lobby, Vector3.new(76, 26, 0.6), CFrame.new(-6, Y + 13.5, rz) * CFrame.Angles(0, math.pi, 0), M.DiamondPlate, rgb(28, 28, 32))
+	block(lobby, Vector3.new(77, 0.4, 0.4), CFrame.new(-6, Y + 26.6, rz + 0.3), M.Neon, rgb(200, 20, 20))
+	block(lobby, Vector3.new(77, 0.4, 0.4), CFrame.new(-6, Y + 0.6, rz + 0.3), M.Neon, rgb(200, 20, 20))
+	for _, x in { -44.3, 32.3 } do
+		block(lobby, Vector3.new(0.4, 26, 0.4), CFrame.new(x, Y + 13.6, rz + 0.3), M.Neon, rgb(200, 20, 20))
+	end
+	local title = block(lobby, Vector3.new(62, 8, 0.3), CFrame.new(-6, Y + 21.5, rz + 0.5) * CFrame.Angles(0, math.pi, 0), M.SmoothPlastic, rgb(12, 12, 14), { Transparency = 1 })
+	local _, tl = surfaceText(title, Enum.NormalId.Front, { Text = "SURVIVE THE WOLVERINE", Font = Enum.Font.LuckiestGuy, TextColor3 = rgb(255, 200, 30) })
+	make("UIStroke", tl, { Thickness = 10, Color = rgb(0, 0, 0) })
+	make("UIGradient", tl, { Rotation = 90, Color = ColorSequence.new(rgb(255, 230, 90), rgb(230, 120, 10)) })
+	local sub = block(lobby, Vector3.new(50, 2, 0.3), CFrame.new(-6, Y + 16.6, rz + 0.5) * CFrame.Angles(0, math.pi, 0), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
+	surfaceText(sub, Enum.NormalId.Front, { Text = "ONE OF YOU IS THE MONSTER. THE REST OF YOU ARE MEAT.", Font = Enum.Font.GothamBlack, TextColor3 = rgb(230, 70, 60) })
+
+	local rules = {
+		{ "🐺", "ONE HUNTER", "A random player becomes Wolverine. Every kill buys him +15 seconds.", rgb(255, 190, 30) },
+		{ "🩸", "3 HITS = DEAD", "Two hits throw you. The third tears you in half.", rgb(230, 40, 40) },
+		{ "🤖", "SUIT UP", "Reboot 3 terminals. Two Sentinel suits. Stay linked or die.", rgb(180, 110, 255) },
+		{ "💨", "HIDE • FART • RUN", "Lockers hide you. Gas hides your scent. Walls won't.", rgb(120, 220, 90) },
+	}
+	for i, r in rules do
+		local x = -6 + (i - 2.5) * 17
+		ruleCard(lobby, CFrame.new(x, Y + 8, rz + 0.6) * CFrame.Angles(0, math.pi, 0), r[1], r[2], r[3], r[4])
+	end
+	-- He clawed through the wall next to the board
+	clawGouge(lobby, CFrame.new(45, Y + 14, rz + 0.3) * CFrame.Angles(0, math.pi, 0), 20, 22)
+	for _ = 1, 10 do
+		block(lobby, Vector3.new(rng:NextNumber(0.6, 1.8), rng:NextNumber(0.4, 1.2), rng:NextNumber(0.6, 1.8)),
+			CFrame.new(45 + rng:NextNumber(-5, 5), Y + 0.5, rz + rng:NextNumber(1.5, 6)) * CFrame.Angles(rng:NextNumber(), rng:NextNumber(), rng:NextNumber()),
+			M.Concrete, rgb(64, 64, 72))
+	end
+
+	-- SUIT GALLERY (east) -----------------------------------------------
+	local gx = hx - 12
+	block(lobby, Vector3.new(20, 1, 70), CFrame.new(gx + 2, Y + 0.5, 0), M.Marble, rgb(26, 26, 30))
+	block(lobby, Vector3.new(0.3, 0.2, 70), CFrame.new(gx - 8, Y + 1.05, 0), M.Neon, rgb(255, 190, 30))
+	block(lobby, Vector3.new(3, 0.5, 70), CFrame.new(gx - 9.5, Y + 0.25, 0), M.Marble, rgb(34, 34, 38))
+	local galleryTitle = block(lobby, Vector3.new(30, 4, 0.3), CFrame.new(hx - 1.4, Y + 23, 0) * CFrame.Angles(0, math.rad(90), 0), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
+	local _, gt = surfaceText(galleryTitle, Enum.NormalId.Front, { Text = "SUIT GALLERY", Font = Enum.Font.LuckiestGuy, TextColor3 = rgb(255, 200, 30) })
+	make("UIStroke", gt, { Thickness = 6 })
+	for z = -30, 30, 6 do
+		block(lobby, Vector3.new(0.3, 16, 0.3), CFrame.new(hx - 1.3, Y + 10, z), M.Neon, rgb(255, 170, 40), { Transparency = 0.2 })
+	end
+	local pedestals = Instance.new("Folder")
+	pedestals.Name = "Pedestals"
+	pedestals.Parent = lobby
+	local skinOrder = { "Logan", "Comic", "WeaponX", "OldManLogan" }
+	local swatches = { rgb(150, 100, 60), rgb(255, 200, 30), rgb(90, 220, 200), rgb(200, 200, 200) }
+	for i, id in skinOrder do
+		local z = -24 + (i - 1) * 16
+		local base = CFrame.new(gx + 3, Y + 1, z)
+		block(lobby, Vector3.new(1.6, 8, 8), base * CFrame.new(0, 0.8, 0) * CFrame.Angles(0, 0, math.rad(90)), M.Marble, rgb(40, 40, 46), { Shape = Enum.PartType.Cylinder })
+		block(lobby, Vector3.new(0.3, 8.4, 8.4), base * CFrame.new(0, 1.2, 0) * CFrame.Angles(0, 0, math.rad(90)), M.Neon, swatches[i], { Shape = Enum.PartType.Cylinder })
+		local spot = block(pedestals, Vector3.new(1, 1, 1), base * CFrame.new(0, 1.6, 0) * CFrame.Angles(0, math.rad(90), 0), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false })
+		spot.Name = "Pedestal_" .. id
+		spot:SetAttribute("Skin", id)
+		local lamp = block(lobby, Vector3.new(1.6, 1, 1.6), CFrame.new(gx - 4, Y + H - 2, z), M.Metal, C.DarkMetal)
+		make("SpotLight", lamp, { Face = Enum.NormalId.Bottom, Range = 34, Angle = 40, Brightness = 5, Color = swatches[i]:Lerp(Color3.new(1, 1, 1), 0.6), Shadows = true })
+		local plaque = block(lobby, Vector3.new(6, 2.2, 0.3), CFrame.new(gx - 4, Y + 1.9, z) * CFrame.Angles(0, math.rad(90), 0) * CFrame.Angles(math.rad(25), 0, 0), M.Metal, rgb(24, 24, 28))
+		surfaceText(plaque, Enum.NormalId.Front, { Name = "PlaqueText", Text = id, TextColor3 = swatches[i], Font = Enum.Font.GothamBlack })
+		block(lobby, Vector3.new(0.4, 1.4, 0.4), CFrame.new(gx - 4, Y + 0.7, z), M.Metal, C.DarkMetal)
+	end
+
+	-- CLAW RACK (south-east) -------------------------------------------
+	local rackC = CFrame.new(40, Y, hz - 5)
+	block(lobby, Vector3.new(26, 3, 5), rackC * CFrame.new(0, 1.5, 0), M.Wood, rgb(40, 28, 20))
+	block(lobby, Vector3.new(26.4, 0.3, 5.4), rackC * CFrame.new(0, 3.1, 0), M.Metal, C.DarkMetal)
+	block(lobby, Vector3.new(26, 6, 5), rackC * CFrame.new(0, 6.2, 0), M.Glass, rgb(190, 220, 235), { Transparency = 0.8 })
+	local rackLight = block(lobby, Vector3.new(25, 0.2, 0.5), rackC * CFrame.new(0, 9.1, 0), M.Neon, rgb(255, 240, 220))
+	light(rackLight, { Range = 12, Brightness = 1.5, Color = rgb(255, 240, 220) })
+	local rackTitle = block(lobby, Vector3.new(16, 2, 0.2), rackC * CFrame.new(0, 10.8, -2.4), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
+	surfaceText(rackTitle, Enum.NormalId.Front, { Text = "CLAW COLLECTION", Font = Enum.Font.LuckiestGuy, TextColor3 = rgb(210, 230, 255) })
+	local Skins = require(ReplicatedStorage.Shared.Skins)
+	for i, id in Skins.ClawOrder do
+		local item = Skins.Claws[id]
+		local cx = -10.5 + (i - 1) * 4.2
+		for b = -1, 1 do
+			local blade = block(lobby, Vector3.new(0.12 * (item.Thick or 1), 3.6, 0.3 * (item.Thick or 1)),
+				rackC * CFrame.new(cx + b * 0.5, 5.6, 0) * CFrame.Angles(0, 0, math.rad(b * 6)), item.Material, item.Color, { Reflectance = item.Reflectance })
+			if item.Material == M.Neon then
+				light(blade, { Range = 5, Brightness = 1, Color = item.Glow })
+			end
+		end
+		block(lobby, Vector3.new(1.6, 0.8, 0.8), rackC * CFrame.new(cx, 3.7, 0), M.Leather, rgb(30, 22, 18))
+		local tag = block(lobby, Vector3.new(3.6, 0.8, 0.1), rackC * CFrame.new(cx, 3.4, -2.56) * CFrame.Angles(math.rad(20), 0, 0), M.SmoothPlastic, rgb(20, 20, 24))
+		surfaceText(tag, Enum.NormalId.Front, { Text = item.Name .. (item.Price > 0 and ("  🪙" .. item.Price) or "  FREE"), TextColor3 = item.Glow, Font = Enum.Font.GothamBold })
+	end
+
+	-- LOUNGE (west) ----------------------------------------------------
+	local lx = -hx + 14
+	block(lobby, Vector3.new(22, 0.08, 26), CFrame.new(lx, Y + 0.05, 8), M.Fabric, rgb(110, 20, 24))
+	block(lobby, Vector3.new(19, 0.1, 23), CFrame.new(lx, Y + 0.07, 8), M.Fabric, rgb(70, 12, 16))
+	couch(lobby, CFrame.new(lx + 2, Y, 18) * CFrame.Angles(0, math.pi, 0), rgb(60, 40, 30))
+	couch(lobby, CFrame.new(lx + 9, Y, 7) * CFrame.Angles(0, math.rad(-90), 0), rgb(60, 40, 30))
+	block(lobby, Vector3.new(6, 0.5, 4), CFrame.new(lx + 1, Y + 1.9, 8), M.Wood, rgb(70, 45, 28))
+	for _, d in { Vector3.new(-2.6, 0, -1.6), Vector3.new(2.6, 0, -1.6), Vector3.new(-2.6, 0, 1.6), Vector3.new(2.6, 0, 1.6) } do
+		block(lobby, Vector3.new(0.4, 1.7, 0.4), CFrame.new(Vector3.new(lx + 1, Y + 0.85, 8) + d), M.Wood, rgb(50, 32, 20))
+	end
+	for i = 0, 1 do
+		block(lobby, Vector3.new(0.6, 0.8, 0.6), CFrame.new(lx + i * 1.6, Y + 2.55, 8), M.SmoothPlastic, i == 0 and rgb(200, 40, 40) or rgb(230, 230, 230), { Shape = Enum.PartType.Cylinder })
+	end
+	-- stone fireplace on the west wall
+	local fz = 8
+	block(lobby, Vector3.new(3, 12, 12), CFrame.new(-hx + 2.5, Y + 6, fz), M.Cobblestone, rgb(88, 84, 82))
+	block(lobby, Vector3.new(2.6, H - 12, 7), CFrame.new(-hx + 2.3, Y + 12 + (H - 12) / 2, fz), M.Cobblestone, rgb(78, 74, 72))
+	block(lobby, Vector3.new(3.4, 0.8, 13), CFrame.new(-hx + 2.8, Y + 12.2, fz), M.Wood, rgb(60, 38, 24))
+	local hearth = block(lobby, Vector3.new(2, 4.5, 6), CFrame.new(-hx + 3.6, Y + 2.25, fz), M.Slate, rgb(15, 12, 10))
+	make("Fire", hearth, { Size = 5, Heat = 6, Color = rgb(255, 150, 50), SecondaryColor = rgb(255, 70, 20) })
+	light(hearth, { Range = 26, Brightness = 2.5, Color = rgb(255, 150, 70), Shadows = true })
+	CollectionService:AddTag(hearth, "FireLight")
+	for i = 0, 2 do
+		block(lobby, Vector3.new(0.8, 0.8, 4), CFrame.new(-hx + 3.6 + (i - 1) * 0.3, Y + 0.5 + i * 0.1, fz) * CFrame.Angles(0, math.rad(i * 40), 0), M.Wood, rgb(60, 40, 24), { Shape = Enum.PartType.Cylinder })
+	end
+	-- mounted claws trophy above the fireplace
+	for b = -1, 1 do
+		block(lobby, Vector3.new(0.15, 4, 0.4), CFrame.new(-hx + 1.6, Y + 15.5, fz + b * 0.9) * CFrame.Angles(math.rad(b * 8), 0, 0), M.Metal, rgb(210, 214, 222), { Reflectance = 0.4 })
+	end
+	block(lobby, Vector3.new(0.4, 2.6, 4), CFrame.new(-hx + 1.4, Y + 13.4, fz), M.Wood, rgb(60, 38, 24))
+	-- bookshelves
+	for _, z in { -8, 24 } do
+		block(lobby, Vector3.new(2.5, 12, 8), CFrame.new(-hx + 2.3, Y + 6, z), M.Wood, rgb(55, 36, 22))
+		for s = 0, 3 do
+			for b = 0, 9 do
+				block(lobby, Vector3.new(1.6, rng:NextNumber(1.6, 2.4), 0.6), CFrame.new(-hx + 3, Y + 1.8 + s * 2.8, z - 3.4 + b * 0.75), M.SmoothPlastic, vary(({ rgb(120, 30, 30), rgb(30, 60, 110), rgb(40, 90, 50), rgb(160, 130, 60) })[(b + s) % 4 + 1], 0.2))
+			end
+		end
+	end
+
+	-- LEADERBOARD (west wall, north) -------------------------------------
+	local lb = block(lobby, Vector3.new(0.4, 12, 18), CFrame.new(-hx + 1.6, Y + 9, -26), M.SmoothPlastic, rgb(14, 14, 18))
+	local lbGui = make("SurfaceGui", lb, { Name = "Leaderboard", Face = Enum.NormalId.Right, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 36, LightInfluence = 0 })
+	local lbBg = make("Frame", lbGui, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = rgb(16, 14, 18), BorderSizePixel = 0 })
+	make("UIStroke", lbBg, { Color = rgb(200, 30, 30), Thickness = 8, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
+	local lbTitle = make("TextLabel", lbBg, { Size = UDim2.fromScale(1, 0.18), BackgroundColor3 = rgb(150, 20, 20), Font = Enum.Font.LuckiestGuy, TextScaled = true, TextColor3 = rgb(255, 220, 90), Text = "TOP HUNTERS" })
+	make("UIStroke", lbTitle, { Thickness = 4 })
+	local rowsFrame = make("Frame", lbBg, { Name = "Rows", Position = UDim2.fromScale(0.05, 0.22), Size = UDim2.fromScale(0.9, 0.74), BackgroundTransparency = 1 })
+	make("UIListLayout", rowsFrame, { Padding = UDim.new(0.02, 0) })
+	for i = 1, 6 do
+		make("TextLabel", rowsFrame, {
+			Name = "Row" .. i,
+			Size = UDim2.fromScale(1, 0.14),
+			BackgroundTransparency = 1,
+			Font = Enum.Font.GothamBlack,
+			TextScaled = true,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextColor3 = i == 1 and rgb(255, 210, 60) or rgb(220, 220, 225),
+			Text = "",
+			LayoutOrder = i,
+		})
+	end
+	local lbLight = block(lobby, Vector3.new(0.3, 0.3, 18), CFrame.new(-hx + 2, Y + 15.4, -26), M.Neon, rgb(200, 30, 30))
+	light(lbLight, { Range = 10, Brightness = 1, Color = rgb(255, 60, 40) })
+
+	-- HANGING STATUS SCREEN (centre) --------------------------------------
+	local screen = block(lobby, Vector3.new(18, 7, 18), CFrame.new(0, Y + 17, 0), M.Metal, rgb(18, 18, 22))
+	screen.Name = "StatusScreen"
+	for _, x in { -6, 6 } do
+		block(lobby, Vector3.new(0.2, H - 20.5, 0.2), CFrame.new(x, Y + 20.5 + (H - 20.5) / 2, 0), M.Metal, rgb(30, 30, 30))
+	end
+	for _, face in { Enum.NormalId.Front, Enum.NormalId.Back, Enum.NormalId.Left, Enum.NormalId.Right } do
+		local g = make("SurfaceGui", screen, { Face = face, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 30, LightInfluence = 0 })
+		local bg = make("Frame", g, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0 })
+		make("UIGradient", bg, { Rotation = 90, Color = ColorSequence.new(rgb(40, 10, 12), rgb(8, 6, 8)) })
+		make("UIStroke", bg, { Color = rgb(200, 30, 30), Thickness = 6, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
+		make("TextLabel", bg, { Name = "StatusText", Position = UDim2.fromScale(0.05, 0.08), Size = UDim2.fromScale(0.9, 0.3), BackgroundTransparency = 1, Font = Enum.Font.GothamBlack, TextScaled = true, TextColor3 = rgb(230, 200, 200), Text = "" })
+		local t = make("TextLabel", bg, { Name = "TimerText", Position = UDim2.fromScale(0.05, 0.38), Size = UDim2.fromScale(0.9, 0.55), BackgroundTransparency = 1, Font = Enum.Font.LuckiestGuy, TextScaled = true, TextColor3 = rgb(255, 200, 30), Text = "" })
+		make("UIStroke", t, { Thickness = 5 })
+	end
+	block(lobby, Vector3.new(18.4, 0.3, 18.4), CFrame.new(0, Y + 13.4, 0), M.Neon, rgb(200, 30, 30))
+
+	-- Supply crates + barrels for detail
+	for _, p in { Vector3.new(-30, Y, -36), Vector3.new(-26, Y, -38), Vector3.new(20, Y, -37), Vector3.new(-36, Y, 36), Vector3.new(14, Y, 38) } do
+		block(lobby, Vector3.new(4, 4, 4), CFrame.new(p + Vector3.new(0, 2, 0)) * CFrame.Angles(0, rng:NextNumber() * 0.5, 0), M.WoodPlanks, vary(C.Wood, 0.2))
+		block(lobby, Vector3.new(3, 2.2, 2.2), CFrame.new(p + Vector3.new(3.4, 1.5, 1.5)) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, rgb(150, 30, 30), { Shape = Enum.PartType.Cylinder })
+	end
+	sign(lobby, CFrame.new(-6, Y + H - 3.6, hz - 1.4), Vector3.new(30, 2.6, 0.3), "WEAPON X  •  HOLDING FACILITY 7", rgb(255, 200, 30), rgb(18, 18, 22))
+
 	lobby.Parent = workspace
+	return lobby
 end
 
 function MapBuilder.Build()
@@ -1112,6 +1647,7 @@ function MapBuilder.Build()
 	watchtower(props, Vector3.new(162, 0, 162))
 	watchtower(props, Vector3.new(-160, 0, 40))
 	buildRoads(env, props)
+	buildDetails(env, props)
 	buildBoundary(env)
 	buildWilderness(env, props)
 

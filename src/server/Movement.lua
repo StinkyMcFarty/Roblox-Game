@@ -38,6 +38,7 @@ end
 function Movement.Reset(player)
 	states[player] = nil
 	player:SetAttribute("Feral", false)
+	player:SetAttribute("Sprinting", false)
 	player:SetAttribute("Stamina", 1)
 end
 
@@ -114,6 +115,13 @@ RunService.Heartbeat:Connect(function(dt)
 			local canJump = speed > 0
 			hum.JumpHeight = canJump and 7.2 or 0
 			hum.JumpPower = canJump and 50 or 0
+
+			local sprinting = moving and speed > Config.Survivor.WalkSpeed + 1 and not feralActive
+				and (s.Sprint or Status.Has(player, "Boost"))
+			if sprinting ~= s.SprintOn then
+				s.SprintOn = sprinting
+				player:SetAttribute("Sprinting", sprinting)
+			end
 
 			if feralActive ~= s.FeralOn then
 				s.FeralOn = feralActive

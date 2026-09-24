@@ -4,6 +4,7 @@
 -- good timing. The suit powers down after Config.Sentinel.Duration seconds,
 -- and Wolverine can still rip it apart.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local Debris = game:GetService("Debris")
 
@@ -26,7 +27,8 @@ local GREY = Color3.fromRGB(120, 124, 132)
 local GLOW = Color3.fromRGB(255, 210, 60)
 
 local cooldowns = {}
-local suitUsed = false
+local suitsLeft = 0
+local links = {} -- [Player] = Beam
 
 local function announce(text, color)
 	Fx:FireAllClients("Announce", { Text = text, Color = color or PURPLE, Duration = 3 })
@@ -54,7 +56,7 @@ local function unlockPod(pod)
 end
 
 function Sentinel.SetupRound(map)
-	suitUsed = false
+	suitsLeft = Config.Sentinel.Suits
 	cooldowns = {}
 	local terminals = map:FindFirstChild("Terminals")
 	local pod = map:FindFirstChild("SentinelPod")
@@ -109,21 +111,24 @@ function Sentinel.SetupRound(map)
 		if prompt then
 			prompt.HoldDuration = Config.Sentinel.PodHoldTime
 			prompt.Triggered:Connect(function(player)
-				if suitUsed or not Round.Active then
+				if suitsLeft <= 0 or not Round.Active then
 					return
 				end
 				if player:GetAttribute("Role") ~= "Survivor" or not Round.Survivors[player] then
 					return
 				end
-				suitUsed = true
-				prompt.Enabled = false
-				local beacon = pod:FindFirstChild("Beacon")
-				if beacon then
-					beacon.Transparency = 1
-				end
-				local dummy = pod:FindFirstChild("Dummy")
-				if dummy then
-					dummy:Destroy()
+				suitsLeft -= 1
+				prompt.ObjectText = ("Sentinel Pod (%d left)"):format(suitsLeft)
+				if suitsLeft <= 0 then
+					prompt.Enabled = false
+					local beacon = pod:FindFirstChild("Beacon")
+					if beacon then
+						beacon.Transparency = 1
+					end
+					local dummy = pod:FindFirstChild("Dummy")
+					if dummy then
+						dummy:Destroy()
+					end
 				end
 				Sentinel.Become(player)
 			end)
@@ -204,7 +209,7 @@ function Sentinel.Become(player)
 	hum.Health = 100
 	Util.Burst(root, Util.SparkProps, 40, 2)
 	Util.Sound(Config.Sounds.Terminal, root, { Volume = 2, Pitch = 0.6, Range = 300 })
-	announce(player.DisplayName .. " suited up as the SENTINEL!", GLOW)
+	announce(player.DisplayName .. " suited up as a SENTINEL! Stay together to link up.", GLOW)
 	Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 0.6, Radius = 80 })
 
 	task.delay(Config.Sentinel.Duration, function()
@@ -252,6 +257,84 @@ local function wolverineParts()
 	return w, char, Util.Root(char)
 end
 
+local function sentinels()
+	local list = {}
+	for p in Round.Survivors do
+		if p:GetAttribute("Role") == "Sentinel" and Util.IsAlive(p.Character) then
+			table.insert(list, p)
+		end
+	end
+	return list
+end
+
+local function isLinked(player)
+	local root = Util.Root(player.Character)
+	if not root then
+		return false
+	end
+	for _, other in sentinels() do
+		local r = Util.Root(other.Character)
+		if other ~= player and r and (r.Position - root.Position).Magnitude <= Config.Sentinel.LinkRange then
+			return true
+		end
+	end
+	return false
+end
+
+local function power(player)
+	return isLinked(player) and Config.Sentinel.LinkedMultiplier or Config.Sentinel.SoloMultiplier
+end
+
+-- Energy tether between linked suits + "Linked" attribute for the HUD
+RunService.Heartbeat:Connect(function()
+	for p, beam in links do
+		if not (p.Parent and p:GetAttribute("Role") == "Sentinel") then
+			beam:Destroy()
+			links[p] = nil
+		end
+	end
+	local list = sentinels()
+	for _, p in list do
+		local linked = isLinked(p)
+		if p:GetAttribute("Linked") ~= linked then
+			p:SetAttribute("Linked", linked)
+		end
+	end
+	if #list >= 2 then
+		local a, b = list[1], list[2]
+		local ta, tb = Util.Torso(a.Character), Util.Torso(b.Character)
+		local beam = links[a]
+		if ta and tb and isLinked(a) then
+			if not beam then
+				local att0 = Instance.new("Attachment")
+				att0.Name = "LinkAtt"
+				att0.Parent = ta
+				local att1 = Instance.new("Attachment")
+				att1.Name = "LinkAtt"
+				att1.Parent = tb
+				beam = Instance.new("Beam")
+				beam.Attachment0 = att0
+				beam.Attachment1 = att1
+				beam.Color = ColorSequence.new(Color3.fromRGB(200, 120, 255), Color3.fromRGB(255, 210, 60))
+				beam.LightEmission = 1
+				beam.Width0 = 0.6
+				beam.Width1 = 0.6
+				beam.CurveSize0 = 2
+				beam.CurveSize1 = -2
+				beam.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+				beam.TextureSpeed = 3
+				beam.Transparency = NumberSequence.new(0.2)
+				beam.FaceCamera = true
+				beam.Parent = ta
+				links[a] = beam
+			end
+		elseif beam then
+			beam:Destroy()
+			links[a] = nil
+		end
+	end
+end)
+
 local function stunWolverine(duration)
 	local w = Round.Wolverine
 	if w then
@@ -272,8 +355,9 @@ local function punch(player, char, root)
 	end
 	local rel = root.CFrame:PointToObjectSpace(wRoot.Position)
 	if rel.Z < 1 and rel.Z > -cfg.Range and math.abs(rel.X) < 5 and math.abs(rel.Y) < 6 then
-		Wolverine.Damage(cfg.Damage)
-		stunWolverine(cfg.Stun)
+		local mult = power(player)
+		Wolverine.Damage(cfg.Damage * mult)
+		stunWolverine(cfg.Stun * mult)
 		local dir = Util.Flat(wRoot.Position - root.Position)
 		Fx:FireClient(w, "Knock", { Velocity = dir * cfg.Knockback + Vector3.new(0, 25, 0) })
 		Util.Sound(Config.Sounds.Punch, wRoot, { Volume = 2, Pitch = 0.6 })
@@ -343,7 +427,7 @@ local function laser(player, char, root, aim)
 		end
 		if wChar and hit.Instance:IsDescendantOf(wChar) then
 			endPos = hit.Position
-			Wolverine.Damage(cfg.Damage)
+			Wolverine.Damage(cfg.Damage * power(player))
 			Wolverine.RevealSkeleton()
 			Status.Apply(Round.Wolverine, "Slowed", cfg.Slow)
 			Fx:FireAllClients("Shake", { Position = hit.Position, Intensity = 0.5, Radius = 40 })
@@ -386,8 +470,9 @@ local function pulse(player, char, root)
 	Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 0.8, Radius = 50 })
 	local _, _, wRoot = wolverineParts()
 	if wRoot and (wRoot.Position - root.Position).Magnitude <= cfg.Radius then
-		Wolverine.Damage(cfg.Damage)
-		stunWolverine(cfg.Stun)
+		local mult = power(player)
+		Wolverine.Damage(cfg.Damage * mult)
+		stunWolverine(cfg.Stun * mult)
 	end
 end
 

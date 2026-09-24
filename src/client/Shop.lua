@@ -1,235 +1,334 @@
--- Wolverine skin shop (button on the left of the screen).
+-- Wolverine shop: suits + claws, and the left-side menu dock.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 
 local Skins = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Skins"))
+local UIKit = require(script.Parent:WaitForChild("UIKit"))
 local ShopRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Shop")
 
 local player = Players.LocalPlayer
 local Shop = {}
 
-local DARK = Color3.fromRGB(16, 16, 20)
-local YELLOW = Color3.fromRGB(255, 205, 30)
-
-local function new(class, props, parent)
-	local inst = Instance.new(class)
-	for k, v in props do
-		inst[k] = v
-	end
-	inst.Parent = parent
-	return inst
-end
+local new, corner, stroke, gradient = UIKit.new, UIKit.Corner, UIKit.Stroke, UIKit.Gradient
+local K = UIKit.Colors
 
 local gui = new("ScreenGui", { Name = "SkinShop", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling }, player:WaitForChild("PlayerGui"))
 
-local openButton = new("TextButton", {
+---------------------------------------------------------------------------
+-- Left dock (shared with the Daily module)
+---------------------------------------------------------------------------
+
+local dock = new("Frame", {
+	Name = "Dock",
 	AnchorPoint = Vector2.new(0, 0.5),
-	Position = UDim2.new(0, 12, 0.5, 0),
-	Size = UDim2.fromOffset(110, 44),
-	BackgroundColor3 = DARK,
-	BackgroundTransparency = 0.15,
+	Position = UDim2.new(0, 14, 0.5, 0),
+	Size = UDim2.fromOffset(170, 10),
+	AutomaticSize = Enum.AutomaticSize.Y,
+	BackgroundTransparency = 1,
+}, gui)
+local dockScale = new("UIScale", {}, dock)
+new("UIListLayout", { Padding = UDim.new(0, 12), SortOrder = Enum.SortOrder.LayoutOrder }, dock)
+Shop.Dock = dock
+
+local function fitDock()
+	local v = workspace.CurrentCamera.ViewportSize
+	dockScale.Scale = (v.X < 900 or v.Y < 520) and 0.7 or 1
+end
+workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fitDock)
+fitDock()
+
+function Shop.DockButton(text, icon, color, order)
+	local b, label = UIKit.Button(dock, { Text = text, Icon = icon, Color = color, Size = UDim2.fromOffset(170, 54), LayoutOrder = order })
+	return b, label
+end
+
+-- Coin counter at the top of the dock
+local coinPlate = new("Frame", { Size = UDim2.fromOffset(170, 40), BackgroundColor3 = Color3.new(1, 1, 1), LayoutOrder = 0 }, dock)
+corner(coinPlate, 20)
+gradient(coinPlate, Color3.fromRGB(60, 46, 10), Color3.fromRGB(24, 18, 6))
+stroke(coinPlate, K.Yellow, 2)
+local coinIcon = new("TextLabel", {
+	Size = UDim2.fromOffset(40, 40),
+	BackgroundTransparency = 1,
 	Font = Enum.Font.GothamBlack,
 	TextScaled = true,
-	TextColor3 = YELLOW,
-	Text = "SKINS",
-}, gui)
-new("UICorner", { CornerRadius = UDim.new(0, 10) }, openButton)
-new("UIStroke", { Color = YELLOW, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, openButton)
-new("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8) }, openButton)
-
-local panel = new("Frame", {
-	AnchorPoint = Vector2.new(0.5, 0.5),
-	Position = UDim2.fromScale(0.5, 0.5),
-	Size = UDim2.fromOffset(620, 360),
-	BackgroundColor3 = DARK,
-	BackgroundTransparency = 0.05,
-	Visible = false,
-	ZIndex = 30,
-}, gui)
-new("UICorner", { CornerRadius = UDim.new(0, 14) }, panel)
-new("UIStroke", { Color = YELLOW, Thickness = 2 }, panel)
-new("UISizeConstraint", { MaxSize = Vector2.new(620, 360) }, panel)
-new("UIScale", {}, panel)
-
-new("TextLabel", {
-	Position = UDim2.fromOffset(20, 12),
-	Size = UDim2.new(1, -140, 0, 36),
+	Text = "🪙",
+}, coinPlate)
+new("UIPadding", { PaddingTop = UDim.new(0, 7), PaddingBottom = UDim.new(0, 7) }, coinIcon)
+local coinText = new("TextLabel", {
+	Position = UDim2.fromOffset(42, 0),
+	Size = UDim2.new(1, -52, 1, 0),
 	BackgroundTransparency = 1,
-	Font = Enum.Font.LuckiestGuy,
+	Font = Enum.Font.GothamBlack,
 	TextScaled = true,
 	TextXAlignment = Enum.TextXAlignment.Left,
-	TextColor3 = YELLOW,
-	Text = "WOLVERINE SKINS",
-	ZIndex = 31,
-}, panel)
-local coinsLabel = new("TextLabel", {
-	AnchorPoint = Vector2.new(1, 0),
-	Position = UDim2.new(1, -60, 0, 16),
-	Size = UDim2.fromOffset(160, 28),
-	BackgroundTransparency = 1,
-	Font = Enum.Font.GothamBlack,
-	TextScaled = true,
-	TextXAlignment = Enum.TextXAlignment.Right,
-	TextColor3 = Color3.fromRGB(255, 225, 120),
-	Text = "",
-	ZIndex = 31,
-}, panel)
-local close = new("TextButton", {
-	AnchorPoint = Vector2.new(1, 0),
-	Position = UDim2.new(1, -12, 0, 12),
-	Size = UDim2.fromOffset(36, 36),
-	BackgroundColor3 = Color3.fromRGB(150, 30, 30),
-	Font = Enum.Font.GothamBlack,
-	TextScaled = true,
-	TextColor3 = Color3.new(1, 1, 1),
-	Text = "X",
-	ZIndex = 31,
-}, panel)
-new("UICorner", { CornerRadius = UDim.new(0, 8) }, close)
+	TextColor3 = K.Yellow,
+	Text = "0",
+}, coinPlate)
+new("UIPadding", { PaddingTop = UDim.new(0, 9), PaddingBottom = UDim.new(0, 9) }, coinText)
+local coinScale = new("UIScale", {}, coinPlate)
 
-local grid = new("Frame", {
-	Position = UDim2.fromOffset(16, 60),
-	Size = UDim2.new(1, -32, 1, -104),
+---------------------------------------------------------------------------
+-- Shop window
+---------------------------------------------------------------------------
+
+local window = UIKit.Window(gui, "WOLVERINE ARMORY", UDim2.fromOffset(700, 430), K.Yellow)
+local w = window.Frame
+
+local tabs = new("Frame", { Position = UDim2.fromOffset(20, 66), Size = UDim2.new(1, -40, 0, 40), BackgroundTransparency = 1, ZIndex = 31 }, w)
+new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 10) }, tabs)
+
+local scroller = new("ScrollingFrame", {
+	Position = UDim2.fromOffset(20, 116),
+	Size = UDim2.new(1, -40, 1, -160),
 	BackgroundTransparency = 1,
+	BorderSizePixel = 0,
+	ScrollBarThickness = 6,
+	ScrollBarImageColor3 = K.Yellow,
+	CanvasSize = UDim2.new(),
+	AutomaticCanvasSize = Enum.AutomaticSize.X,
+	ScrollingDirection = Enum.ScrollingDirection.X,
 	ZIndex = 31,
-}, panel)
-new("UIGridLayout", { CellSize = UDim2.fromOffset(140, 250), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, grid)
+}, w)
+new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 12), SortOrder = Enum.SortOrder.LayoutOrder }, scroller)
+new("UIPadding", { PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 10), PaddingLeft = UDim.new(0, 4) }, scroller)
 
 local message = new("TextLabel", {
 	AnchorPoint = Vector2.new(0.5, 1),
-	Position = UDim2.new(0.5, 0, 1, -10),
-	Size = UDim2.new(1, -40, 0, 24),
+	Position = UDim2.new(0.5, 0, 1, -12),
+	Size = UDim2.new(1, -40, 0, 22),
 	BackgroundTransparency = 1,
 	Font = Enum.Font.GothamBold,
 	TextScaled = true,
-	TextColor3 = Color3.new(1, 1, 1),
-	Text = "Earn coins by surviving, rebooting terminals and getting kills.",
+	TextColor3 = Color3.fromRGB(190, 190, 200),
+	Text = "Earn coins by surviving, rebooting terminals, kills and daily challenges.",
 	ZIndex = 31,
-}, panel)
+}, w)
 
+local category = "Suits"
 local cards = {}
 
-local function owned(id)
-	for s in string.gmatch(player:GetAttribute("OwnedSkins") or "", "[^,]+") do
-		if s == id then
-			return true
-		end
+local function ownedList(attr)
+	local set = {}
+	for s in string.gmatch(player:GetAttribute(attr) or "", "[^,]+") do
+		set[s] = true
 	end
-	return false
+	return set
+end
+
+local function coins()
+	local ls = player:FindFirstChild("leaderstats")
+	return (ls and ls:FindFirstChild("Coins")) and ls.Coins.Value or 0
 end
 
 local function refresh()
-	local coins = 0
-	local ls = player:FindFirstChild("leaderstats")
-	if ls and ls:FindFirstChild("Coins") then
-		coins = ls.Coins.Value
-	end
-	coinsLabel.Text = coins .. " coins"
-	local equipped = player:GetAttribute("Skin")
+	coinText.Text = tostring(coins())
+	local owned = ownedList(category == "Suits" and "OwnedSkins" or "OwnedClaws")
+	local equipped = player:GetAttribute(category == "Suits" and "Skin" or "Claw")
+	local list = category == "Suits" and Skins.List or Skins.Claws
 	for id, card in cards do
-		local skin = Skins.List[id]
+		local item = list[id]
 		if equipped == id then
-			card.Button.Text = "EQUIPPED"
-			card.Button.BackgroundColor3 = Color3.fromRGB(40, 120, 60)
-		elseif owned(id) then
-			card.Button.Text = "EQUIP"
-			card.Button.BackgroundColor3 = Color3.fromRGB(50, 80, 140)
+			card.Label.Text = "EQUIPPED"
+			UIKit.Recolor(card.Button, K.Green)
+			card.Stroke.Color = K.Green
+			card.Stroke.Thickness = 3
+		elseif owned[id] then
+			card.Label.Text = "EQUIP"
+			UIKit.Recolor(card.Button, K.Blue)
+			card.Stroke.Color = Color3.fromRGB(70, 70, 80)
+			card.Stroke.Thickness = 2
 		else
-			card.Button.Text = "BUY " .. skin.Price
-			card.Button.BackgroundColor3 = coins >= skin.Price and Color3.fromRGB(190, 140, 20) or Color3.fromRGB(70, 70, 75)
+			card.Label.Text = "🪙 " .. item.Price
+			UIKit.Recolor(card.Button, coins() >= item.Price and K.Yellow or Color3.fromRGB(90, 90, 96))
+			card.Stroke.Color = Color3.fromRGB(70, 70, 80)
+			card.Stroke.Thickness = 2
 		end
 	end
 end
 
-for i, id in Skins.Order do
-	local skin = Skins.List[id]
-	local card = new("Frame", { BackgroundColor3 = Color3.fromRGB(30, 30, 36), LayoutOrder = i, ZIndex = 32 }, grid)
-	new("UICorner", { CornerRadius = UDim.new(0, 10) }, card)
-	local swatch = new("Frame", {
-		Position = UDim2.fromOffset(10, 10),
-		Size = UDim2.new(1, -20, 0, 70),
-		BackgroundColor3 = skin.Swatch,
-		ZIndex = 33,
-	}, card)
-	new("UICorner", { CornerRadius = UDim.new(0, 8) }, swatch)
-	for c = -1, 1 do -- claw marks on the swatch
-		new("Frame", {
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0.5, c * 14, 0.5, 0),
-			Size = UDim2.fromOffset(4, 56),
-			Rotation = 20,
-			BackgroundColor3 = Color3.fromRGB(220, 225, 235),
+-- Draws a little claw preview (3 blades) inside a frame
+local function clawPreview(parent, item)
+	for i = -1, 1 do
+		local blade = new("Frame", {
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, i * 22, 0.92, 0),
+			Size = UDim2.fromOffset(item.Thick and 12 or 8, 86),
+			Rotation = i * 6,
+			BackgroundColor3 = Color3.new(1, 1, 1),
 			ZIndex = 34,
-		}, swatch)
+		}, parent)
+		new("UICorner", { CornerRadius = UDim.new(1, 0) }, blade)
+		gradient(blade, item.Color:Lerp(Color3.new(1, 1, 1), 0.35), item.Color, 0)
+		new("UIStroke", { Color = item.Glow, Thickness = 2, Transparency = 0.3 }, blade)
 	end
-	new("TextLabel", {
-		Position = UDim2.fromOffset(8, 86),
-		Size = UDim2.new(1, -16, 0, 40),
-		BackgroundTransparency = 1,
-		Font = Enum.Font.GothamBlack,
-		TextScaled = true,
-		TextWrapped = true,
-		TextColor3 = Color3.new(1, 1, 1),
-		Text = skin.Name,
-		ZIndex = 33,
-	}, card)
-	new("TextLabel", {
-		Position = UDim2.fromOffset(8, 128),
-		Size = UDim2.new(1, -16, 0, 70),
-		BackgroundTransparency = 1,
-		Font = Enum.Font.Gotham,
-		TextSize = 13,
-		TextWrapped = true,
-		TextYAlignment = Enum.TextYAlignment.Top,
-		TextColor3 = Color3.fromRGB(190, 190, 200),
-		Text = skin.Description,
-		ZIndex = 33,
-	}, card)
-	local button = new("TextButton", {
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -8),
-		Size = UDim2.new(1, -16, 0, 36),
-		Font = Enum.Font.GothamBlack,
-		TextScaled = true,
-		TextColor3 = Color3.new(1, 1, 1),
-		Text = "",
-		ZIndex = 33,
-	}, card)
-	new("UICorner", { CornerRadius = UDim.new(0, 8) }, button)
-	new("UIPadding", { PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6) }, button)
-	button.Activated:Connect(function()
-		local action = owned(id) and "Equip" or "Buy"
-		local ok, msg = ShopRemote:InvokeServer(action, id)
-		message.Text = msg or ""
-		message.TextColor3 = ok and Color3.fromRGB(120, 255, 150) or Color3.fromRGB(255, 110, 110)
-		refresh()
-	end)
-	cards[id] = { Button = button }
 end
 
--- Fit small (phone) screens
-local function fit()
-	local cam = workspace.CurrentCamera
-	local s = math.min(1, (cam.ViewportSize.X - 24) / 620, (cam.ViewportSize.Y - 24) / 360)
-	panel:FindFirstChildOfClass("UIScale").Scale = math.max(0.4, s)
+-- Draws a little suit preview (colour blocks shaped like a body)
+local function suitPreview(parent, item)
+	local c = item.Colors
+	local skin = Color3.fromRGB(230, 180, 140)
+	local function col(x)
+		return x == "Skin" and skin or x
+	end
+	local function box(x, y, wd, h, color)
+		local f = new("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, x, 0, y),
+			Size = UDim2.fromOffset(wd, h),
+			BackgroundColor3 = color,
+			ZIndex = 34,
+		}, parent)
+		corner(f, 4)
+		return f
+	end
+	box(0, 8, 26, 24, skin)
+	box(0, 34, 40, 34, col(c.UpperTorso))
+	box(0, 68, 40, 10, col(c.LowerTorso))
+	box(-28, 34, 14, 22, col(c.UpperArm))
+	box(28, 34, 14, 22, col(c.UpperArm))
+	box(-28, 56, 14, 14, col(c.LowerArm))
+	box(28, 56, 14, 14, col(c.LowerArm))
+	box(-10, 78, 18, 18, col(c.UpperLeg))
+	box(10, 78, 18, 18, col(c.UpperLeg))
+	box(-10, 96, 18, 8, col(c.Foot))
+	box(10, 96, 18, 8, col(c.Foot))
 end
-workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fit)
-fit()
 
-openButton.Activated:Connect(function()
-	panel.Visible = not panel.Visible
+local function build()
+	for _, c in cards do
+		c.Card:Destroy()
+	end
+	cards = {}
+	local order = category == "Suits" and Skins.Order or Skins.ClawOrder
+	local list = category == "Suits" and Skins.List or Skins.Claws
+	for i, id in order do
+		local item = list[id]
+		local card = new("Frame", { Size = UDim2.fromOffset(190, 250), BackgroundColor3 = Color3.new(1, 1, 1), LayoutOrder = i, ZIndex = 32 }, scroller)
+		corner(card, 14)
+		gradient(card, Color3.fromRGB(44, 42, 52), Color3.fromRGB(20, 19, 25))
+		local cardStroke = stroke(card, Color3.fromRGB(70, 70, 80), 2)
+		local scale = new("UIScale", {}, card)
+
+		local preview = new("Frame", {
+			Position = UDim2.fromOffset(10, 10),
+			Size = UDim2.new(1, -20, 0, 112),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			ClipsDescendants = true,
+			ZIndex = 33,
+		}, card)
+		corner(preview, 10)
+		local accent = category == "Suits" and item.Swatch or item.Glow
+		gradient(preview, accent:Lerp(Color3.new(0, 0, 0), 0.35), Color3.fromRGB(12, 12, 16))
+		if category == "Suits" then
+			suitPreview(preview, item)
+		else
+			clawPreview(preview, item)
+		end
+		new("TextLabel", {
+			Position = UDim2.fromOffset(12, 128),
+			Size = UDim2.new(1, -24, 0, 24),
+			BackgroundTransparency = 1,
+			Font = Enum.Font.GothamBlack,
+			TextScaled = true,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextColor3 = K.White,
+			Text = item.Name,
+			ZIndex = 33,
+		}, card)
+		new("TextLabel", {
+			Position = UDim2.fromOffset(12, 154),
+			Size = UDim2.new(1, -24, 0, 40),
+			BackgroundTransparency = 1,
+			Font = Enum.Font.Gotham,
+			TextSize = 13,
+			TextWrapped = true,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			TextColor3 = Color3.fromRGB(180, 178, 190),
+			Text = item.Description,
+			ZIndex = 33,
+		}, card)
+		local button, label = UIKit.Button(card, {
+			Text = "",
+			Color = K.Yellow,
+			Size = UDim2.new(1, -20, 0, 40),
+			Position = UDim2.new(0, 10, 1, -50),
+			ZIndex = 34,
+		})
+		card.MouseEnter:Connect(function()
+			TweenService:Create(scale, TweenInfo.new(0.2, Enum.EasingStyle.Back), { Scale = 1.04 }):Play()
+		end)
+		card.MouseLeave:Connect(function()
+			TweenService:Create(scale, TweenInfo.new(0.15), { Scale = 1 }):Play()
+		end)
+		button.Activated:Connect(function()
+			local isSuit = category == "Suits"
+			local owned = ownedList(isSuit and "OwnedSkins" or "OwnedClaws")[id]
+			local action = (owned and "Equip" or "Buy") .. (isSuit and "" or "Claw")
+			local ok, msg = ShopRemote:InvokeServer(action, id)
+			message.Text = msg or ""
+			message.TextColor3 = ok and K.Green or Color3.fromRGB(255, 110, 110)
+			if ok then
+				scale.Scale = 1.12
+				TweenService:Create(scale, TweenInfo.new(0.4, Enum.EasingStyle.Back), { Scale = 1 }):Play()
+			end
+			refresh()
+		end)
+		cards[id] = { Card = card, Button = button, Label = label, Stroke = cardStroke }
+	end
+	scroller.CanvasPosition = Vector2.zero
 	refresh()
+end
+
+local tabButtons = {}
+local function selectTab(name)
+	category = name
+	for n, b in tabButtons do
+		UIKit.Recolor(b, n == name and K.Yellow or Color3.fromRGB(80, 80, 90))
+	end
+	build()
+end
+for i, name in { "Suits", "Claws" } do
+	local b = UIKit.Button(tabs, {
+		Text = name == "Suits" and "SUITS" or "CLAWS",
+		Icon = name == "Suits" and "🦸" or "🗡️",
+		Color = K.Yellow,
+		Size = UDim2.fromOffset(150, 40),
+		LayoutOrder = i,
+		ZIndex = 32,
+	})
+	tabButtons[name] = b
+	b.Activated:Connect(function()
+		selectTab(name)
+	end)
+end
+selectTab("Suits")
+
+local openButton = Shop.DockButton("ARMORY", "🛡️", K.Yellow, 1)
+openButton.Activated:Connect(function()
+	refresh()
+	window.Toggle()
 end)
-close.Activated:Connect(function()
-	panel.Visible = false
-end)
+
 player:GetAttributeChangedSignal("OwnedSkins"):Connect(refresh)
 player:GetAttributeChangedSignal("Skin"):Connect(refresh)
+player:GetAttributeChangedSignal("OwnedClaws"):Connect(refresh)
+player:GetAttributeChangedSignal("Claw"):Connect(refresh)
 task.spawn(function()
 	local ls = player:WaitForChild("leaderstats", 30)
-	local coins = ls and ls:WaitForChild("Coins", 30)
-	if coins then
-		coins.Changed:Connect(refresh)
+	local c = ls and ls:WaitForChild("Coins", 30)
+	if c then
+		local last = c.Value
+		c.Changed:Connect(function(v)
+			if v > last then
+				coinScale.Scale = 1.15
+				TweenService:Create(coinScale, TweenInfo.new(0.4, Enum.EasingStyle.Back), { Scale = 1 }):Play()
+			end
+			last = v
+			refresh()
+		end)
 	end
 	refresh()
 end)

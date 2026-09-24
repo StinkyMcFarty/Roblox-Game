@@ -2,7 +2,10 @@
 local Config = {}
 
 -- Rounds ----------------------------------------------------------------
-Config.MinPlayers = 2 -- In Studio play-testing 1 player is enough
+Config.MinPlayers = 1 -- a round starts even with 1 player (bots fill in)
+-- If there are fewer survivors than this, bot survivors are added so
+-- Wolverine always has someone to hunt.
+Config.BotFill = 5
 Config.IntermissionTime = 20
 Config.RoundTime = 150 -- seconds survivors must last (after the intro)
 Config.KillTimeBonus = 15 -- Wolverine gets this much extra time per kill
@@ -15,7 +18,9 @@ Config.RoarTime = 3.8
 
 -- Damage ----------------------------------------------------------------
 Config.HitsToKill = 3 -- the 3rd hit always rips the survivor in half
-Config.HitImmunity = 1.2 -- i-frames after being wounded
+Config.HitImmunity = 2.0 -- i-frames after being wounded (no infinite combos)
+Config.WolverineHitRecovery = 0.4 -- Wolverine can't attack for this long after landing a hit
+Config.Throw = { Force = 72, Up = 34, Tumble = 0.8 } -- survivors get flung on a non-lethal hit
 Config.AdrenalineTime = 1.8 -- speed boost after being wounded
 Config.AdrenalineBonus = 8
 
@@ -53,6 +58,12 @@ Config.Sentinel = {
 	PodHoldTime = 2,
 	Duration = 45, -- the suit powers down after this
 	Armor = 4, -- Wolverine hits needed to destroy it (the last one rips it in half)
+	Suits = 2, -- how many survivors can suit up per round
+	-- Teamwork: suits within LinkRange of each other are "linked" and hit hard.
+	-- Alone they barely scratch him (his healing outpaces them).
+	LinkRange = 30,
+	LinkedMultiplier = 1.6,
+	SoloMultiplier = 0.5,
 	WalkSpeed = 18,
 	Scale = 1.35,
 	Punch = { Cooldown = 0.9, Damage = 40, Range = 9, Stun = 0.6, Knockback = 70 },

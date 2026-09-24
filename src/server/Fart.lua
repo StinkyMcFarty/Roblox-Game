@@ -92,6 +92,8 @@ function Fart.SniffTargets()
 			table.insert(targets, { Position = c.Position })
 		elseif spot and spot:FindFirstChild("Inside") then
 			table.insert(targets, { Position = spot.Inside.Position - Vector3.new(0, 2, 0), Hiding = true })
+		elseif player.IsBot then
+			table.insert(targets, { Char = player.Character })
 		else
 			table.insert(targets, { Name = player.Name })
 		end

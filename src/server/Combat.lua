@@ -9,6 +9,7 @@ local Round = require(script.Parent.Round)
 local Status = require(script.Parent.Status)
 local Posture = require(script.Parent.Posture)
 local Hiding = require(script.Parent.Hiding)
+local VFX = require(script.Parent.VFX)
 
 local Fx = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Fx")
 
@@ -111,6 +112,7 @@ function Combat.BreakInBox(cframe, size, origin, force)
 		end
 	end
 	if n > 0 then
+		VFX.Dust(cframe.Position, Color3.fromRGB(190, 185, 180), 8 + n * 3)
 		Util.SoundAt(Config.Sounds.Break, cframe.Position, { Volume = 1.6, Pitch = 0.55 + math.random() * 0.2, Range = 260 })
 		Util.SoundAt(Config.Sounds.Slash, cframe.Position, { Volume = 1, Pitch = 0.7, Range = 180 })
 	end
@@ -218,13 +220,36 @@ function Combat.Wound(killer, victim)
 	Util.Sound(Config.Sounds.Slash, root, { Pitch = 0.8, Volume = 1.2 })
 	Util.Sound(Config.Sounds.Gore, root, { Pitch = 0.7, Volume = 0.8 })
 	Status.Apply(victim, "Immune", Config.HitImmunity)
-	Status.Apply(victim, "Boost", Config.AdrenalineTime)
+	Status.Apply(victim, "Boost", Config.HitImmunity + Config.AdrenalineTime)
+	Status.Apply(killer, "Busy", Config.WolverineHitRecovery)
 
+	-- Crisp hit feedback
+	local torso = Util.Torso(char) or root
+	VFX.Impact(torso.Position, Color3.fromRGB(255, 50, 40), 1)
+	VFX.WoundMarks(char)
+	VFX.IFrames(char, Config.HitImmunity)
+	VFX.ThrowTrail(char, Config.Throw.Tumble + 0.3)
+	Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 0.5, Radius = 35 })
+
+	-- Throw them away from Wolverine
 	local kRoot = Util.Root(killer.Character)
 	local dir = kRoot and Util.Flat(root.Position - kRoot.Position) or Util.Flat(-root.CFrame.LookVector)
-	Fx:FireClient(victim, "Knock", { Velocity = dir * 45 + Vector3.new(0, 22, 0) })
-	Fx:FireClient(victim, "Hurt", {})
-	Fx:FireClient(killer, "HitConfirm", {})
+	local throw = dir * Config.Throw.Force + Vector3.new(0, Config.Throw.Up, 0)
+	if victim.IsBot then
+		local hum2 = Util.Humanoid(char)
+		hum2.PlatformStand = true
+		root.AssemblyLinearVelocity = throw
+		root.AssemblyAngularVelocity = dir:Cross(Vector3.yAxis) * -8
+		task.delay(Config.Throw.Tumble, function()
+			if hum2.Parent and hum2.Health > 0 then
+				hum2.PlatformStand = false
+				hum2:ChangeState(Enum.HumanoidStateType.GettingUp)
+			end
+		end)
+	end
+	Util.FireClient(Fx, victim, "Knock", { Velocity = throw, Tumble = Config.Throw.Tumble, Spin = dir:Cross(Vector3.yAxis) * -8 })
+	Util.FireClient(Fx, victim, "Hurt", {})
+	Util.FireClient(Fx, killer, "HitConfirm", {})
 end
 
 ---------------------------------------------------------------------------
@@ -366,7 +391,7 @@ function Combat.Execute(killer, victim)
 		CFrame = base * CFrame.new(0, 2.4, -2.7) * CFrame.Angles(0, math.pi, 0),
 	}):Play()
 	Fx:FireAllClients("Shake", { Position = kRoot.Position, Intensity = 0.7, Radius = 70 })
-	Fx:FireClient(victim, "Grabbed", {})
+	Util.FireClient(Fx, victim, "Grabbed", {})
 	task.wait(0.55)
 
 	-- Tear

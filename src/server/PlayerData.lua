@@ -48,6 +48,12 @@ local function publish(player)
 	end
 	player:SetAttribute("OwnedSkins", table.concat(owned, ","))
 	player:SetAttribute("Skin", d.Skin)
+	local claws = {}
+	for id in d.OwnedClaws do
+		table.insert(claws, id)
+	end
+	player:SetAttribute("OwnedClaws", table.concat(claws, ","))
+	player:SetAttribute("Claw", d.Claw)
 	player:SetAttribute("GuaranteedTokens", d.Tokens)
 	player:SetAttribute("LoginStreak", d.Streak)
 	player:SetAttribute("Challenges", HttpService:JSONEncode(d.Daily))
@@ -72,6 +78,14 @@ function PlayerData.Save(player)
 			Coins = d.Coins,
 			Owned = owned,
 			Skin = d.Skin,
+			OwnedClaws = (function()
+				local list = {}
+				for id in d.OwnedClaws do
+					table.insert(list, id)
+				end
+				return list
+			end)(),
+			Claw = d.Claw,
 			Tokens = d.Tokens,
 			LastLogin = d.LastLogin,
 			Streak = d.Streak,
@@ -101,6 +115,8 @@ function PlayerData.Load(player)
 		Coins = 0,
 		Owned = { [Skins.Default] = true },
 		Skin = Skins.Default,
+		OwnedClaws = { [Skins.DefaultClaw] = true },
+		Claw = Skins.DefaultClaw,
 		Tokens = 0,
 		LastLogin = "",
 		Streak = 0,
@@ -120,6 +136,14 @@ function PlayerData.Load(player)
 			end
 			if saved.Skin and data.Owned[saved.Skin] then
 				data.Skin = saved.Skin
+			end
+			for _, id in saved.OwnedClaws or {} do
+				if Skins.Claws[id] then
+					data.OwnedClaws[id] = true
+				end
+			end
+			if saved.Claw and data.OwnedClaws[saved.Claw] then
+				data.Claw = saved.Claw
 			end
 			data.Tokens = tonumber(saved.Tokens) or 0
 			data.LastLogin = saved.LastLogin or ""
@@ -191,6 +215,40 @@ end
 function PlayerData.GetSkin(player)
 	local d = cache[player]
 	return d and d.Skin or Skins.Default
+end
+
+function PlayerData.GetClaw(player)
+	local d = cache[player]
+	return d and d.Claw or Skins.DefaultClaw
+end
+
+function PlayerData.BuyClaw(player, id)
+	local d, claw = cache[player], Skins.Claws[id]
+	if not (d and claw) then
+		return false, "Unknown claws"
+	end
+	if d.OwnedClaws[id] then
+		return false, "Already owned"
+	end
+	if d.Coins < claw.Price then
+		return false, "Not enough coins"
+	end
+	d.Coins -= claw.Price
+	d.OwnedClaws[id] = true
+	d.Claw = id
+	publish(player)
+	task.spawn(PlayerData.Save, player)
+	return true, "Unlocked " .. claw.Name .. "!"
+end
+
+function PlayerData.EquipClaw(player, id)
+	local d = cache[player]
+	if d and d.OwnedClaws[id] then
+		d.Claw = id
+		publish(player)
+		return true, "Equipped " .. Skins.Claws[id].Name
+	end
+	return false, "You don't own those"
 end
 
 function PlayerData.Buy(player, id)

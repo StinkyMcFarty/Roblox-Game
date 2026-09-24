@@ -98,6 +98,13 @@ Util.SparkProps = {
 	Acceleration = Vector3.new(0, -40, 0),
 }
 
+-- FireClient that quietly skips bots (they have no client).
+function Util.FireClient(remote, target, ...)
+	if typeof(target) == "Instance" and target:IsA("Player") then
+		remote:FireClient(target, ...)
+	end
+end
+
 function Util.Root(char)
 	return char and char:FindFirstChild("HumanoidRootPart")
 end

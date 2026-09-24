@@ -40,7 +40,10 @@
 local Config = {}
 
 -- Rounds ----------------------------------------------------------------
-Config.MinPlayers = 2 -- In Studio play-testing 1 player is enough
+Config.MinPlayers = 1 -- a round starts even with 1 player (bots fill in)
+-- If there are fewer survivors than this, bot survivors are added so
+-- Wolverine always has someone to hunt.
+Config.BotFill = 5
 Config.IntermissionTime = 20
 Config.RoundTime = 150 -- seconds survivors must last (after the intro)
 Config.KillTimeBonus = 15 -- Wolverine gets this much extra time per kill
@@ -53,7 +56,9 @@ Config.RoarTime = 3.8
 
 -- Damage ----------------------------------------------------------------
 Config.HitsToKill = 3 -- the 3rd hit always rips the survivor in half
-Config.HitImmunity = 1.2 -- i-frames after being wounded
+Config.HitImmunity = 2.0 -- i-frames after being wounded (no infinite combos)
+Config.WolverineHitRecovery = 0.4 -- Wolverine can't attack for this long after landing a hit
+Config.Throw = { Force = 72, Up = 34, Tumble = 0.8 } -- survivors get flung on a non-lethal hit
 Config.AdrenalineTime = 1.8 -- speed boost after being wounded
 Config.AdrenalineBonus = 8
 
@@ -91,6 +96,12 @@ Config.Sentinel = {
 	PodHoldTime = 2,
 	Duration = 45, -- the suit powers down after this
 	Armor = 4, -- Wolverine hits needed to destroy it (the last one rips it in half)
+	Suits = 2, -- how many survivors can suit up per round
+	-- Teamwork: suits within LinkRange of each other are "linked" and hit hard.
+	-- Alone they barely scratch him (his healing outpaces them).
+	LinkRange = 30,
+	LinkedMultiplier = 1.6,
+	SoloMultiplier = 0.5,
 	WalkSpeed = 18,
 	Scale = 1.35,
 	Punch = { Cooldown = 0.9, Damage = 40, Range = 9, Stun = 0.6, Knockback = 70 },
@@ -213,6 +224,36 @@ Skins.List = {
 
 Skins.Default = "Logan"
 
+-- Claw skins (separate from suits)
+Skins.ClawOrder = { "Adamantium", "Bone", "Gold", "Blood", "Obsidian", "Cosmic" }
+Skins.DefaultClaw = "Adamantium"
+Skins.Claws = {
+	Adamantium = {
+		Name = "Adamantium", Price = 0, Description = "Unbreakable. The classic.",
+		Color = rgb(210, 214, 222), Material = Enum.Material.Metal, Reflectance = 0.4, Glow = rgb(210, 230, 255),
+	},
+	Bone = {
+		Name = "Bone Claws", Price = 400, Description = "Before the metal. Raw and jagged.",
+		Color = rgb(232, 222, 196), Material = Enum.Material.SmoothPlastic, Reflectance = 0, Glow = rgb(255, 235, 200), Thick = 1.5,
+	},
+	Gold = {
+		Name = "Gold", Price = 900, Description = "Flex while you shred.",
+		Color = rgb(255, 196, 40), Material = Enum.Material.Metal, Reflectance = 0.5, Glow = rgb(255, 210, 80),
+	},
+	Blood = {
+		Name = "Blood-Soaked", Price = 1100, Description = "They never get clean. Drips as you move.",
+		Color = rgb(130, 0, 0), Material = Enum.Material.SmoothPlastic, Reflectance = 0.25, Glow = rgb(255, 30, 30), Drip = true,
+	},
+	Obsidian = {
+		Name = "Obsidian", Price = 1400, Description = "Black glass edges with a violet gleam.",
+		Color = rgb(22, 20, 28), Material = Enum.Material.Glass, Reflectance = 0.35, Glow = rgb(150, 60, 255),
+	},
+	Cosmic = {
+		Name = "Cosmic", Price = 2200, Description = "Forged in a dying star. Glows and sparkles.",
+		Color = rgb(120, 90, 255), Material = Enum.Material.Neon, Reflectance = 0, Glow = rgb(90, 220, 255), Sparkle = true,
+	},
+}
+
 -- Coins handed out by the server
 Skins.Rewards = {
 	Survive = 60,
@@ -330,6 +371,13 @@ Util.SparkProps = {
 	Acceleration = Vector3.new(0, -40, 0),
 }
 
+-- FireClient that quietly skips bots (they have no client).
+function Util.FireClient(remote, target, ...)
+	if typeof(target) == "Instance" and target:IsA("Player") then
+		remote:FireClient(target, ...)
+	end
+end
+
 function Util.Root(char)
 	return char and char:FindFirstChild("HumanoidRootPart")
 end
@@ -376,6 +424,196 @@ return Util
       </Properties>
       <Item class="ModuleScript" referent="12">
         <Properties>
+          <string name="Name">Bots</string>
+          <string name="Source"><![CDATA[-- Bot survivors so a round is playable with only 1-2 real players.
+-- A bot is a small table that looks enough like a Player for the rest of
+-- the game (Character, Name, DisplayName, Get/SetAttribute).
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Util = require(ReplicatedStorage.Shared.Util)
+local Round = require(script.Parent.Round)
+local Status = require(script.Parent.Status)
+
+local Bots = {}
+
+local Bot = {}
+Bot.__index = Bot
+Bot.IsBot = true
+Bot.UserId = 0
+
+function Bot:GetAttribute(key)
+	return self.Character and self.Character:GetAttribute(key)
+end
+
+function Bot:SetAttribute(key, value)
+	if self.Character then
+		self.Character:SetAttribute(key, value)
+	end
+end
+
+function Bot:FindFirstChild()
+	return nil
+end
+
+local NAMES = { "Scott", "Jean", "Rogue", "Jubilee", "Kitty", "Bobby", "Remy", "Ororo", "Hank", "Kurt", "Piotr", "Warren" }
+local SHIRTS = {
+	Color3.fromRGB(160, 40, 40), Color3.fromRGB(40, 80, 160), Color3.fromRGB(60, 120, 60),
+	Color3.fromRGB(200, 160, 40), Color3.fromRGB(110, 60, 150), Color3.fromRGB(80, 80, 85),
+}
+local SKIN = { Color3.fromRGB(234, 184, 146), Color3.fromRGB(204, 142, 105), Color3.fromRGB(124, 84, 60), Color3.fromRGB(255, 204, 170) }
+
+local active = {} -- list of bots this round
+
+local function makeModel(index)
+	local desc = Instance.new("HumanoidDescription")
+	local skin = SKIN[math.random(#SKIN)]
+	desc.HeadColor = skin
+	desc.LeftArmColor = skin
+	desc.RightArmColor = skin
+	local shirt = SHIRTS[math.random(#SHIRTS)]
+	desc.TorsoColor = shirt
+	desc.LeftLegColor = Color3.fromRGB(45, 50, 70)
+	desc.RightLegColor = Color3.fromRGB(45, 50, 70)
+	local ok, model = pcall(function()
+		return Players:CreateHumanoidModelFromDescription(desc, Enum.HumanoidRigType.R15)
+	end)
+	if not ok or not model then
+		warn("Could not create bot:", model)
+		return nil
+	end
+	model.Name = NAMES[(index - 1) % #NAMES + 1] .. " (bot)"
+	local hum = model:FindFirstChildOfClass("Humanoid")
+	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+	hum.NameDisplayDistance = 40
+	hum.MaxHealth = 100
+	hum.Health = 100
+	return model
+end
+
+local function randomPoint()
+	local r = 160
+	return Vector3.new(math.random(-r, r), 3, math.random(-r, r))
+end
+
+local function think(bot)
+	local char = bot.Character
+	local hum, root = Util.Humanoid(char), Util.Root(char)
+	if not (hum and root) or hum.Health <= 0 or not Round.Survivors[bot] then
+		return
+	end
+	if root.Anchored or Status.Has(bot, "Frozen") or Status.Has(bot, "Busy") then
+		hum.WalkSpeed = 0
+		return
+	end
+
+	local w = Round.Wolverine
+	local wRoot = w and Util.Root(w.Character)
+	local dist = wRoot and (wRoot.Position - root.Position).Magnitude or math.huge
+	local boost = Status.Has(bot, "Boost") and Config.AdrenalineBonus or 0
+
+	if Round.Released and dist < 70 then
+		-- Flee: away from him, with some sideways panic so they aren't a straight line
+		local away = Util.Flat(root.Position - wRoot.Position)
+		local side = away:Cross(Vector3.yAxis) * (bot.Dodge or 1)
+		local target = root.Position + away * 30 + side * math.random(5, 15)
+		target = Vector3.new(math.clamp(target.X, -170, 170), root.Position.Y, math.clamp(target.Z, -170, 170))
+		hum.WalkSpeed = (dist < 40 and Config.Survivor.SprintSpeed - 2 or Config.Survivor.WalkSpeed) + boost
+		hum:MoveTo(target)
+		char:SetAttribute("Sprinting", dist < 40)
+		if math.random() < 0.08 then
+			bot.Dodge = -(bot.Dodge or 1)
+		end
+	else
+		char:SetAttribute("Sprinting", false)
+		hum.WalkSpeed = Config.Survivor.WalkSpeed - 2 + boost
+		local toGoal = bot.Goal and Vector3.new(bot.Goal.X - root.Position.X, 0, bot.Goal.Z - root.Position.Z).Magnitude or 0
+		if not bot.Goal or toGoal < 4 or os.clock() > (bot.GoalUntil or 0) then
+			bot.Goal = randomPoint()
+			bot.GoalUntil = os.clock() + math.random(6, 12)
+		end
+		hum:MoveTo(bot.Goal)
+	end
+
+	-- Unstick: hop if we are trying to move but not going anywhere
+	local v = root.AssemblyLinearVelocity
+	if Vector3.new(v.X, 0, v.Z).Magnitude < 2 then
+		bot.Stuck = (bot.Stuck or 0) + 1
+		if bot.Stuck > 3 then
+			hum.Jump = true
+			bot.Goal = randomPoint()
+			bot.Stuck = 0
+		end
+	else
+		bot.Stuck = 0
+	end
+end
+
+-- Adds bots as survivors until there are at least `count` survivors.
+function Bots.Fill(count, spawns)
+	local have = 0
+	for _ in Round.Survivors do
+		have += 1
+	end
+	for i = 1, count - have do
+		local model = makeModel(i)
+		if model then
+			local bot = setmetatable({ Character = model, Name = model.Name, DisplayName = model.Name, Dodge = 1 }, Bot)
+			bot:SetAttribute("Role", "Survivor")
+			bot:SetAttribute("Hits", 0)
+			bot:SetAttribute("Sprinting", false)
+			model.Parent = (Round.Map and Round.Map:FindFirstChild("Debris")) or workspace
+			local spot = spawns[math.random(#spawns)]
+			model:PivotTo(spot.CFrame + Vector3.new(math.random(-4, 4), 3, math.random(-4, 4)))
+			local root = Util.Root(model)
+			if root then
+				pcall(function()
+					root:SetNetworkOwner(nil)
+				end)
+			end
+			local hum = Util.Humanoid(model)
+			hum.Died:Connect(function()
+				if Round.Survivors[bot] then
+					Round.Survivors[bot] = nil
+				end
+			end)
+			Round.Survivors[bot] = true
+			table.insert(active, bot)
+		end
+	end
+end
+
+function Bots.Clear()
+	for _, bot in active do
+		Round.Survivors[bot] = nil
+		Status.Reset(bot)
+		if bot.Character then
+			bot.Character:Destroy()
+		end
+	end
+	active = {}
+end
+
+local clock = 0
+RunService.Heartbeat:Connect(function(dt)
+	clock += dt
+	if clock < 0.25 then
+		return
+	end
+	clock = 0
+	for _, bot in active do
+		think(bot)
+	end
+end)
+
+return Bots
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="13">
+        <Properties>
           <string name="Name">Combat</string>
           <string name="Source"><![CDATA[-- Hits, wounds, wall shredding and the rip-in-half finisher.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -388,6 +626,7 @@ local Round = require(script.Parent.Round)
 local Status = require(script.Parent.Status)
 local Posture = require(script.Parent.Posture)
 local Hiding = require(script.Parent.Hiding)
+local VFX = require(script.Parent.VFX)
 
 local Fx = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Fx")
 
@@ -490,6 +729,7 @@ function Combat.BreakInBox(cframe, size, origin, force)
 		end
 	end
 	if n > 0 then
+		VFX.Dust(cframe.Position, Color3.fromRGB(190, 185, 180), 8 + n * 3)
 		Util.SoundAt(Config.Sounds.Break, cframe.Position, { Volume = 1.6, Pitch = 0.55 + math.random() * 0.2, Range = 260 })
 		Util.SoundAt(Config.Sounds.Slash, cframe.Position, { Volume = 1, Pitch = 0.7, Range = 180 })
 	end
@@ -597,13 +837,36 @@ function Combat.Wound(killer, victim)
 	Util.Sound(Config.Sounds.Slash, root, { Pitch = 0.8, Volume = 1.2 })
 	Util.Sound(Config.Sounds.Gore, root, { Pitch = 0.7, Volume = 0.8 })
 	Status.Apply(victim, "Immune", Config.HitImmunity)
-	Status.Apply(victim, "Boost", Config.AdrenalineTime)
+	Status.Apply(victim, "Boost", Config.HitImmunity + Config.AdrenalineTime)
+	Status.Apply(killer, "Busy", Config.WolverineHitRecovery)
 
+	-- Crisp hit feedback
+	local torso = Util.Torso(char) or root
+	VFX.Impact(torso.Position, Color3.fromRGB(255, 50, 40), 1)
+	VFX.WoundMarks(char)
+	VFX.IFrames(char, Config.HitImmunity)
+	VFX.ThrowTrail(char, Config.Throw.Tumble + 0.3)
+	Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 0.5, Radius = 35 })
+
+	-- Throw them away from Wolverine
 	local kRoot = Util.Root(killer.Character)
 	local dir = kRoot and Util.Flat(root.Position - kRoot.Position) or Util.Flat(-root.CFrame.LookVector)
-	Fx:FireClient(victim, "Knock", { Velocity = dir * 45 + Vector3.new(0, 22, 0) })
-	Fx:FireClient(victim, "Hurt", {})
-	Fx:FireClient(killer, "HitConfirm", {})
+	local throw = dir * Config.Throw.Force + Vector3.new(0, Config.Throw.Up, 0)
+	if victim.IsBot then
+		local hum2 = Util.Humanoid(char)
+		hum2.PlatformStand = true
+		root.AssemblyLinearVelocity = throw
+		root.AssemblyAngularVelocity = dir:Cross(Vector3.yAxis) * -8
+		task.delay(Config.Throw.Tumble, function()
+			if hum2.Parent and hum2.Health > 0 then
+				hum2.PlatformStand = false
+				hum2:ChangeState(Enum.HumanoidStateType.GettingUp)
+			end
+		end)
+	end
+	Util.FireClient(Fx, victim, "Knock", { Velocity = throw, Tumble = Config.Throw.Tumble, Spin = dir:Cross(Vector3.yAxis) * -8 })
+	Util.FireClient(Fx, victim, "Hurt", {})
+	Util.FireClient(Fx, killer, "HitConfirm", {})
 end
 
 ---------------------------------------------------------------------------
@@ -745,7 +1008,7 @@ function Combat.Execute(killer, victim)
 		CFrame = base * CFrame.new(0, 2.4, -2.7) * CFrame.Angles(0, math.pi, 0),
 	}):Play()
 	Fx:FireAllClients("Shake", { Position = kRoot.Position, Intensity = 0.7, Radius = 70 })
-	Fx:FireClient(victim, "Grabbed", {})
+	Util.FireClient(Fx, victim, "Grabbed", {})
 	task.wait(0.55)
 
 	-- Tear
@@ -781,7 +1044,7 @@ return Combat
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="13">
+      <Item class="ModuleScript" referent="14">
         <Properties>
           <string name="Name">Fart</string>
           <string name="Source"><![CDATA[-- Survivor counter to Wolverine's Sniff: a green gas cloud out the back.
@@ -878,6 +1141,8 @@ function Fart.SniffTargets()
 			table.insert(targets, { Position = c.Position })
 		elseif spot and spot:FindFirstChild("Inside") then
 			table.insert(targets, { Position = spot.Inside.Position - Vector3.new(0, 2, 0), Hiding = true })
+		elseif player.IsBot then
+			table.insert(targets, { Char = player.Character })
 		else
 			table.insert(targets, { Name = player.Name })
 		end
@@ -894,14 +1159,13 @@ return Fart
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Script" referent="14">
+      <Item class="Script" referent="15">
         <Properties>
           <string name="Name">GameManager</string>
           <token name="RunContext">0</token>
           <string name="Source"><![CDATA[-- Round loop: intermission -> pick Wolverine -> survive -> results.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
 
 local Server = script.Parent
 local Config = require(ReplicatedStorage.Shared.Config)
@@ -914,6 +1178,7 @@ local Sentinel = require(Server.Sentinel)
 local PlayerData = require(Server.PlayerData)
 local Fart = require(Server.Fart)
 local Hiding = require(Server.Hiding)
+local Bots = require(Server.Bots)
 local Skins = require(ReplicatedStorage.Shared.Skins)
 
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
@@ -928,7 +1193,59 @@ local GREEN = Color3.fromRGB(90, 255, 140)
 
 Players.RespawnTime = 4
 MapBuilder.SetupLighting()
-MapBuilder.BuildLobby()
+local lobby = MapBuilder.BuildLobby()
+
+-- Lobby: statues, live status screen and leaderboard
+task.spawn(function()
+	for _, spot in lobby:WaitForChild("Pedestals"):GetChildren() do
+		local id = spot:GetAttribute("Skin")
+		Wolverine.MakeStatue(id, spot.CFrame, lobby)
+		local skin = Skins.List[id]
+		for _, d in lobby:GetDescendants() do
+			if d.Name == "PlaqueText" and d.Text == id and skin then
+				d.Text = skin.Name .. (skin.Price > 0 and ("   🪙 " .. skin.Price) or "   FREE")
+			end
+		end
+	end
+end)
+task.spawn(function()
+	local screen = lobby:WaitForChild("StatusScreen")
+	local board = lobby:FindFirstChild("Leaderboard", true)
+	local rows = board and board:FindFirstChild("Rows", true)
+	while true do
+		local status = ReplicatedStorage:GetAttribute("Status") or ""
+		local ends = ReplicatedStorage:GetAttribute("TimerEnds") or 0
+		local left = math.max(0, ends - workspace:GetServerTimeNow())
+		local timer = ends > 0 and ("%d:%02d"):format(math.floor(left / 60), math.floor(left % 60)) or "--:--"
+		for _, d in screen:GetDescendants() do
+			if d.Name == "StatusText" then
+				d.Text = string.upper(status)
+			elseif d.Name == "TimerText" then
+				d.Text = timer
+			end
+		end
+		if rows then
+			local list = {}
+			for _, p in Players:GetPlayers() do
+				local ls = p:FindFirstChild("leaderstats")
+				local kills = ls and ls:FindFirstChild("Kills") and ls.Kills.Value or 0
+				local wins = ls and ls:FindFirstChild("Wins") and ls.Wins.Value or 0
+				table.insert(list, { Name = p.DisplayName, Kills = kills, Wins = wins })
+			end
+			table.sort(list, function(a, b)
+				return a.Kills * 2 + a.Wins > b.Kills * 2 + b.Wins
+			end)
+			for i = 1, 6 do
+				local row = rows:FindFirstChild("Row" .. i)
+				local e = list[i]
+				if row then
+					row.Text = e and ("%d.  %s   🩸%d  🏆%d"):format(i, e.Name, e.Kills, e.Wins) or ""
+				end
+			end
+		end
+		task.wait(0.5)
+	end
+end)
 
 local function now()
 	return workspace:GetServerTimeNow()
@@ -952,7 +1269,7 @@ local function stat(player, name, delta)
 end
 
 local function minPlayers()
-	return RunService:IsStudio() and 1 or Config.MinPlayers
+	return Config.MinPlayers
 end
 
 ---------------------------------------------------------------------------
@@ -1034,6 +1351,10 @@ ShopRemote.OnServerInvoke = function(player, action, id)
 		return PlayerData.Buy(player, id)
 	elseif action == "Equip" then
 		return PlayerData.Equip(player, id)
+	elseif action == "BuyClaw" then
+		return PlayerData.BuyClaw(player, id)
+	elseif action == "EquipClaw" then
+		return PlayerData.EquipClaw(player, id)
 	end
 	return false, "Bad request"
 end
@@ -1101,6 +1422,7 @@ local function runRound()
 
 	Sentinel.SetupRound(map)
 	Hiding.SetupRound(map)
+	Bots.Fill(Config.BotFill, spawns)
 	announce(wolverine.DisplayName .. " is WOLVERINE!" .. (bought and "  (guaranteed pass)" or ""), RED, 4)
 	PlayerData.Progress(wolverine, "BecomeWolverine", 1)
 	Round.EndTime = os.clock() + Config.IntroLength + Config.RoundTime
@@ -1190,6 +1512,7 @@ local function runRound()
 	setStatus("Round over", now() + Config.EndScreenTime)
 	task.wait(Config.EndScreenTime)
 
+	Bots.Clear()
 	Round.Wolverine = nil
 	Round.Survivors = {}
 	ReplicatedStorage:SetAttribute("Wolverine", nil)
@@ -1228,6 +1551,7 @@ while true do
 		local success, err = pcall(runRound)
 		if not success then
 			warn("Round crashed:", err)
+			pcall(Bots.Clear)
 			Round.Active = false
 			Round.Wolverine = nil
 			Round.Survivors = {}
@@ -1244,7 +1568,7 @@ end
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="15">
+      <Item class="ModuleScript" referent="16">
         <Properties>
           <string name="Name">Hiding</string>
           <string name="Source"><![CDATA[-- Hiding spots (lockers, wardrobes, dumpsters, freezer). Hidden survivors are
@@ -1396,7 +1720,7 @@ return Hiding
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="16">
+      <Item class="ModuleScript" referent="17">
         <Properties>
           <string name="Name">MapBuilder</string>
           <string name="Source"><![CDATA[-- Builds the whole map from code: a snowed-in Weapon X compound at night.
@@ -2378,6 +2702,212 @@ local function buildWilderness(env, props)
 	end
 end
 
+
+---------------------------------------------------------------------------
+-- Extra detail pass: the stuff that makes it feel lived-in (and abandoned)
+---------------------------------------------------------------------------
+
+local function powerLine(parent, a, b, spacing)
+	local dir = (b - a).Unit
+	local len = (b - a).Magnitude
+	local side = dir:Cross(Vector3.yAxis)
+	local poles = {}
+	for t = 0, len, spacing do
+		local p = a + dir * t
+		block(parent, Vector3.new(0.9, 20, 0.9), CFrame.new(p + Vector3.new(0, 10, 0)), M.Wood, rgb(70, 52, 36))
+		block(parent, Vector3.new(0.5, 0.5, 7), CFrame.lookAt(p + Vector3.new(0, 18.5, 0), p + Vector3.new(0, 18.5, 0) + side), M.Wood, rgb(70, 52, 36))
+		for _, o in { -3, 0, 3 } do
+			block(parent, Vector3.new(0.3, 0.5, 0.3), CFrame.new(p + side * o + Vector3.new(0, 19, 0)), M.SmoothPlastic, rgb(120, 140, 120))
+		end
+		table.insert(poles, p)
+	end
+	for i = 1, #poles - 1 do
+		for _, o in { -3, 0, 3 } do
+			local p0 = poles[i] + side * o + Vector3.new(0, 19.2, 0)
+			local p1 = poles[i + 1] + side * o + Vector3.new(0, 19.2, 0)
+			local mid = (p0 + p1) / 2 - Vector3.new(0, 1.2, 0)
+			for _, seg in { { p0, mid }, { mid, p1 } } do
+				local l = (seg[2] - seg[1]).Magnitude
+				block(parent, Vector3.new(0.08, 0.08, l), CFrame.lookAt((seg[1] + seg[2]) / 2, seg[2]), M.SmoothPlastic, rgb(20, 20, 20), { CanCollide = false, CanQuery = false })
+			end
+		end
+	end
+end
+
+local function acUnit(parent, pos)
+	block(parent, Vector3.new(4, 2.6, 3), CFrame.new(pos + Vector3.new(0, 1.3, 0)), M.Metal, rgb(150, 152, 156))
+	block(parent, Vector3.new(2.4, 0.2, 2.4), CFrame.new(pos + Vector3.new(0, 2.7, 0)), M.DiamondPlate, rgb(60, 62, 66))
+	block(parent, Vector3.new(3.8, 0.25, 2.8), CFrame.new(pos + Vector3.new(0, 2.8, 0)), M.Snow, C.Snow, { CanCollide = false })
+end
+
+local function vent(parent, pos)
+	block(parent, Vector3.new(1.4, 3, 1.4), CFrame.new(pos + Vector3.new(0, 1.5, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, rgb(120, 122, 128), { Shape = Enum.PartType.Cylinder })
+	block(parent, Vector3.new(2.2, 0.4, 2.2), CFrame.new(pos + Vector3.new(0, 3.2, 0)), M.Metal, rgb(90, 92, 98))
+end
+
+local function woodpile(parent, pos, facing)
+	local cf = CFrame.lookAt(pos, pos + facing)
+	for row = 0, 2 do
+		for i = 0, 4 - row do
+			block(parent, Vector3.new(4, 0.9, 0.9), cf * CFrame.new(0, 0.5 + row * 0.8, -1.8 + i * 0.95 + row * 0.45) * CFrame.Angles(0, math.rad(90), 0), M.Wood, vary(rgb(110, 76, 46), 0.15), { Shape = Enum.PartType.Cylinder })
+		end
+	end
+	block(parent, Vector3.new(1.4, 2.4, 2.4), cf * CFrame.new(2.8, 0.7, 1) * CFrame.Angles(0, 0, math.rad(90)), M.Wood, rgb(90, 62, 40), { Shape = Enum.PartType.Cylinder })
+	block(parent, Vector3.new(0.2, 1.6, 0.2), cf * CFrame.new(2.8, 2.2, 1) * CFrame.Angles(0, 0, math.rad(20)), M.Wood, rgb(80, 56, 36))
+	block(parent, Vector3.new(0.1, 0.5, 0.7), cf * CFrame.new(2.55, 2.9, 1) * CFrame.Angles(0, 0, math.rad(20)), M.Metal, rgb(140, 140, 145))
+end
+
+local function pallet(parent, cf)
+	for i = -1, 1 do
+		block(parent, Vector3.new(4, 0.25, 0.8), cf * CFrame.new(0, 0.55, i * 1.5), M.WoodPlanks, rgb(150, 115, 70))
+		block(parent, Vector3.new(0.6, 0.45, 4), cf * CFrame.new(i * 1.7, 0.22, 0), M.WoodPlanks, rgb(130, 98, 60))
+	end
+end
+
+local function cone(parent, pos)
+	block(parent, Vector3.new(1.2, 0.2, 1.2), CFrame.new(pos + Vector3.new(0, 0.1, 0)), M.SmoothPlastic, rgb(40, 40, 40))
+	for i = 0, 2 do
+		local w = 0.9 - i * 0.25
+		block(parent, Vector3.new(w, 0.5, w), CFrame.new(pos + Vector3.new(0, 0.45 + i * 0.5, 0)), M.SmoothPlastic, i == 1 and rgb(240, 240, 240) or rgb(240, 110, 20))
+	end
+end
+
+local function barrier(parent, cf)
+	block(parent, Vector3.new(6, 1, 2), cf * CFrame.new(0, 0.5, 0), M.Concrete, rgb(170, 170, 165))
+	block(parent, Vector3.new(6, 2, 1), cf * CFrame.new(0, 2, 0), M.Concrete, rgb(170, 170, 165))
+	block(parent, Vector3.new(6.05, 0.4, 1.05), cf * CFrame.new(0, 2.4, 0), M.SmoothPlastic, rgb(230, 60, 40))
+end
+
+local function truck(parent, cf)
+	breakable(block(parent, Vector3.new(7, 5, 6), cf * CFrame.new(0, 3.3, -7), M.SmoothPlastic, rgb(30, 60, 110)))
+	breakable(block(parent, Vector3.new(6.6, 2, 0.2), cf * CFrame.new(0, 4.6, -10.05), M.Glass, rgb(40, 50, 60), { Transparency = 0.2 }))
+	breakable(block(parent, Vector3.new(7.4, 7.5, 16), cf * CFrame.new(0, 4.6, 4), M.CorrugatedSteel, rgb(200, 200, 205)))
+	block(parent, Vector3.new(7, 0.3, 15.6), cf * CFrame.new(0, 8.5, 4), M.Snow, C.Snow, { CanCollide = false })
+	for _, z in { -7, 1, 8 } do
+		for _, x in { -3.3, 3.3 } do
+			block(parent, Vector3.new(1.2, 3, 3), cf * CFrame.new(x, 1.5, z), M.SmoothPlastic, rgb(20, 20, 22), { Shape = Enum.PartType.Cylinder })
+		end
+	end
+	local p = cf.Position
+	zone(p.X, p.Z, 10, 24)
+end
+
+local function bench(parent, cf)
+	block(parent, Vector3.new(6, 0.4, 1.8), cf * CFrame.new(0, 1.6, 0), M.WoodPlanks, rgb(110, 76, 46))
+	block(parent, Vector3.new(6, 1.6, 0.3), cf * CFrame.new(0, 2.6, 0.8), M.WoodPlanks, rgb(110, 76, 46))
+	for _, x in { -2.6, 2.6 } do
+		block(parent, Vector3.new(0.3, 1.6, 1.6), cf * CFrame.new(x, 0.8, 0), M.Metal, C.DarkMetal)
+	end
+	block(parent, Vector3.new(5.6, 0.2, 1.6), cf * CFrame.new(0, 1.9, 0), M.Snow, C.Snow, { CanCollide = false })
+end
+
+local function phoneBooth(parent, cf)
+	breakable(block(parent, Vector3.new(3.5, 8, 3.5), cf * CFrame.new(0, 4, 0), M.Glass, rgb(160, 30, 30), { Transparency = 0.3 }))
+	block(parent, Vector3.new(3.7, 0.6, 3.7), cf * CFrame.new(0, 8.3, 0), M.SmoothPlastic, rgb(150, 20, 20))
+	local lamp = block(parent, Vector3.new(2.4, 0.5, 0.2), cf * CFrame.new(0, 7.7, -1.8), M.Neon, rgb(255, 245, 220))
+	light(lamp, { Range = 10, Brightness = 1, Color = rgb(255, 240, 210) })
+	CollectionService:AddTag(lamp, "Flicker")
+end
+
+local function generator(parent, cf)
+	block(parent, Vector3.new(6, 4, 3.5), cf * CFrame.new(0, 2, 0), M.Metal, rgb(200, 160, 30))
+	block(parent, Vector3.new(6.2, 0.5, 3.7), cf * CFrame.new(0, 4.2, 0), M.Metal, C.DarkMetal)
+	block(parent, Vector3.new(0.6, 3, 0.6), cf * CFrame.new(2.3, 5.5, 1), M.Metal, rgb(60, 60, 60), { Shape = Enum.PartType.Cylinder })
+	local led = block(parent, Vector3.new(0.3, 0.3, 0.1), cf * CFrame.new(-2, 3, -1.8), M.Neon, rgb(60, 255, 90))
+	light(led, { Range = 4, Brightness = 1, Color = rgb(60, 255, 90) })
+	sign(parent, cf * CFrame.new(0.6, 2.4, -1.8), Vector3.new(2.6, 1.4, 0.05), "⚡ DANGER", rgb(20, 20, 20), rgb(240, 200, 30))
+	block(parent, Vector3.new(6, 0.25, 3.3), cf * CFrame.new(0, 4.5, 0), M.Snow, C.Snow, { CanCollide = false })
+	local p = cf.Position
+	zone(p.X, p.Z, 8, 6)
+end
+
+local function bush(parent, pos, size)
+	block(parent, Vector3.one * size, CFrame.new(pos + Vector3.new(0, size * 0.25, 0)), M.Grass, vary(rgb(40, 70, 44), 0.2), { Shape = Enum.PartType.Ball })
+	block(parent, Vector3.one * size * 0.7, CFrame.new(pos + Vector3.new(size * 0.35, size * 0.1, size * 0.2)), M.Grass, vary(rgb(34, 60, 40), 0.2), { Shape = Enum.PartType.Ball })
+	block(parent, Vector3.new(size * 0.8, 0.2, size * 0.8), CFrame.new(pos + Vector3.new(0, size * 0.72, 0)), M.Snow, C.Snow, { CanCollide = false })
+end
+
+local function buildDetails(env, props)
+	-- Power lines along the main roads
+	powerLine(props, Vector3.new(-9, 0, 64), Vector3.new(-9, 0, 172), 27)
+	powerLine(props, Vector3.new(70, 0, -9), Vector3.new(172, 0, -9), 34)
+	powerLine(props, Vector3.new(-172, 0, 9), Vector3.new(-70, 0, 9), 34)
+
+	-- Rooftops: AC units, vents, satellite dish, antenna
+	local labRoof = 15 + 0.4 + 1.3
+	for _, p in { Vector3.new(-30, labRoof, -20), Vector3.new(-12, labRoof, 22), Vector3.new(25, labRoof, -8), Vector3.new(34, labRoof, 20) } do
+		acUnit(props, p)
+	end
+	for _, p in { Vector3.new(-38, labRoof, 6), Vector3.new(0, labRoof, -26), Vector3.new(14, labRoof, 26), Vector3.new(38, labRoof, -28) } do
+		vent(props, p)
+	end
+	local dish = Vector3.new(-20, labRoof, -4)
+	block(props, Vector3.new(1, 5, 1), CFrame.new(dish + Vector3.new(0, 2.5, 0)), M.Metal, C.DarkMetal)
+	block(props, Vector3.new(0.6, 8, 8), CFrame.new(dish + Vector3.new(0, 6, 0)) * CFrame.Angles(0, math.rad(40), math.rad(55)), M.Metal, rgb(210, 212, 216), { Shape = Enum.PartType.Cylinder })
+	local ant = Vector3.new(30, labRoof, 4)
+	block(props, Vector3.new(0.5, 26, 0.5), CFrame.new(ant + Vector3.new(0, 13, 0)), M.Metal, rgb(180, 50, 40))
+	local blink = block(props, Vector3.new(0.9, 0.9, 0.9), CFrame.new(ant + Vector3.new(0, 26.4, 0)), M.Neon, rgb(255, 30, 30), { Shape = Enum.PartType.Ball })
+	light(blink, { Range = 20, Brightness = 2, Color = rgb(255, 40, 40) })
+	CollectionService:AddTag(blink, "Flicker")
+	for _, p in { Vector3.new(105, 16 + 0.4 + 1.3, -130), Vector3.new(135, 17.7, -105) } do
+		acUnit(props, p)
+	end
+	acUnit(props, Vector3.new(128, 11 + 0.4 + 1.3, 93))
+	vent(props, Vector3.new(106, 12.7, 95))
+
+	-- Lab exterior: big pipes + generators
+	for _, y in { 3, 5 } do
+		block(props, Vector3.new(60, 1.2, 1.2), CFrame.new(0, y, -36.4), M.Metal, rgb(110, 80, 50), { Shape = Enum.PartType.Cylinder })
+	end
+	generator(props, CFrame.new(-50, 0, -20) * CFrame.Angles(0, math.rad(90), 0))
+	generator(props, CFrame.new(50, 0, 22) * CFrame.Angles(0, math.rad(-90), 0))
+
+	-- Blood trail dragged out of the lab's front door
+	for i = 0, 14 do
+		local p = Vector3.new(math.sin(i * 0.5) * 2, 0.23, 37 + i * 1.6)
+		block(props, Vector3.new(rng:NextNumber(0.8, 1.6), 0.05, rng:NextNumber(1, 1.8)), CFrame.new(p) * CFrame.Angles(0, rng:NextNumber() * 0.6, 0), M.SmoothPlastic, C.Blood, { CanCollide = false, CanQuery = false })
+	end
+
+	-- Cabin woodpiles
+	for _, c in { Vector3.new(-125, 0, -112), Vector3.new(-42, 0, 140), Vector3.new(38, 0, -148), Vector3.new(152, 0, 30) } do
+		woodpile(props, c + Vector3.new(-14, 0, -5), Vector3.new(1, 0, 0))
+		bush(props, c + Vector3.new(12.5, 0, 9.5), 3)
+	end
+
+	-- Warehouse yard: pallets, cones, truck
+	for i = 0, 3 do
+		pallet(props, CFrame.new(98 + i * 5, 0, -143) * CFrame.Angles(0, rng:NextNumber() * 0.3, 0))
+	end
+	pallet(props, CFrame.new(98, 0.8, -143))
+	for i = 0, 4 do
+		cone(props, Vector3.new(88 + i * 4, 0.2, -90))
+	end
+	truck(props, CFrame.new(158, 0, -122))
+
+	-- Gate: concrete barriers
+	for i = -1, 1, 2 do
+		barrier(props, CFrame.new(i * 12, 0, HALF - 30) * CFrame.Angles(0, math.rad(i * 10), 0))
+	end
+	for i = 0, 3 do
+		cone(props, Vector3.new(-6 + i * 4, 0.2, HALF - 26))
+	end
+
+	-- Diner front: benches, phone booth, bushes
+	bench(props, CFrame.new(100, 0, 114) * CFrame.Angles(0, math.pi, 0))
+	bench(props, CFrame.new(136, 0, 114) * CFrame.Angles(0, math.pi, 0))
+	phoneBooth(props, CFrame.new(96, 0, 118))
+	for _, x in { 106, 112, 124, 130 } do
+		bush(props, Vector3.new(x, 0, 113), 2.2)
+	end
+
+	-- Tire tracks in the snow along roads
+	for _, t in { { 0, 90, 130 }, { 0, -90, 130 } } do
+		for _, off in { -2.2, 2.2 } do
+			block(env, Vector3.new(0.9, 0.04, t[3] * 0.6), CFrame.new(t[1] + off, 0.23, t[2]), M.Snow, C.SnowShade, { CanCollide = false })
+		end
+	end
+end
+
 ---------------------------------------------------------------------------
 -- Public
 ---------------------------------------------------------------------------
@@ -2414,63 +2944,392 @@ function MapBuilder.SetupLighting()
 	make("BloomEffect", Lighting, { Intensity = 0.7, Size = 28, Threshold = 1.4 })
 end
 
+-- The lobby: a Weapon X holding hangar on a snowy mountain ledge.
+-- Returns the lobby model; statues are added by Wolverine.MakeStatue.
+local function surfaceText(p, face, props)
+	local gui = make("SurfaceGui", p, {
+		Face = face or Enum.NormalId.Front,
+		SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud,
+		PixelsPerStud = 40,
+		LightInfluence = 0,
+	})
+	local label = make("TextLabel", gui, {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		TextScaled = true,
+		Font = Enum.Font.GothamBlack,
+		TextColor3 = Color3.new(1, 1, 1),
+	})
+	for k, v in props do
+		label[k] = v
+	end
+	return gui, label
+end
+
+local function ruleCard(parent, cf, icon, heading, body, accent)
+	local p = block(parent, Vector3.new(15, 11, 0.4), cf, M.SmoothPlastic, rgb(16, 16, 20))
+	local gui = make("SurfaceGui", p, { Face = Enum.NormalId.Front, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 40, LightInfluence = 0 })
+	local bg = make("Frame", gui, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0 })
+	make("UIGradient", bg, { Rotation = 90, Color = ColorSequence.new(rgb(40, 34, 38), rgb(10, 9, 12)) })
+	make("UIStroke", bg, { Color = accent, Thickness = 8, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
+	local top = make("Frame", bg, { Size = UDim2.new(1, 0, 0, 16), BackgroundColor3 = accent, BorderSizePixel = 0 })
+	make("UIGradient", top, { Color = ColorSequence.new(accent, Color3.new(0, 0, 0)) })
+	make("TextLabel", bg, {
+		Position = UDim2.fromScale(0.05, 0.1),
+		Size = UDim2.fromScale(0.9, 0.32),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamBlack,
+		TextScaled = true,
+		Text = icon,
+	})
+	local h = make("TextLabel", bg, {
+		Position = UDim2.fromScale(0.05, 0.44),
+		Size = UDim2.fromScale(0.9, 0.18),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.LuckiestGuy,
+		TextScaled = true,
+		TextColor3 = accent,
+		Text = heading,
+	})
+	make("UIStroke", h, { Thickness = 4 })
+	make("TextLabel", bg, {
+		Position = UDim2.fromScale(0.07, 0.64),
+		Size = UDim2.fromScale(0.86, 0.3),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamBold,
+		TextScaled = true,
+		TextWrapped = true,
+		TextColor3 = rgb(215, 210, 215),
+		Text = body,
+	})
+	-- neon underline + small spot lamp above the card
+	block(parent, Vector3.new(15, 0.25, 0.25), cf * CFrame.new(0, -5.8, -0.2), M.Neon, accent)
+	local lampArm = block(parent, Vector3.new(0.4, 0.4, 2.4), cf * CFrame.new(0, 6.6, -1.2), M.Metal, C.DarkMetal)
+	local head = block(parent, Vector3.new(1.4, 0.7, 1.4), cf * CFrame.new(0, 6.4, -2.4), M.Metal, C.DarkMetal)
+	make("SpotLight", head, { Face = Enum.NormalId.Bottom, Range = 16, Angle = 70, Brightness = 3, Color = rgb(255, 235, 210) })
+	return p, lampArm
+end
+
+-- Three glowing gouges ripped through steel, with bent metal flaps.
+local function clawGouge(parent, origin, length, tilt)
+	for i = -1, 1 do
+		local cf = origin * CFrame.Angles(0, 0, math.rad(tilt)) * CFrame.new(i * 2.2, 0, 0)
+		block(parent, Vector3.new(0.9, length, 0.3), cf, M.Slate, rgb(8, 6, 6))
+		for s = -1, 1, 2 do
+			block(parent, Vector3.new(0.14, length * 0.96, 0.32), cf * CFrame.new(s * 0.5, 0, 0), M.Neon, rgb(255, 120, 30))
+			-- torn flaps curling out of the cut
+			for f = -1, 1 do
+				block(parent, Vector3.new(0.6, 1.4, 0.1), cf * CFrame.new(s * 0.75, f * length * 0.3, -0.35) * CFrame.Angles(math.rad(-35), 0, math.rad(s * 35)), M.Metal, rgb(90, 92, 98))
+			end
+		end
+	end
+	local glow = block(parent, Vector3.new(1, 1, 1), origin * CFrame.new(0, 0, -1), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false })
+	light(glow, { Range = 14, Brightness = 2, Color = rgb(255, 120, 40) })
+end
+
+local function hangingLamp(parent, pos, color)
+	block(parent, Vector3.new(0.15, 6, 0.15), CFrame.new(pos + Vector3.new(0, 3, 0)), M.Metal, rgb(30, 30, 30))
+	local shade = block(parent, Vector3.new(1.6, 3.4, 3.4), CFrame.new(pos) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, rgb(40, 42, 46), { Shape = Enum.PartType.Cylinder })
+	local bulb = block(parent, Vector3.new(1.2, 1.2, 1.2), CFrame.new(pos - Vector3.new(0, 0.9, 0)), M.Neon, color, { Shape = Enum.PartType.Ball })
+	make("SpotLight", shade, { Face = Enum.NormalId.Left, Range = 40, Angle = 80, Brightness = 2.2, Color = color, Shadows = true })
+	return bulb
+end
+
+local function couch(parent, cf, color)
+	block(parent, Vector3.new(10, 1.6, 4), cf * CFrame.new(0, 1.2, 0), M.Fabric, color)
+	block(parent, Vector3.new(10, 3, 1.2), cf * CFrame.new(0, 2.6, 1.6), M.Fabric, color)
+	for _, x in { -5.3, 5.3 } do
+		block(parent, Vector3.new(0.9, 2.4, 4), cf * CFrame.new(x, 1.8, 0), M.Fabric, color)
+	end
+	for _, x in { -3.3, 0, 3.3 } do
+		block(parent, Vector3.new(3.1, 0.6, 3.4), cf * CFrame.new(x, 2.2, -0.2), M.Fabric, vary(color, 0.15))
+	end
+end
+
 function MapBuilder.BuildLobby()
 	local old = workspace:FindFirstChild("Lobby")
 	if old then
 		old:Destroy()
 	end
+	rng = Random.new(400)
 	local lobby = Instance.new("Model")
 	lobby.Name = "Lobby"
-	local y = 400
-	block(lobby, Vector3.new(80, 2, 80), CFrame.new(0, y - 1, 0), M.Slate, rgb(38, 40, 46))
-	block(lobby, Vector3.new(60, 0.1, 60), CFrame.new(0, y + 0.05, 0), M.DiamondPlate, rgb(60, 62, 70))
-	for _, d in { { 0, -40, 82, 2 }, { 0, 40, 82, 2 }, { -40, 0, 2, 82 }, { 40, 0, 2, 82 } } do
-		block(lobby, Vector3.new(d[3], 16, d[4]), CFrame.new(d[1], y + 8, d[2]), M.Concrete, rgb(55, 58, 66))
-		local strip = block(lobby, Vector3.new(d[3] == 2 and 0.3 or d[3], 0.4, d[4] == 2 and 0.3 or d[4]), CFrame.new(d[1] * 0.985, y + 3, d[2] * 0.985), M.Neon, rgb(200, 30, 30))
-		light(strip, { Range = 14, Brightness = 1, Color = rgb(255, 40, 40) })
+	local Y = 400
+	local W, D, H = 120, 90, 28
+	local hx, hz = W / 2, D / 2
+
+	-- Mountain ledge + backdrop
+	block(lobby, Vector3.new(420, 4, 420), CFrame.new(0, Y - 2.2, 0), M.Snow, C.Snow)
+	for _ = 1, 60 do
+		local a = rng:NextNumber() * math.pi * 2
+		local r = rng:NextNumber(80, 190)
+		tree(lobby, Vector3.new(math.cos(a) * r, Y - 0.2, math.sin(a) * r), rng:NextNumber(1.3, 2.2))
+	end
+	for i = 1, 10 do
+		local a = (i / 10) * math.pi * 2
+		local r = rng:NextNumber(260, 320)
+		local h = rng:NextNumber(90, 170)
+		local cf = CFrame.new(math.cos(a) * r, Y + h / 2 - 30, math.sin(a) * r) * CFrame.Angles(0, -a + math.rad(45), 0)
+		block(lobby, Vector3.new(150, h, 110), cf, M.Slate, vary(rgb(70, 74, 84), 0.2), { CanCollide = false })
+		block(lobby, Vector3.new(80, h * 0.25, 60), cf * CFrame.new(0, h * 0.42, 0), M.Snow, C.Snow, { CanCollide = false })
+	end
+
+	-- Floor: dark concrete, hazard border, steel walkway
+	block(lobby, Vector3.new(W, 1, D), CFrame.new(0, Y - 0.5, 0), M.Concrete, rgb(48, 48, 54))
+	for _, d in { { 0, -hz + 2, W - 2, 1.2 }, { 0, hz - 2, W - 2, 1.2 }, { -hx + 2, 0, 1.2, D - 2 }, { hx - 2, 0, 1.2, D - 2 } } do
+		block(lobby, Vector3.new(d[3], 0.06, d[4]), CFrame.new(d[1], Y + 0.03, d[2]), M.SmoothPlastic, C.Hazard)
+	end
+	for x = -hx + 6, hx - 6, 4 do
+		block(lobby, Vector3.new(0.9, 0.07, 1.25), CFrame.new(x, Y + 0.05, -hz + 2) * CFrame.Angles(0, math.rad(45), 0), M.SmoothPlastic, rgb(20, 20, 20))
+		block(lobby, Vector3.new(0.9, 0.07, 1.25), CFrame.new(x, Y + 0.05, hz - 2) * CFrame.Angles(0, math.rad(45), 0), M.SmoothPlastic, rgb(20, 20, 20))
+	end
+	block(lobby, Vector3.new(10, 0.1, D - 10), CFrame.new(0, Y + 0.05, 0), M.DiamondPlate, rgb(80, 84, 92))
+
+	-- Glowing X emblem in the floor
+	local ringY = Y + 0.12
+	block(lobby, Vector3.new(0.1, 22, 22), CFrame.new(0, ringY, 0) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, rgb(20, 20, 24), { Shape = Enum.PartType.Cylinder })
+	block(lobby, Vector3.new(0.12, 21, 21), CFrame.new(0, ringY + 0.01, 0) * CFrame.Angles(0, 0, math.rad(90)), M.Neon, rgb(170, 20, 20), { Shape = Enum.PartType.Cylinder })
+	block(lobby, Vector3.new(0.14, 19, 19), CFrame.new(0, ringY + 0.02, 0) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, rgb(20, 20, 24), { Shape = Enum.PartType.Cylinder })
+	for _, a in { 45, -45 } do
+		block(lobby, Vector3.new(2.2, 0.1, 17), CFrame.new(0, ringY + 0.05, 0) * CFrame.Angles(0, math.rad(a), 0), M.Neon, rgb(255, 190, 30))
 	end
 	make("SpawnLocation", lobby, {
-		Size = Vector3.new(12, 1, 12),
-		CFrame = CFrame.new(0, y + 0.5, 14),
+		Size = Vector3.new(12, 0.2, 12),
+		CFrame = CFrame.new(0, Y + 0.2, 0),
 		Neutral = true,
 		Duration = 0,
-		Material = M.Metal,
-		Color = rgb(70, 72, 80),
+		Transparency = 1,
+		CanCollide = false,
 	})
-	local board = block(lobby, Vector3.new(50, 14, 1), CFrame.new(0, y + 9, -38.5) * CFrame.Angles(0, math.pi, 0), M.SmoothPlastic, rgb(18, 18, 22))
-	local gui = make("SurfaceGui", board, {
-		Face = Enum.NormalId.Front,
-		SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud,
-		PixelsPerStud = 25,
-		LightInfluence = 0,
-	})
-	make("TextLabel", gui, {
-		Size = UDim2.fromScale(1, 0.4),
-		BackgroundTransparency = 1,
-		Text = "SURVIVE THE WOLVERINE",
-		TextScaled = true,
-		Font = Enum.Font.LuckiestGuy,
-		TextColor3 = rgb(255, 205, 30),
-	})
-	make("TextLabel", gui, {
-		Position = UDim2.fromScale(0.05, 0.42),
-		Size = UDim2.fromScale(0.9, 0.55),
-		BackgroundTransparency = 1,
-		TextWrapped = true,
-		TextScaled = true,
-		Font = Enum.Font.GothamBold,
-		TextColor3 = Color3.new(1, 1, 1),
-		Text = "One player becomes WOLVERINE. Everyone else: survive until the timer runs out.\n"
-			.. "3 hits and you're ripped in half. Every kill gives him more time.\n"
-			.. "Reboot the 3 Sentinel terminals to unlock the SENTINEL SUIT — the only thing that can fight back.",
-	})
-	for i = -1, 1 do
-		block(lobby, Vector3.new(0.6, 16, 0.2), CFrame.new(i * 3 + 18, y + 8, -37.9) * CFrame.Angles(0, 0, math.rad(25)), M.Neon, rgb(200, 20, 20))
+
+	-- Walls with pillars, pipes and windows (south)
+	local wallStyle = { Material = M.Concrete, Color = rgb(64, 64, 72), Vary = 0.05, Breakable = false }
+	wall(lobby, Vector3.new(-hx, 0, -hz + 0.5), Vector3.new(hx, 0, -hz + 0.5), Y, H, 1, wallStyle)
+	wall(lobby, Vector3.new(-hx + 0.5, 0, -hz), Vector3.new(-hx + 0.5, 0, hz), Y, H, 1, wallStyle)
+	wall(lobby, Vector3.new(hx - 0.5, 0, -hz), Vector3.new(hx - 0.5, 0, hz), Y, H, 1, wallStyle)
+	local windows = {}
+	for x = -45, 45, 18 do
+		table.insert(windows, { At = x + hx, Width = 12, Bottom = 5, Top = 20, Glass = true })
 	end
-	for _, p in { Vector3.new(-20, y, 20), Vector3.new(20, y, 20) } do
-		block(lobby, Vector3.new(10, 1.2, 3), CFrame.new(p + Vector3.new(0, 1, 0)), M.WoodPlanks, C.Wood)
+	wall(lobby, Vector3.new(-hx, 0, hz - 0.5), Vector3.new(hx, 0, hz - 0.5), Y, H, 1, wallStyle, windows)
+	for _, w in windows do -- window frames
+		local x = w.At - hx
+		block(lobby, Vector3.new(12.6, 0.6, 1.6), CFrame.new(x, Y + 5, hz - 0.5), M.Metal, C.DarkMetal)
+		block(lobby, Vector3.new(12.6, 0.6, 1.6), CFrame.new(x, Y + 20, hz - 0.5), M.Metal, C.DarkMetal)
+		block(lobby, Vector3.new(0.4, 15, 1.4), CFrame.new(x, Y + 12.5, hz - 0.5), M.Metal, C.DarkMetal)
 	end
+	for x = -hx, hx, 15 do
+		for _, z in { -hz + 1.2, hz - 1.2 } do
+			block(lobby, Vector3.new(1.8, H, 1.4), CFrame.new(x, Y + H / 2, z), M.Metal, rgb(58, 60, 66))
+		end
+	end
+	for z = -hz, hz, 15 do
+		for _, x in { -hx + 1.2, hx - 1.2 } do
+			block(lobby, Vector3.new(1.4, H, 1.8), CFrame.new(x, Y + H / 2, z), M.Metal, rgb(58, 60, 66))
+		end
+	end
+	for _, y in { H - 3, H - 4.4 } do
+		block(lobby, Vector3.new(W - 4, 0.8, 0.8), CFrame.new(0, Y + y, -hz + 2.2) * CFrame.Angles(0, math.rad(90), 0) * CFrame.Angles(0, math.rad(90), 0), M.Metal, rgb(110, 80, 50), { Shape = Enum.PartType.Cylinder })
+	end
+	-- Ceiling + trusses
+	block(lobby, Vector3.new(W, 1, D), CFrame.new(0, Y + H + 0.5, 0), M.Metal, rgb(30, 31, 36))
+	for z = -hz + 10, hz - 10, 15 do
+		block(lobby, Vector3.new(W, 1.4, 0.8), CFrame.new(0, Y + H - 0.7, z), M.Metal, rgb(52, 54, 60))
+		for x = -hx + 5, hx - 5, 10 do
+			block(lobby, Vector3.new(0.4, 2.4, 0.4), CFrame.new(x, Y + H - 2, z) * CFrame.Angles(0, 0, math.rad(35)), M.Metal, rgb(52, 54, 60))
+		end
+	end
+	-- Hanging lamps: warm light pools with a few red ones for menace
+	for x = -40, 40, 20 do
+		for z = -24, 24, 24 do
+			local red = (x == -40 and z == 24) or (x == 40 and z == -24)
+			local bulb = hangingLamp(lobby, Vector3.new(x, Y + H - 7, z), red and rgb(255, 60, 40) or rgb(255, 214, 160))
+			if red then
+				CollectionService:AddTag(bulb, "Flicker")
+			end
+		end
+	end
+
+	-- RULES WALL (north) -----------------------------------------------
+	local rz = -hz + 1.3
+	block(lobby, Vector3.new(76, 26, 0.6), CFrame.new(-6, Y + 13.5, rz) * CFrame.Angles(0, math.pi, 0), M.DiamondPlate, rgb(28, 28, 32))
+	block(lobby, Vector3.new(77, 0.4, 0.4), CFrame.new(-6, Y + 26.6, rz + 0.3), M.Neon, rgb(200, 20, 20))
+	block(lobby, Vector3.new(77, 0.4, 0.4), CFrame.new(-6, Y + 0.6, rz + 0.3), M.Neon, rgb(200, 20, 20))
+	for _, x in { -44.3, 32.3 } do
+		block(lobby, Vector3.new(0.4, 26, 0.4), CFrame.new(x, Y + 13.6, rz + 0.3), M.Neon, rgb(200, 20, 20))
+	end
+	local title = block(lobby, Vector3.new(62, 8, 0.3), CFrame.new(-6, Y + 21.5, rz + 0.5) * CFrame.Angles(0, math.pi, 0), M.SmoothPlastic, rgb(12, 12, 14), { Transparency = 1 })
+	local _, tl = surfaceText(title, Enum.NormalId.Front, { Text = "SURVIVE THE WOLVERINE", Font = Enum.Font.LuckiestGuy, TextColor3 = rgb(255, 200, 30) })
+	make("UIStroke", tl, { Thickness = 10, Color = rgb(0, 0, 0) })
+	make("UIGradient", tl, { Rotation = 90, Color = ColorSequence.new(rgb(255, 230, 90), rgb(230, 120, 10)) })
+	local sub = block(lobby, Vector3.new(50, 2, 0.3), CFrame.new(-6, Y + 16.6, rz + 0.5) * CFrame.Angles(0, math.pi, 0), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
+	surfaceText(sub, Enum.NormalId.Front, { Text = "ONE OF YOU IS THE MONSTER. THE REST OF YOU ARE MEAT.", Font = Enum.Font.GothamBlack, TextColor3 = rgb(230, 70, 60) })
+
+	local rules = {
+		{ "🐺", "ONE HUNTER", "A random player becomes Wolverine. Every kill buys him +15 seconds.", rgb(255, 190, 30) },
+		{ "🩸", "3 HITS = DEAD", "Two hits throw you. The third tears you in half.", rgb(230, 40, 40) },
+		{ "🤖", "SUIT UP", "Reboot 3 terminals. Two Sentinel suits. Stay linked or die.", rgb(180, 110, 255) },
+		{ "💨", "HIDE • FART • RUN", "Lockers hide you. Gas hides your scent. Walls won't.", rgb(120, 220, 90) },
+	}
+	for i, r in rules do
+		local x = -6 + (i - 2.5) * 17
+		ruleCard(lobby, CFrame.new(x, Y + 8, rz + 0.6) * CFrame.Angles(0, math.pi, 0), r[1], r[2], r[3], r[4])
+	end
+	-- He clawed through the wall next to the board
+	clawGouge(lobby, CFrame.new(45, Y + 14, rz + 0.3) * CFrame.Angles(0, math.pi, 0), 20, 22)
+	for _ = 1, 10 do
+		block(lobby, Vector3.new(rng:NextNumber(0.6, 1.8), rng:NextNumber(0.4, 1.2), rng:NextNumber(0.6, 1.8)),
+			CFrame.new(45 + rng:NextNumber(-5, 5), Y + 0.5, rz + rng:NextNumber(1.5, 6)) * CFrame.Angles(rng:NextNumber(), rng:NextNumber(), rng:NextNumber()),
+			M.Concrete, rgb(64, 64, 72))
+	end
+
+	-- SUIT GALLERY (east) -----------------------------------------------
+	local gx = hx - 12
+	block(lobby, Vector3.new(20, 1, 70), CFrame.new(gx + 2, Y + 0.5, 0), M.Marble, rgb(26, 26, 30))
+	block(lobby, Vector3.new(0.3, 0.2, 70), CFrame.new(gx - 8, Y + 1.05, 0), M.Neon, rgb(255, 190, 30))
+	block(lobby, Vector3.new(3, 0.5, 70), CFrame.new(gx - 9.5, Y + 0.25, 0), M.Marble, rgb(34, 34, 38))
+	local galleryTitle = block(lobby, Vector3.new(30, 4, 0.3), CFrame.new(hx - 1.4, Y + 23, 0) * CFrame.Angles(0, math.rad(90), 0), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
+	local _, gt = surfaceText(galleryTitle, Enum.NormalId.Front, { Text = "SUIT GALLERY", Font = Enum.Font.LuckiestGuy, TextColor3 = rgb(255, 200, 30) })
+	make("UIStroke", gt, { Thickness = 6 })
+	for z = -30, 30, 6 do
+		block(lobby, Vector3.new(0.3, 16, 0.3), CFrame.new(hx - 1.3, Y + 10, z), M.Neon, rgb(255, 170, 40), { Transparency = 0.2 })
+	end
+	local pedestals = Instance.new("Folder")
+	pedestals.Name = "Pedestals"
+	pedestals.Parent = lobby
+	local skinOrder = { "Logan", "Comic", "WeaponX", "OldManLogan" }
+	local swatches = { rgb(150, 100, 60), rgb(255, 200, 30), rgb(90, 220, 200), rgb(200, 200, 200) }
+	for i, id in skinOrder do
+		local z = -24 + (i - 1) * 16
+		local base = CFrame.new(gx + 3, Y + 1, z)
+		block(lobby, Vector3.new(1.6, 8, 8), base * CFrame.new(0, 0.8, 0) * CFrame.Angles(0, 0, math.rad(90)), M.Marble, rgb(40, 40, 46), { Shape = Enum.PartType.Cylinder })
+		block(lobby, Vector3.new(0.3, 8.4, 8.4), base * CFrame.new(0, 1.2, 0) * CFrame.Angles(0, 0, math.rad(90)), M.Neon, swatches[i], { Shape = Enum.PartType.Cylinder })
+		local spot = block(pedestals, Vector3.new(1, 1, 1), base * CFrame.new(0, 1.6, 0) * CFrame.Angles(0, math.rad(90), 0), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false })
+		spot.Name = "Pedestal_" .. id
+		spot:SetAttribute("Skin", id)
+		local lamp = block(lobby, Vector3.new(1.6, 1, 1.6), CFrame.new(gx - 4, Y + H - 2, z), M.Metal, C.DarkMetal)
+		make("SpotLight", lamp, { Face = Enum.NormalId.Bottom, Range = 34, Angle = 40, Brightness = 5, Color = swatches[i]:Lerp(Color3.new(1, 1, 1), 0.6), Shadows = true })
+		local plaque = block(lobby, Vector3.new(6, 2.2, 0.3), CFrame.new(gx - 4, Y + 1.9, z) * CFrame.Angles(0, math.rad(90), 0) * CFrame.Angles(math.rad(25), 0, 0), M.Metal, rgb(24, 24, 28))
+		surfaceText(plaque, Enum.NormalId.Front, { Name = "PlaqueText", Text = id, TextColor3 = swatches[i], Font = Enum.Font.GothamBlack })
+		block(lobby, Vector3.new(0.4, 1.4, 0.4), CFrame.new(gx - 4, Y + 0.7, z), M.Metal, C.DarkMetal)
+	end
+
+	-- CLAW RACK (south-east) -------------------------------------------
+	local rackC = CFrame.new(40, Y, hz - 5)
+	block(lobby, Vector3.new(26, 3, 5), rackC * CFrame.new(0, 1.5, 0), M.Wood, rgb(40, 28, 20))
+	block(lobby, Vector3.new(26.4, 0.3, 5.4), rackC * CFrame.new(0, 3.1, 0), M.Metal, C.DarkMetal)
+	block(lobby, Vector3.new(26, 6, 5), rackC * CFrame.new(0, 6.2, 0), M.Glass, rgb(190, 220, 235), { Transparency = 0.8 })
+	local rackLight = block(lobby, Vector3.new(25, 0.2, 0.5), rackC * CFrame.new(0, 9.1, 0), M.Neon, rgb(255, 240, 220))
+	light(rackLight, { Range = 12, Brightness = 1.5, Color = rgb(255, 240, 220) })
+	local rackTitle = block(lobby, Vector3.new(16, 2, 0.2), rackC * CFrame.new(0, 10.8, -2.4), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
+	surfaceText(rackTitle, Enum.NormalId.Front, { Text = "CLAW COLLECTION", Font = Enum.Font.LuckiestGuy, TextColor3 = rgb(210, 230, 255) })
+	local Skins = require(ReplicatedStorage.Shared.Skins)
+	for i, id in Skins.ClawOrder do
+		local item = Skins.Claws[id]
+		local cx = -10.5 + (i - 1) * 4.2
+		for b = -1, 1 do
+			local blade = block(lobby, Vector3.new(0.12 * (item.Thick or 1), 3.6, 0.3 * (item.Thick or 1)),
+				rackC * CFrame.new(cx + b * 0.5, 5.6, 0) * CFrame.Angles(0, 0, math.rad(b * 6)), item.Material, item.Color, { Reflectance = item.Reflectance })
+			if item.Material == M.Neon then
+				light(blade, { Range = 5, Brightness = 1, Color = item.Glow })
+			end
+		end
+		block(lobby, Vector3.new(1.6, 0.8, 0.8), rackC * CFrame.new(cx, 3.7, 0), M.Leather, rgb(30, 22, 18))
+		local tag = block(lobby, Vector3.new(3.6, 0.8, 0.1), rackC * CFrame.new(cx, 3.4, -2.56) * CFrame.Angles(math.rad(20), 0, 0), M.SmoothPlastic, rgb(20, 20, 24))
+		surfaceText(tag, Enum.NormalId.Front, { Text = item.Name .. (item.Price > 0 and ("  🪙" .. item.Price) or "  FREE"), TextColor3 = item.Glow, Font = Enum.Font.GothamBold })
+	end
+
+	-- LOUNGE (west) ----------------------------------------------------
+	local lx = -hx + 14
+	block(lobby, Vector3.new(22, 0.08, 26), CFrame.new(lx, Y + 0.05, 8), M.Fabric, rgb(110, 20, 24))
+	block(lobby, Vector3.new(19, 0.1, 23), CFrame.new(lx, Y + 0.07, 8), M.Fabric, rgb(70, 12, 16))
+	couch(lobby, CFrame.new(lx + 2, Y, 18) * CFrame.Angles(0, math.pi, 0), rgb(60, 40, 30))
+	couch(lobby, CFrame.new(lx + 9, Y, 7) * CFrame.Angles(0, math.rad(-90), 0), rgb(60, 40, 30))
+	block(lobby, Vector3.new(6, 0.5, 4), CFrame.new(lx + 1, Y + 1.9, 8), M.Wood, rgb(70, 45, 28))
+	for _, d in { Vector3.new(-2.6, 0, -1.6), Vector3.new(2.6, 0, -1.6), Vector3.new(-2.6, 0, 1.6), Vector3.new(2.6, 0, 1.6) } do
+		block(lobby, Vector3.new(0.4, 1.7, 0.4), CFrame.new(Vector3.new(lx + 1, Y + 0.85, 8) + d), M.Wood, rgb(50, 32, 20))
+	end
+	for i = 0, 1 do
+		block(lobby, Vector3.new(0.6, 0.8, 0.6), CFrame.new(lx + i * 1.6, Y + 2.55, 8), M.SmoothPlastic, i == 0 and rgb(200, 40, 40) or rgb(230, 230, 230), { Shape = Enum.PartType.Cylinder })
+	end
+	-- stone fireplace on the west wall
+	local fz = 8
+	block(lobby, Vector3.new(3, 12, 12), CFrame.new(-hx + 2.5, Y + 6, fz), M.Cobblestone, rgb(88, 84, 82))
+	block(lobby, Vector3.new(2.6, H - 12, 7), CFrame.new(-hx + 2.3, Y + 12 + (H - 12) / 2, fz), M.Cobblestone, rgb(78, 74, 72))
+	block(lobby, Vector3.new(3.4, 0.8, 13), CFrame.new(-hx + 2.8, Y + 12.2, fz), M.Wood, rgb(60, 38, 24))
+	local hearth = block(lobby, Vector3.new(2, 4.5, 6), CFrame.new(-hx + 3.6, Y + 2.25, fz), M.Slate, rgb(15, 12, 10))
+	make("Fire", hearth, { Size = 5, Heat = 6, Color = rgb(255, 150, 50), SecondaryColor = rgb(255, 70, 20) })
+	light(hearth, { Range = 26, Brightness = 2.5, Color = rgb(255, 150, 70), Shadows = true })
+	CollectionService:AddTag(hearth, "FireLight")
+	for i = 0, 2 do
+		block(lobby, Vector3.new(0.8, 0.8, 4), CFrame.new(-hx + 3.6 + (i - 1) * 0.3, Y + 0.5 + i * 0.1, fz) * CFrame.Angles(0, math.rad(i * 40), 0), M.Wood, rgb(60, 40, 24), { Shape = Enum.PartType.Cylinder })
+	end
+	-- mounted claws trophy above the fireplace
+	for b = -1, 1 do
+		block(lobby, Vector3.new(0.15, 4, 0.4), CFrame.new(-hx + 1.6, Y + 15.5, fz + b * 0.9) * CFrame.Angles(math.rad(b * 8), 0, 0), M.Metal, rgb(210, 214, 222), { Reflectance = 0.4 })
+	end
+	block(lobby, Vector3.new(0.4, 2.6, 4), CFrame.new(-hx + 1.4, Y + 13.4, fz), M.Wood, rgb(60, 38, 24))
+	-- bookshelves
+	for _, z in { -8, 24 } do
+		block(lobby, Vector3.new(2.5, 12, 8), CFrame.new(-hx + 2.3, Y + 6, z), M.Wood, rgb(55, 36, 22))
+		for s = 0, 3 do
+			for b = 0, 9 do
+				block(lobby, Vector3.new(1.6, rng:NextNumber(1.6, 2.4), 0.6), CFrame.new(-hx + 3, Y + 1.8 + s * 2.8, z - 3.4 + b * 0.75), M.SmoothPlastic, vary(({ rgb(120, 30, 30), rgb(30, 60, 110), rgb(40, 90, 50), rgb(160, 130, 60) })[(b + s) % 4 + 1], 0.2))
+			end
+		end
+	end
+
+	-- LEADERBOARD (west wall, north) -------------------------------------
+	local lb = block(lobby, Vector3.new(0.4, 12, 18), CFrame.new(-hx + 1.6, Y + 9, -26), M.SmoothPlastic, rgb(14, 14, 18))
+	local lbGui = make("SurfaceGui", lb, { Name = "Leaderboard", Face = Enum.NormalId.Right, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 36, LightInfluence = 0 })
+	local lbBg = make("Frame", lbGui, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = rgb(16, 14, 18), BorderSizePixel = 0 })
+	make("UIStroke", lbBg, { Color = rgb(200, 30, 30), Thickness = 8, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
+	local lbTitle = make("TextLabel", lbBg, { Size = UDim2.fromScale(1, 0.18), BackgroundColor3 = rgb(150, 20, 20), Font = Enum.Font.LuckiestGuy, TextScaled = true, TextColor3 = rgb(255, 220, 90), Text = "TOP HUNTERS" })
+	make("UIStroke", lbTitle, { Thickness = 4 })
+	local rowsFrame = make("Frame", lbBg, { Name = "Rows", Position = UDim2.fromScale(0.05, 0.22), Size = UDim2.fromScale(0.9, 0.74), BackgroundTransparency = 1 })
+	make("UIListLayout", rowsFrame, { Padding = UDim.new(0.02, 0) })
+	for i = 1, 6 do
+		make("TextLabel", rowsFrame, {
+			Name = "Row" .. i,
+			Size = UDim2.fromScale(1, 0.14),
+			BackgroundTransparency = 1,
+			Font = Enum.Font.GothamBlack,
+			TextScaled = true,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextColor3 = i == 1 and rgb(255, 210, 60) or rgb(220, 220, 225),
+			Text = "",
+			LayoutOrder = i,
+		})
+	end
+	local lbLight = block(lobby, Vector3.new(0.3, 0.3, 18), CFrame.new(-hx + 2, Y + 15.4, -26), M.Neon, rgb(200, 30, 30))
+	light(lbLight, { Range = 10, Brightness = 1, Color = rgb(255, 60, 40) })
+
+	-- HANGING STATUS SCREEN (centre) --------------------------------------
+	local screen = block(lobby, Vector3.new(18, 7, 18), CFrame.new(0, Y + 17, 0), M.Metal, rgb(18, 18, 22))
+	screen.Name = "StatusScreen"
+	for _, x in { -6, 6 } do
+		block(lobby, Vector3.new(0.2, H - 20.5, 0.2), CFrame.new(x, Y + 20.5 + (H - 20.5) / 2, 0), M.Metal, rgb(30, 30, 30))
+	end
+	for _, face in { Enum.NormalId.Front, Enum.NormalId.Back, Enum.NormalId.Left, Enum.NormalId.Right } do
+		local g = make("SurfaceGui", screen, { Face = face, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 30, LightInfluence = 0 })
+		local bg = make("Frame", g, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0 })
+		make("UIGradient", bg, { Rotation = 90, Color = ColorSequence.new(rgb(40, 10, 12), rgb(8, 6, 8)) })
+		make("UIStroke", bg, { Color = rgb(200, 30, 30), Thickness = 6, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
+		make("TextLabel", bg, { Name = "StatusText", Position = UDim2.fromScale(0.05, 0.08), Size = UDim2.fromScale(0.9, 0.3), BackgroundTransparency = 1, Font = Enum.Font.GothamBlack, TextScaled = true, TextColor3 = rgb(230, 200, 200), Text = "" })
+		local t = make("TextLabel", bg, { Name = "TimerText", Position = UDim2.fromScale(0.05, 0.38), Size = UDim2.fromScale(0.9, 0.55), BackgroundTransparency = 1, Font = Enum.Font.LuckiestGuy, TextScaled = true, TextColor3 = rgb(255, 200, 30), Text = "" })
+		make("UIStroke", t, { Thickness = 5 })
+	end
+	block(lobby, Vector3.new(18.4, 0.3, 18.4), CFrame.new(0, Y + 13.4, 0), M.Neon, rgb(200, 30, 30))
+
+	-- Supply crates + barrels for detail
+	for _, p in { Vector3.new(-30, Y, -36), Vector3.new(-26, Y, -38), Vector3.new(20, Y, -37), Vector3.new(-36, Y, 36), Vector3.new(14, Y, 38) } do
+		block(lobby, Vector3.new(4, 4, 4), CFrame.new(p + Vector3.new(0, 2, 0)) * CFrame.Angles(0, rng:NextNumber() * 0.5, 0), M.WoodPlanks, vary(C.Wood, 0.2))
+		block(lobby, Vector3.new(3, 2.2, 2.2), CFrame.new(p + Vector3.new(3.4, 1.5, 1.5)) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, rgb(150, 30, 30), { Shape = Enum.PartType.Cylinder })
+	end
+	sign(lobby, CFrame.new(-6, Y + H - 3.6, hz - 1.4), Vector3.new(30, 2.6, 0.3), "WEAPON X  •  HOLDING FACILITY 7", rgb(255, 200, 30), rgb(18, 18, 22))
+
 	lobby.Parent = workspace
+	return lobby
 end
 
 function MapBuilder.Build()
@@ -2513,6 +3372,7 @@ function MapBuilder.Build()
 	watchtower(props, Vector3.new(162, 0, 162))
 	watchtower(props, Vector3.new(-160, 0, 40))
 	buildRoads(env, props)
+	buildDetails(env, props)
 	buildBoundary(env)
 	buildWilderness(env, props)
 
@@ -2545,7 +3405,7 @@ return MapBuilder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="17">
+      <Item class="ModuleScript" referent="18">
         <Properties>
           <string name="Name">Movement</string>
           <string name="Source"><![CDATA[-- Server-authoritative walk speeds, sprint/feral stamina and status slowdowns.
@@ -2588,6 +3448,7 @@ end
 function Movement.Reset(player)
 	states[player] = nil
 	player:SetAttribute("Feral", false)
+	player:SetAttribute("Sprinting", false)
 	player:SetAttribute("Stamina", 1)
 end
 
@@ -2665,6 +3526,13 @@ RunService.Heartbeat:Connect(function(dt)
 			hum.JumpHeight = canJump and 7.2 or 0
 			hum.JumpPower = canJump and 50 or 0
 
+			local sprinting = moving and speed > Config.Survivor.WalkSpeed + 1 and not feralActive
+				and (s.Sprint or Status.Has(player, "Boost"))
+			if sprinting ~= s.SprintOn then
+				s.SprintOn = sprinting
+				player:SetAttribute("Sprinting", sprinting)
+			end
+
 			if feralActive ~= s.FeralOn then
 				s.FeralOn = feralActive
 				Posture.Feral(char, feralActive)
@@ -2683,7 +3551,7 @@ return Movement
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="18">
+      <Item class="ModuleScript" referent="19">
         <Properties>
           <string name="Name">PlayerData</string>
           <string name="Source"><![CDATA[-- Saved player data: coins, skins, daily challenges, login streak and
@@ -2736,6 +3604,12 @@ local function publish(player)
 	end
 	player:SetAttribute("OwnedSkins", table.concat(owned, ","))
 	player:SetAttribute("Skin", d.Skin)
+	local claws = {}
+	for id in d.OwnedClaws do
+		table.insert(claws, id)
+	end
+	player:SetAttribute("OwnedClaws", table.concat(claws, ","))
+	player:SetAttribute("Claw", d.Claw)
 	player:SetAttribute("GuaranteedTokens", d.Tokens)
 	player:SetAttribute("LoginStreak", d.Streak)
 	player:SetAttribute("Challenges", HttpService:JSONEncode(d.Daily))
@@ -2760,6 +3634,14 @@ function PlayerData.Save(player)
 			Coins = d.Coins,
 			Owned = owned,
 			Skin = d.Skin,
+			OwnedClaws = (function()
+				local list = {}
+				for id in d.OwnedClaws do
+					table.insert(list, id)
+				end
+				return list
+			end)(),
+			Claw = d.Claw,
 			Tokens = d.Tokens,
 			LastLogin = d.LastLogin,
 			Streak = d.Streak,
@@ -2789,6 +3671,8 @@ function PlayerData.Load(player)
 		Coins = 0,
 		Owned = { [Skins.Default] = true },
 		Skin = Skins.Default,
+		OwnedClaws = { [Skins.DefaultClaw] = true },
+		Claw = Skins.DefaultClaw,
 		Tokens = 0,
 		LastLogin = "",
 		Streak = 0,
@@ -2808,6 +3692,14 @@ function PlayerData.Load(player)
 			end
 			if saved.Skin and data.Owned[saved.Skin] then
 				data.Skin = saved.Skin
+			end
+			for _, id in saved.OwnedClaws or {} do
+				if Skins.Claws[id] then
+					data.OwnedClaws[id] = true
+				end
+			end
+			if saved.Claw and data.OwnedClaws[saved.Claw] then
+				data.Claw = saved.Claw
 			end
 			data.Tokens = tonumber(saved.Tokens) or 0
 			data.LastLogin = saved.LastLogin or ""
@@ -2879,6 +3771,40 @@ end
 function PlayerData.GetSkin(player)
 	local d = cache[player]
 	return d and d.Skin or Skins.Default
+end
+
+function PlayerData.GetClaw(player)
+	local d = cache[player]
+	return d and d.Claw or Skins.DefaultClaw
+end
+
+function PlayerData.BuyClaw(player, id)
+	local d, claw = cache[player], Skins.Claws[id]
+	if not (d and claw) then
+		return false, "Unknown claws"
+	end
+	if d.OwnedClaws[id] then
+		return false, "Already owned"
+	end
+	if d.Coins < claw.Price then
+		return false, "Not enough coins"
+	end
+	d.Coins -= claw.Price
+	d.OwnedClaws[id] = true
+	d.Claw = id
+	publish(player)
+	task.spawn(PlayerData.Save, player)
+	return true, "Unlocked " .. claw.Name .. "!"
+end
+
+function PlayerData.EquipClaw(player, id)
+	local d = cache[player]
+	if d and d.OwnedClaws[id] then
+		d.Claw = id
+		publish(player)
+		return true, "Equipped " .. Skins.Claws[id].Name
+	end
+	return false, "You don't own those"
 end
 
 function PlayerData.Buy(player, id)
@@ -3013,7 +3939,7 @@ return PlayerData
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="19">
+      <Item class="ModuleScript" referent="20">
         <Properties>
           <string name="Name">Posture</string>
           <string name="Source"><![CDATA[-- Code-driven "animations": offsets Motor6D.C0 on R15 rigs so no animation
@@ -3142,7 +4068,7 @@ return Posture
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="20">
+      <Item class="ModuleScript" referent="21">
         <Properties>
           <string name="Name">Round</string>
           <string name="Source"><![CDATA[-- Shared round state used by every server module.
@@ -3168,7 +4094,7 @@ return Round
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="21">
+      <Item class="ModuleScript" referent="22">
         <Properties>
           <string name="Name">Sentinel</string>
           <string name="Source"><![CDATA[-- The counter (like the Hulkbuster): survivors reboot 3 Sentinel terminals,
@@ -3177,6 +4103,7 @@ return Round
 -- good timing. The suit powers down after Config.Sentinel.Duration seconds,
 -- and Wolverine can still rip it apart.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local Debris = game:GetService("Debris")
 
@@ -3199,7 +4126,8 @@ local GREY = Color3.fromRGB(120, 124, 132)
 local GLOW = Color3.fromRGB(255, 210, 60)
 
 local cooldowns = {}
-local suitUsed = false
+local suitsLeft = 0
+local links = {} -- [Player] = Beam
 
 local function announce(text, color)
 	Fx:FireAllClients("Announce", { Text = text, Color = color or PURPLE, Duration = 3 })
@@ -3227,7 +4155,7 @@ local function unlockPod(pod)
 end
 
 function Sentinel.SetupRound(map)
-	suitUsed = false
+	suitsLeft = Config.Sentinel.Suits
 	cooldowns = {}
 	local terminals = map:FindFirstChild("Terminals")
 	local pod = map:FindFirstChild("SentinelPod")
@@ -3282,21 +4210,24 @@ function Sentinel.SetupRound(map)
 		if prompt then
 			prompt.HoldDuration = Config.Sentinel.PodHoldTime
 			prompt.Triggered:Connect(function(player)
-				if suitUsed or not Round.Active then
+				if suitsLeft <= 0 or not Round.Active then
 					return
 				end
 				if player:GetAttribute("Role") ~= "Survivor" or not Round.Survivors[player] then
 					return
 				end
-				suitUsed = true
-				prompt.Enabled = false
-				local beacon = pod:FindFirstChild("Beacon")
-				if beacon then
-					beacon.Transparency = 1
-				end
-				local dummy = pod:FindFirstChild("Dummy")
-				if dummy then
-					dummy:Destroy()
+				suitsLeft -= 1
+				prompt.ObjectText = ("Sentinel Pod (%d left)"):format(suitsLeft)
+				if suitsLeft <= 0 then
+					prompt.Enabled = false
+					local beacon = pod:FindFirstChild("Beacon")
+					if beacon then
+						beacon.Transparency = 1
+					end
+					local dummy = pod:FindFirstChild("Dummy")
+					if dummy then
+						dummy:Destroy()
+					end
 				end
 				Sentinel.Become(player)
 			end)
@@ -3377,7 +4308,7 @@ function Sentinel.Become(player)
 	hum.Health = 100
 	Util.Burst(root, Util.SparkProps, 40, 2)
 	Util.Sound(Config.Sounds.Terminal, root, { Volume = 2, Pitch = 0.6, Range = 300 })
-	announce(player.DisplayName .. " suited up as the SENTINEL!", GLOW)
+	announce(player.DisplayName .. " suited up as a SENTINEL! Stay together to link up.", GLOW)
 	Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 0.6, Radius = 80 })
 
 	task.delay(Config.Sentinel.Duration, function()
@@ -3425,6 +4356,84 @@ local function wolverineParts()
 	return w, char, Util.Root(char)
 end
 
+local function sentinels()
+	local list = {}
+	for p in Round.Survivors do
+		if p:GetAttribute("Role") == "Sentinel" and Util.IsAlive(p.Character) then
+			table.insert(list, p)
+		end
+	end
+	return list
+end
+
+local function isLinked(player)
+	local root = Util.Root(player.Character)
+	if not root then
+		return false
+	end
+	for _, other in sentinels() do
+		local r = Util.Root(other.Character)
+		if other ~= player and r and (r.Position - root.Position).Magnitude <= Config.Sentinel.LinkRange then
+			return true
+		end
+	end
+	return false
+end
+
+local function power(player)
+	return isLinked(player) and Config.Sentinel.LinkedMultiplier or Config.Sentinel.SoloMultiplier
+end
+
+-- Energy tether between linked suits + "Linked" attribute for the HUD
+RunService.Heartbeat:Connect(function()
+	for p, beam in links do
+		if not (p.Parent and p:GetAttribute("Role") == "Sentinel") then
+			beam:Destroy()
+			links[p] = nil
+		end
+	end
+	local list = sentinels()
+	for _, p in list do
+		local linked = isLinked(p)
+		if p:GetAttribute("Linked") ~= linked then
+			p:SetAttribute("Linked", linked)
+		end
+	end
+	if #list >= 2 then
+		local a, b = list[1], list[2]
+		local ta, tb = Util.Torso(a.Character), Util.Torso(b.Character)
+		local beam = links[a]
+		if ta and tb and isLinked(a) then
+			if not beam then
+				local att0 = Instance.new("Attachment")
+				att0.Name = "LinkAtt"
+				att0.Parent = ta
+				local att1 = Instance.new("Attachment")
+				att1.Name = "LinkAtt"
+				att1.Parent = tb
+				beam = Instance.new("Beam")
+				beam.Attachment0 = att0
+				beam.Attachment1 = att1
+				beam.Color = ColorSequence.new(Color3.fromRGB(200, 120, 255), Color3.fromRGB(255, 210, 60))
+				beam.LightEmission = 1
+				beam.Width0 = 0.6
+				beam.Width1 = 0.6
+				beam.CurveSize0 = 2
+				beam.CurveSize1 = -2
+				beam.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+				beam.TextureSpeed = 3
+				beam.Transparency = NumberSequence.new(0.2)
+				beam.FaceCamera = true
+				beam.Parent = ta
+				links[a] = beam
+			end
+		elseif beam then
+			beam:Destroy()
+			links[a] = nil
+		end
+	end
+end)
+
 local function stunWolverine(duration)
 	local w = Round.Wolverine
 	if w then
@@ -3445,8 +4454,9 @@ local function punch(player, char, root)
 	end
 	local rel = root.CFrame:PointToObjectSpace(wRoot.Position)
 	if rel.Z < 1 and rel.Z > -cfg.Range and math.abs(rel.X) < 5 and math.abs(rel.Y) < 6 then
-		Wolverine.Damage(cfg.Damage)
-		stunWolverine(cfg.Stun)
+		local mult = power(player)
+		Wolverine.Damage(cfg.Damage * mult)
+		stunWolverine(cfg.Stun * mult)
 		local dir = Util.Flat(wRoot.Position - root.Position)
 		Fx:FireClient(w, "Knock", { Velocity = dir * cfg.Knockback + Vector3.new(0, 25, 0) })
 		Util.Sound(Config.Sounds.Punch, wRoot, { Volume = 2, Pitch = 0.6 })
@@ -3516,7 +4526,7 @@ local function laser(player, char, root, aim)
 		end
 		if wChar and hit.Instance:IsDescendantOf(wChar) then
 			endPos = hit.Position
-			Wolverine.Damage(cfg.Damage)
+			Wolverine.Damage(cfg.Damage * power(player))
 			Wolverine.RevealSkeleton()
 			Status.Apply(Round.Wolverine, "Slowed", cfg.Slow)
 			Fx:FireAllClients("Shake", { Position = hit.Position, Intensity = 0.5, Radius = 40 })
@@ -3559,8 +4569,9 @@ local function pulse(player, char, root)
 	Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 0.8, Radius = 50 })
 	local _, _, wRoot = wolverineParts()
 	if wRoot and (wRoot.Position - root.Position).Magnitude <= cfg.Radius then
-		Wolverine.Damage(cfg.Damage)
-		stunWolverine(cfg.Stun)
+		local mult = power(player)
+		Wolverine.Damage(cfg.Damage * mult)
+		stunWolverine(cfg.Stun * mult)
 	end
 end
 
@@ -3600,7 +4611,7 @@ return Sentinel
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="22">
+      <Item class="ModuleScript" referent="23">
         <Properties>
           <string name="Name">Status</string>
           <string name="Source"><![CDATA[-- Timed status effects: Stunned, Slowed, Frozen, Busy, Immune, Boost.
@@ -3638,7 +4649,236 @@ return Status
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="23">
+      <Item class="ModuleScript" referent="24">
+        <Properties>
+          <string name="Name">VFX</string>
+          <string name="Source"><![CDATA[-- Crisp combat visuals, created on the server so everyone sees them.
+local Debris = game:GetService("Debris")
+local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Util = require(ReplicatedStorage.Shared.Util)
+
+local VFX = {}
+
+local function fxPart(props)
+	local p = Instance.new("Part")
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.CastShadow = false
+	p.Material = Enum.Material.Neon
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	for k, v in props do
+		p[k] = v
+	end
+	p.Parent = workspace
+	return p
+end
+
+-- Three curved claw crescents in front of the attacker.
+-- `color` tints the outer glow (claw skin colour).
+function VFX.ClawArc(root, side, color)
+	color = color or Color3.fromRGB(255, 80, 60)
+	local dir = side == "R" and 1 or -1
+	local base = root.CFrame * CFrame.new(0, 0.8, -3.2)
+	local segments = 7
+	local arcRadius = 3.4
+	local sweep = math.rad(110)
+	for claw = -1, 1 do
+		for i = 0, segments - 1 do
+			local a0 = -sweep / 2 + sweep * (i / segments)
+			local a1 = -sweep / 2 + sweep * ((i + 1) / segments)
+			local am = (a0 + a1) / 2
+			local segLen = arcRadius * (a1 - a0) * 1.08
+			-- thinner at the ends of the arc, thick in the middle
+			local thickness = 0.28 * (1 - math.abs(am) / (sweep / 2)) + 0.05
+			local cf = base
+				* CFrame.Angles(0, 0, math.rad(35 * dir))
+				* CFrame.new(claw * 0.55, 0, 0)
+				* CFrame.Angles(0, am * dir, 0)
+				* CFrame.new(0, 0, -arcRadius)
+				* CFrame.Angles(0, math.rad(90), 0)
+			local core = fxPart({ Size = Vector3.new(segLen, thickness, thickness * 0.5), CFrame = cf, Color = Color3.new(1, 1, 1), Transparency = 0 })
+			local glow = fxPart({ Size = Vector3.new(segLen, thickness * 2.8, thickness * 1.6), CFrame = cf, Color = color, Transparency = 0.55 })
+			local delay = i * 0.012
+			task.delay(delay, function()
+				TweenService:Create(core, TweenInfo.new(0.16, Enum.EasingStyle.Quad), { Transparency = 1, Size = core.Size * Vector3.new(1.2, 0.2, 0.2) }):Play()
+				TweenService:Create(glow, TweenInfo.new(0.2, Enum.EasingStyle.Quad), { Transparency = 1, Size = glow.Size * Vector3.new(1.3, 1.6, 1.6) }):Play()
+			end)
+			Debris:AddItem(core, 0.35)
+			Debris:AddItem(glow, 0.35)
+		end
+	end
+end
+
+-- Fast bright flash + ring at a hit location.
+function VFX.Impact(position, color, size)
+	size = size or 1
+	color = color or Color3.fromRGB(255, 60, 40)
+	local ball = fxPart({ Shape = Enum.PartType.Ball, Size = Vector3.one * 0.6 * size, Position = position, Color = Color3.new(1, 1, 1), Transparency = 0 })
+	TweenService:Create(ball, TweenInfo.new(0.12, Enum.EasingStyle.Quad), { Size = Vector3.one * 4.5 * size, Transparency = 1 }):Play()
+	Debris:AddItem(ball, 0.2)
+	local ring = fxPart({
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.1, 1, 1) * size,
+		CFrame = CFrame.new(position) * CFrame.Angles(math.random() * math.pi, math.random() * math.pi, 0),
+		Color = color,
+		Transparency = 0.1,
+	})
+	TweenService:Create(ring, TweenInfo.new(0.22, Enum.EasingStyle.Quad), { Size = Vector3.new(0.05, 7, 7) * size, Transparency = 1 }):Play()
+	Debris:AddItem(ring, 0.3)
+	Util.Burst(position, Util.SparkProps, 18, 1)
+	local light = Instance.new("PointLight")
+	light.Color = color
+	light.Range = 14 * size
+	light.Brightness = 4
+	light.Parent = ball
+end
+
+-- Red claw marks slashed across a victim for a moment.
+function VFX.WoundMarks(char)
+	local torso = Util.Torso(char)
+	if not torso then
+		return
+	end
+	for i = -1, 1 do
+		local mark = fxPart({
+			Size = Vector3.new(0.12, torso.Size.Y * 1.3, 0.05),
+			CFrame = torso.CFrame * CFrame.new(i * 0.35, 0, -torso.Size.Z / 2 - 0.08) * CFrame.Angles(0, 0, math.rad(30)),
+			Color = Color3.fromRGB(200, 0, 0),
+			Transparency = 0,
+		})
+		TweenService:Create(mark, TweenInfo.new(0.5), { Transparency = 1 }):Play()
+		Debris:AddItem(mark, 0.6)
+	end
+end
+
+-- Dust/snow puff when a wall is shredded.
+function VFX.Dust(position, color, amount)
+	Util.Burst(position, {
+		Texture = "rbxasset://textures/particles/smoke_main.dds",
+		Color = ColorSequence.new(color or Color3.fromRGB(200, 200, 205)),
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.5), NumberSequenceKeypoint.new(1, 5) }),
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.4), NumberSequenceKeypoint.new(1, 1) }),
+		Lifetime = NumberRange.new(0.8, 1.5),
+		Speed = NumberRange.new(6, 14),
+		SpreadAngle = Vector2.new(180, 180),
+		Drag = 3,
+		RotSpeed = NumberRange.new(-60, 60),
+	}, amount or 14, 2.5)
+end
+
+-- Flat shockwave ring on the ground (pounce landing, roar).
+function VFX.Shockwave(position, radius, color)
+	local ring = fxPart({
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.3, 2, 2),
+		CFrame = CFrame.new(position) * CFrame.Angles(0, 0, math.rad(90)),
+		Color = color or Color3.fromRGB(255, 240, 220),
+		Transparency = 0.2,
+		Material = Enum.Material.ForceField,
+	})
+	TweenService:Create(ring, TweenInfo.new(0.35, Enum.EasingStyle.Quad), { Size = Vector3.new(0.3, radius * 2, radius * 2), Transparency = 1 }):Play()
+	Debris:AddItem(ring, 0.45)
+	VFX.Dust(position, Color3.fromRGB(235, 240, 250), 20)
+end
+
+-- Two piercing streaks for the impale.
+function VFX.Pierce(root, color)
+	for s = -1, 1, 2 do
+		local cf = root.CFrame * CFrame.new(s * 0.5, 0.8, -3.5)
+		local streak = fxPart({ Size = Vector3.new(0.12, 0.12, 5), CFrame = cf, Color = Color3.new(1, 1, 1) })
+		local glow = fxPart({ Size = Vector3.new(0.4, 0.4, 5.5), CFrame = cf, Color = color or Color3.fromRGB(255, 70, 50), Transparency = 0.5 })
+		TweenService:Create(streak, TweenInfo.new(0.2), { Transparency = 1, Size = Vector3.new(0.02, 0.02, 7) }):Play()
+		TweenService:Create(glow, TweenInfo.new(0.25), { Transparency = 1, Size = Vector3.new(0.8, 0.8, 7) }):Play()
+		Debris:AddItem(streak, 0.3)
+		Debris:AddItem(glow, 0.3)
+	end
+end
+
+-- Blood spraying out of the victim's back (impale).
+function VFX.ExitSpray(char, direction)
+	local torso = Util.Torso(char)
+	if not torso then
+		return
+	end
+	local anchor = Instance.new("Attachment")
+	anchor.CFrame = CFrame.lookAt(Vector3.zero, torso.CFrame:VectorToObjectSpace(direction))
+	anchor.Parent = torso
+	local pe = Instance.new("ParticleEmitter")
+	for k, v in Util.BloodProps do
+		pe[k] = v
+	end
+	pe.EmissionDirection = Enum.NormalId.Front
+	pe.SpreadAngle = Vector2.new(20, 20)
+	pe.Speed = NumberRange.new(18, 30)
+	pe.Rate = 220
+	pe.Parent = anchor
+	task.delay(0.25, function()
+		pe.Enabled = false
+	end)
+	Debris:AddItem(anchor, 2)
+end
+
+-- Flickering shield shimmer during i-frames (visible to everyone).
+function VFX.IFrames(char, duration)
+	local old = char:FindFirstChild("IFrameGlow")
+	if old then
+		old:Destroy()
+	end
+	local hl = Instance.new("Highlight")
+	hl.Name = "IFrameGlow"
+	hl.FillColor = Color3.fromRGB(220, 240, 255)
+	hl.OutlineColor = Color3.fromRGB(140, 220, 255)
+	hl.FillTransparency = 0.55
+	hl.OutlineTransparency = 0
+	hl.DepthMode = Enum.HighlightDepthMode.Occluded
+	hl.Parent = char
+	local tw = TweenService:Create(hl, TweenInfo.new(0.12, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1, true), { FillTransparency = 0.95 })
+	tw:Play()
+	task.delay(duration, function()
+		tw:Cancel()
+		if hl.Parent then
+			TweenService:Create(hl, TweenInfo.new(0.25), { FillTransparency = 1, OutlineTransparency = 1 }):Play()
+			Debris:AddItem(hl, 0.3)
+		end
+	end)
+end
+
+-- Streaky trail on someone being thrown.
+function VFX.ThrowTrail(char, duration)
+	local root = Util.Root(char)
+	if not root then
+		return
+	end
+	local a0 = Instance.new("Attachment")
+	a0.Position = Vector3.new(0, 1, 0)
+	a0.Parent = root
+	local a1 = Instance.new("Attachment")
+	a1.Position = Vector3.new(0, -1, 0)
+	a1.Parent = root
+	local trail = Instance.new("Trail")
+	trail.Attachment0 = a0
+	trail.Attachment1 = a1
+	trail.Lifetime = 0.3
+	trail.Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(180, 20, 20))
+	trail.Transparency = NumberSequence.new(0.3, 1)
+	trail.LightEmission = 0.6
+	trail.FaceCamera = true
+	trail.Parent = root
+	Debris:AddItem(trail, duration)
+	Debris:AddItem(a0, duration)
+	Debris:AddItem(a1, duration)
+end
+
+return VFX
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="25">
         <Properties>
           <string name="Name">Wolverine</string>
           <string name="Source"><![CDATA[-- Wolverine: transformation, intro (SNIKT + roar), abilities, healing factor
@@ -3657,6 +4897,7 @@ local Movement = require(script.Parent.Movement)
 local Combat = require(script.Parent.Combat)
 local PlayerData = require(script.Parent.PlayerData)
 local Fart = require(script.Parent.Fart)
+local VFX = require(script.Parent.VFX)
 local Skins = require(ReplicatedStorage.Shared.Skins)
 
 local Fx = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Fx")
@@ -3673,6 +4914,8 @@ local lastDamaged = 0
 local lastShredFx = 0
 local combo = 0
 local claws = {}
+local clawGlow = Color3.fromRGB(210, 230, 255)
+local clawSkin = nil
 
 ---------------------------------------------------------------------------
 -- Look
@@ -3877,15 +5120,18 @@ local function dressUp(char, skinId)
 	hl.Parent = char
 end
 
-local function makeClaws(char)
+local function makeClaws(char, clawId)
 	claws = {}
+	clawSkin = Skins.Claws[clawId] or Skins.Claws[Skins.DefaultClaw]
+	clawGlow = clawSkin.Glow
+	local thick = clawSkin.Thick or 1
 	for _, side in { "Right", "Left" } do
 		local hand = Util.Hand(char, side)
 		if hand then
 			for i = -1, 1 do
 				local z = i * math.max(0.1, hand.Size.Z * 0.3)
-				local c, w = gearPart(char, hand, "Claw", Vector3.new(0.07, 0.1, 0.16), STEEL, Enum.Material.Metal, CFrame.new(0, 0, z))
-				c.Reflectance = 0.35
+				local c, w = gearPart(char, hand, "Claw", Vector3.new(0.07 * thick, 0.1, 0.16 * thick), clawSkin.Color, clawSkin.Material, CFrame.new(0, 0, z))
+				c.Reflectance = clawSkin.Reflectance
 				c.Transparency = 1
 				table.insert(claws, { Part = c, Weld = w, Z = z, Hand = hand })
 			end
@@ -3898,8 +5144,57 @@ local function popClaws(char)
 	for _, c in claws do
 		if c.Part.Parent then
 			c.Part.Transparency = 0
-			TweenService:Create(c.Part, info, { Size = Vector3.new(0.07, CLAW_LEN, 0.16) }):Play()
+			local thick = clawSkin and clawSkin.Thick or 1
+			TweenService:Create(c.Part, info, { Size = Vector3.new(0.07 * thick, CLAW_LEN, 0.16 * thick) }):Play()
 			TweenService:Create(c.Weld, info, { C0 = CFrame.new(0, -(c.Hand.Size.Y * 0.3 + CLAW_LEN / 2), c.Z) }):Play()
+			-- Streaking trail off every blade: every swing leaves a crisp arc
+			task.delay(0.2, function()
+				if not c.Part.Parent then
+					return
+				end
+				local a0 = Instance.new("Attachment")
+				a0.Position = Vector3.new(0, CLAW_LEN * 0.1, 0)
+				a0.Parent = c.Part
+				local a1 = Instance.new("Attachment")
+				a1.Position = Vector3.new(0, -CLAW_LEN / 2, 0)
+				a1.Parent = c.Part
+				local trail = Instance.new("Trail")
+				trail.Attachment0 = a0
+				trail.Attachment1 = a1
+				trail.Lifetime = 0.14
+				trail.MinLength = 0.05
+				trail.LightEmission = 1
+				trail.Color = ColorSequence.new(Color3.new(1, 1, 1), clawGlow)
+				trail.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.15), NumberSequenceKeypoint.new(1, 1) })
+				trail.Parent = c.Part
+				if clawSkin and (clawSkin.Drip or clawSkin.Sparkle) then
+					local pe = Instance.new("ParticleEmitter")
+					if clawSkin.Drip then
+						for k, v in Util.BloodProps do
+							pe[k] = v
+						end
+						pe.Rate = 3
+						pe.Speed = NumberRange.new(0, 1)
+						pe.Size = NumberSequence.new(0.12)
+					else
+						for k, v in Util.SparkProps do
+							pe[k] = v
+						end
+						pe.Color = ColorSequence.new(clawSkin.Glow, clawSkin.Color)
+						pe.Rate = 6
+						pe.Speed = NumberRange.new(0.5, 2)
+						pe.Acceleration = Vector3.zero
+					end
+					pe.Parent = a1
+				end
+				if clawSkin and clawSkin.Material == Enum.Material.Neon then
+					local l = Instance.new("PointLight")
+					l.Color = clawGlow
+					l.Range = 6
+					l.Brightness = 1
+					l.Parent = c.Part
+				end
+			end)
 		end
 	end
 	for _, side in { "Right", "Left" } do
@@ -3965,23 +5260,7 @@ local function roar(char)
 end
 
 local function clawStreaks(root, side)
-	local base = root.CFrame * CFrame.new(0, 0.6, -3.4)
-	local tilt = side == "R" and 40 or -40
-	for i = -1, 1 do
-		local p = Instance.new("Part")
-		p.Anchored = true
-		p.CanCollide = false
-		p.CanQuery = false
-		p.CanTouch = false
-		p.Material = Enum.Material.Neon
-		p.Color = Color3.fromRGB(255, 245, 235)
-		p.Transparency = 0.1
-		p.Size = Vector3.new(0.12, 4.4, 0.12)
-		p.CFrame = base * CFrame.Angles(0, 0, math.rad(tilt)) * CFrame.new(i * 0.6, 0, 0)
-		p.Parent = workspace
-		TweenService:Create(p, TweenInfo.new(0.25), { Transparency = 1, Size = Vector3.new(0.02, 5.2, 0.02) }):Play()
-		Debris:AddItem(p, 0.3)
-	end
+	VFX.ClawArc(root, side, clawGlow)
 end
 
 ---------------------------------------------------------------------------
@@ -4171,7 +5450,7 @@ function Wolverine.Transform(player, spawnCFrame)
 	pcall(function()
 		char:ScaleTo(Config.Wolverine.Scale)
 	end)
-	makeClaws(char)
+	makeClaws(char, PlayerData.GetClaw(player))
 	makeSkeleton(char)
 	char:PivotTo(spawnCFrame * CFrame.new(0, 1, 0))
 
@@ -4242,8 +5521,9 @@ local function pin(player, victim)
 	kRoot.CFrame = base * CFrame.new(0, 2.6, 1.6)
 	Posture.Set(kChar, "Root", CFrame.Angles(math.rad(-45), 0, 0), 0.12)
 	Util.Sound(Config.Sounds.Land, kRoot, { Volume = 2, Pitch = 0.7 })
+	VFX.Shockwave(Vector3.new(vRoot.Position.X, y + 0.2, vRoot.Position.Z), 12)
 	Fx:FireAllClients("Shake", { Position = kRoot.Position, Intensity = 0.8, Radius = 60 })
-	Fx:FireClient(victim, "Grabbed", {})
+	Util.FireClient(Fx, victim, "Grabbed", {})
 
 	for i = 1, 3 do
 		task.wait(0.28)
@@ -4254,7 +5534,11 @@ local function pin(player, victim)
 		Posture.Swipe(kChar, side)
 		Util.Sound(Config.Sounds.Slash, vRoot, { Pitch = 0.8 + i * 0.1, Volume = 1.3 })
 		Combat.Blood(Util.Torso(vChar), 18)
-		Fx:FireClient(victim, "Shake", { Position = vRoot.Position, Intensity = 0.5, Radius = 10 })
+		local vt = Util.Torso(vChar)
+		if vt then
+			VFX.Impact(vt.Position, clawGlow, 0.7)
+		end
+		Util.FireClient(Fx, victim, "Shake", { Position = vRoot.Position, Intensity = 0.5, Radius = 10 })
 	end
 	task.wait(0.2)
 
@@ -4337,8 +5621,11 @@ local function stab(player, char, root)
 	Util.Sound(Config.Sounds.Slash, vRoot, { Pitch = 0.6, Volume = 1.6 })
 	Util.Sound(Config.Sounds.Gore, vRoot, { Pitch = 0.6, Volume = 1.2 })
 	Combat.Blood(Util.Torso(target.Char), 45)
+	VFX.Pierce(root, clawGlow)
+	VFX.ExitSpray(target.Char, base.LookVector)
+	VFX.Impact(vRoot.Position + Vector3.new(0, 1, 0), clawGlow, 1.1)
 	Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 0.7, Radius = 60 })
-	Fx:FireClient(victim, "Grabbed", {})
+	Util.FireClient(Fx, victim, "Grabbed", {})
 	task.wait(0.65)
 
 	local result = Combat.Hit(victim, true)
@@ -4365,9 +5652,9 @@ end
 local function sniff(player, root)
 	local cfg = Config.Abilities.Sniff
 	Util.Sound(Config.Sounds.Sniff, root, { Volume = 1.5 })
-	Fx:FireClient(player, "Sniff", { Duration = cfg.Duration, Targets = Fart.SniffTargets() })
+	Util.FireClient(Fx, player, "Sniff", { Duration = cfg.Duration, Targets = Fart.SniffTargets() })
 	for survivor in Round.Survivors do
-		Fx:FireClient(survivor, "Sniffed", {})
+		Util.FireClient(Fx, survivor, "Sniffed", {})
 	end
 end
 
@@ -4410,6 +5697,61 @@ function Wolverine.Handle(player, ability, arg)
 	elseif ability == "Sniff" then
 		sniff(player, root)
 	end
+end
+
+-- Posed display statue for the lobby's suit gallery.
+function Wolverine.MakeStatue(skinId, cframe, parent)
+	local desc = Instance.new("HumanoidDescription")
+	local tone = Color3.fromRGB(226, 176, 140)
+	desc.HeadColor = tone
+	desc.LeftArmColor = tone
+	desc.RightArmColor = tone
+	desc.TorsoColor = tone
+	desc.LeftLegColor = tone
+	desc.RightLegColor = tone
+	local ok, model = pcall(function()
+		return game:GetService("Players"):CreateHumanoidModelFromDescription(desc, Enum.HumanoidRigType.R15)
+	end)
+	if not ok or not model then
+		return nil
+	end
+	model.Name = "Statue_" .. skinId
+	local hum = Util.Humanoid(model)
+	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	model.Parent = parent
+	dressUp(model, skinId)
+	local menace = model:FindFirstChild("Menace")
+	if menace then
+		menace:Destroy()
+	end
+	pcall(function()
+		model:ScaleTo(1.25)
+	end)
+	local claw = Skins.Claws[Skins.DefaultClaw]
+	for _, side in { "Right", "Left" } do
+		local hand = Util.Hand(model, side)
+		if hand then
+			for i = -1, 1 do
+				local z = i * math.max(0.1, hand.Size.Z * 0.3)
+				local c = gearPart(model, hand, "Claw", Vector3.new(0.08, CLAW_LEN * 1.25, 0.18), claw.Color, claw.Material,
+					CFrame.new(0, -(hand.Size.Y * 0.3 + CLAW_LEN * 0.62), z))
+				c.Reflectance = claw.Reflectance
+			end
+		end
+	end
+	-- Crouched, arms flared, claws out
+	Posture.Set(model, "Root", CFrame.new(0, -0.3, 0) * CFrame.Angles(math.rad(-14), 0, 0))
+	Posture.Set(model, "Neck", CFrame.Angles(math.rad(12), 0, 0))
+	Posture.Set(model, "RShoulder", CFrame.Angles(math.rad(45), 0, math.rad(50)))
+	Posture.Set(model, "LShoulder", CFrame.Angles(math.rad(45), 0, math.rad(-50)))
+	Posture.Set(model, "RHip", CFrame.Angles(math.rad(28), 0, math.rad(8)))
+	Posture.Set(model, "LHip", CFrame.Angles(math.rad(-12), 0, math.rad(-8)))
+	local root = Util.Root(model)
+	model:PivotTo(cframe * CFrame.new(0, 3.9, 0))
+	if root then
+		root.Anchored = true
+	end
+	return model
 end
 
 -- Called by the Sentinel.
@@ -4481,15 +5823,15 @@ return Wolverine
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="24">
+  <Item class="StarterPlayer" referent="26">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterCharacterScripts" referent="25">
+    <Item class="StarterCharacterScripts" referent="27">
       <Properties>
         <string name="Name">StarterCharacterScripts</string>
       </Properties>
-      <Item class="Script" referent="26">
+      <Item class="Script" referent="28">
         <Properties>
           <string name="Name">Health</string>
           <token name="RunContext">0</token>
@@ -4500,15 +5842,200 @@ return Wolverine
         </Properties>
       </Item>
     </Item>
-    <Item class="StarterPlayerScripts" referent="27">
+    <Item class="StarterPlayerScripts" referent="29">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="28">
+      <Item class="Folder" referent="30">
         <Properties>
           <string name="Name">Client</string>
         </Properties>
-        <Item class="LocalScript" referent="29">
+        <Item class="ModuleScript" referent="31">
+          <Properties>
+            <string name="Name">Anims</string>
+            <string name="Source"><![CDATA[-- Procedural sprint animations, applied on every client to every sprinting
+-- character. We override Motor6D.Transform after Roblox's Animator runs
+-- (PreSimulation), so this fully replaces the default run while sprinting.
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Anims = {}
+
+local rad = math.rad
+local JOINTS = {
+	Root = { "LowerTorso", "Root" },
+	Waist = { "UpperTorso", "Waist" },
+	Neck = { "Head", "Neck" },
+	RShoulder = { "RightUpperArm", "RightShoulder" },
+	LShoulder = { "LeftUpperArm", "LeftShoulder" },
+	RElbow = { "RightLowerArm", "RightElbow" },
+	LElbow = { "LeftLowerArm", "LeftElbow" },
+	RWrist = { "RightHand", "RightWrist" },
+	LWrist = { "LeftHand", "LeftWrist" },
+	RHip = { "RightUpperLeg", "RightHip" },
+	LHip = { "LeftUpperLeg", "LeftHip" },
+	RKnee = { "RightLowerLeg", "RightKnee" },
+	LKnee = { "LeftLowerLeg", "LeftKnee" },
+	RAnkle = { "RightFoot", "RightAnkle" },
+	LAnkle = { "LeftFoot", "LeftAnkle" },
+}
+
+local state = setmetatable({}, { __mode = "k" }) -- [Model] = { Phase, Blend, Motors, LookUntil, NextLook, LookSide }
+
+local function motors(char)
+	local m = {}
+	for key, info in JOINTS do
+		local part = char:FindFirstChild(info[1])
+		local j = part and part:FindFirstChild(info[2])
+		if j and j:IsA("Motor6D") then
+			m[key] = j
+		end
+	end
+	return m
+end
+
+local function isSprinting(char)
+	if char:GetAttribute("Sprinting") then
+		return true, char:GetAttribute("Role") or "Survivor"
+	end
+	local p = Players:GetPlayerFromCharacter(char)
+	if p and p:GetAttribute("Sprinting") then
+		return true, p:GetAttribute("Role")
+	end
+	return false, nil
+end
+
+local function wolverineNear(root)
+	local name = ReplicatedStorage:GetAttribute("Wolverine")
+	local w = name and Players:FindFirstChild(name)
+	local wRoot = w and w.Character and w.Character:FindFirstChild("HumanoidRootPart")
+	return wRoot ~= nil and (wRoot.Position - root.Position).Magnitude < 70
+end
+
+-- Survivor: running for their life.
+local function fleePose(s, c, look)
+	local up = math.abs(c)
+	return {
+		Root = CFrame.new(0, up * 0.25 - 0.1, 0) * CFrame.Angles(rad(-16), 0, 0),
+		Waist = CFrame.Angles(rad(-6), rad(14 * s) + look * 0.35, 0),
+		Neck = CFrame.Angles(rad(12), look, 0),
+		RShoulder = CFrame.Angles(rad(-75 * s + 15), 0, rad(6)),
+		LShoulder = CFrame.Angles(rad(75 * s + 15), 0, rad(-6)),
+		RElbow = CFrame.Angles(rad(85 + 15 * s), 0, 0),
+		LElbow = CFrame.Angles(rad(85 - 15 * s), 0, 0),
+		RWrist = CFrame.Angles(rad(10), 0, 0),
+		LWrist = CFrame.Angles(rad(10), 0, 0),
+		RHip = CFrame.Angles(rad(60 * s + 8), 0, 0),
+		LHip = CFrame.Angles(rad(-60 * s + 8), 0, 0),
+		RKnee = CFrame.Angles(rad(-(15 + 85 * math.max(0, -s))), 0, 0),
+		LKnee = CFrame.Angles(rad(-(15 + 85 * math.max(0, s))), 0, 0),
+		RAnkle = CFrame.Angles(rad(-20 * s), 0, 0),
+		LAnkle = CFrame.Angles(rad(20 * s), 0, 0),
+	}
+end
+
+-- Wolverine: low, heavy, claws forward, shoulders rolling.
+local function huntPose(s, c)
+	local up = math.abs(c)
+	return {
+		Root = CFrame.new(0, up * 0.18 - 0.25, 0) * CFrame.Angles(rad(-24), 0, 0),
+		Waist = CFrame.Angles(rad(-10), rad(18 * s), 0),
+		Neck = CFrame.Angles(rad(22), rad(-10 * s), 0),
+		RShoulder = CFrame.Angles(rad(-55 * s + 35), 0, rad(18)),
+		LShoulder = CFrame.Angles(rad(55 * s + 35), 0, rad(-18)),
+		RElbow = CFrame.Angles(rad(45), 0, 0),
+		LElbow = CFrame.Angles(rad(45), 0, 0),
+		RWrist = CFrame.identity,
+		LWrist = CFrame.identity,
+		RHip = CFrame.Angles(rad(55 * s + 15), 0, 0),
+		LHip = CFrame.Angles(rad(-55 * s + 15), 0, 0),
+		RKnee = CFrame.Angles(rad(-(25 + 75 * math.max(0, -s))), 0, 0),
+		LKnee = CFrame.Angles(rad(-(25 + 75 * math.max(0, s))), 0, 0),
+		RAnkle = CFrame.Angles(rad(-15 * s), 0, 0),
+		LAnkle = CFrame.Angles(rad(15 * s), 0, 0),
+	}
+end
+
+local function characters()
+	local list = {}
+	for _, p in Players:GetPlayers() do
+		if p.Character then
+			table.insert(list, p.Character)
+		end
+	end
+	local map = workspace:FindFirstChild("Map")
+	local debris = map and map:FindFirstChild("Debris")
+	if debris then
+		for _, m in debris:GetChildren() do
+			if m:IsA("Model") and m:GetAttribute("Sprinting") ~= nil then
+				table.insert(list, m)
+			end
+		end
+	end
+	return list
+end
+
+local step = RunService.PreSimulation or RunService.Stepped
+step:Connect(function(a, b)
+	local dt = typeof(b) == "number" and b or a
+	local now = os.clock()
+	for _, char in characters() do
+		local hum = char:FindFirstChildOfClass("Humanoid")
+		local root = char:FindFirstChild("HumanoidRootPart")
+		if hum and root and hum.Health > 0 and hum.RigType == Enum.HumanoidRigType.R15 then
+			local st = state[char]
+			local sprinting, role = isSprinting(char)
+			local v = root.AssemblyLinearVelocity
+			local speed = Vector3.new(v.X, 0, v.Z).Magnitude
+			local feral = role == "Wolverine" and (Players:GetPlayerFromCharacter(char) or char):GetAttribute("Feral")
+			local active = sprinting and speed > 8 and not root.Anchored and not feral
+				and hum:GetState() ~= Enum.HumanoidStateType.Freefall
+
+			if active and not st then
+				st = { Phase = 0, Blend = 0, Motors = motors(char), LookUntil = 0, NextLook = now + 1.5, LookSide = 1 }
+				state[char] = st
+			end
+			if st then
+				st.Blend = math.clamp(st.Blend + (active and dt * 8 or -dt * 8), 0, 1)
+				if st.Blend <= 0 and not active then
+					state[char] = nil
+				else
+					st.Phase += dt * math.max(speed, 10) * 0.52
+					local s, c = math.sin(st.Phase), math.cos(st.Phase)
+					local pose
+					if role == "Wolverine" then
+						pose = huntPose(s, c)
+					else
+						-- Panicked glances back when he's close
+						local look = 0
+						if now > st.NextLook and wolverineNear(root) then
+							st.LookUntil = now + 0.45
+							st.NextLook = now + 1.6 + math.random() * 1.8
+							st.LookSide = math.random() < 0.5 and -1 or 1
+						end
+						if now < st.LookUntil then
+							look = rad(70) * st.LookSide
+						end
+						pose = fleePose(s, c, look)
+					end
+					for key, cf in pose do
+						local m = st.Motors[key]
+						if m and m.Parent then
+							m.Transform = m.Transform:Lerp(cf, st.Blend)
+						end
+					end
+				end
+			end
+		end
+	end
+end)
+
+return Anims
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="LocalScript" referent="32">
           <Properties>
             <string name="Name">ClientMain</string>
             <string name="Source"><![CDATA[-- Input + role handling. PC keys, gamepad and mobile touch buttons.
@@ -4522,6 +6049,7 @@ local Interface = require(script.Parent:WaitForChild("Interface"))
 local Effects = require(script.Parent:WaitForChild("Effects"))
 require(script.Parent:WaitForChild("Shop"))
 local Daily = require(script.Parent:WaitForChild("Daily"))
+require(script.Parent:WaitForChild("Anims"))
 
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local Ability = Remotes:WaitForChild("Ability")
@@ -4531,21 +6059,43 @@ local player = Players.LocalPlayer
 local A = Config.Abilities
 local S = Config.Sentinel
 
+local YELLOW = Color3.fromRGB(255, 200, 30)
+local RED = Color3.fromRGB(230, 50, 50)
 local ROLE_KIT = {
 	Wolverine = {
-		{ Name = "Slash", Label = "Claw", KeyText = "M1", Key = Enum.KeyCode.ButtonR2, Cooldown = A.Slash.Cooldown, Click = true },
-		{ Name = "Pounce", Label = "Pounce", KeyText = "Q", Key = Enum.KeyCode.Q, Cooldown = A.Pounce.Cooldown },
-		{ Name = "Stab", Label = "Impale", KeyText = "E", Key = Enum.KeyCode.E, Cooldown = A.Stab.Cooldown },
-		{ Name = "Sniff", Label = "Sniff", KeyText = "F", Key = Enum.KeyCode.F, Cooldown = A.Sniff.Cooldown },
+		{ Name = "Slash", Label = "Claw Slash", Desc = "Shreds survivors and walls", Icon = "🩸", KeyText = "M1", Key = Enum.KeyCode.ButtonR2, Cooldown = A.Slash.Cooldown, Click = true, Color = RED },
+		{ Name = "Pounce", Label = "Pounce", Desc = "Leap, pin them down, claw away", Icon = "🐾", KeyText = "Q", Key = Enum.KeyCode.Q, Cooldown = A.Pounce.Cooldown, Color = Color3.fromRGB(255, 140, 30) },
+		{ Name = "Stab", Label = "Impale", Desc = "Both claws in. Lift them up", Icon = "🗡️", KeyText = "E", Key = Enum.KeyCode.E, Cooldown = A.Stab.Cooldown, Color = Color3.fromRGB(200, 205, 220) },
+		{ Name = "Sniff", Label = "Sniff", Desc = "Sense everyone for " .. A.Sniff.Duration .. "s", Icon = "👃", KeyText = "F", Key = Enum.KeyCode.F, Cooldown = A.Sniff.Cooldown, Color = Color3.fromRGB(200, 60, 255) },
 	},
 	Survivor = {
-		{ Name = "Fart", Label = "Fart", KeyText = "G", Key = Enum.KeyCode.G, Cooldown = Config.Fart.Cooldown, Color = Color3.fromRGB(150, 210, 50) },
+		{ Name = "Fart", Label = "Fart", Desc = "Gas cloud throws off his Sniff", Icon = "💨", KeyText = "G", Key = Enum.KeyCode.G, Cooldown = Config.Fart.Cooldown, Color = Color3.fromRGB(150, 210, 50) },
 	},
 	Sentinel = {
-		{ Name = "Punch", Label = "Punch", KeyText = "M1", Key = Enum.KeyCode.ButtonR2, Cooldown = S.Punch.Cooldown, Click = true, Color = Color3.fromRGB(200, 160, 255) },
-		{ Name = "Laser", Label = "Laser", KeyText = "Q", Key = Enum.KeyCode.Q, Cooldown = S.Laser.Cooldown, Color = Color3.fromRGB(255, 90, 60) },
-		{ Name = "Pulse", Label = "Inhibitor Pulse", KeyText = "E", Key = Enum.KeyCode.E, Cooldown = S.Pulse.Cooldown, Color = Color3.fromRGB(255, 210, 60) },
+		{ Name = "Punch", Label = "Punch", Desc = "Stun + knockback", Icon = "👊", KeyText = "M1", Key = Enum.KeyCode.ButtonR2, Cooldown = S.Punch.Cooldown, Click = true, Color = Color3.fromRGB(200, 160, 255) },
+		{ Name = "Laser", Label = "Laser", Desc = "Burns through walls, exposes bone", Icon = "🔴", KeyText = "Q", Key = Enum.KeyCode.Q, Cooldown = S.Laser.Cooldown, Color = Color3.fromRGB(255, 90, 60) },
+		{ Name = "Pulse", Label = "Inhibitor Pulse", Desc = "Stuns him if he's close", Icon = "💥", KeyText = "E", Key = Enum.KeyCode.E, Cooldown = S.Pulse.Cooldown, Color = Color3.fromRGB(255, 210, 60) },
 	},
+}
+
+local ROLE_HOLDS = {
+	Wolverine = {
+		{ Name = "SprintHold", Label = "Sprint", Desc = "Run into walls to tear through", Icon = "💨", KeyText = "SHIFT", Attr = "Sprinting", Color = YELLOW },
+		{ Name = "FeralHold", Label = "All Fours", Desc = "Fastest. Burns stamina", Icon = "🐺", KeyText = "C", Attr = "Feral", Color = Color3.fromRGB(255, 140, 30) },
+	},
+	Sentinel = {
+		{ Name = "LinkHold", Label = "Link", Desc = "Stay near the other suit: 1.6x power", Icon = "🔗", KeyText = "30m", Attr = "Linked", Color = Color3.fromRGB(190, 140, 255) },
+	},
+	Survivor = {
+		{ Name = "SprintHold", Label = "Sprint", Desc = "Run for your life", Icon = "🏃", KeyText = "SHIFT", Attr = "Sprinting", Color = Color3.fromRGB(80, 170, 255) },
+		{ Name = "HideHold", Label = "Hide", Desc = "Lockers, wardrobes, dumpsters", Icon = "🚪", KeyText = "E", Attr = "Hidden", Color = Color3.fromRGB(160, 160, 170) },
+	},
+}
+
+local ROLE_TITLE = {
+	Wolverine = { "WOLVERINE", YELLOW },
+	Survivor = { "SURVIVOR", Color3.fromRGB(120, 200, 255) },
+	Sentinel = { "SENTINEL SYSTEMS", Color3.fromRGB(190, 140, 255) },
 }
 
 local HINTS = {
@@ -4635,7 +6185,8 @@ end
 local function applyRole(role)
 	unbindAll()
 	currentKit = ROLE_KIT[role] or {}
-	Interface.SetAbilities(currentKit)
+	local title = ROLE_TITLE[role]
+	Interface.SetAbilities(currentKit, ROLE_HOLDS[role], title and title[1], title and title[2])
 	Interface.SetHint(HINTS[role] or "")
 
 	for i, a in currentKit do
@@ -4716,7 +6267,7 @@ Fx.OnClientEvent:Connect(function(kind, data)
 	elseif kind == "Roar" then
 		Effects.Roar(data.Position)
 	elseif kind == "Knock" then
-		Effects.Knock(data.Velocity)
+		Effects.Knock(data.Velocity, data.Tumble, data.Spin)
 	elseif kind == "Hurt" then
 		Effects.Hurt()
 	elseif kind == "Grabbed" then
@@ -4747,174 +6298,151 @@ end)
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="30">
+        <Item class="ModuleScript" referent="33">
           <Properties>
             <string name="Name">Daily</string>
-            <string name="Source"><![CDATA[-- Daily challenges panel, login streak, Wolverine odds and the Robux
--- "guaranteed Wolverine" button.
+            <string name="Source"><![CDATA[-- Daily challenges, login streak, Wolverine odds and the Robux pass.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 local MarketplaceService = game:GetService("MarketplaceService")
+local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local UIKit = require(script.Parent:WaitForChild("UIKit"))
+local Shop = require(script.Parent:WaitForChild("Shop"))
 
 local player = Players.LocalPlayer
 local Daily = {}
 
-local DARK = Color3.fromRGB(16, 16, 20)
-local YELLOW = Color3.fromRGB(255, 205, 30)
-local GREEN = Color3.fromRGB(90, 220, 120)
-
-local function new(class, props, parent)
-	local inst = Instance.new(class)
-	for k, v in props do
-		inst[k] = v
-	end
-	inst.Parent = parent
-	return inst
-end
-
-local function corner(p, r)
-	new("UICorner", { CornerRadius = UDim.new(0, r or 8) }, p)
-end
+local new, corner, stroke, gradient = UIKit.new, UIKit.Corner, UIKit.Stroke, UIKit.Gradient
+local K = UIKit.Colors
 
 local gui = new("ScreenGui", { Name = "DailyUI", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling }, player:WaitForChild("PlayerGui"))
 
-local function sideButton(text, y, color)
-	local b = new("TextButton", {
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 12, 0.5, y),
-		Size = UDim2.fromOffset(110, 44),
-		BackgroundColor3 = DARK,
-		BackgroundTransparency = 0.15,
-		Font = Enum.Font.GothamBlack,
-		TextScaled = true,
-		TextColor3 = color,
-		Text = text,
-	}, gui)
-	corner(b, 10)
-	new("UIStroke", { Color = color, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, b)
-	new("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8) }, b)
-	return b
-end
+local dailyButton = Shop.DockButton("DAILY", "🎁", K.Green, 2)
+local buyButton, buyLabel = Shop.DockButton("BE HIM", "👑", K.Red, 3)
+buyLabel.Text = "BE HIM  R$80"
 
-local dailyButton = sideButton("DAILY", 52, GREEN)
-local buyButton = sideButton("BE WOLVERINE\n80 R$", 104, YELLOW)
-buyButton.Size = UDim2.fromOffset(110, 52)
-buyButton.Position = UDim2.new(0, 12, 0.5, 108)
-
-local chanceLabel = new("TextLabel", {
-	AnchorPoint = Vector2.new(0, 0.5),
-	Position = UDim2.new(0, 12, 0.5, 150),
-	Size = UDim2.fromOffset(160, 22),
+-- Wolverine odds pill
+local odds = new("Frame", { Size = UDim2.fromOffset(170, 46), BackgroundColor3 = Color3.new(1, 1, 1), LayoutOrder = 4 }, Shop.Dock)
+corner(odds, 12)
+gradient(odds, Color3.fromRGB(50, 16, 18), Color3.fromRGB(18, 8, 10))
+local oddsStroke = stroke(odds, Color3.fromRGB(140, 30, 30), 2)
+new("TextLabel", {
+	Position = UDim2.fromOffset(10, 4),
+	Size = UDim2.new(1, -20, 0, 14),
 	BackgroundTransparency = 1,
 	Font = Enum.Font.GothamBold,
 	TextScaled = true,
 	TextXAlignment = Enum.TextXAlignment.Left,
-	TextColor3 = Color3.fromRGB(255, 120, 120),
-	TextStrokeTransparency = 0.4,
-	Text = "",
-}, gui)
-
-local panel = new("Frame", {
-	AnchorPoint = Vector2.new(0.5, 0.5),
-	Position = UDim2.fromScale(0.5, 0.5),
-	Size = UDim2.fromOffset(460, 340),
-	BackgroundColor3 = DARK,
-	BackgroundTransparency = 0.05,
-	Visible = false,
-	ZIndex = 30,
-}, gui)
-corner(panel, 14)
-new("UIStroke", { Color = GREEN, Thickness = 2 }, panel)
-local scale = new("UIScale", {}, panel)
-
-new("TextLabel", {
-	Position = UDim2.fromOffset(20, 12),
-	Size = UDim2.new(1, -80, 0, 34),
+	TextColor3 = Color3.fromRGB(220, 170, 170),
+	Text = "WOLVERINE CHANCE",
+}, odds)
+local oddsBar = new("Frame", { Position = UDim2.fromOffset(10, 24), Size = UDim2.new(1, -20, 0, 14), BackgroundColor3 = K.Ink }, odds)
+corner(oddsBar, 7)
+local oddsFill = new("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0 }, oddsBar)
+corner(oddsFill, 7)
+gradient(oddsFill, Color3.fromRGB(255, 90, 60), Color3.fromRGB(180, 20, 20), 0)
+local oddsText = new("TextLabel", {
+	Size = UDim2.fromScale(1, 1),
 	BackgroundTransparency = 1,
-	Font = Enum.Font.LuckiestGuy,
-	TextScaled = true,
-	TextXAlignment = Enum.TextXAlignment.Left,
-	TextColor3 = GREEN,
-	Text = "DAILY CHALLENGES",
-	ZIndex = 31,
-}, panel)
-local close = new("TextButton", {
-	AnchorPoint = Vector2.new(1, 0),
-	Position = UDim2.new(1, -12, 0, 12),
-	Size = UDim2.fromOffset(34, 34),
-	BackgroundColor3 = Color3.fromRGB(150, 30, 30),
 	Font = Enum.Font.GothamBlack,
 	TextScaled = true,
-	TextColor3 = Color3.new(1, 1, 1),
-	Text = "X",
-	ZIndex = 31,
-}, panel)
-corner(close, 8)
-
-local list = new("Frame", {
-	Position = UDim2.fromOffset(16, 56),
-	Size = UDim2.new(1, -32, 0, 230),
-	BackgroundTransparency = 1,
-	ZIndex = 31,
-}, panel)
-new("UIListLayout", { Padding = UDim.new(0, 8) }, list)
-
-local streakLabel = new("TextLabel", {
-	AnchorPoint = Vector2.new(0.5, 1),
-	Position = UDim2.new(0.5, 0, 1, -12),
-	Size = UDim2.new(1, -32, 0, 22),
-	BackgroundTransparency = 1,
-	Font = Enum.Font.GothamBold,
-	TextScaled = true,
-	TextColor3 = YELLOW,
+	TextColor3 = K.White,
 	Text = "",
-	ZIndex = 31,
-}, panel)
+	ZIndex = 2,
+}, oddsBar)
+new("UIStroke", { Thickness = 1.5 }, oddsText)
 
+---------------------------------------------------------------------------
+-- Challenges window
+---------------------------------------------------------------------------
+
+local window = UIKit.Window(gui, "DAILY CHALLENGES", UDim2.fromOffset(520, 400), K.Green)
+local w = window.Frame
+
+local list = new("Frame", { Position = UDim2.fromOffset(20, 72), Size = UDim2.new(1, -40, 0, 260), BackgroundTransparency = 1, ZIndex = 31 }, w)
+new("UIListLayout", { Padding = UDim.new(0, 10) }, list)
+
+local streak = new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 1, -14),
+	Size = UDim2.new(1, -40, 0, 40),
+	BackgroundColor3 = Color3.new(1, 1, 1),
+	ZIndex = 31,
+}, w)
+corner(streak, 10)
+gradient(streak, Color3.fromRGB(70, 54, 10), Color3.fromRGB(28, 22, 6), 0)
+stroke(streak, K.Yellow, 1.5, 0.3)
+local streakText = new("TextLabel", {
+	Size = UDim2.fromScale(1, 1),
+	BackgroundTransparency = 1,
+	Font = Enum.Font.GothamBlack,
+	TextScaled = true,
+	TextColor3 = K.Yellow,
+	Text = "",
+	ZIndex = 32,
+}, streak)
+new("UIPadding", { PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10) }, streakText)
+
+local ICONS = { BecomeWolverine = "🐺", WolverineKills = "🩸", SurviveTime = "⏱️", PlayMatches = "🎮" }
 local rows = {}
 for i, c in Config.DailyChallenges do
-	local row = new("Frame", { Size = UDim2.new(1, 0, 0, 50), BackgroundColor3 = Color3.fromRGB(30, 30, 36), LayoutOrder = i, ZIndex = 32 }, list)
-	corner(row, 8)
+	local row = new("Frame", { Size = UDim2.new(1, 0, 0, 56), BackgroundColor3 = Color3.new(1, 1, 1), LayoutOrder = i, ZIndex = 32 }, list)
+	corner(row, 12)
+	gradient(row, Color3.fromRGB(42, 42, 50), Color3.fromRGB(22, 22, 28), 0)
+	local rowStroke = stroke(row, Color3.fromRGB(70, 70, 80), 1.5)
+	local tile = new("TextLabel", {
+		Position = UDim2.fromOffset(8, 8),
+		Size = UDim2.fromOffset(40, 40),
+		BackgroundColor3 = Color3.fromRGB(20, 40, 26),
+		Font = Enum.Font.GothamBlack,
+		TextScaled = true,
+		Text = ICONS[c.Id] or "★",
+		ZIndex = 33,
+	}, row)
+	corner(tile, 10)
+	new("UIPadding", { PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6) }, tile)
 	new("TextLabel", {
-		Position = UDim2.fromOffset(10, 4),
-		Size = UDim2.new(1, -120, 0, 22),
+		Position = UDim2.fromOffset(58, 6),
+		Size = UDim2.new(1, -170, 0, 20),
 		BackgroundTransparency = 1,
-		Font = Enum.Font.GothamBold,
+		Font = Enum.Font.GothamBlack,
 		TextScaled = true,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = Color3.new(1, 1, 1),
+		TextColor3 = K.White,
 		Text = c.Text,
 		ZIndex = 33,
 	}, row)
-	new("TextLabel", {
+	local reward = new("TextLabel", {
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -10, 0, 4),
-		Size = UDim2.fromOffset(100, 22),
+		Position = UDim2.new(1, -10, 0, 8),
+		Size = UDim2.fromOffset(100, 20),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBlack,
 		TextScaled = true,
 		TextXAlignment = Enum.TextXAlignment.Right,
-		TextColor3 = YELLOW,
-		Text = "+" .. c.Reward .. " coins",
+		TextColor3 = K.Yellow,
+		Text = "🪙 " .. c.Reward,
 		ZIndex = 33,
 	}, row)
-	local bar = new("Frame", { Position = UDim2.fromOffset(10, 32), Size = UDim2.new(1, -20, 0, 10), BackgroundColor3 = Color3.fromRGB(55, 55, 62), ZIndex = 33 }, row)
-	corner(bar, 5)
-	local fill = new("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = GREEN, BorderSizePixel = 0, ZIndex = 34 }, bar)
-	corner(fill, 5)
+	local bar = new("Frame", { Position = UDim2.fromOffset(58, 32), Size = UDim2.new(1, -68, 0, 14), BackgroundColor3 = K.Ink, ZIndex = 33 }, row)
+	corner(bar, 7)
+	local fill = new("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, ZIndex = 34 }, bar)
+	corner(fill, 7)
+	gradient(fill, Color3.fromRGB(120, 255, 150), Color3.fromRGB(30, 160, 70), 0)
 	local count = new("TextLabel", {
 		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
-		Font = Enum.Font.GothamBold,
+		Font = Enum.Font.GothamBlack,
 		TextScaled = true,
-		TextColor3 = Color3.new(1, 1, 1),
+		TextColor3 = K.White,
 		Text = "",
 		ZIndex = 35,
 	}, bar)
-	rows[c.Id] = { Fill = fill, Count = count, Goal = c.Goal, Id = c.Id }
+	new("UIStroke", { Thickness = 1.5 }, count)
+	rows[c.Id] = { Fill = fill, Count = count, Goal = c.Goal, Stroke = rowStroke, Reward = reward, Tile = tile }
 end
 
 local function refresh()
@@ -4926,47 +6454,46 @@ local function refresh()
 	for id, r in rows do
 		local v = tonumber(progress[id]) or 0
 		local complete = done[id] == true
-		r.Fill.Size = UDim2.fromScale(complete and 1 or math.clamp(v / r.Goal, 0, 1), 1)
+		TweenService:Create(r.Fill, TweenInfo.new(0.4, Enum.EasingStyle.Quad), {
+			Size = UDim2.fromScale(complete and 1 or math.clamp(v / r.Goal, 0, 1), 1),
+		}):Play()
+		r.Stroke.Color = complete and K.Green or Color3.fromRGB(70, 70, 80)
+		r.Tile.BackgroundColor3 = complete and Color3.fromRGB(30, 110, 50) or Color3.fromRGB(20, 40, 26)
+		r.Reward.Text = complete and "✔ CLAIMED" or r.Reward.Text:gsub("✔ CLAIMED", "")
 		if complete then
-			r.Count.Text = "DONE"
+			r.Count.Text = "COMPLETE"
 		elseif id == "SurviveTime" then
 			r.Count.Text = ("%d:%02d / %d:%02d"):format(v // 60, v % 60, r.Goal // 60, r.Goal % 60)
 		else
 			r.Count.Text = ("%d / %d"):format(v, r.Goal)
 		end
 	end
-	streakLabel.Text = ("Login streak: %d day%s — come back tomorrow for more coins"):format(
-		player:GetAttribute("LoginStreak") or 0,
-		(player:GetAttribute("LoginStreak") or 0) == 1 and "" or "s"
-	)
+	local s = player:GetAttribute("LoginStreak") or 0
+	streakText.Text = ("🔥 LOGIN STREAK: %d DAY%s — COME BACK TOMORROW FOR MORE"):format(s, s == 1 and "" or "S")
+
 	local tokens = player:GetAttribute("GuaranteedTokens") or 0
-	local chance = player:GetAttribute("WolverineChance")
+	local chance = player:GetAttribute("WolverineChance") or 0
 	if tokens > 0 then
-		chanceLabel.Text = "Wolverine next round: GUARANTEED"
-		chanceLabel.TextColor3 = YELLOW
-	elseif chance then
-		chanceLabel.Text = ("Wolverine chance: %d%%"):format(chance)
-		chanceLabel.TextColor3 = Color3.fromRGB(255, 120, 120)
+		oddsText.Text = "GUARANTEED"
+		oddsFill.Size = UDim2.fromScale(1, 1)
+		oddsStroke.Color = K.Yellow
+	else
+		oddsText.Text = chance .. "%"
+		TweenService:Create(oddsFill, TweenInfo.new(0.4), { Size = UDim2.fromScale(math.clamp(chance / 100, 0.04, 1), 1) }):Play()
+		oddsStroke.Color = Color3.fromRGB(140, 30, 30)
 	end
 end
 
-local function fit()
-	local cam = workspace.CurrentCamera
-	scale.Scale = math.max(0.4, math.min(1, (cam.ViewportSize.X - 24) / 460, (cam.ViewportSize.Y - 24) / 340))
-end
-workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fit)
-fit()
-
 dailyButton.Activated:Connect(function()
-	panel.Visible = not panel.Visible
 	refresh()
-end)
-close.Activated:Connect(function()
-	panel.Visible = false
+	window.Toggle()
 end)
 buyButton.Activated:Connect(function()
 	if Config.GuaranteedWolverineProductId == 0 then
-		chanceLabel.Text = "Purchase not set up yet (see Config)"
+		buyLabel.Text = "NOT SET UP"
+		task.delay(2, function()
+			buyLabel.Text = "BE HIM  R$80"
+		end)
 		return
 	end
 	MarketplaceService:PromptProductPurchase(player, Config.GuaranteedWolverineProductId)
@@ -4977,64 +6504,93 @@ for _, attr in { "Challenges", "LoginStreak", "WolverineChance", "GuaranteedToke
 end
 refresh()
 
-function Daily.ShowReward(amount, streak)
-	local card = new("Frame", {
+function Daily.ShowReward(amount, days)
+	local holder = new("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(340, 170),
-		BackgroundColor3 = DARK,
+		Size = UDim2.fromOffset(380, 230),
+		BackgroundColor3 = Color3.new(1, 1, 1),
 		ZIndex = 40,
 	}, gui)
-	corner(card, 14)
-	new("UIStroke", { Color = YELLOW, Thickness = 3 }, card)
-	new("TextLabel", {
-		Position = UDim2.fromOffset(10, 12),
+	corner(holder, 18)
+	gradient(holder, Color3.fromRGB(60, 46, 12), Color3.fromRGB(18, 14, 6))
+	stroke(holder, K.Yellow, 3)
+	local scale = new("UIScale", { Scale = 0.5 }, holder)
+	TweenService:Create(scale, TweenInfo.new(0.5, Enum.EasingStyle.Back), { Scale = 1 }):Play()
+
+	-- rotating rays behind the coin
+	local rays = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.42),
+		Size = UDim2.fromOffset(160, 160),
+		BackgroundTransparency = 1,
+		ZIndex = 41,
+	}, holder)
+	for i = 0, 5 do
+		local ray = new("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(18, 160),
+			Rotation = i * 30,
+			BackgroundColor3 = K.Yellow,
+			BackgroundTransparency = 0.75,
+			ZIndex = 41,
+		}, rays)
+		new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.5, 0), NumberSequenceKeypoint.new(1, 1) }) }, ray)
+	end
+	TweenService:Create(rays, TweenInfo.new(6, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1), { Rotation = 360 }):Play()
+
+	local title = new("TextLabel", {
+		Position = UDim2.fromOffset(10, 10),
 		Size = UDim2.new(1, -20, 0, 40),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.LuckiestGuy,
 		TextScaled = true,
-		TextColor3 = YELLOW,
+		TextColor3 = K.Yellow,
 		Text = "DAILY REWARD",
-		ZIndex = 41,
-	}, card)
-	new("TextLabel", {
-		Position = UDim2.fromOffset(10, 58),
-		Size = UDim2.new(1, -20, 0, 44),
+		ZIndex = 43,
+	}, holder)
+	new("UIStroke", { Thickness = 2.5 }, title)
+	local amountLabel = new("TextLabel", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.45),
+		Size = UDim2.fromOffset(300, 56),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBlack,
 		TextScaled = true,
-		TextColor3 = Color3.new(1, 1, 1),
-		Text = ("+%d coins"):format(amount),
-		ZIndex = 41,
-	}, card)
+		TextColor3 = K.White,
+		Text = "🪙 +" .. amount,
+		ZIndex = 43,
+	}, holder)
+	new("UIStroke", { Thickness = 2.5 }, amountLabel)
 	new("TextLabel", {
-		Position = UDim2.fromOffset(10, 108),
+		Position = UDim2.new(0, 10, 1, -86),
 		Size = UDim2.new(1, -20, 0, 22),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBold,
 		TextScaled = true,
-		TextColor3 = GREEN,
-		Text = ("Day %d streak — bigger rewards every day you come back"):format(streak),
-		ZIndex = 41,
-	}, card)
-	local ok = new("TextButton", {
+		TextColor3 = K.Green,
+		Text = ("🔥 Day %d streak — rewards grow every day"):format(days),
+		ZIndex = 43,
+	}, holder)
+	local ok = UIKit.Button(holder, {
+		Text = "COLLECT",
+		Color = K.Green,
+		Size = UDim2.fromOffset(170, 44),
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -10),
-		Size = UDim2.fromOffset(120, 28),
-		BackgroundColor3 = Color3.fromRGB(40, 120, 60),
-		Font = Enum.Font.GothamBlack,
-		TextScaled = true,
-		TextColor3 = Color3.new(1, 1, 1),
-		Text = "NICE",
-		ZIndex = 41,
-	}, card)
-	corner(ok, 8)
-	ok.Activated:Connect(function()
-		card:Destroy()
-	end)
-	task.delay(8, function()
-		if card.Parent then
-			card:Destroy()
+		Position = UDim2.new(0.5, 0, 1, -14),
+		ZIndex = 44,
+	})
+	local function close()
+		local tw = TweenService:Create(scale, TweenInfo.new(0.15), { Scale = 0.6 })
+		tw:Play()
+		tw.Completed:Wait()
+		holder:Destroy()
+	end
+	ok.Activated:Connect(close)
+	task.delay(10, function()
+		if holder.Parent then
+			close()
 		end
 	end)
 end
@@ -5043,7 +6599,7 @@ return Daily
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="31">
+        <Item class="ModuleScript" referent="34">
           <Properties>
             <string name="Name">Effects</string>
             <string name="Source"><![CDATA[-- Client-only atmosphere: camera shake, snowfall, flickering lights,
@@ -5131,13 +6687,29 @@ function Effects.Hurt()
 	Effects.Shake(1)
 end
 
-function Effects.Knock(velocity)
+function Effects.Knock(velocity, tumble, spin)
 	local char = player.Character
 	local root = char and char:FindFirstChild("HumanoidRootPart")
-	if not root then
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if not (root and hum) then
 		return
 	end
-	Effects.Impulse(root, velocity, 0.18)
+	if tumble then
+		-- Ragdoll-ish tumble through the air, then scramble back up
+		hum.PlatformStand = true
+		Effects.Impulse(root, velocity, 0.15)
+		if typeof(spin) == "Vector3" then
+			root.AssemblyAngularVelocity = spin
+		end
+		task.delay(tumble, function()
+			if hum.Parent and hum.Health > 0 then
+				hum.PlatformStand = false
+				hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+			end
+		end)
+	else
+		Effects.Impulse(root, velocity, 0.18)
+	end
 end
 
 -- Short burst of velocity that the Humanoid can't immediately cancel.
@@ -5186,8 +6758,11 @@ end
 function Effects.Sniff(duration, targets)
 	local marks = {}
 	local tracked = {}
+	local extraChars = {}
 	for _, t in targets or {} do
-		if t.Name then
+		if typeof(t.Char) == "Instance" then
+			table.insert(extraChars, t.Char)
+		elseif t.Name then
 			tracked[t.Name] = true
 		elseif typeof(t.Position) == "Vector3" then
 			local ghost = decoyMark(t.Position)
@@ -5209,10 +6784,18 @@ function Effects.Sniff(duration, targets)
 			table.insert(marks, { Highlight = ghost, Billboard = bb, Label = label, Part = ghost, Prefix = hidingTag and "HIDING " or "" })
 		end
 	end
+	local toMark = {}
 	for _, p in Players:GetPlayers() do
 		local role = p:GetAttribute("Role")
-		local char = p.Character
-		if p ~= player and char and (role == "Survivor" or role == "Sentinel") and (targets == nil or tracked[p.Name]) then
+		if p ~= player and p.Character and (role == "Survivor" or role == "Sentinel") and (targets == nil or tracked[p.Name]) then
+			table.insert(toMark, p.Character)
+		end
+	end
+	for _, c in extraChars do
+		table.insert(toMark, c)
+	end
+	for _, char in toMark do
+		do
 			local hl = Instance.new("Highlight")
 			hl.FillColor = Color3.fromRGB(255, 40, 40)
 			hl.OutlineColor = Color3.fromRGB(255, 220, 220)
@@ -5377,7 +6960,7 @@ return Effects
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="32">
+        <Item class="ModuleScript" referent="35">
           <Properties>
             <string name="Name">Interface</string>
             <string name="Source"><![CDATA[-- HUD built entirely from code.
@@ -5387,31 +6970,18 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local UIKit = require(script.Parent:WaitForChild("UIKit"))
 
 local player = Players.LocalPlayer
 local Interface = {}
 
-local YELLOW = Color3.fromRGB(255, 205, 30)
-local RED = Color3.fromRGB(230, 40, 40)
-local DARK = Color3.fromRGB(14, 14, 18)
+local new, corner, stroke, gradient = UIKit.new, UIKit.Corner, UIKit.Stroke, UIKit.Gradient
+local K = UIKit.Colors
 local TITLE = Enum.Font.GothamBlack
 local BODY = Enum.Font.GothamBold
 
-local function new(class, props, parent)
-	local inst = Instance.new(class)
-	for k, v in props do
-		inst[k] = v
-	end
-	inst.Parent = parent
-	return inst
-end
-
-local function corner(p, r)
-	new("UICorner", { CornerRadius = UDim.new(0, r or 8) }, p)
-end
-
-local function stroke(p, color, thickness)
-	new("UIStroke", { Color = color or Color3.new(0, 0, 0), Thickness = thickness or 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, p)
+local function darker(c, f)
+	return Color3.new(c.R * f, c.G * f, c.B * f)
 end
 
 local gui = new("ScreenGui", {
@@ -5421,16 +6991,18 @@ local gui = new("ScreenGui", {
 	ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 }, player:WaitForChild("PlayerGui"))
 
+local smallScreen = false
+local function checkScreen()
+	local v = workspace.CurrentCamera.ViewportSize
+	smallScreen = v.X < 900 or v.Y < 520
+end
+checkScreen()
+
 ---------------------------------------------------------------------------
 -- Screen effects
 ---------------------------------------------------------------------------
 
-local vignette = new("CanvasGroup", {
-	Size = UDim2.fromScale(1, 1),
-	BackgroundTransparency = 1,
-	GroupTransparency = 1,
-	ZIndex = 1,
-}, gui)
+local vignette = new("CanvasGroup", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, GroupTransparency = 1 }, gui)
 for _, e in {
 	{ UDim2.fromScale(1, 0.35), UDim2.fromScale(0, 0), 90 },
 	{ UDim2.fromScale(1, 0.35), UDim2.fromScale(0, 0.65), 270 },
@@ -5438,84 +7010,92 @@ for _, e in {
 	{ UDim2.fromScale(0.3, 1), UDim2.fromScale(0.7, 0), 180 },
 } do
 	local f = new("Frame", { Size = e[1], Position = e[2], BackgroundColor3 = Color3.fromRGB(120, 0, 0), BorderSizePixel = 0 }, vignette)
-	new("UIGradient", {
-		Rotation = e[3],
-		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1) }),
-	}, f)
+	new("UIGradient", { Rotation = e[3], Transparency = NumberSequence.new(0, 1) }, f)
 end
 
-local flash = new("Frame", {
-	Size = UDim2.fromScale(1, 1),
-	BackgroundColor3 = RED,
-	BackgroundTransparency = 1,
-	BorderSizePixel = 0,
-	ZIndex = 50,
-}, gui)
+local flash = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = K.Red, BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 50 }, gui)
 
 ---------------------------------------------------------------------------
--- Top: status + timer + Wolverine health
+-- Top: timer plate + Wolverine health + terminals
 ---------------------------------------------------------------------------
 
 local top = new("Frame", {
 	AnchorPoint = Vector2.new(0.5, 0),
 	Position = UDim2.new(0.5, 0, 0, 44),
-	Size = UDim2.fromOffset(320, 64),
-	BackgroundColor3 = DARK,
-	BackgroundTransparency = 0.25,
+	Size = UDim2.fromOffset(300, 70),
+	BackgroundColor3 = Color3.new(1, 1, 1),
 }, gui)
-corner(top, 10)
-stroke(top, Color3.fromRGB(80, 20, 20), 2)
+corner(top, 14)
+gradient(top, Color3.fromRGB(38, 30, 34), Color3.fromRGB(12, 10, 14))
+local topStroke = stroke(top, Color3.fromRGB(120, 30, 30), 2)
+for i = 0, 2 do -- claw scratch detail
+	new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0, 20 + i * 9, 0.5, 0),
+		Size = UDim2.fromOffset(3, 46),
+		Rotation = 22,
+		BackgroundColor3 = Color3.fromRGB(150, 25, 25),
+		BackgroundTransparency = 0.2,
+	}, top)
+end
 local statusLabel = new("TextLabel", {
-	Size = UDim2.new(1, -16, 0, 22),
-	Position = UDim2.fromOffset(8, 4),
+	Size = UDim2.new(1, -70, 0, 20),
+	Position = UDim2.fromOffset(52, 6),
 	BackgroundTransparency = 1,
 	Font = BODY,
 	TextScaled = true,
-	TextColor3 = Color3.fromRGB(220, 220, 225),
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextColor3 = Color3.fromRGB(200, 190, 195),
 	Text = "",
 }, top)
 local timerLabel = new("TextLabel", {
-	Size = UDim2.new(1, -16, 0, 34),
-	Position = UDim2.fromOffset(8, 26),
+	Size = UDim2.new(1, -70, 0, 40),
+	Position = UDim2.fromOffset(52, 26),
 	BackgroundTransparency = 1,
 	Font = TITLE,
 	TextScaled = true,
-	TextColor3 = Color3.new(1, 1, 1),
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextColor3 = K.White,
 	Text = "",
 }, top)
+new("UIStroke", { Thickness = 2, Transparency = 0.2 }, timerLabel)
 
 local wHealth = new("Frame", {
 	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 114),
-	Size = UDim2.fromOffset(300, 18),
-	BackgroundColor3 = DARK,
-	BackgroundTransparency = 0.2,
+	Position = UDim2.new(0.5, 0, 0, 122),
+	Size = UDim2.fromOffset(300, 20),
+	BackgroundColor3 = K.Ink,
 	Visible = false,
 }, gui)
-corner(wHealth, 6)
-local wHealthFill = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = YELLOW, BorderSizePixel = 0 }, wHealth)
-corner(wHealthFill, 6)
+corner(wHealth, 10)
+stroke(wHealth, Color3.fromRGB(80, 60, 10), 2)
+local wHealthLag = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(255, 255, 255), BackgroundTransparency = 0.3, BorderSizePixel = 0 }, wHealth)
+corner(wHealthLag, 10)
+local wHealthFill = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0 }, wHealth)
+corner(wHealthFill, 10)
+gradient(wHealthFill, Color3.fromRGB(255, 220, 60), Color3.fromRGB(220, 140, 10))
 new("TextLabel", {
 	Size = UDim2.fromScale(1, 1),
 	BackgroundTransparency = 1,
 	Font = TITLE,
 	TextScaled = true,
 	Text = "WOLVERINE",
-	TextColor3 = Color3.new(0, 0, 0),
+	TextColor3 = K.White,
 	ZIndex = 2,
 }, wHealth)
+new("UIPadding", { PaddingTop = UDim.new(0, 3), PaddingBottom = UDim.new(0, 3) }, wHealth)
 
 local terminalsLabel = new("TextLabel", {
 	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 136),
-	Size = UDim2.fromOffset(300, 20),
+	Position = UDim2.new(0.5, 0, 0, 148),
+	Size = UDim2.fromOffset(320, 20),
 	BackgroundTransparency = 1,
 	Font = BODY,
 	TextScaled = true,
 	TextColor3 = Color3.fromRGB(200, 160, 255),
-	TextStrokeTransparency = 0.5,
 	Text = "",
 }, gui)
+new("UIStroke", { Thickness = 1.5, Transparency = 0.3 }, terminalsLabel)
 
 ---------------------------------------------------------------------------
 -- Centre: announcements & role banner
@@ -5528,7 +7108,7 @@ local announceLabel = new("TextLabel", {
 	BackgroundTransparency = 1,
 	Font = TITLE,
 	TextScaled = true,
-	TextColor3 = Color3.new(1, 1, 1),
+	TextColor3 = K.White,
 	TextStrokeTransparency = 0,
 	TextTransparency = 1,
 	ZIndex = 20,
@@ -5542,7 +7122,7 @@ local roleLabel = new("TextLabel", {
 	BackgroundTransparency = 1,
 	Font = Enum.Font.LuckiestGuy,
 	TextScaled = true,
-	TextColor3 = YELLOW,
+	TextColor3 = K.Yellow,
 	TextStrokeTransparency = 0,
 	TextTransparency = 1,
 	ZIndex = 21,
@@ -5554,7 +7134,7 @@ local roleSub = new("TextLabel", {
 	BackgroundTransparency = 1,
 	Font = BODY,
 	TextScaled = true,
-	TextColor3 = Color3.new(1, 1, 1),
+	TextColor3 = K.White,
 	TextStrokeTransparency = 0.3,
 	TextTransparency = 1,
 	ZIndex = 21,
@@ -5567,132 +7147,282 @@ local roleSub = new("TextLabel", {
 local feed = new("Frame", {
 	AnchorPoint = Vector2.new(1, 0),
 	Position = UDim2.new(1, -12, 0, 60),
-	Size = UDim2.fromOffset(330, 200),
+	Size = UDim2.fromOffset(330, 220),
 	BackgroundTransparency = 1,
 }, gui)
 new("UIListLayout", { Padding = UDim.new(0, 4), HorizontalAlignment = Enum.HorizontalAlignment.Right }, feed)
 
 ---------------------------------------------------------------------------
--- Bottom: abilities, stamina, wounds
+-- Stamina bar
 ---------------------------------------------------------------------------
 
-local hotbar = new("Frame", {
+local stamina = new("CanvasGroup", {
 	AnchorPoint = Vector2.new(0.5, 1),
-	Position = UDim2.new(0.5, 0, 1, -18),
-	Size = UDim2.fromOffset(460, 76),
+	Position = UDim2.new(0.5, 0, 1, -24),
+	Size = UDim2.fromOffset(340, 34),
 	BackgroundTransparency = 1,
+	GroupTransparency = 0,
 }, gui)
-new("UIListLayout", {
-	FillDirection = Enum.FillDirection.Horizontal,
-	HorizontalAlignment = Enum.HorizontalAlignment.Center,
-	Padding = UDim.new(0, 8),
-}, hotbar)
-
-local staminaBar = new("Frame", {
-	AnchorPoint = Vector2.new(0.5, 1),
-	Position = UDim2.new(0.5, 0, 1, -100),
-	Size = UDim2.fromOffset(260, 8),
-	BackgroundColor3 = DARK,
-	BackgroundTransparency = 0.3,
-}, gui)
-corner(staminaBar, 4)
-local staminaFill = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(120, 200, 255), BorderSizePixel = 0 }, staminaBar)
-corner(staminaFill, 4)
-
-local wounds = new("TextLabel", {
-	AnchorPoint = Vector2.new(0, 1),
-	Position = UDim2.new(0, 16, 1, -120),
-	Size = UDim2.fromOffset(240, 30),
-	BackgroundTransparency = 1,
+local stamScale = new("UIScale", {}, stamina)
+local stamIcon = new("TextLabel", {
+	Size = UDim2.fromOffset(34, 34),
+	BackgroundColor3 = K.Ink,
 	Font = TITLE,
 	TextScaled = true,
-	TextXAlignment = Enum.TextXAlignment.Left,
-	TextColor3 = Color3.new(1, 1, 1),
-	TextStrokeTransparency = 0.3,
-	Text = "",
-}, gui)
+	Text = "⚡",
+	TextColor3 = K.Blue,
+}, stamina)
+corner(stamIcon, 17)
+local stamIconStroke = stroke(stamIcon, K.Blue, 2)
+new("UIPadding", { PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6) }, stamIcon)
 
-local hint = new("TextLabel", {
-	AnchorPoint = Vector2.new(0, 1),
-	Position = UDim2.new(0, 16, 1, -16),
-	Size = UDim2.fromOffset(300, 90),
+local track = new("Frame", {
+	Position = UDim2.fromOffset(42, 7),
+	Size = UDim2.new(1, -42, 0, 20),
+	BackgroundColor3 = K.Ink,
+	BackgroundTransparency = 0.1,
+	ClipsDescendants = true,
+}, stamina)
+corner(track, 10)
+local trackStroke = stroke(track, Color3.fromRGB(40, 70, 100), 2)
+local fill = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0 }, track)
+corner(fill, 10)
+local fillGrad = gradient(fill, Color3.fromRGB(90, 220, 255), Color3.fromRGB(30, 110, 230), 0)
+new("Frame", { -- gloss
+	Size = UDim2.new(1, 0, 0.45, 0),
+	BackgroundColor3 = Color3.new(1, 1, 1),
+	BackgroundTransparency = 0.8,
+	BorderSizePixel = 0,
+}, fill)
+local sheen = new("Frame", {
+	Size = UDim2.new(0, 40, 1, 0),
+	Position = UDim2.new(-0.2, 0, 0, 0),
+	BackgroundColor3 = Color3.new(1, 1, 1),
+	BackgroundTransparency = 0.6,
+	BorderSizePixel = 0,
+	Rotation = 12,
+}, fill)
+new("UIGradient", { Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.5, 0.3), NumberSequenceKeypoint.new(1, 1) }) }, sheen)
+for i = 1, 3 do -- segment ticks
+	new("Frame", {
+		Position = UDim2.new(i / 4, -1, 0, 3),
+		Size = UDim2.new(0, 2, 1, -6),
+		BackgroundColor3 = Color3.new(0, 0, 0),
+		BackgroundTransparency = 0.55,
+		BorderSizePixel = 0,
+		ZIndex = 3,
+	}, track)
+end
+local stamText = new("TextLabel", {
+	Size = UDim2.fromScale(1, 1),
 	BackgroundTransparency = 1,
-	Font = BODY,
-	TextSize = 14,
-	TextWrapped = true,
-	TextXAlignment = Enum.TextXAlignment.Left,
-	TextYAlignment = Enum.TextYAlignment.Bottom,
-	TextColor3 = Color3.fromRGB(200, 200, 210),
-	TextStrokeTransparency = 0.5,
-	Text = "",
+	Font = TITLE,
+	TextSize = 13,
+	TextColor3 = K.White,
+	Text = "STAMINA",
+	ZIndex = 4,
+}, track)
+new("UIStroke", { Thickness = 1.5, Transparency = 0.2 }, stamText)
+
+---------------------------------------------------------------------------
+-- Ability panel (bottom right)
+---------------------------------------------------------------------------
+
+local panel = new("Frame", {
+	AnchorPoint = Vector2.new(1, 1),
+	Position = UDim2.new(1, -16, 1, -16),
+	Size = UDim2.fromOffset(290, 10),
+	AutomaticSize = Enum.AutomaticSize.Y,
+	BackgroundTransparency = 1,
 }, gui)
+local panelScale = new("UIScale", {}, panel)
+new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Bottom }, panel)
+
+local header = new("Frame", { Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, LayoutOrder = 0 }, panel)
+local headerText = new("TextLabel", {
+	Size = UDim2.new(1, -50, 1, 0),
+	BackgroundTransparency = 1,
+	Font = Enum.Font.LuckiestGuy,
+	TextScaled = true,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextColor3 = K.Yellow,
+	Text = "",
+}, header)
+new("UIStroke", { Thickness = 2 }, headerText)
+local headerLine = new("Frame", { Position = UDim2.new(0, 0, 1, -2), Size = UDim2.new(1, 0, 0, 2), BorderSizePixel = 0, BackgroundColor3 = K.Yellow }, header)
+new("UIGradient", { Transparency = NumberSequence.new(0, 1) }, headerLine)
 
 local slots = {}
 
-function Interface.SetAbilities(list)
+local function makeCard(a, order, isHold)
+	local accent = a.Color or K.Yellow
+	local card = new("Frame", {
+		Name = a.Name,
+		Size = UDim2.new(1, 0, 0, isHold and 44 or 62),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		LayoutOrder = order,
+		ClipsDescendants = true,
+	}, panel)
+	corner(card, 12)
+	gradient(card, Color3.fromRGB(36, 34, 42), Color3.fromRGB(16, 15, 20), 0)
+	local cardStroke = stroke(card, accent, 1.5, 0.55)
+	local scale = new("UIScale", {}, card)
+
+	-- accent edge
+	local edge = new("Frame", { Size = UDim2.new(0, 5, 1, 0), BackgroundColor3 = accent, BorderSizePixel = 0 }, card)
+	gradient(edge, accent, darker(accent, 0.5))
+
+	-- icon tile
+	local tileSize = isHold and 32 or 46
+	local tile = new("Frame", {
+		Position = UDim2.new(0, 14, 0.5, -tileSize / 2),
+		Size = UDim2.fromOffset(tileSize, tileSize),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		ClipsDescendants = true,
+	}, card)
+	corner(tile, 10)
+	gradient(tile, darker(accent, 0.8), darker(accent, 0.3))
+	local tileStroke = stroke(tile, accent, 2)
+	local icon = new("TextLabel", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Font = TITLE,
+		TextScaled = true,
+		Text = a.Icon or "•",
+		TextColor3 = K.White,
+		ZIndex = 2,
+	}, tile)
+	new("UIPadding", { PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6), PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }, icon)
+	-- sweep overlay that drains top->bottom as the cooldown finishes
+	local sweep = new("Frame", {
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.fromScale(0, 1),
+		Size = UDim2.fromScale(1, 0),
+		BackgroundColor3 = Color3.new(0, 0, 0),
+		BackgroundTransparency = 0.25,
+		BorderSizePixel = 0,
+		ZIndex = 3,
+	}, tile)
+	local countdown = new("TextLabel", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Font = TITLE,
+		TextScaled = true,
+		Text = "",
+		TextColor3 = K.White,
+		ZIndex = 4,
+	}, tile)
+	new("UIStroke", { Thickness = 2 }, countdown)
+	new("UIPadding", { PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10) }, countdown)
+
+	-- text
+	local x = 14 + tileSize + 10
+	local name = new("TextLabel", {
+		Position = UDim2.fromOffset(x, isHold and 6 or 9),
+		Size = UDim2.new(1, -x - 60, 0, isHold and 18 or 20),
+		BackgroundTransparency = 1,
+		Font = TITLE,
+		TextScaled = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = K.White,
+		Text = string.upper(a.Label),
+	}, card)
+	new("TextLabel", {
+		Position = UDim2.fromOffset(x, isHold and 24 or 31),
+		Size = UDim2.new(1, -x - 60, 0, isHold and 14 or 24),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.Gotham,
+		TextSize = isHold and 11 or 12,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextColor3 = Color3.fromRGB(175, 170, 180),
+		Text = a.Desc or "",
+	}, card)
+
+	-- keycap
+	local cap = new("Frame", {
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -10, 0.5, 0),
+		Size = UDim2.fromOffset(a.KeyText and #a.KeyText > 2 and 52 or 38, 36),
+		BackgroundColor3 = Color3.fromRGB(10, 10, 12),
+	}, card)
+	corner(cap, 8)
+	local capTop = new("Frame", {
+		Size = UDim2.new(1, 0, 1, -4),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+	}, cap)
+	corner(capTop, 8)
+	gradient(capTop, Color3.fromRGB(245, 245, 250), Color3.fromRGB(185, 185, 195))
+	new("TextLabel", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Font = TITLE,
+		TextScaled = true,
+		Text = a.KeyText or "",
+		TextColor3 = Color3.fromRGB(25, 25, 30),
+	}, capTop)
+	new("UIPadding", { PaddingTop = UDim.new(0, 7), PaddingBottom = UDim.new(0, 7), PaddingLeft = UDim.new(0, 4), PaddingRight = UDim.new(0, 4) }, capTop)
+
+	-- ready flash
+	local flashFrame = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = accent, BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 5 }, card)
+
+	slots[a.Name] = {
+		Card = card, Scale = scale, Stroke = cardStroke, TileStroke = tileStroke, Sweep = sweep, Countdown = countdown,
+		Flash = flashFrame, Name = name, Icon = icon, Accent = accent, ReadyAt = 0, Duration = 1, WasCooling = false,
+		Hold = isHold, Attr = a.Attr,
+	}
+end
+
+function Interface.SetAbilities(list, holds, title, color)
 	for _, s in slots do
-		s.Frame:Destroy()
+		s.Card:Destroy()
 	end
 	slots = {}
+	headerText.Text = title or ""
+	headerText.TextColor3 = color or K.Yellow
+	headerLine.BackgroundColor3 = color or K.Yellow
+	header.Visible = (#list + #(holds or {})) > 0
+	local order = 1
 	for _, a in list do
-		local f = new("Frame", {
-			Size = UDim2.fromOffset(88, 72),
-			BackgroundColor3 = DARK,
-			BackgroundTransparency = 0.2,
-		}, hotbar)
-		corner(f, 10)
-		stroke(f, a.Color or Color3.fromRGB(120, 30, 30), 2)
-		new("TextLabel", {
-			Size = UDim2.new(1, -8, 0, 22),
-			Position = UDim2.fromOffset(4, 4),
-			BackgroundTransparency = 1,
-			Font = TITLE,
-			TextScaled = true,
-			TextColor3 = a.Color or YELLOW,
-			Text = a.KeyText,
-		}, f)
-		new("TextLabel", {
-			Size = UDim2.new(1, -8, 0, 36),
-			Position = UDim2.fromOffset(4, 30),
-			BackgroundTransparency = 1,
-			Font = BODY,
-			TextScaled = true,
-			TextWrapped = true,
-			TextColor3 = Color3.new(1, 1, 1),
-			Text = a.Label,
-		}, f)
-		local cd = new("Frame", {
-			AnchorPoint = Vector2.new(0, 1),
-			Position = UDim2.fromScale(0, 1),
-			Size = UDim2.fromScale(1, 0),
-			BackgroundColor3 = Color3.new(0, 0, 0),
-			BackgroundTransparency = 0.35,
-			ZIndex = 5,
-		}, f)
-		corner(cd, 10)
-		slots[a.Name] = { Frame = f, Cooldown = cd, ReadyAt = 0, Duration = 1 }
+		makeCard(a, order, false)
+		order += 1
+	end
+	for _, h in holds or {} do
+		makeCard(h, order, true)
+		order += 1
+	end
+	-- slide in
+	for i, s in slots do
+		s.Scale.Scale = 0.6
+		TweenService:Create(s.Scale, TweenInfo.new(0.35, Enum.EasingStyle.Back), { Scale = 1 }):Play()
 	end
 end
 
 function Interface.StartCooldown(name, duration)
 	local s = slots[name]
-	if s then
-		s.ReadyAt = os.clock() + duration
-		s.Duration = duration
+	if not s then
+		return
 	end
+	s.ReadyAt = os.clock() + duration
+	s.Duration = duration
+	s.WasCooling = true
+	-- press feedback
+	s.Scale.Scale = 0.92
+	TweenService:Create(s.Scale, TweenInfo.new(0.25, Enum.EasingStyle.Back), { Scale = 1 }):Play()
+	s.Flash.BackgroundTransparency = 0.5
+	TweenService:Create(s.Flash, TweenInfo.new(0.3), { BackgroundTransparency = 1 }):Play()
 end
 
-function Interface.SetHint(text)
-	hint.Text = text
-end
+function Interface.SetHint(_) end
 
 function Interface.Announce(text, color, duration)
 	announceLabel.Text = text
-	announceLabel.TextColor3 = color or Color3.new(1, 1, 1)
+	announceLabel.TextColor3 = color or K.White
 	announceLabel.TextTransparency = 0
 	announceLabel.TextStrokeTransparency = 0
-	announceLabel.Size = UDim2.new(0.9, 0, 0, 70)
-	TweenService:Create(announceLabel, TweenInfo.new(0.25, Enum.EasingStyle.Back), { Size = UDim2.new(0.9, 0, 0, 56) }):Play()
+	announceLabel.Size = UDim2.new(0.9, 0, 0, 72)
+	TweenService:Create(announceLabel, TweenInfo.new(0.3, Enum.EasingStyle.Back), { Size = UDim2.new(0.9, 0, 0, 56) }):Play()
 	local token = {}
 	Interface._announceToken = token
 	task.delay(duration or 3, function()
@@ -5704,8 +7434,10 @@ end
 
 function Interface.RoleBanner(title, subtitle, color)
 	roleLabel.Text = title
-	roleLabel.TextColor3 = color or YELLOW
+	roleLabel.TextColor3 = color or K.Yellow
 	roleSub.Text = subtitle or ""
+	roleLabel.Size = UDim2.new(0.9, 0, 0, 140)
+	TweenService:Create(roleLabel, TweenInfo.new(0.5, Enum.EasingStyle.Back), { Size = UDim2.new(0.9, 0, 0, 90) }):Play()
 	for _, l in { roleLabel, roleSub } do
 		l.TextTransparency = 0
 		l.TextStrokeTransparency = l == roleLabel and 0 or 0.3
@@ -5718,7 +7450,7 @@ function Interface.RoleBanner(title, subtitle, color)
 end
 
 function Interface.Flash(color, strength, duration)
-	flash.BackgroundColor3 = color or RED
+	flash.BackgroundColor3 = color or K.Red
 	flash.BackgroundTransparency = 1 - (strength or 0.4)
 	TweenService:Create(flash, TweenInfo.new(duration or 0.5), { BackgroundTransparency = 1 }):Play()
 end
@@ -5730,15 +7462,17 @@ end
 
 function Interface.KillFeed(text)
 	local l = new("TextLabel", {
-		Size = UDim2.fromOffset(330, 26),
-		BackgroundColor3 = DARK,
-		BackgroundTransparency = 0.3,
+		Size = UDim2.fromOffset(330, 28),
+		BackgroundColor3 = Color3.new(1, 1, 1),
 		Font = BODY,
 		TextSize = 15,
-		TextColor3 = Color3.fromRGB(255, 120, 120),
+		TextColor3 = Color3.fromRGB(255, 130, 130),
 		Text = text,
+		Position = UDim2.fromOffset(60, 0),
 	}, feed)
-	corner(l, 6)
+	corner(l, 8)
+	gradient(l, Color3.fromRGB(40, 18, 20), Color3.fromRGB(14, 10, 12), 0)
+	stroke(l, Color3.fromRGB(120, 30, 30), 1.5, 0.3)
 	task.delay(6, function()
 		TweenService:Create(l, TweenInfo.new(0.5), { TextTransparency = 1, BackgroundTransparency = 1 }):Play()
 		task.wait(0.5)
@@ -5749,91 +7483,140 @@ end
 function Interface.TimeBonus(seconds)
 	local l = new("TextLabel", {
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 180, 0, 60),
-		Size = UDim2.fromOffset(120, 34),
+		Position = UDim2.new(0.5, 190, 0, 60),
+		Size = UDim2.fromOffset(120, 36),
 		BackgroundTransparency = 1,
 		Font = TITLE,
 		TextScaled = true,
-		TextColor3 = RED,
+		TextColor3 = K.Red,
 		TextStrokeTransparency = 0,
 		Text = "+" .. seconds .. "s",
 	}, gui)
-	TweenService:Create(l, TweenInfo.new(1.6), { Position = UDim2.new(0.5, 180, 0, 30), TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
+	TweenService:Create(l, TweenInfo.new(1.6), { Position = UDim2.new(0.5, 190, 0, 28), TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
 	task.delay(1.7, function()
 		l:Destroy()
 	end)
+	topStroke.Color = K.Red
+	TweenService:Create(topStroke, TweenInfo.new(1), { Color = Color3.fromRGB(120, 30, 30) }):Play()
 end
 
 ---------------------------------------------------------------------------
 -- Per-frame refresh
 ---------------------------------------------------------------------------
 
-local pulseClock = 0
+local pulseClock, shownStamina, lagHealth, sheenClock = 0, 1, 1, 0
+local stamVisibleFor = 0
+
 RunService.RenderStepped:Connect(function(dt)
+	checkScreen()
+	panelScale.Scale = smallScreen and 0.7 or 1
+	stamScale.Scale = smallScreen and 0.75 or 1
+	panel.Position = smallScreen and UDim2.new(1, -8, 0.62, 0) or UDim2.new(1, -16, 1, -16)
 	local role = player:GetAttribute("Role")
-	local status = ReplicatedStorage:GetAttribute("Status") or ""
+	local inRound = ReplicatedStorage:GetAttribute("InRound")
+	local now = workspace:GetServerTimeNow()
+
+	statusLabel.Text = string.upper(ReplicatedStorage:GetAttribute("Status") or "")
 	local ends = ReplicatedStorage:GetAttribute("TimerEnds") or 0
-	statusLabel.Text = status
-	local left = math.max(0, ends - workspace:GetServerTimeNow())
+	local left = math.max(0, ends - now)
 	if ends > 0 then
 		timerLabel.Text = ("%d:%02d"):format(math.floor(left / 60), math.floor(left % 60))
-		timerLabel.TextColor3 = (left < 20 and ReplicatedStorage:GetAttribute("InRound")) and RED or Color3.new(1, 1, 1)
+		local urgent = left < 20 and inRound
+		timerLabel.TextColor3 = urgent and K.Red or K.White
 	else
-		timerLabel.Text = ""
+		timerLabel.Text = "--:--"
 	end
 
-	-- Wolverine health bar
+	-- Wolverine health (white lag bar trails the real one)
 	local wName = ReplicatedStorage:GetAttribute("Wolverine")
 	local wPlayer = wName and Players:FindFirstChild(wName)
 	local wHum = wPlayer and wPlayer.Character and wPlayer.Character:FindFirstChildOfClass("Humanoid")
-	if wHum and ReplicatedStorage:GetAttribute("InRound") then
+	if wHum and inRound then
 		wHealth.Visible = true
-		wHealthFill.Size = UDim2.fromScale(math.clamp(wHum.Health / math.max(1, wHum.MaxHealth), 0, 1), 1)
+		local frac = math.clamp(wHum.Health / math.max(1, wHum.MaxHealth), 0, 1)
+		lagHealth = math.max(frac, lagHealth - dt * 0.35)
+		wHealthFill.Size = UDim2.fromScale(frac, 1)
+		wHealthLag.Size = UDim2.fromScale(lagHealth, 1)
 	else
 		wHealth.Visible = false
+		lagHealth = 1
 	end
 
-	-- Terminals
 	local total = ReplicatedStorage:GetAttribute("TerminalsTotal") or 0
-	if ReplicatedStorage:GetAttribute("InRound") and total > 0 then
-		if ReplicatedStorage:GetAttribute("SuitOnline") then
-			terminalsLabel.Text = "SENTINEL SUIT ONLINE — container yard"
-		else
-			terminalsLabel.Text = ("Sentinel terminals: %d/%d"):format(ReplicatedStorage:GetAttribute("Terminals") or 0, total)
-		end
+	if inRound and total > 0 then
+		terminalsLabel.Text = ReplicatedStorage:GetAttribute("SuitOnline") and "⚠ SENTINEL SUIT ONLINE — CONTAINER YARD"
+			or ("SENTINEL TERMINALS  %d / %d"):format(ReplicatedStorage:GetAttribute("Terminals") or 0, total)
 	else
 		terminalsLabel.Text = ""
 	end
 
 	-- Stamina
-	local stamina = player:GetAttribute("Stamina") or 1
-	staminaFill.Size = UDim2.fromScale(math.clamp(stamina, 0, 1), 1)
-	staminaBar.Visible = role ~= "Sentinel"
-	staminaFill.BackgroundColor3 = role == "Wolverine" and Color3.fromRGB(255, 150, 40) or Color3.fromRGB(120, 200, 255)
-
-	-- Wounds / armor
-	if role == "Survivor" then
-		local hits = player:GetAttribute("Hits") or 0
-		local marks = ""
-		for i = 1, Config.HitsToKill do
-			marks ..= i <= hits and "/// " or "— "
-		end
-		wounds.Text = "WOUNDS  " .. marks
-		wounds.TextColor3 = hits >= Config.HitsToKill - 1 and RED or Color3.new(1, 1, 1)
-	elseif role == "Sentinel" then
-		local armor = player:GetAttribute("Armor") or 0
-		local suitEnds = player:GetAttribute("SuitEnds") or 0
-		wounds.Text = ("ARMOR %d  |  POWER %ds"):format(armor, math.max(0, math.floor(suitEnds - workspace:GetServerTimeNow())))
-		wounds.TextColor3 = Color3.fromRGB(200, 160, 255)
+	local target = math.clamp(player:GetAttribute("Stamina") or 1, 0, 1)
+	shownStamina += (target - shownStamina) * math.min(1, dt * 12)
+	fill.Size = UDim2.fromScale(shownStamina, 1)
+	local wolverine = role == "Wolverine"
+	local draining = target < shownStamina - 0.001 or target < 0.999
+	local exhausted = target < 0.05
+	if wolverine then
+		fillGrad.Color = ColorSequence.new(Color3.fromRGB(255, 190, 60), Color3.fromRGB(230, 60, 20))
+		stamIcon.Text = "🐺"
+		stamText.Text = exhausted and "EXHAUSTED" or "FERAL"
+		stamIconStroke.Color = Color3.fromRGB(255, 150, 40)
 	else
-		wounds.Text = ""
+		fillGrad.Color = ColorSequence.new(Color3.fromRGB(90, 220, 255), Color3.fromRGB(30, 110, 230))
+		stamIcon.Text = "⚡"
+		stamText.Text = exhausted and "EXHAUSTED" or "STAMINA"
+		stamIconStroke.Color = K.Blue
 	end
+	if exhausted then
+		local blink = (math.sin(os.clock() * 12) + 1) / 2
+		trackStroke.Color = Color3.fromRGB(255, 40, 40):Lerp(Color3.fromRGB(80, 10, 10), blink)
+	else
+		trackStroke.Color = wolverine and Color3.fromRGB(110, 60, 20) or Color3.fromRGB(40, 70, 100)
+	end
+	sheenClock += dt
+	sheen.Position = UDim2.new((sheenClock % 1.6) / 1.6 * 1.4 - 0.2, 0, 0, 0)
+	-- fade out when full and idle
+	if draining then
+		stamVisibleFor = 2
+	else
+		stamVisibleFor -= dt
+	end
+	local wantHidden = role == "Sentinel" or role == "Dead" or (stamVisibleFor <= 0 and role ~= "Wolverine")
+	stamina.GroupTransparency += ((wantHidden and 0.75 or 0) - stamina.GroupTransparency) * math.min(1, dt * 6)
 
-	-- Cooldowns
+	-- Ability cards
 	local t = os.clock()
 	for _, s in slots do
-		local frac = math.clamp((s.ReadyAt - t) / s.Duration, 0, 1)
-		s.Cooldown.Size = UDim2.fromScale(1, frac)
+		if s.Hold then
+			local on = s.Attr and player:GetAttribute(s.Attr)
+			s.Stroke.Transparency = on and 0 or 0.55
+			s.Stroke.Thickness = on and 2.5 or 1.5
+			s.Name.TextColor3 = on and s.Accent or K.White
+		else
+			local remaining = s.ReadyAt - t
+			if remaining > 0 then
+				s.Sweep.Size = UDim2.fromScale(1, math.clamp(remaining / s.Duration, 0, 1))
+				s.Countdown.Text = remaining >= 10 and tostring(math.ceil(remaining)) or ("%.1f"):format(remaining)
+				s.Icon.TextTransparency = 0.5
+				s.Stroke.Transparency = 0.8
+			else
+				s.Sweep.Size = UDim2.fromScale(1, 0)
+				s.Countdown.Text = ""
+				s.Icon.TextTransparency = 0
+				-- ready glow pulse
+				local pulse = (math.sin(t * 3) + 1) / 2
+				s.Stroke.Transparency = 0.2 + pulse * 0.4
+				s.TileStroke.Thickness = 2 + pulse
+				if s.WasCooling then
+					s.WasCooling = false
+					s.Scale.Scale = 1.1
+					TweenService:Create(s.Scale, TweenInfo.new(0.4, Enum.EasingStyle.Back), { Scale = 1 }):Play()
+					s.Flash.BackgroundTransparency = 0.3
+					TweenService:Create(s.Flash, TweenInfo.new(0.5), { BackgroundTransparency = 1 }):Play()
+				end
+			end
+		end
 	end
 
 	-- Danger vignette pulses like a heartbeat
@@ -5846,245 +7629,421 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 end)
 
+-- Wounds / armor indicator (bottom-left)
+local wounds = new("Frame", {
+	AnchorPoint = Vector2.new(0, 1),
+	Position = UDim2.new(0, 16, 1, -20),
+	Size = UDim2.fromOffset(210, 54),
+	BackgroundColor3 = Color3.new(1, 1, 1),
+	Visible = false,
+}, gui)
+corner(wounds, 12)
+gradient(wounds, Color3.fromRGB(40, 18, 22), Color3.fromRGB(14, 10, 12))
+stroke(wounds, Color3.fromRGB(120, 30, 30), 1.5, 0.3)
+local woundsTitle = new("TextLabel", {
+	Position = UDim2.fromOffset(12, 5),
+	Size = UDim2.new(1, -24, 0, 16),
+	BackgroundTransparency = 1,
+	Font = TITLE,
+	TextScaled = true,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextColor3 = Color3.fromRGB(230, 200, 200),
+	Text = "WOUNDS",
+}, wounds)
+local pips = {}
+for i = 1, math.max(Config.HitsToKill, Config.Sentinel.Armor) do
+	local pip = new("Frame", {
+		Position = UDim2.fromOffset(12 + (i - 1) * 46, 26),
+		Size = UDim2.fromOffset(40, 20),
+		BackgroundColor3 = Color3.fromRGB(60, 60, 66),
+	}, wounds)
+	corner(pip, 6)
+	for c = -1, 1 do -- claw slash inside the pip
+		new("Frame", {
+			Name = "Slash",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, c * 7, 0.5, 0),
+			Size = UDim2.fromOffset(3, 22),
+			Rotation = 25,
+			BackgroundColor3 = Color3.fromRGB(20, 0, 0),
+			Visible = false,
+		}, pip)
+	end
+	pips[i] = pip
+end
+RunService.RenderStepped:Connect(function()
+	local role = player:GetAttribute("Role")
+	if role == "Survivor" then
+		wounds.Visible = true
+		woundsTitle.Text = player:GetAttribute("Hidden") and "WOUNDS — HIDING" or "WOUNDS"
+		local hits = player:GetAttribute("Hits") or 0
+		for i, pip in pips do
+			pip.Visible = i <= Config.HitsToKill
+			local hurt = i <= hits
+			pip.BackgroundColor3 = hurt and K.Red or Color3.fromRGB(60, 60, 66)
+			for _, s in pip:GetChildren() do
+				if s.Name == "Slash" then
+					s.Visible = hurt
+				end
+			end
+		end
+	elseif role == "Sentinel" then
+		wounds.Visible = true
+		local armor = player:GetAttribute("Armor") or 0
+		local suitEnds = player:GetAttribute("SuitEnds") or 0
+		woundsTitle.Text = ("ARMOR — POWER %ds"):format(math.max(0, math.floor(suitEnds - workspace:GetServerTimeNow())))
+		for i, pip in pips do
+			pip.Visible = i <= Config.Sentinel.Armor
+			pip.BackgroundColor3 = i <= armor and K.Purple or Color3.fromRGB(50, 50, 56)
+			for _, s in pip:GetChildren() do
+				if s.Name == "Slash" then
+					s.Visible = false
+				end
+			end
+		end
+	else
+		wounds.Visible = false
+	end
+end)
+
 return Interface
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="33">
+        <Item class="ModuleScript" referent="36">
           <Properties>
             <string name="Name">Shop</string>
-            <string name="Source"><![CDATA[-- Wolverine skin shop (button on the left of the screen).
+            <string name="Source"><![CDATA[-- Wolverine shop: suits + claws, and the left-side menu dock.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 
 local Skins = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Skins"))
+local UIKit = require(script.Parent:WaitForChild("UIKit"))
 local ShopRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Shop")
 
 local player = Players.LocalPlayer
 local Shop = {}
 
-local DARK = Color3.fromRGB(16, 16, 20)
-local YELLOW = Color3.fromRGB(255, 205, 30)
-
-local function new(class, props, parent)
-	local inst = Instance.new(class)
-	for k, v in props do
-		inst[k] = v
-	end
-	inst.Parent = parent
-	return inst
-end
+local new, corner, stroke, gradient = UIKit.new, UIKit.Corner, UIKit.Stroke, UIKit.Gradient
+local K = UIKit.Colors
 
 local gui = new("ScreenGui", { Name = "SkinShop", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling }, player:WaitForChild("PlayerGui"))
 
-local openButton = new("TextButton", {
+---------------------------------------------------------------------------
+-- Left dock (shared with the Daily module)
+---------------------------------------------------------------------------
+
+local dock = new("Frame", {
+	Name = "Dock",
 	AnchorPoint = Vector2.new(0, 0.5),
-	Position = UDim2.new(0, 12, 0.5, 0),
-	Size = UDim2.fromOffset(110, 44),
-	BackgroundColor3 = DARK,
-	BackgroundTransparency = 0.15,
+	Position = UDim2.new(0, 14, 0.5, 0),
+	Size = UDim2.fromOffset(170, 10),
+	AutomaticSize = Enum.AutomaticSize.Y,
+	BackgroundTransparency = 1,
+}, gui)
+local dockScale = new("UIScale", {}, dock)
+new("UIListLayout", { Padding = UDim.new(0, 12), SortOrder = Enum.SortOrder.LayoutOrder }, dock)
+Shop.Dock = dock
+
+local function fitDock()
+	local v = workspace.CurrentCamera.ViewportSize
+	dockScale.Scale = (v.X < 900 or v.Y < 520) and 0.7 or 1
+end
+workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fitDock)
+fitDock()
+
+function Shop.DockButton(text, icon, color, order)
+	local b, label = UIKit.Button(dock, { Text = text, Icon = icon, Color = color, Size = UDim2.fromOffset(170, 54), LayoutOrder = order })
+	return b, label
+end
+
+-- Coin counter at the top of the dock
+local coinPlate = new("Frame", { Size = UDim2.fromOffset(170, 40), BackgroundColor3 = Color3.new(1, 1, 1), LayoutOrder = 0 }, dock)
+corner(coinPlate, 20)
+gradient(coinPlate, Color3.fromRGB(60, 46, 10), Color3.fromRGB(24, 18, 6))
+stroke(coinPlate, K.Yellow, 2)
+local coinIcon = new("TextLabel", {
+	Size = UDim2.fromOffset(40, 40),
+	BackgroundTransparency = 1,
 	Font = Enum.Font.GothamBlack,
 	TextScaled = true,
-	TextColor3 = YELLOW,
-	Text = "SKINS",
-}, gui)
-new("UICorner", { CornerRadius = UDim.new(0, 10) }, openButton)
-new("UIStroke", { Color = YELLOW, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, openButton)
-new("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8) }, openButton)
-
-local panel = new("Frame", {
-	AnchorPoint = Vector2.new(0.5, 0.5),
-	Position = UDim2.fromScale(0.5, 0.5),
-	Size = UDim2.fromOffset(620, 360),
-	BackgroundColor3 = DARK,
-	BackgroundTransparency = 0.05,
-	Visible = false,
-	ZIndex = 30,
-}, gui)
-new("UICorner", { CornerRadius = UDim.new(0, 14) }, panel)
-new("UIStroke", { Color = YELLOW, Thickness = 2 }, panel)
-new("UISizeConstraint", { MaxSize = Vector2.new(620, 360) }, panel)
-new("UIScale", {}, panel)
-
-new("TextLabel", {
-	Position = UDim2.fromOffset(20, 12),
-	Size = UDim2.new(1, -140, 0, 36),
+	Text = "🪙",
+}, coinPlate)
+new("UIPadding", { PaddingTop = UDim.new(0, 7), PaddingBottom = UDim.new(0, 7) }, coinIcon)
+local coinText = new("TextLabel", {
+	Position = UDim2.fromOffset(42, 0),
+	Size = UDim2.new(1, -52, 1, 0),
 	BackgroundTransparency = 1,
-	Font = Enum.Font.LuckiestGuy,
+	Font = Enum.Font.GothamBlack,
 	TextScaled = true,
 	TextXAlignment = Enum.TextXAlignment.Left,
-	TextColor3 = YELLOW,
-	Text = "WOLVERINE SKINS",
-	ZIndex = 31,
-}, panel)
-local coinsLabel = new("TextLabel", {
-	AnchorPoint = Vector2.new(1, 0),
-	Position = UDim2.new(1, -60, 0, 16),
-	Size = UDim2.fromOffset(160, 28),
-	BackgroundTransparency = 1,
-	Font = Enum.Font.GothamBlack,
-	TextScaled = true,
-	TextXAlignment = Enum.TextXAlignment.Right,
-	TextColor3 = Color3.fromRGB(255, 225, 120),
-	Text = "",
-	ZIndex = 31,
-}, panel)
-local close = new("TextButton", {
-	AnchorPoint = Vector2.new(1, 0),
-	Position = UDim2.new(1, -12, 0, 12),
-	Size = UDim2.fromOffset(36, 36),
-	BackgroundColor3 = Color3.fromRGB(150, 30, 30),
-	Font = Enum.Font.GothamBlack,
-	TextScaled = true,
-	TextColor3 = Color3.new(1, 1, 1),
-	Text = "X",
-	ZIndex = 31,
-}, panel)
-new("UICorner", { CornerRadius = UDim.new(0, 8) }, close)
+	TextColor3 = K.Yellow,
+	Text = "0",
+}, coinPlate)
+new("UIPadding", { PaddingTop = UDim.new(0, 9), PaddingBottom = UDim.new(0, 9) }, coinText)
+local coinScale = new("UIScale", {}, coinPlate)
 
-local grid = new("Frame", {
-	Position = UDim2.fromOffset(16, 60),
-	Size = UDim2.new(1, -32, 1, -104),
+---------------------------------------------------------------------------
+-- Shop window
+---------------------------------------------------------------------------
+
+local window = UIKit.Window(gui, "WOLVERINE ARMORY", UDim2.fromOffset(700, 430), K.Yellow)
+local w = window.Frame
+
+local tabs = new("Frame", { Position = UDim2.fromOffset(20, 66), Size = UDim2.new(1, -40, 0, 40), BackgroundTransparency = 1, ZIndex = 31 }, w)
+new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 10) }, tabs)
+
+local scroller = new("ScrollingFrame", {
+	Position = UDim2.fromOffset(20, 116),
+	Size = UDim2.new(1, -40, 1, -160),
 	BackgroundTransparency = 1,
+	BorderSizePixel = 0,
+	ScrollBarThickness = 6,
+	ScrollBarImageColor3 = K.Yellow,
+	CanvasSize = UDim2.new(),
+	AutomaticCanvasSize = Enum.AutomaticSize.X,
+	ScrollingDirection = Enum.ScrollingDirection.X,
 	ZIndex = 31,
-}, panel)
-new("UIGridLayout", { CellSize = UDim2.fromOffset(140, 250), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, grid)
+}, w)
+new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 12), SortOrder = Enum.SortOrder.LayoutOrder }, scroller)
+new("UIPadding", { PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 10), PaddingLeft = UDim.new(0, 4) }, scroller)
 
 local message = new("TextLabel", {
 	AnchorPoint = Vector2.new(0.5, 1),
-	Position = UDim2.new(0.5, 0, 1, -10),
-	Size = UDim2.new(1, -40, 0, 24),
+	Position = UDim2.new(0.5, 0, 1, -12),
+	Size = UDim2.new(1, -40, 0, 22),
 	BackgroundTransparency = 1,
 	Font = Enum.Font.GothamBold,
 	TextScaled = true,
-	TextColor3 = Color3.new(1, 1, 1),
-	Text = "Earn coins by surviving, rebooting terminals and getting kills.",
+	TextColor3 = Color3.fromRGB(190, 190, 200),
+	Text = "Earn coins by surviving, rebooting terminals, kills and daily challenges.",
 	ZIndex = 31,
-}, panel)
+}, w)
 
+local category = "Suits"
 local cards = {}
 
-local function owned(id)
-	for s in string.gmatch(player:GetAttribute("OwnedSkins") or "", "[^,]+") do
-		if s == id then
-			return true
-		end
+local function ownedList(attr)
+	local set = {}
+	for s in string.gmatch(player:GetAttribute(attr) or "", "[^,]+") do
+		set[s] = true
 	end
-	return false
+	return set
+end
+
+local function coins()
+	local ls = player:FindFirstChild("leaderstats")
+	return (ls and ls:FindFirstChild("Coins")) and ls.Coins.Value or 0
 end
 
 local function refresh()
-	local coins = 0
-	local ls = player:FindFirstChild("leaderstats")
-	if ls and ls:FindFirstChild("Coins") then
-		coins = ls.Coins.Value
-	end
-	coinsLabel.Text = coins .. " coins"
-	local equipped = player:GetAttribute("Skin")
+	coinText.Text = tostring(coins())
+	local owned = ownedList(category == "Suits" and "OwnedSkins" or "OwnedClaws")
+	local equipped = player:GetAttribute(category == "Suits" and "Skin" or "Claw")
+	local list = category == "Suits" and Skins.List or Skins.Claws
 	for id, card in cards do
-		local skin = Skins.List[id]
+		local item = list[id]
 		if equipped == id then
-			card.Button.Text = "EQUIPPED"
-			card.Button.BackgroundColor3 = Color3.fromRGB(40, 120, 60)
-		elseif owned(id) then
-			card.Button.Text = "EQUIP"
-			card.Button.BackgroundColor3 = Color3.fromRGB(50, 80, 140)
+			card.Label.Text = "EQUIPPED"
+			UIKit.Recolor(card.Button, K.Green)
+			card.Stroke.Color = K.Green
+			card.Stroke.Thickness = 3
+		elseif owned[id] then
+			card.Label.Text = "EQUIP"
+			UIKit.Recolor(card.Button, K.Blue)
+			card.Stroke.Color = Color3.fromRGB(70, 70, 80)
+			card.Stroke.Thickness = 2
 		else
-			card.Button.Text = "BUY " .. skin.Price
-			card.Button.BackgroundColor3 = coins >= skin.Price and Color3.fromRGB(190, 140, 20) or Color3.fromRGB(70, 70, 75)
+			card.Label.Text = "🪙 " .. item.Price
+			UIKit.Recolor(card.Button, coins() >= item.Price and K.Yellow or Color3.fromRGB(90, 90, 96))
+			card.Stroke.Color = Color3.fromRGB(70, 70, 80)
+			card.Stroke.Thickness = 2
 		end
 	end
 end
 
-for i, id in Skins.Order do
-	local skin = Skins.List[id]
-	local card = new("Frame", { BackgroundColor3 = Color3.fromRGB(30, 30, 36), LayoutOrder = i, ZIndex = 32 }, grid)
-	new("UICorner", { CornerRadius = UDim.new(0, 10) }, card)
-	local swatch = new("Frame", {
-		Position = UDim2.fromOffset(10, 10),
-		Size = UDim2.new(1, -20, 0, 70),
-		BackgroundColor3 = skin.Swatch,
-		ZIndex = 33,
-	}, card)
-	new("UICorner", { CornerRadius = UDim.new(0, 8) }, swatch)
-	for c = -1, 1 do -- claw marks on the swatch
-		new("Frame", {
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0.5, c * 14, 0.5, 0),
-			Size = UDim2.fromOffset(4, 56),
-			Rotation = 20,
-			BackgroundColor3 = Color3.fromRGB(220, 225, 235),
+-- Draws a little claw preview (3 blades) inside a frame
+local function clawPreview(parent, item)
+	for i = -1, 1 do
+		local blade = new("Frame", {
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, i * 22, 0.92, 0),
+			Size = UDim2.fromOffset(item.Thick and 12 or 8, 86),
+			Rotation = i * 6,
+			BackgroundColor3 = Color3.new(1, 1, 1),
 			ZIndex = 34,
-		}, swatch)
+		}, parent)
+		new("UICorner", { CornerRadius = UDim.new(1, 0) }, blade)
+		gradient(blade, item.Color:Lerp(Color3.new(1, 1, 1), 0.35), item.Color, 0)
+		new("UIStroke", { Color = item.Glow, Thickness = 2, Transparency = 0.3 }, blade)
 	end
-	new("TextLabel", {
-		Position = UDim2.fromOffset(8, 86),
-		Size = UDim2.new(1, -16, 0, 40),
-		BackgroundTransparency = 1,
-		Font = Enum.Font.GothamBlack,
-		TextScaled = true,
-		TextWrapped = true,
-		TextColor3 = Color3.new(1, 1, 1),
-		Text = skin.Name,
-		ZIndex = 33,
-	}, card)
-	new("TextLabel", {
-		Position = UDim2.fromOffset(8, 128),
-		Size = UDim2.new(1, -16, 0, 70),
-		BackgroundTransparency = 1,
-		Font = Enum.Font.Gotham,
-		TextSize = 13,
-		TextWrapped = true,
-		TextYAlignment = Enum.TextYAlignment.Top,
-		TextColor3 = Color3.fromRGB(190, 190, 200),
-		Text = skin.Description,
-		ZIndex = 33,
-	}, card)
-	local button = new("TextButton", {
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -8),
-		Size = UDim2.new(1, -16, 0, 36),
-		Font = Enum.Font.GothamBlack,
-		TextScaled = true,
-		TextColor3 = Color3.new(1, 1, 1),
-		Text = "",
-		ZIndex = 33,
-	}, card)
-	new("UICorner", { CornerRadius = UDim.new(0, 8) }, button)
-	new("UIPadding", { PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6) }, button)
-	button.Activated:Connect(function()
-		local action = owned(id) and "Equip" or "Buy"
-		local ok, msg = ShopRemote:InvokeServer(action, id)
-		message.Text = msg or ""
-		message.TextColor3 = ok and Color3.fromRGB(120, 255, 150) or Color3.fromRGB(255, 110, 110)
-		refresh()
-	end)
-	cards[id] = { Button = button }
 end
 
--- Fit small (phone) screens
-local function fit()
-	local cam = workspace.CurrentCamera
-	local s = math.min(1, (cam.ViewportSize.X - 24) / 620, (cam.ViewportSize.Y - 24) / 360)
-	panel:FindFirstChildOfClass("UIScale").Scale = math.max(0.4, s)
+-- Draws a little suit preview (colour blocks shaped like a body)
+local function suitPreview(parent, item)
+	local c = item.Colors
+	local skin = Color3.fromRGB(230, 180, 140)
+	local function col(x)
+		return x == "Skin" and skin or x
+	end
+	local function box(x, y, wd, h, color)
+		local f = new("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, x, 0, y),
+			Size = UDim2.fromOffset(wd, h),
+			BackgroundColor3 = color,
+			ZIndex = 34,
+		}, parent)
+		corner(f, 4)
+		return f
+	end
+	box(0, 8, 26, 24, skin)
+	box(0, 34, 40, 34, col(c.UpperTorso))
+	box(0, 68, 40, 10, col(c.LowerTorso))
+	box(-28, 34, 14, 22, col(c.UpperArm))
+	box(28, 34, 14, 22, col(c.UpperArm))
+	box(-28, 56, 14, 14, col(c.LowerArm))
+	box(28, 56, 14, 14, col(c.LowerArm))
+	box(-10, 78, 18, 18, col(c.UpperLeg))
+	box(10, 78, 18, 18, col(c.UpperLeg))
+	box(-10, 96, 18, 8, col(c.Foot))
+	box(10, 96, 18, 8, col(c.Foot))
 end
-workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fit)
-fit()
 
-openButton.Activated:Connect(function()
-	panel.Visible = not panel.Visible
+local function build()
+	for _, c in cards do
+		c.Card:Destroy()
+	end
+	cards = {}
+	local order = category == "Suits" and Skins.Order or Skins.ClawOrder
+	local list = category == "Suits" and Skins.List or Skins.Claws
+	for i, id in order do
+		local item = list[id]
+		local card = new("Frame", { Size = UDim2.fromOffset(190, 250), BackgroundColor3 = Color3.new(1, 1, 1), LayoutOrder = i, ZIndex = 32 }, scroller)
+		corner(card, 14)
+		gradient(card, Color3.fromRGB(44, 42, 52), Color3.fromRGB(20, 19, 25))
+		local cardStroke = stroke(card, Color3.fromRGB(70, 70, 80), 2)
+		local scale = new("UIScale", {}, card)
+
+		local preview = new("Frame", {
+			Position = UDim2.fromOffset(10, 10),
+			Size = UDim2.new(1, -20, 0, 112),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			ClipsDescendants = true,
+			ZIndex = 33,
+		}, card)
+		corner(preview, 10)
+		local accent = category == "Suits" and item.Swatch or item.Glow
+		gradient(preview, accent:Lerp(Color3.new(0, 0, 0), 0.35), Color3.fromRGB(12, 12, 16))
+		if category == "Suits" then
+			suitPreview(preview, item)
+		else
+			clawPreview(preview, item)
+		end
+		new("TextLabel", {
+			Position = UDim2.fromOffset(12, 128),
+			Size = UDim2.new(1, -24, 0, 24),
+			BackgroundTransparency = 1,
+			Font = Enum.Font.GothamBlack,
+			TextScaled = true,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextColor3 = K.White,
+			Text = item.Name,
+			ZIndex = 33,
+		}, card)
+		new("TextLabel", {
+			Position = UDim2.fromOffset(12, 154),
+			Size = UDim2.new(1, -24, 0, 40),
+			BackgroundTransparency = 1,
+			Font = Enum.Font.Gotham,
+			TextSize = 13,
+			TextWrapped = true,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			TextColor3 = Color3.fromRGB(180, 178, 190),
+			Text = item.Description,
+			ZIndex = 33,
+		}, card)
+		local button, label = UIKit.Button(card, {
+			Text = "",
+			Color = K.Yellow,
+			Size = UDim2.new(1, -20, 0, 40),
+			Position = UDim2.new(0, 10, 1, -50),
+			ZIndex = 34,
+		})
+		card.MouseEnter:Connect(function()
+			TweenService:Create(scale, TweenInfo.new(0.2, Enum.EasingStyle.Back), { Scale = 1.04 }):Play()
+		end)
+		card.MouseLeave:Connect(function()
+			TweenService:Create(scale, TweenInfo.new(0.15), { Scale = 1 }):Play()
+		end)
+		button.Activated:Connect(function()
+			local isSuit = category == "Suits"
+			local owned = ownedList(isSuit and "OwnedSkins" or "OwnedClaws")[id]
+			local action = (owned and "Equip" or "Buy") .. (isSuit and "" or "Claw")
+			local ok, msg = ShopRemote:InvokeServer(action, id)
+			message.Text = msg or ""
+			message.TextColor3 = ok and K.Green or Color3.fromRGB(255, 110, 110)
+			if ok then
+				scale.Scale = 1.12
+				TweenService:Create(scale, TweenInfo.new(0.4, Enum.EasingStyle.Back), { Scale = 1 }):Play()
+			end
+			refresh()
+		end)
+		cards[id] = { Card = card, Button = button, Label = label, Stroke = cardStroke }
+	end
+	scroller.CanvasPosition = Vector2.zero
 	refresh()
+end
+
+local tabButtons = {}
+local function selectTab(name)
+	category = name
+	for n, b in tabButtons do
+		UIKit.Recolor(b, n == name and K.Yellow or Color3.fromRGB(80, 80, 90))
+	end
+	build()
+end
+for i, name in { "Suits", "Claws" } do
+	local b = UIKit.Button(tabs, {
+		Text = name == "Suits" and "SUITS" or "CLAWS",
+		Icon = name == "Suits" and "🦸" or "🗡️",
+		Color = K.Yellow,
+		Size = UDim2.fromOffset(150, 40),
+		LayoutOrder = i,
+		ZIndex = 32,
+	})
+	tabButtons[name] = b
+	b.Activated:Connect(function()
+		selectTab(name)
+	end)
+end
+selectTab("Suits")
+
+local openButton = Shop.DockButton("ARMORY", "🛡️", K.Yellow, 1)
+openButton.Activated:Connect(function()
+	refresh()
+	window.Toggle()
 end)
-close.Activated:Connect(function()
-	panel.Visible = false
-end)
+
 player:GetAttributeChangedSignal("OwnedSkins"):Connect(refresh)
 player:GetAttributeChangedSignal("Skin"):Connect(refresh)
+player:GetAttributeChangedSignal("OwnedClaws"):Connect(refresh)
+player:GetAttributeChangedSignal("Claw"):Connect(refresh)
 task.spawn(function()
 	local ls = player:WaitForChild("leaderstats", 30)
-	local coins = ls and ls:WaitForChild("Coins", 30)
-	if coins then
-		coins.Changed:Connect(refresh)
+	local c = ls and ls:WaitForChild("Coins", 30)
+	if c then
+		local last = c.Value
+		c.Changed:Connect(function(v)
+			if v > last then
+				coinScale.Scale = 1.15
+				TweenService:Create(coinScale, TweenInfo.new(0.4, Enum.EasingStyle.Back), { Scale = 1 }):Play()
+			end
+			last = v
+			refresh()
+		end)
 	end
 	refresh()
 end)
@@ -6093,10 +8052,321 @@ return Shop
 ]]></string>
           </Properties>
         </Item>
+        <Item class="ModuleScript" referent="37">
+          <Properties>
+            <string name="Name">UIKit</string>
+            <string name="Source"><![CDATA[-- Shared UI building blocks: animated buttons, panels, gradients.
+local TweenService = game:GetService("TweenService")
+local SoundService = game:GetService("SoundService")
+
+local UIKit = {}
+
+UIKit.Colors = {
+	Ink = Color3.fromRGB(12, 12, 16),
+	Panel = Color3.fromRGB(22, 22, 28),
+	Card = Color3.fromRGB(32, 32, 40),
+	Yellow = Color3.fromRGB(255, 200, 30),
+	Red = Color3.fromRGB(225, 45, 45),
+	Green = Color3.fromRGB(80, 220, 120),
+	Blue = Color3.fromRGB(80, 170, 255),
+	Purple = Color3.fromRGB(170, 110, 255),
+	White = Color3.new(1, 1, 1),
+}
+
+local FAST = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local BOUNCE = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+
+function UIKit.new(class, props, parent)
+	local inst = Instance.new(class)
+	for k, v in props do
+		inst[k] = v
+	end
+	inst.Parent = parent
+	return inst
+end
+local new = UIKit.new
+
+function UIKit.Corner(p, r)
+	return new("UICorner", { CornerRadius = UDim.new(0, r or 10) }, p)
+end
+
+function UIKit.Stroke(p, color, thickness, transparency)
+	return new("UIStroke", {
+		Color = color or Color3.new(0, 0, 0),
+		Thickness = thickness or 2,
+		Transparency = transparency or 0,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+	}, p)
+end
+
+function UIKit.Gradient(p, top, bottom, rotation)
+	return new("UIGradient", {
+		Color = ColorSequence.new(top, bottom),
+		Rotation = rotation or 90,
+	}, p)
+end
+
+local function darker(c, f)
+	return Color3.new(c.R * f, c.G * f, c.B * f)
+end
+
+local clickSound = Instance.new("Sound")
+clickSound.SoundId = "rbxasset://sounds/electronicpingshort.wav"
+clickSound.Volume = 0.25
+clickSound.PlaybackSpeed = 1.6
+clickSound.Parent = SoundService
+
+local hoverSound = Instance.new("Sound")
+hoverSound.SoundId = "rbxasset://sounds/electronicpingshort.wav"
+hoverSound.Volume = 0.08
+hoverSound.PlaybackSpeed = 2.4
+hoverSound.Parent = SoundService
+
+-- Makes any GuiButton feel alive: grows + glows on hover, squishes on press.
+function UIKit.Animate(button, accent)
+	local scale = button:FindFirstChildOfClass("UIScale") or new("UIScale", {}, button)
+	local stroke = button:FindFirstChildOfClass("UIStroke")
+	local baseThickness = stroke and stroke.Thickness or 0
+	local shine = button:FindFirstChild("Shine")
+	local hovering = false
+
+	button.AutoButtonColor = false
+	button.MouseEnter:Connect(function()
+		hovering = true
+		hoverSound:Play()
+		TweenService:Create(scale, BOUNCE, { Scale = 1.07 }):Play()
+		if stroke then
+			TweenService:Create(stroke, FAST, { Thickness = baseThickness + 1.5, Color = accent or stroke.Color }):Play()
+		end
+		if shine then
+			shine.Position = UDim2.fromScale(-0.6, 0)
+			TweenService:Create(shine, TweenInfo.new(0.45, Enum.EasingStyle.Quad), { Position = UDim2.fromScale(1.2, 0) }):Play()
+		end
+	end)
+	button.MouseLeave:Connect(function()
+		hovering = false
+		TweenService:Create(scale, FAST, { Scale = 1 }):Play()
+		if stroke then
+			TweenService:Create(stroke, FAST, { Thickness = baseThickness }):Play()
+		end
+	end)
+	button.MouseButton1Down:Connect(function()
+		TweenService:Create(scale, FAST, { Scale = 0.93 }):Play()
+	end)
+	button.MouseButton1Up:Connect(function()
+		TweenService:Create(scale, BOUNCE, { Scale = hovering and 1.07 or 1 }):Play()
+	end)
+	button.Activated:Connect(function()
+		clickSound:Play()
+		if not hovering then -- touch: do a quick pop
+			scale.Scale = 0.93
+			TweenService:Create(scale, BOUNCE, { Scale = 1 }):Play()
+		end
+	end)
+end
+
+-- A chunky game-style button with gradient, stroke, drop shadow and shine sweep.
+function UIKit.Button(parent, props)
+	local accent = props.Color or UIKit.Colors.Yellow
+	local holder = new("Frame", {
+		Name = props.Name or "Button",
+		Size = props.Size or UDim2.fromOffset(150, 52),
+		Position = props.Position or UDim2.new(),
+		AnchorPoint = props.AnchorPoint or Vector2.zero,
+		BackgroundTransparency = 1,
+		LayoutOrder = props.LayoutOrder or 0,
+		ZIndex = props.ZIndex or 1,
+	}, parent)
+	-- drop shadow
+	local shadow = new("Frame", {
+		Size = UDim2.fromScale(1, 1),
+		Position = UDim2.fromOffset(0, 4),
+		BackgroundColor3 = Color3.new(0, 0, 0),
+		BackgroundTransparency = 0.45,
+		ZIndex = holder.ZIndex,
+	}, holder)
+	UIKit.Corner(shadow, 12)
+
+	local b = new("TextButton", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		Text = "",
+		ZIndex = holder.ZIndex + 1,
+		ClipsDescendants = true,
+	}, holder)
+	UIKit.Corner(b, 12)
+	UIKit.Gradient(b, props.Top or darker(accent, 0.55), props.Bottom or darker(accent, 0.25))
+	UIKit.Stroke(b, darker(accent, 0.9), 2)
+
+	-- glossy top half
+	local gloss = new("Frame", {
+		Size = UDim2.fromScale(1, 0.5),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = 0.88,
+		BorderSizePixel = 0,
+		ZIndex = b.ZIndex + 1,
+	}, b)
+	UIKit.Corner(gloss, 12)
+
+	-- shine sweep on hover
+	local shine = new("Frame", {
+		Name = "Shine",
+		Size = UDim2.new(0.35, 0, 1, 0),
+		Position = UDim2.fromScale(-0.6, 0),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = 0.75,
+		BorderSizePixel = 0,
+		Rotation = 15,
+		ZIndex = b.ZIndex + 2,
+	}, b)
+	new("UIGradient", {
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1),
+			NumberSequenceKeypoint.new(0.5, 0.2),
+			NumberSequenceKeypoint.new(1, 1),
+		}),
+	}, shine)
+
+	local hasIcon = props.Icon ~= nil
+	if hasIcon then
+		new("TextLabel", {
+			Name = "Icon",
+			Size = UDim2.new(0, 34, 1, -12),
+			Position = UDim2.fromOffset(8, 6),
+			BackgroundTransparency = 1,
+			Font = Enum.Font.GothamBlack,
+			TextScaled = true,
+			TextColor3 = accent,
+			Text = props.Icon,
+			ZIndex = b.ZIndex + 3,
+		}, b)
+	end
+	local label = new("TextLabel", {
+		Name = "Label",
+		Size = UDim2.new(1, hasIcon and -52 or -16, 1, -14),
+		Position = UDim2.fromOffset(hasIcon and 44 or 8, 7),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamBlack,
+		TextScaled = true,
+		TextXAlignment = hasIcon and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center,
+		TextColor3 = Color3.new(1, 1, 1),
+		Text = props.Text or "",
+		ZIndex = b.ZIndex + 3,
+	}, b)
+	new("UIStroke", { Thickness = 1.5, Transparency = 0.3 }, label)
+	new("UITextSizeConstraint", { MaxTextSize = props.MaxText or 22 }, label)
+
+	UIKit.Animate(b, Color3.new(1, 1, 1))
+	return b, label, holder
+end
+
+-- Recolours a button made with UIKit.Button.
+function UIKit.Recolor(button, accent)
+	local g = button:FindFirstChildOfClass("UIGradient")
+	if g then
+		g.Color = ColorSequence.new(darker(accent, 0.55), darker(accent, 0.25))
+	end
+	local s = button:FindFirstChildOfClass("UIStroke")
+	if s then
+		s.Color = darker(accent, 0.9)
+	end
+end
+
+-- Standard window: title bar, close button, pop-in animation.
+function UIKit.Window(parent, title, size, accent)
+	local w = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = size,
+		BackgroundColor3 = UIKit.Colors.Panel,
+		Visible = false,
+		ZIndex = 30,
+	}, parent)
+	UIKit.Corner(w, 16)
+	UIKit.Gradient(w, Color3.fromRGB(34, 32, 40), Color3.fromRGB(14, 14, 18))
+	UIKit.Stroke(w, accent, 2.5)
+	local scale = new("UIScale", {}, w)
+
+	local bar = new("Frame", { Size = UDim2.new(1, 0, 0, 56), BackgroundColor3 = accent, ZIndex = 31 }, w)
+	UIKit.Corner(bar, 16)
+	UIKit.Gradient(bar, darker(accent, 0.7), darker(accent, 0.35))
+	new("Frame", { Size = UDim2.new(1, 0, 0, 16), Position = UDim2.new(0, 0, 1, -16), BackgroundColor3 = darker(accent, 0.35), BorderSizePixel = 0, ZIndex = 31 }, bar)
+	-- claw scratches in the title bar
+	for i = 0, 2 do
+		new("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(1, -90 - i * 12, 0.5, 0),
+			Size = UDim2.fromOffset(4, 44),
+			Rotation = 25,
+			BackgroundColor3 = Color3.new(0, 0, 0),
+			BackgroundTransparency = 0.6,
+			ZIndex = 32,
+		}, bar)
+	end
+	local t = new("TextLabel", {
+		Position = UDim2.fromOffset(20, 8),
+		Size = UDim2.new(1, -140, 0, 40),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.LuckiestGuy,
+		TextScaled = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = Color3.new(1, 1, 1),
+		Text = title,
+		ZIndex = 33,
+	}, bar)
+	new("UIStroke", { Thickness = 2 }, t)
+
+	local close = UIKit.Button(w, {
+		Text = "X",
+		Color = UIKit.Colors.Red,
+		Size = UDim2.fromOffset(40, 40),
+		Position = UDim2.new(1, -52, 0, 8),
+		ZIndex = 34,
+	})
+
+	local api = { Frame = w, Scale = scale, Base = 1 }
+	function api.Open()
+		w.Visible = true
+		scale.Scale = api.Base * 0.8
+		TweenService:Create(scale, BOUNCE, { Scale = api.Base }):Play()
+	end
+	function api.Close()
+		local tw = TweenService:Create(scale, FAST, { Scale = api.Base * 0.85 })
+		tw:Play()
+		tw.Completed:Wait()
+		w.Visible = false
+	end
+	function api.Toggle()
+		if w.Visible then
+			api.Close()
+		else
+			api.Open()
+		end
+	end
+	close.Activated:Connect(api.Close)
+
+	-- keep it on screen for phones
+	local function fit()
+		local cam = workspace.CurrentCamera
+		local s = math.min(1, (cam.ViewportSize.X - 24) / size.X.Offset, (cam.ViewportSize.Y - 24) / size.Y.Offset)
+		api.Base = math.max(0.4, s)
+		if w.Visible then
+			scale.Scale = api.Base
+		end
+	end
+	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fit)
+	fit()
+	return api
+end
+
+return UIKit
+]]></string>
+          </Properties>
+        </Item>
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="34">
+  <Item class="Workspace" referent="38">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>

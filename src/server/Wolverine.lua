@@ -14,6 +14,7 @@ local Movement = require(script.Parent.Movement)
 local Combat = require(script.Parent.Combat)
 local PlayerData = require(script.Parent.PlayerData)
 local Fart = require(script.Parent.Fart)
+local VFX = require(script.Parent.VFX)
 local Skins = require(ReplicatedStorage.Shared.Skins)
 
 local Fx = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Fx")
@@ -30,6 +31,8 @@ local lastDamaged = 0
 local lastShredFx = 0
 local combo = 0
 local claws = {}
+local clawGlow = Color3.fromRGB(210, 230, 255)
+local clawSkin = nil
 
 ---------------------------------------------------------------------------
 -- Look
@@ -234,15 +237,18 @@ local function dressUp(char, skinId)
 	hl.Parent = char
 end
 
-local function makeClaws(char)
+local function makeClaws(char, clawId)
 	claws = {}
+	clawSkin = Skins.Claws[clawId] or Skins.Claws[Skins.DefaultClaw]
+	clawGlow = clawSkin.Glow
+	local thick = clawSkin.Thick or 1
 	for _, side in { "Right", "Left" } do
 		local hand = Util.Hand(char, side)
 		if hand then
 			for i = -1, 1 do
 				local z = i * math.max(0.1, hand.Size.Z * 0.3)
-				local c, w = gearPart(char, hand, "Claw", Vector3.new(0.07, 0.1, 0.16), STEEL, Enum.Material.Metal, CFrame.new(0, 0, z))
-				c.Reflectance = 0.35
+				local c, w = gearPart(char, hand, "Claw", Vector3.new(0.07 * thick, 0.1, 0.16 * thick), clawSkin.Color, clawSkin.Material, CFrame.new(0, 0, z))
+				c.Reflectance = clawSkin.Reflectance
 				c.Transparency = 1
 				table.insert(claws, { Part = c, Weld = w, Z = z, Hand = hand })
 			end
@@ -255,8 +261,57 @@ local function popClaws(char)
 	for _, c in claws do
 		if c.Part.Parent then
 			c.Part.Transparency = 0
-			TweenService:Create(c.Part, info, { Size = Vector3.new(0.07, CLAW_LEN, 0.16) }):Play()
+			local thick = clawSkin and clawSkin.Thick or 1
+			TweenService:Create(c.Part, info, { Size = Vector3.new(0.07 * thick, CLAW_LEN, 0.16 * thick) }):Play()
 			TweenService:Create(c.Weld, info, { C0 = CFrame.new(0, -(c.Hand.Size.Y * 0.3 + CLAW_LEN / 2), c.Z) }):Play()
+			-- Streaking trail off every blade: every swing leaves a crisp arc
+			task.delay(0.2, function()
+				if not c.Part.Parent then
+					return
+				end
+				local a0 = Instance.new("Attachment")
+				a0.Position = Vector3.new(0, CLAW_LEN * 0.1, 0)
+				a0.Parent = c.Part
+				local a1 = Instance.new("Attachment")
+				a1.Position = Vector3.new(0, -CLAW_LEN / 2, 0)
+				a1.Parent = c.Part
+				local trail = Instance.new("Trail")
+				trail.Attachment0 = a0
+				trail.Attachment1 = a1
+				trail.Lifetime = 0.14
+				trail.MinLength = 0.05
+				trail.LightEmission = 1
+				trail.Color = ColorSequence.new(Color3.new(1, 1, 1), clawGlow)
+				trail.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.15), NumberSequenceKeypoint.new(1, 1) })
+				trail.Parent = c.Part
+				if clawSkin and (clawSkin.Drip or clawSkin.Sparkle) then
+					local pe = Instance.new("ParticleEmitter")
+					if clawSkin.Drip then
+						for k, v in Util.BloodProps do
+							pe[k] = v
+						end
+						pe.Rate = 3
+						pe.Speed = NumberRange.new(0, 1)
+						pe.Size = NumberSequence.new(0.12)
+					else
+						for k, v in Util.SparkProps do
+							pe[k] = v
+						end
+						pe.Color = ColorSequence.new(clawSkin.Glow, clawSkin.Color)
+						pe.Rate = 6
+						pe.Speed = NumberRange.new(0.5, 2)
+						pe.Acceleration = Vector3.zero
+					end
+					pe.Parent = a1
+				end
+				if clawSkin and clawSkin.Material == Enum.Material.Neon then
+					local l = Instance.new("PointLight")
+					l.Color = clawGlow
+					l.Range = 6
+					l.Brightness = 1
+					l.Parent = c.Part
+				end
+			end)
 		end
 	end
 	for _, side in { "Right", "Left" } do
@@ -322,23 +377,7 @@ local function roar(char)
 end
 
 local function clawStreaks(root, side)
-	local base = root.CFrame * CFrame.new(0, 0.6, -3.4)
-	local tilt = side == "R" and 40 or -40
-	for i = -1, 1 do
-		local p = Instance.new("Part")
-		p.Anchored = true
-		p.CanCollide = false
-		p.CanQuery = false
-		p.CanTouch = false
-		p.Material = Enum.Material.Neon
-		p.Color = Color3.fromRGB(255, 245, 235)
-		p.Transparency = 0.1
-		p.Size = Vector3.new(0.12, 4.4, 0.12)
-		p.CFrame = base * CFrame.Angles(0, 0, math.rad(tilt)) * CFrame.new(i * 0.6, 0, 0)
-		p.Parent = workspace
-		TweenService:Create(p, TweenInfo.new(0.25), { Transparency = 1, Size = Vector3.new(0.02, 5.2, 0.02) }):Play()
-		Debris:AddItem(p, 0.3)
-	end
+	VFX.ClawArc(root, side, clawGlow)
 end
 
 ---------------------------------------------------------------------------
@@ -528,7 +567,7 @@ function Wolverine.Transform(player, spawnCFrame)
 	pcall(function()
 		char:ScaleTo(Config.Wolverine.Scale)
 	end)
-	makeClaws(char)
+	makeClaws(char, PlayerData.GetClaw(player))
 	makeSkeleton(char)
 	char:PivotTo(spawnCFrame * CFrame.new(0, 1, 0))
 
@@ -599,8 +638,9 @@ local function pin(player, victim)
 	kRoot.CFrame = base * CFrame.new(0, 2.6, 1.6)
 	Posture.Set(kChar, "Root", CFrame.Angles(math.rad(-45), 0, 0), 0.12)
 	Util.Sound(Config.Sounds.Land, kRoot, { Volume = 2, Pitch = 0.7 })
+	VFX.Shockwave(Vector3.new(vRoot.Position.X, y + 0.2, vRoot.Position.Z), 12)
 	Fx:FireAllClients("Shake", { Position = kRoot.Position, Intensity = 0.8, Radius = 60 })
-	Fx:FireClient(victim, "Grabbed", {})
+	Util.FireClient(Fx, victim, "Grabbed", {})
 
 	for i = 1, 3 do
 		task.wait(0.28)
@@ -611,7 +651,11 @@ local function pin(player, victim)
 		Posture.Swipe(kChar, side)
 		Util.Sound(Config.Sounds.Slash, vRoot, { Pitch = 0.8 + i * 0.1, Volume = 1.3 })
 		Combat.Blood(Util.Torso(vChar), 18)
-		Fx:FireClient(victim, "Shake", { Position = vRoot.Position, Intensity = 0.5, Radius = 10 })
+		local vt = Util.Torso(vChar)
+		if vt then
+			VFX.Impact(vt.Position, clawGlow, 0.7)
+		end
+		Util.FireClient(Fx, victim, "Shake", { Position = vRoot.Position, Intensity = 0.5, Radius = 10 })
 	end
 	task.wait(0.2)
 
@@ -694,8 +738,11 @@ local function stab(player, char, root)
 	Util.Sound(Config.Sounds.Slash, vRoot, { Pitch = 0.6, Volume = 1.6 })
 	Util.Sound(Config.Sounds.Gore, vRoot, { Pitch = 0.6, Volume = 1.2 })
 	Combat.Blood(Util.Torso(target.Char), 45)
+	VFX.Pierce(root, clawGlow)
+	VFX.ExitSpray(target.Char, base.LookVector)
+	VFX.Impact(vRoot.Position + Vector3.new(0, 1, 0), clawGlow, 1.1)
 	Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 0.7, Radius = 60 })
-	Fx:FireClient(victim, "Grabbed", {})
+	Util.FireClient(Fx, victim, "Grabbed", {})
 	task.wait(0.65)
 
 	local result = Combat.Hit(victim, true)
@@ -722,9 +769,9 @@ end
 local function sniff(player, root)
 	local cfg = Config.Abilities.Sniff
 	Util.Sound(Config.Sounds.Sniff, root, { Volume = 1.5 })
-	Fx:FireClient(player, "Sniff", { Duration = cfg.Duration, Targets = Fart.SniffTargets() })
+	Util.FireClient(Fx, player, "Sniff", { Duration = cfg.Duration, Targets = Fart.SniffTargets() })
 	for survivor in Round.Survivors do
-		Fx:FireClient(survivor, "Sniffed", {})
+		Util.FireClient(Fx, survivor, "Sniffed", {})
 	end
 end
 
@@ -767,6 +814,61 @@ function Wolverine.Handle(player, ability, arg)
 	elseif ability == "Sniff" then
 		sniff(player, root)
 	end
+end
+
+-- Posed display statue for the lobby's suit gallery.
+function Wolverine.MakeStatue(skinId, cframe, parent)
+	local desc = Instance.new("HumanoidDescription")
+	local tone = Color3.fromRGB(226, 176, 140)
+	desc.HeadColor = tone
+	desc.LeftArmColor = tone
+	desc.RightArmColor = tone
+	desc.TorsoColor = tone
+	desc.LeftLegColor = tone
+	desc.RightLegColor = tone
+	local ok, model = pcall(function()
+		return game:GetService("Players"):CreateHumanoidModelFromDescription(desc, Enum.HumanoidRigType.R15)
+	end)
+	if not ok or not model then
+		return nil
+	end
+	model.Name = "Statue_" .. skinId
+	local hum = Util.Humanoid(model)
+	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	model.Parent = parent
+	dressUp(model, skinId)
+	local menace = model:FindFirstChild("Menace")
+	if menace then
+		menace:Destroy()
+	end
+	pcall(function()
+		model:ScaleTo(1.25)
+	end)
+	local claw = Skins.Claws[Skins.DefaultClaw]
+	for _, side in { "Right", "Left" } do
+		local hand = Util.Hand(model, side)
+		if hand then
+			for i = -1, 1 do
+				local z = i * math.max(0.1, hand.Size.Z * 0.3)
+				local c = gearPart(model, hand, "Claw", Vector3.new(0.08, CLAW_LEN * 1.25, 0.18), claw.Color, claw.Material,
+					CFrame.new(0, -(hand.Size.Y * 0.3 + CLAW_LEN * 0.62), z))
+				c.Reflectance = claw.Reflectance
+			end
+		end
+	end
+	-- Crouched, arms flared, claws out
+	Posture.Set(model, "Root", CFrame.new(0, -0.3, 0) * CFrame.Angles(math.rad(-14), 0, 0))
+	Posture.Set(model, "Neck", CFrame.Angles(math.rad(12), 0, 0))
+	Posture.Set(model, "RShoulder", CFrame.Angles(math.rad(45), 0, math.rad(50)))
+	Posture.Set(model, "LShoulder", CFrame.Angles(math.rad(45), 0, math.rad(-50)))
+	Posture.Set(model, "RHip", CFrame.Angles(math.rad(28), 0, math.rad(8)))
+	Posture.Set(model, "LHip", CFrame.Angles(math.rad(-12), 0, math.rad(-8)))
+	local root = Util.Root(model)
+	model:PivotTo(cframe * CFrame.new(0, 3.9, 0))
+	if root then
+		root.Anchored = true
+	end
+	return model
 end
 
 -- Called by the Sentinel.

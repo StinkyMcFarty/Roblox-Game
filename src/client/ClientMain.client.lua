@@ -9,6 +9,7 @@ local Interface = require(script.Parent:WaitForChild("Interface"))
 local Effects = require(script.Parent:WaitForChild("Effects"))
 require(script.Parent:WaitForChild("Shop"))
 local Daily = require(script.Parent:WaitForChild("Daily"))
+require(script.Parent:WaitForChild("Anims"))
 
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local Ability = Remotes:WaitForChild("Ability")
@@ -18,21 +19,43 @@ local player = Players.LocalPlayer
 local A = Config.Abilities
 local S = Config.Sentinel
 
+local YELLOW = Color3.fromRGB(255, 200, 30)
+local RED = Color3.fromRGB(230, 50, 50)
 local ROLE_KIT = {
 	Wolverine = {
-		{ Name = "Slash", Label = "Claw", KeyText = "M1", Key = Enum.KeyCode.ButtonR2, Cooldown = A.Slash.Cooldown, Click = true },
-		{ Name = "Pounce", Label = "Pounce", KeyText = "Q", Key = Enum.KeyCode.Q, Cooldown = A.Pounce.Cooldown },
-		{ Name = "Stab", Label = "Impale", KeyText = "E", Key = Enum.KeyCode.E, Cooldown = A.Stab.Cooldown },
-		{ Name = "Sniff", Label = "Sniff", KeyText = "F", Key = Enum.KeyCode.F, Cooldown = A.Sniff.Cooldown },
+		{ Name = "Slash", Label = "Claw Slash", Desc = "Shreds survivors and walls", Icon = "🩸", KeyText = "M1", Key = Enum.KeyCode.ButtonR2, Cooldown = A.Slash.Cooldown, Click = true, Color = RED },
+		{ Name = "Pounce", Label = "Pounce", Desc = "Leap, pin them down, claw away", Icon = "🐾", KeyText = "Q", Key = Enum.KeyCode.Q, Cooldown = A.Pounce.Cooldown, Color = Color3.fromRGB(255, 140, 30) },
+		{ Name = "Stab", Label = "Impale", Desc = "Both claws in. Lift them up", Icon = "🗡️", KeyText = "E", Key = Enum.KeyCode.E, Cooldown = A.Stab.Cooldown, Color = Color3.fromRGB(200, 205, 220) },
+		{ Name = "Sniff", Label = "Sniff", Desc = "Sense everyone for " .. A.Sniff.Duration .. "s", Icon = "👃", KeyText = "F", Key = Enum.KeyCode.F, Cooldown = A.Sniff.Cooldown, Color = Color3.fromRGB(200, 60, 255) },
 	},
 	Survivor = {
-		{ Name = "Fart", Label = "Fart", KeyText = "G", Key = Enum.KeyCode.G, Cooldown = Config.Fart.Cooldown, Color = Color3.fromRGB(150, 210, 50) },
+		{ Name = "Fart", Label = "Fart", Desc = "Gas cloud throws off his Sniff", Icon = "💨", KeyText = "G", Key = Enum.KeyCode.G, Cooldown = Config.Fart.Cooldown, Color = Color3.fromRGB(150, 210, 50) },
 	},
 	Sentinel = {
-		{ Name = "Punch", Label = "Punch", KeyText = "M1", Key = Enum.KeyCode.ButtonR2, Cooldown = S.Punch.Cooldown, Click = true, Color = Color3.fromRGB(200, 160, 255) },
-		{ Name = "Laser", Label = "Laser", KeyText = "Q", Key = Enum.KeyCode.Q, Cooldown = S.Laser.Cooldown, Color = Color3.fromRGB(255, 90, 60) },
-		{ Name = "Pulse", Label = "Inhibitor Pulse", KeyText = "E", Key = Enum.KeyCode.E, Cooldown = S.Pulse.Cooldown, Color = Color3.fromRGB(255, 210, 60) },
+		{ Name = "Punch", Label = "Punch", Desc = "Stun + knockback", Icon = "👊", KeyText = "M1", Key = Enum.KeyCode.ButtonR2, Cooldown = S.Punch.Cooldown, Click = true, Color = Color3.fromRGB(200, 160, 255) },
+		{ Name = "Laser", Label = "Laser", Desc = "Burns through walls, exposes bone", Icon = "🔴", KeyText = "Q", Key = Enum.KeyCode.Q, Cooldown = S.Laser.Cooldown, Color = Color3.fromRGB(255, 90, 60) },
+		{ Name = "Pulse", Label = "Inhibitor Pulse", Desc = "Stuns him if he's close", Icon = "💥", KeyText = "E", Key = Enum.KeyCode.E, Cooldown = S.Pulse.Cooldown, Color = Color3.fromRGB(255, 210, 60) },
 	},
+}
+
+local ROLE_HOLDS = {
+	Wolverine = {
+		{ Name = "SprintHold", Label = "Sprint", Desc = "Run into walls to tear through", Icon = "💨", KeyText = "SHIFT", Attr = "Sprinting", Color = YELLOW },
+		{ Name = "FeralHold", Label = "All Fours", Desc = "Fastest. Burns stamina", Icon = "🐺", KeyText = "C", Attr = "Feral", Color = Color3.fromRGB(255, 140, 30) },
+	},
+	Sentinel = {
+		{ Name = "LinkHold", Label = "Link", Desc = "Stay near the other suit: 1.6x power", Icon = "🔗", KeyText = "30m", Attr = "Linked", Color = Color3.fromRGB(190, 140, 255) },
+	},
+	Survivor = {
+		{ Name = "SprintHold", Label = "Sprint", Desc = "Run for your life", Icon = "🏃", KeyText = "SHIFT", Attr = "Sprinting", Color = Color3.fromRGB(80, 170, 255) },
+		{ Name = "HideHold", Label = "Hide", Desc = "Lockers, wardrobes, dumpsters", Icon = "🚪", KeyText = "E", Attr = "Hidden", Color = Color3.fromRGB(160, 160, 170) },
+	},
+}
+
+local ROLE_TITLE = {
+	Wolverine = { "WOLVERINE", YELLOW },
+	Survivor = { "SURVIVOR", Color3.fromRGB(120, 200, 255) },
+	Sentinel = { "SENTINEL SYSTEMS", Color3.fromRGB(190, 140, 255) },
 }
 
 local HINTS = {
@@ -122,7 +145,8 @@ end
 local function applyRole(role)
 	unbindAll()
 	currentKit = ROLE_KIT[role] or {}
-	Interface.SetAbilities(currentKit)
+	local title = ROLE_TITLE[role]
+	Interface.SetAbilities(currentKit, ROLE_HOLDS[role], title and title[1], title and title[2])
 	Interface.SetHint(HINTS[role] or "")
 
 	for i, a in currentKit do
@@ -203,7 +227,7 @@ Fx.OnClientEvent:Connect(function(kind, data)
 	elseif kind == "Roar" then
 		Effects.Roar(data.Position)
 	elseif kind == "Knock" then
-		Effects.Knock(data.Velocity)
+		Effects.Knock(data.Velocity, data.Tumble, data.Spin)
 	elseif kind == "Hurt" then
 		Effects.Hurt()
 	elseif kind == "Grabbed" then

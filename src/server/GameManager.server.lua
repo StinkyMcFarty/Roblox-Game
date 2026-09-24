@@ -1,7 +1,6 @@
 -- Round loop: intermission -> pick Wolverine -> survive -> results.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
 
 local Server = script.Parent
 local Config = require(ReplicatedStorage.Shared.Config)
@@ -14,6 +13,7 @@ local Sentinel = require(Server.Sentinel)
 local PlayerData = require(Server.PlayerData)
 local Fart = require(Server.Fart)
 local Hiding = require(Server.Hiding)
+local Bots = require(Server.Bots)
 local Skins = require(ReplicatedStorage.Shared.Skins)
 
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
@@ -28,7 +28,59 @@ local GREEN = Color3.fromRGB(90, 255, 140)
 
 Players.RespawnTime = 4
 MapBuilder.SetupLighting()
-MapBuilder.BuildLobby()
+local lobby = MapBuilder.BuildLobby()
+
+-- Lobby: statues, live status screen and leaderboard
+task.spawn(function()
+	for _, spot in lobby:WaitForChild("Pedestals"):GetChildren() do
+		local id = spot:GetAttribute("Skin")
+		Wolverine.MakeStatue(id, spot.CFrame, lobby)
+		local skin = Skins.List[id]
+		for _, d in lobby:GetDescendants() do
+			if d.Name == "PlaqueText" and d.Text == id and skin then
+				d.Text = skin.Name .. (skin.Price > 0 and ("   🪙 " .. skin.Price) or "   FREE")
+			end
+		end
+	end
+end)
+task.spawn(function()
+	local screen = lobby:WaitForChild("StatusScreen")
+	local board = lobby:FindFirstChild("Leaderboard", true)
+	local rows = board and board:FindFirstChild("Rows", true)
+	while true do
+		local status = ReplicatedStorage:GetAttribute("Status") or ""
+		local ends = ReplicatedStorage:GetAttribute("TimerEnds") or 0
+		local left = math.max(0, ends - workspace:GetServerTimeNow())
+		local timer = ends > 0 and ("%d:%02d"):format(math.floor(left / 60), math.floor(left % 60)) or "--:--"
+		for _, d in screen:GetDescendants() do
+			if d.Name == "StatusText" then
+				d.Text = string.upper(status)
+			elseif d.Name == "TimerText" then
+				d.Text = timer
+			end
+		end
+		if rows then
+			local list = {}
+			for _, p in Players:GetPlayers() do
+				local ls = p:FindFirstChild("leaderstats")
+				local kills = ls and ls:FindFirstChild("Kills") and ls.Kills.Value or 0
+				local wins = ls and ls:FindFirstChild("Wins") and ls.Wins.Value or 0
+				table.insert(list, { Name = p.DisplayName, Kills = kills, Wins = wins })
+			end
+			table.sort(list, function(a, b)
+				return a.Kills * 2 + a.Wins > b.Kills * 2 + b.Wins
+			end)
+			for i = 1, 6 do
+				local row = rows:FindFirstChild("Row" .. i)
+				local e = list[i]
+				if row then
+					row.Text = e and ("%d.  %s   🩸%d  🏆%d"):format(i, e.Name, e.Kills, e.Wins) or ""
+				end
+			end
+		end
+		task.wait(0.5)
+	end
+end)
 
 local function now()
 	return workspace:GetServerTimeNow()
@@ -52,7 +104,7 @@ local function stat(player, name, delta)
 end
 
 local function minPlayers()
-	return RunService:IsStudio() and 1 or Config.MinPlayers
+	return Config.MinPlayers
 end
 
 ---------------------------------------------------------------------------
@@ -134,6 +186,10 @@ ShopRemote.OnServerInvoke = function(player, action, id)
 		return PlayerData.Buy(player, id)
 	elseif action == "Equip" then
 		return PlayerData.Equip(player, id)
+	elseif action == "BuyClaw" then
+		return PlayerData.BuyClaw(player, id)
+	elseif action == "EquipClaw" then
+		return PlayerData.EquipClaw(player, id)
 	end
 	return false, "Bad request"
 end
@@ -201,6 +257,7 @@ local function runRound()
 
 	Sentinel.SetupRound(map)
 	Hiding.SetupRound(map)
+	Bots.Fill(Config.BotFill, spawns)
 	announce(wolverine.DisplayName .. " is WOLVERINE!" .. (bought and "  (guaranteed pass)" or ""), RED, 4)
 	PlayerData.Progress(wolverine, "BecomeWolverine", 1)
 	Round.EndTime = os.clock() + Config.IntroLength + Config.RoundTime
@@ -290,6 +347,7 @@ local function runRound()
 	setStatus("Round over", now() + Config.EndScreenTime)
 	task.wait(Config.EndScreenTime)
 
+	Bots.Clear()
 	Round.Wolverine = nil
 	Round.Survivors = {}
 	ReplicatedStorage:SetAttribute("Wolverine", nil)
@@ -328,6 +386,7 @@ while true do
 		local success, err = pcall(runRound)
 		if not success then
 			warn("Round crashed:", err)
+			pcall(Bots.Clear)
 			Round.Active = false
 			Round.Wolverine = nil
 			Round.Survivors = {}

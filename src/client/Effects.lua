@@ -83,13 +83,29 @@ function Effects.Hurt()
 	Effects.Shake(1)
 end
 
-function Effects.Knock(velocity)
+function Effects.Knock(velocity, tumble, spin)
 	local char = player.Character
 	local root = char and char:FindFirstChild("HumanoidRootPart")
-	if not root then
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if not (root and hum) then
 		return
 	end
-	Effects.Impulse(root, velocity, 0.18)
+	if tumble then
+		-- Ragdoll-ish tumble through the air, then scramble back up
+		hum.PlatformStand = true
+		Effects.Impulse(root, velocity, 0.15)
+		if typeof(spin) == "Vector3" then
+			root.AssemblyAngularVelocity = spin
+		end
+		task.delay(tumble, function()
+			if hum.Parent and hum.Health > 0 then
+				hum.PlatformStand = false
+				hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+			end
+		end)
+	else
+		Effects.Impulse(root, velocity, 0.18)
+	end
 end
 
 -- Short burst of velocity that the Humanoid can't immediately cancel.
@@ -138,8 +154,11 @@ end
 function Effects.Sniff(duration, targets)
 	local marks = {}
 	local tracked = {}
+	local extraChars = {}
 	for _, t in targets or {} do
-		if t.Name then
+		if typeof(t.Char) == "Instance" then
+			table.insert(extraChars, t.Char)
+		elseif t.Name then
 			tracked[t.Name] = true
 		elseif typeof(t.Position) == "Vector3" then
 			local ghost = decoyMark(t.Position)
@@ -161,10 +180,18 @@ function Effects.Sniff(duration, targets)
 			table.insert(marks, { Highlight = ghost, Billboard = bb, Label = label, Part = ghost, Prefix = hidingTag and "HIDING " or "" })
 		end
 	end
+	local toMark = {}
 	for _, p in Players:GetPlayers() do
 		local role = p:GetAttribute("Role")
-		local char = p.Character
-		if p ~= player and char and (role == "Survivor" or role == "Sentinel") and (targets == nil or tracked[p.Name]) then
+		if p ~= player and p.Character and (role == "Survivor" or role == "Sentinel") and (targets == nil or tracked[p.Name]) then
+			table.insert(toMark, p.Character)
+		end
+	end
+	for _, c in extraChars do
+		table.insert(toMark, c)
+	end
+	for _, char in toMark do
+		do
 			local hl = Instance.new("Highlight")
 			hl.FillColor = Color3.fromRGB(255, 40, 40)
 			hl.OutlineColor = Color3.fromRGB(255, 220, 220)

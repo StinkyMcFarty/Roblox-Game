@@ -8,8 +8,8 @@ The whole game is written as code. The map, Wolverine's look, the claws, the "an
 
 1. Download **`SurviveTheWolverine.rbxlx`** from this repo.
 2. Double-click it (or use Studio → File → Open from File).
-3. Press **Play**. In Studio, 1 player is enough to start a round, and you'll be Wolverine.
-   To test with survivors, use **Test → Clients and Servers → 2+ players**.
+3. Press **Play**. One player is enough: if there aren't enough people, **bot survivors** fill the round (up to 5 survivors) so Wolverine always has someone to hunt.
+   To test with real survivors, use **Test → Clients and Servers → 2+ players**.
 
 ## Before you publish
 
@@ -37,8 +37,11 @@ The whole game is written as code. The map, Wolverine's look, the claws, the "an
 | F | Sniff: see every survivor through walls for **5s** (25s cooldown) |
 
 - It takes **3 hits to kill** a survivor. The 3rd hit, from any attack, triggers the finisher: he lifts them and **rips them in half**.
-- Hits 1 and 2 cause bleeding, knockback, a brief adrenaline speed boost and i-frames.
+- Hits 1 and 2 **throw** the survivor, who tumbles through the air with a trail. They get **2s of i-frames** (a visible white shimmer) and an adrenaline boost. Wolverine gets a short recovery, so there are no infinite combos.
+- The HUD shows animated ability cards (bottom-right) with keys, cooldown sweeps and "ready" flashes.
+- Crisp VFX: claw trails, crescent slash arcs, impact flashes, dust bursts, pounce shockwaves.
 - He has 600 HP and a healing factor.
+- **Sprint animations**: survivors get a panicked flee (they look back at him); Wolverine gets a low, heavy hunting run.
 
 **Survivors**
 
@@ -48,19 +51,31 @@ The whole game is written as code. The map, Wolverine's look, the claws, the "an
 
 **The counter: Sentinel suit** (like the Hulkbuster)
 
-- Reboot the **3 Sentinel terminals** (cabin, warehouse, diner). This unlocks the pod in the container yard. One survivor can suit up.
+- Reboot the **3 Sentinel terminals** (cabin, warehouse, diner). This unlocks the pod in the container yard. **Two** survivors can suit up.
+- **Teamwork is required:** suits within 30 studs of each other are *linked* (energy tether, 1.6x damage, longer stuns). Alone they deal 0.5x damage, which his healing outpaces.
 - **M1 punch** (stuns + knockback), **Q laser** (burns through walls; on a hit it flashes Wolverine's **adamantium skeleton** before his flesh regrows), **E inhibitor pulse** (stun area).
-- It's balanced so it can't beat him alone:
-  - The suit lasts 45s.
-  - Wolverine keeps healing.
-  - 4 Wolverine hits rip the suit in half.
+- Other limits:
+  - Each suit lasts 45s.
+  - 4 Wolverine hits rip a suit in half.
 
 **Progression:** coins for surviving, kills, terminals and playing matches.
 
-- **Skins** (saved): Logan (free), Comic Wolverine (500), Weapon X (1000), Old Man Logan (1500).
+- **Suits** (saved): Logan (free), Comic Wolverine (500), Weapon X (1000), Old Man Logan (1500).
+- **Claws** (saved): Adamantium (free), Bone (400), Gold (900), Blood-Soaked (1100, drips), Obsidian (1400), Cosmic (2200, glows).
+- Both are sold in the **Armory** (left dock).
 - **Daily challenges:** become Wolverine, 5 kills as Wolverine, survive 5 min total, play 3 matches.
 - **Daily login reward** that grows with your streak.
 - **Wolverine odds:** every round you play without being Wolverine raises your chance (shown on screen). The 80 R$ pass guarantees it next round.
+
+## Lobby
+
+A Weapon X holding hangar on a snowy mountain ledge:
+
+- a rules wall with 3D claw gouges torn through the steel
+- a suit gallery with posed Wolverine statues on lit pedestals
+- a claw collection display case
+- a fireplace lounge with a live "Top Hunters" leaderboard
+- a hanging screen showing the round timer
 
 ## Map
 
@@ -74,6 +89,8 @@ A snowed-in Alkali Lake / Weapon X compound at night:
 - guard gate, watchtowers with sweeping searchlights, flickering street lamps, fire barrels
 - pine forest, mountains, falling snow, fog
 
+Also on the map: power lines, rooftop AC units and a satellite dish, generators, woodpiles, pallets and cones, an abandoned truck, benches, a phone booth, a blood trail out of the lab, and hiding spots.
+
 Almost every wall is breakable, and trees fall when he slashes their trunks. The map rebuilds each round.
 
 ## Editing
@@ -83,9 +100,10 @@ All tuning lives in `src/shared/Config.lua` (speeds, cooldowns, timers, rewards)
 To live-sync code into Studio, install [Rojo](https://rojo.space) and run `rojo serve`. To rebuild the place file, run `rojo build -o SurviveTheWolverine.rbxlx`.
 
 ```
-src/server/   GameManager (rounds), Wolverine, Sentinel, Combat, MapBuilder,
-              Movement, Hiding, Fart, PlayerData (saves, dailies, Robux)
-src/client/   ClientMain (controls), Interface (HUD), Effects (shake, snow,
-              sniff, dread), Shop (skins), Daily (challenges)
+src/server/   GameManager (rounds), Wolverine, Sentinel, Combat, VFX, MapBuilder,
+              Movement, Hiding, Fart, Bots, PlayerData (saves, dailies, Robux)
+src/client/   ClientMain (controls), Interface (HUD), UIKit (animated UI),
+              Anims (sprints), Effects (shake, snow, sniff, dread),
+              Shop (suits/claws), Daily (challenges)
 src/shared/   Config, Skins, Util
 ```

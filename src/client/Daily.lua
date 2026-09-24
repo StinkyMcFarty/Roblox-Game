@@ -1,168 +1,145 @@
--- Daily challenges panel, login streak, Wolverine odds and the Robux
--- "guaranteed Wolverine" button.
+-- Daily challenges, login streak, Wolverine odds and the Robux pass.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 local MarketplaceService = game:GetService("MarketplaceService")
+local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local UIKit = require(script.Parent:WaitForChild("UIKit"))
+local Shop = require(script.Parent:WaitForChild("Shop"))
 
 local player = Players.LocalPlayer
 local Daily = {}
 
-local DARK = Color3.fromRGB(16, 16, 20)
-local YELLOW = Color3.fromRGB(255, 205, 30)
-local GREEN = Color3.fromRGB(90, 220, 120)
-
-local function new(class, props, parent)
-	local inst = Instance.new(class)
-	for k, v in props do
-		inst[k] = v
-	end
-	inst.Parent = parent
-	return inst
-end
-
-local function corner(p, r)
-	new("UICorner", { CornerRadius = UDim.new(0, r or 8) }, p)
-end
+local new, corner, stroke, gradient = UIKit.new, UIKit.Corner, UIKit.Stroke, UIKit.Gradient
+local K = UIKit.Colors
 
 local gui = new("ScreenGui", { Name = "DailyUI", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling }, player:WaitForChild("PlayerGui"))
 
-local function sideButton(text, y, color)
-	local b = new("TextButton", {
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 12, 0.5, y),
-		Size = UDim2.fromOffset(110, 44),
-		BackgroundColor3 = DARK,
-		BackgroundTransparency = 0.15,
-		Font = Enum.Font.GothamBlack,
-		TextScaled = true,
-		TextColor3 = color,
-		Text = text,
-	}, gui)
-	corner(b, 10)
-	new("UIStroke", { Color = color, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, b)
-	new("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8) }, b)
-	return b
-end
+local dailyButton = Shop.DockButton("DAILY", "🎁", K.Green, 2)
+local buyButton, buyLabel = Shop.DockButton("BE HIM", "👑", K.Red, 3)
+buyLabel.Text = "BE HIM  R$80"
 
-local dailyButton = sideButton("DAILY", 52, GREEN)
-local buyButton = sideButton("BE WOLVERINE\n80 R$", 104, YELLOW)
-buyButton.Size = UDim2.fromOffset(110, 52)
-buyButton.Position = UDim2.new(0, 12, 0.5, 108)
-
-local chanceLabel = new("TextLabel", {
-	AnchorPoint = Vector2.new(0, 0.5),
-	Position = UDim2.new(0, 12, 0.5, 150),
-	Size = UDim2.fromOffset(160, 22),
+-- Wolverine odds pill
+local odds = new("Frame", { Size = UDim2.fromOffset(170, 46), BackgroundColor3 = Color3.new(1, 1, 1), LayoutOrder = 4 }, Shop.Dock)
+corner(odds, 12)
+gradient(odds, Color3.fromRGB(50, 16, 18), Color3.fromRGB(18, 8, 10))
+local oddsStroke = stroke(odds, Color3.fromRGB(140, 30, 30), 2)
+new("TextLabel", {
+	Position = UDim2.fromOffset(10, 4),
+	Size = UDim2.new(1, -20, 0, 14),
 	BackgroundTransparency = 1,
 	Font = Enum.Font.GothamBold,
 	TextScaled = true,
 	TextXAlignment = Enum.TextXAlignment.Left,
-	TextColor3 = Color3.fromRGB(255, 120, 120),
-	TextStrokeTransparency = 0.4,
-	Text = "",
-}, gui)
-
-local panel = new("Frame", {
-	AnchorPoint = Vector2.new(0.5, 0.5),
-	Position = UDim2.fromScale(0.5, 0.5),
-	Size = UDim2.fromOffset(460, 340),
-	BackgroundColor3 = DARK,
-	BackgroundTransparency = 0.05,
-	Visible = false,
-	ZIndex = 30,
-}, gui)
-corner(panel, 14)
-new("UIStroke", { Color = GREEN, Thickness = 2 }, panel)
-local scale = new("UIScale", {}, panel)
-
-new("TextLabel", {
-	Position = UDim2.fromOffset(20, 12),
-	Size = UDim2.new(1, -80, 0, 34),
+	TextColor3 = Color3.fromRGB(220, 170, 170),
+	Text = "WOLVERINE CHANCE",
+}, odds)
+local oddsBar = new("Frame", { Position = UDim2.fromOffset(10, 24), Size = UDim2.new(1, -20, 0, 14), BackgroundColor3 = K.Ink }, odds)
+corner(oddsBar, 7)
+local oddsFill = new("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0 }, oddsBar)
+corner(oddsFill, 7)
+gradient(oddsFill, Color3.fromRGB(255, 90, 60), Color3.fromRGB(180, 20, 20), 0)
+local oddsText = new("TextLabel", {
+	Size = UDim2.fromScale(1, 1),
 	BackgroundTransparency = 1,
-	Font = Enum.Font.LuckiestGuy,
-	TextScaled = true,
-	TextXAlignment = Enum.TextXAlignment.Left,
-	TextColor3 = GREEN,
-	Text = "DAILY CHALLENGES",
-	ZIndex = 31,
-}, panel)
-local close = new("TextButton", {
-	AnchorPoint = Vector2.new(1, 0),
-	Position = UDim2.new(1, -12, 0, 12),
-	Size = UDim2.fromOffset(34, 34),
-	BackgroundColor3 = Color3.fromRGB(150, 30, 30),
 	Font = Enum.Font.GothamBlack,
 	TextScaled = true,
-	TextColor3 = Color3.new(1, 1, 1),
-	Text = "X",
-	ZIndex = 31,
-}, panel)
-corner(close, 8)
-
-local list = new("Frame", {
-	Position = UDim2.fromOffset(16, 56),
-	Size = UDim2.new(1, -32, 0, 230),
-	BackgroundTransparency = 1,
-	ZIndex = 31,
-}, panel)
-new("UIListLayout", { Padding = UDim.new(0, 8) }, list)
-
-local streakLabel = new("TextLabel", {
-	AnchorPoint = Vector2.new(0.5, 1),
-	Position = UDim2.new(0.5, 0, 1, -12),
-	Size = UDim2.new(1, -32, 0, 22),
-	BackgroundTransparency = 1,
-	Font = Enum.Font.GothamBold,
-	TextScaled = true,
-	TextColor3 = YELLOW,
+	TextColor3 = K.White,
 	Text = "",
-	ZIndex = 31,
-}, panel)
+	ZIndex = 2,
+}, oddsBar)
+new("UIStroke", { Thickness = 1.5 }, oddsText)
 
+---------------------------------------------------------------------------
+-- Challenges window
+---------------------------------------------------------------------------
+
+local window = UIKit.Window(gui, "DAILY CHALLENGES", UDim2.fromOffset(520, 400), K.Green)
+local w = window.Frame
+
+local list = new("Frame", { Position = UDim2.fromOffset(20, 72), Size = UDim2.new(1, -40, 0, 260), BackgroundTransparency = 1, ZIndex = 31 }, w)
+new("UIListLayout", { Padding = UDim.new(0, 10) }, list)
+
+local streak = new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 1, -14),
+	Size = UDim2.new(1, -40, 0, 40),
+	BackgroundColor3 = Color3.new(1, 1, 1),
+	ZIndex = 31,
+}, w)
+corner(streak, 10)
+gradient(streak, Color3.fromRGB(70, 54, 10), Color3.fromRGB(28, 22, 6), 0)
+stroke(streak, K.Yellow, 1.5, 0.3)
+local streakText = new("TextLabel", {
+	Size = UDim2.fromScale(1, 1),
+	BackgroundTransparency = 1,
+	Font = Enum.Font.GothamBlack,
+	TextScaled = true,
+	TextColor3 = K.Yellow,
+	Text = "",
+	ZIndex = 32,
+}, streak)
+new("UIPadding", { PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10) }, streakText)
+
+local ICONS = { BecomeWolverine = "🐺", WolverineKills = "🩸", SurviveTime = "⏱️", PlayMatches = "🎮" }
 local rows = {}
 for i, c in Config.DailyChallenges do
-	local row = new("Frame", { Size = UDim2.new(1, 0, 0, 50), BackgroundColor3 = Color3.fromRGB(30, 30, 36), LayoutOrder = i, ZIndex = 32 }, list)
-	corner(row, 8)
+	local row = new("Frame", { Size = UDim2.new(1, 0, 0, 56), BackgroundColor3 = Color3.new(1, 1, 1), LayoutOrder = i, ZIndex = 32 }, list)
+	corner(row, 12)
+	gradient(row, Color3.fromRGB(42, 42, 50), Color3.fromRGB(22, 22, 28), 0)
+	local rowStroke = stroke(row, Color3.fromRGB(70, 70, 80), 1.5)
+	local tile = new("TextLabel", {
+		Position = UDim2.fromOffset(8, 8),
+		Size = UDim2.fromOffset(40, 40),
+		BackgroundColor3 = Color3.fromRGB(20, 40, 26),
+		Font = Enum.Font.GothamBlack,
+		TextScaled = true,
+		Text = ICONS[c.Id] or "★",
+		ZIndex = 33,
+	}, row)
+	corner(tile, 10)
+	new("UIPadding", { PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6) }, tile)
 	new("TextLabel", {
-		Position = UDim2.fromOffset(10, 4),
-		Size = UDim2.new(1, -120, 0, 22),
+		Position = UDim2.fromOffset(58, 6),
+		Size = UDim2.new(1, -170, 0, 20),
 		BackgroundTransparency = 1,
-		Font = Enum.Font.GothamBold,
+		Font = Enum.Font.GothamBlack,
 		TextScaled = true,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = Color3.new(1, 1, 1),
+		TextColor3 = K.White,
 		Text = c.Text,
 		ZIndex = 33,
 	}, row)
-	new("TextLabel", {
+	local reward = new("TextLabel", {
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -10, 0, 4),
-		Size = UDim2.fromOffset(100, 22),
+		Position = UDim2.new(1, -10, 0, 8),
+		Size = UDim2.fromOffset(100, 20),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBlack,
 		TextScaled = true,
 		TextXAlignment = Enum.TextXAlignment.Right,
-		TextColor3 = YELLOW,
-		Text = "+" .. c.Reward .. " coins",
+		TextColor3 = K.Yellow,
+		Text = "🪙 " .. c.Reward,
 		ZIndex = 33,
 	}, row)
-	local bar = new("Frame", { Position = UDim2.fromOffset(10, 32), Size = UDim2.new(1, -20, 0, 10), BackgroundColor3 = Color3.fromRGB(55, 55, 62), ZIndex = 33 }, row)
-	corner(bar, 5)
-	local fill = new("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = GREEN, BorderSizePixel = 0, ZIndex = 34 }, bar)
-	corner(fill, 5)
+	local bar = new("Frame", { Position = UDim2.fromOffset(58, 32), Size = UDim2.new(1, -68, 0, 14), BackgroundColor3 = K.Ink, ZIndex = 33 }, row)
+	corner(bar, 7)
+	local fill = new("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, ZIndex = 34 }, bar)
+	corner(fill, 7)
+	gradient(fill, Color3.fromRGB(120, 255, 150), Color3.fromRGB(30, 160, 70), 0)
 	local count = new("TextLabel", {
 		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
-		Font = Enum.Font.GothamBold,
+		Font = Enum.Font.GothamBlack,
 		TextScaled = true,
-		TextColor3 = Color3.new(1, 1, 1),
+		TextColor3 = K.White,
 		Text = "",
 		ZIndex = 35,
 	}, bar)
-	rows[c.Id] = { Fill = fill, Count = count, Goal = c.Goal, Id = c.Id }
+	new("UIStroke", { Thickness = 1.5 }, count)
+	rows[c.Id] = { Fill = fill, Count = count, Goal = c.Goal, Stroke = rowStroke, Reward = reward, Tile = tile }
 end
 
 local function refresh()
@@ -174,47 +151,46 @@ local function refresh()
 	for id, r in rows do
 		local v = tonumber(progress[id]) or 0
 		local complete = done[id] == true
-		r.Fill.Size = UDim2.fromScale(complete and 1 or math.clamp(v / r.Goal, 0, 1), 1)
+		TweenService:Create(r.Fill, TweenInfo.new(0.4, Enum.EasingStyle.Quad), {
+			Size = UDim2.fromScale(complete and 1 or math.clamp(v / r.Goal, 0, 1), 1),
+		}):Play()
+		r.Stroke.Color = complete and K.Green or Color3.fromRGB(70, 70, 80)
+		r.Tile.BackgroundColor3 = complete and Color3.fromRGB(30, 110, 50) or Color3.fromRGB(20, 40, 26)
+		r.Reward.Text = complete and "✔ CLAIMED" or r.Reward.Text:gsub("✔ CLAIMED", "")
 		if complete then
-			r.Count.Text = "DONE"
+			r.Count.Text = "COMPLETE"
 		elseif id == "SurviveTime" then
 			r.Count.Text = ("%d:%02d / %d:%02d"):format(v // 60, v % 60, r.Goal // 60, r.Goal % 60)
 		else
 			r.Count.Text = ("%d / %d"):format(v, r.Goal)
 		end
 	end
-	streakLabel.Text = ("Login streak: %d day%s — come back tomorrow for more coins"):format(
-		player:GetAttribute("LoginStreak") or 0,
-		(player:GetAttribute("LoginStreak") or 0) == 1 and "" or "s"
-	)
+	local s = player:GetAttribute("LoginStreak") or 0
+	streakText.Text = ("🔥 LOGIN STREAK: %d DAY%s — COME BACK TOMORROW FOR MORE"):format(s, s == 1 and "" or "S")
+
 	local tokens = player:GetAttribute("GuaranteedTokens") or 0
-	local chance = player:GetAttribute("WolverineChance")
+	local chance = player:GetAttribute("WolverineChance") or 0
 	if tokens > 0 then
-		chanceLabel.Text = "Wolverine next round: GUARANTEED"
-		chanceLabel.TextColor3 = YELLOW
-	elseif chance then
-		chanceLabel.Text = ("Wolverine chance: %d%%"):format(chance)
-		chanceLabel.TextColor3 = Color3.fromRGB(255, 120, 120)
+		oddsText.Text = "GUARANTEED"
+		oddsFill.Size = UDim2.fromScale(1, 1)
+		oddsStroke.Color = K.Yellow
+	else
+		oddsText.Text = chance .. "%"
+		TweenService:Create(oddsFill, TweenInfo.new(0.4), { Size = UDim2.fromScale(math.clamp(chance / 100, 0.04, 1), 1) }):Play()
+		oddsStroke.Color = Color3.fromRGB(140, 30, 30)
 	end
 end
 
-local function fit()
-	local cam = workspace.CurrentCamera
-	scale.Scale = math.max(0.4, math.min(1, (cam.ViewportSize.X - 24) / 460, (cam.ViewportSize.Y - 24) / 340))
-end
-workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fit)
-fit()
-
 dailyButton.Activated:Connect(function()
-	panel.Visible = not panel.Visible
 	refresh()
-end)
-close.Activated:Connect(function()
-	panel.Visible = false
+	window.Toggle()
 end)
 buyButton.Activated:Connect(function()
 	if Config.GuaranteedWolverineProductId == 0 then
-		chanceLabel.Text = "Purchase not set up yet (see Config)"
+		buyLabel.Text = "NOT SET UP"
+		task.delay(2, function()
+			buyLabel.Text = "BE HIM  R$80"
+		end)
 		return
 	end
 	MarketplaceService:PromptProductPurchase(player, Config.GuaranteedWolverineProductId)
@@ -225,64 +201,93 @@ for _, attr in { "Challenges", "LoginStreak", "WolverineChance", "GuaranteedToke
 end
 refresh()
 
-function Daily.ShowReward(amount, streak)
-	local card = new("Frame", {
+function Daily.ShowReward(amount, days)
+	local holder = new("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(340, 170),
-		BackgroundColor3 = DARK,
+		Size = UDim2.fromOffset(380, 230),
+		BackgroundColor3 = Color3.new(1, 1, 1),
 		ZIndex = 40,
 	}, gui)
-	corner(card, 14)
-	new("UIStroke", { Color = YELLOW, Thickness = 3 }, card)
-	new("TextLabel", {
-		Position = UDim2.fromOffset(10, 12),
+	corner(holder, 18)
+	gradient(holder, Color3.fromRGB(60, 46, 12), Color3.fromRGB(18, 14, 6))
+	stroke(holder, K.Yellow, 3)
+	local scale = new("UIScale", { Scale = 0.5 }, holder)
+	TweenService:Create(scale, TweenInfo.new(0.5, Enum.EasingStyle.Back), { Scale = 1 }):Play()
+
+	-- rotating rays behind the coin
+	local rays = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.42),
+		Size = UDim2.fromOffset(160, 160),
+		BackgroundTransparency = 1,
+		ZIndex = 41,
+	}, holder)
+	for i = 0, 5 do
+		local ray = new("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(18, 160),
+			Rotation = i * 30,
+			BackgroundColor3 = K.Yellow,
+			BackgroundTransparency = 0.75,
+			ZIndex = 41,
+		}, rays)
+		new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.5, 0), NumberSequenceKeypoint.new(1, 1) }) }, ray)
+	end
+	TweenService:Create(rays, TweenInfo.new(6, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1), { Rotation = 360 }):Play()
+
+	local title = new("TextLabel", {
+		Position = UDim2.fromOffset(10, 10),
 		Size = UDim2.new(1, -20, 0, 40),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.LuckiestGuy,
 		TextScaled = true,
-		TextColor3 = YELLOW,
+		TextColor3 = K.Yellow,
 		Text = "DAILY REWARD",
-		ZIndex = 41,
-	}, card)
-	new("TextLabel", {
-		Position = UDim2.fromOffset(10, 58),
-		Size = UDim2.new(1, -20, 0, 44),
+		ZIndex = 43,
+	}, holder)
+	new("UIStroke", { Thickness = 2.5 }, title)
+	local amountLabel = new("TextLabel", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.45),
+		Size = UDim2.fromOffset(300, 56),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBlack,
 		TextScaled = true,
-		TextColor3 = Color3.new(1, 1, 1),
-		Text = ("+%d coins"):format(amount),
-		ZIndex = 41,
-	}, card)
+		TextColor3 = K.White,
+		Text = "🪙 +" .. amount,
+		ZIndex = 43,
+	}, holder)
+	new("UIStroke", { Thickness = 2.5 }, amountLabel)
 	new("TextLabel", {
-		Position = UDim2.fromOffset(10, 108),
+		Position = UDim2.new(0, 10, 1, -86),
 		Size = UDim2.new(1, -20, 0, 22),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBold,
 		TextScaled = true,
-		TextColor3 = GREEN,
-		Text = ("Day %d streak — bigger rewards every day you come back"):format(streak),
-		ZIndex = 41,
-	}, card)
-	local ok = new("TextButton", {
+		TextColor3 = K.Green,
+		Text = ("🔥 Day %d streak — rewards grow every day"):format(days),
+		ZIndex = 43,
+	}, holder)
+	local ok = UIKit.Button(holder, {
+		Text = "COLLECT",
+		Color = K.Green,
+		Size = UDim2.fromOffset(170, 44),
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -10),
-		Size = UDim2.fromOffset(120, 28),
-		BackgroundColor3 = Color3.fromRGB(40, 120, 60),
-		Font = Enum.Font.GothamBlack,
-		TextScaled = true,
-		TextColor3 = Color3.new(1, 1, 1),
-		Text = "NICE",
-		ZIndex = 41,
-	}, card)
-	corner(ok, 8)
-	ok.Activated:Connect(function()
-		card:Destroy()
-	end)
-	task.delay(8, function()
-		if card.Parent then
-			card:Destroy()
+		Position = UDim2.new(0.5, 0, 1, -14),
+		ZIndex = 44,
+	})
+	local function close()
+		local tw = TweenService:Create(scale, TweenInfo.new(0.15), { Scale = 0.6 })
+		tw:Play()
+		tw.Completed:Wait()
+		holder:Destroy()
+	end
+	ok.Activated:Connect(close)
+	task.delay(10, function()
+		if holder.Parent then
+			close()
 		end
 	end)
 end
