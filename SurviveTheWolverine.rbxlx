@@ -1562,43 +1562,87 @@ local function wolverineFace(char, head, opts)
 		return
 	end
 	local hs = head.Size
-	local t = 0.04
-	local z = -(hs.Z / 2 + t / 2)
+	-- The classic Roblox head is a rounded cylinder, so a flat piece only
+	-- touches it in the middle and floats off at the cheeks. Each piece is cut
+	-- into thin vertical strips and every strip is laid on the curve (like a
+	-- decal wrapping round). Layers sit 0.01 apart so nothing flickers.
+	local t = 0.02
+	local r = hs.Z / 2
 	local hair = opts.Hair or rgb(30, 24, 20)
 	local function f(name, w, h, x, y, color, rot, depth, mat)
-		return gear(char, head, name, Vector3.new(hs.X * w, hs.Y * h, t), color, mat or M.SmoothPlastic,
-			CFrame.new(hs.X * x, hs.Y * y, z - (depth or 0) * t) * CFrame.Angles(0, 0, rad(rot or 0)), nil, "Face")
+		local a = rad(rot or 0)
+		local width = hs.X * w
+		local strips = math.max(1, math.ceil(width / (hs.X * 0.08)))
+		local sw = width / strips
+		local first
+		for i = 1, strips do
+			local s = -width / 2 + (i - 0.5) * sw
+			local cx = math.clamp(hs.X * x + math.cos(a) * s, -r * 0.97, r * 0.97)
+			local cy = hs.Y * y + math.sin(a) * s
+			local theta = math.asin(cx / r)
+			-- the top and bottom edges of the head are bevelled too
+			local bevel = math.max(0, math.abs(cy) - hs.Y * 0.36) * 0.5
+			local rr = r + (depth or 0) * 0.01 - bevel
+			local cf = CFrame.new(math.sin(theta) * rr, cy, -math.cos(theta) * rr) * CFrame.Angles(0, -theta, 0) * CFrame.Angles(0, 0, a)
+			local p = gear(char, head, name, Vector3.new(sw * 1.08, hs.Y * h, t), color, mat or M.SmoothPlastic, cf, nil, "Face")
+			p.CastShadow = false
+			first = first or p
+		end
+		return first
 	end
-	local old = head:FindFirstChildOfClass("Decal")
-	if old then
-		old.Transparency = 1 -- the built face replaces the default one
+	-- the built face replaces the avatar's own face for good: Roblox re-applies
+	-- the avatar (and its face decal) after we dress, so keep removing it
+	local function strip(d)
+		if d:IsA("Decal") or d:IsA("Texture") then
+			d:Destroy()
+		end
 	end
+	for _, d in head:GetChildren() do
+		strip(d)
+	end
+	if not head:GetAttribute("BuiltFace") then
+		head:SetAttribute("BuiltFace", true)
+		pcall(function()
+			head.ChildAdded:Connect(function(d)
+				task.defer(function()
+					if d.Parent == head and head:GetAttribute("BuiltFace") then
+						strip(d)
+					end
+				end)
+			end)
+		end)
+	end
+	pcall(function()
+		if head:IsA("MeshPart") then
+			head.TextureID = "" -- dynamic heads paint the face into the mesh texture
+		end
+	end)
 
 	if opts.Skin then
 		-- the comic mask leaves the jaw bare
-		f("Jaw", 1.0, 0.44, 0, -0.28, opts.Skin, 0, 0)
+		f("Jaw", 1.0, 0.44, 0, -0.28, opts.Skin, 0, 1)
 	end
 	for _, side in { -1, 1 } do
 		if opts.Eyes == "mask" then
-			f("EyePatch", 0.34, 0.2, side * 0.2, 0.06, rgb(16, 16, 20), side * 14, 1)
-			f("Eye", 0.2, 0.06, side * 0.19, 0.05, Color3.new(1, 1, 1), side * 14, 2)
+			f("EyePatch", 0.34, 0.2, side * 0.2, 0.06, rgb(16, 16, 20), side * 14, 2)
+			f("Eye", 0.2, 0.06, side * 0.19, 0.05, Color3.new(1, 1, 1), side * 14, 3)
 		elseif opts.Eyes ~= "none" then
 			f("Eye", 0.14, 0.06, side * 0.2, 0.05, rgb(245, 240, 232), side * 8, 1)
 			f("Pupil", 0.06, 0.06, side * 0.18, 0.05, rgb(20, 16, 14), side * 8, 2)
 			-- heavy angry brows, low at the middle
-			f("Brow", 0.3, 0.08, side * 0.2, 0.16, hair, side * 16, 2)
+			f("Brow", 0.3, 0.08, side * 0.2, 0.16, hair, side * 16, 3)
 		end
 		-- mutton chops down the cheeks, curling in toward the mouth (chin bare)
-		f("Chop", 0.16, 0.46, side * 0.42, -0.12, hair, 0, 1)
-		f("ChopCurl", 0.2, 0.12, side * 0.3, -0.31, hair, side * -18, 1)
+		f("Chop", 0.16, 0.46, side * 0.42, -0.12, hair, 0, 2)
+		f("ChopCurl", 0.2, 0.12, side * 0.3, -0.31, hair, side * -18, 2)
 	end
 	-- gritted-teeth snarl
-	f("Mouth", 0.34, 0.1, 0, -0.24, rgb(40, 14, 14), 0, 1)
-	f("Teeth", 0.28, 0.045, 0, -0.235, rgb(236, 232, 220), 0, 2)
 	if opts.Beard then
-		f("Beard", 0.92, 0.26, 0, -0.38, hair, 0, 1)
-		f("Moustache", 0.44, 0.07, 0, -0.17, hair, 0, 3)
+		f("Beard", 0.92, 0.26, 0, -0.38, hair, 0, 3)
+		f("Moustache", 0.44, 0.07, 0, -0.17, hair, 0, 6)
 	end
+	f("Mouth", 0.34, 0.1, 0, -0.24, rgb(40, 14, 14), 0, 4)
+	f("Teeth", 0.28, 0.045, 0, -0.235, rgb(236, 232, 220), 0, 5)
 end
 
 local function comicGear(char, head)
