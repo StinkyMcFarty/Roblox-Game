@@ -4,6 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local Debris = game:GetService("Debris")
+local CollectionService = game:GetService("CollectionService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Util = require(ReplicatedStorage.Shared.Util)
@@ -945,7 +946,22 @@ function Wolverine.MakeStatue(skinId, cframe, parent)
 	pcall(function()
 		model:ScaleTo(1.25)
 	end)
-	Costumes.BuildClaws(model, Skins.Claws[Skins.DefaultClaw], true)
+	-- every claw skin is built onto the statue; each player's client shows only
+	-- the claws they have equipped (Shop.lua). Others see the default claws.
+	for _, clawId in Skins.ClawOrder do
+		Costumes.BuildClaws(model, Skins.Claws[clawId], true)
+		local folder = model:FindFirstChild("Claws")
+		for _, p in folder and folder:GetChildren() or {} do
+			if p:IsA("BasePart") and p:GetAttribute("ClawSkin") == nil then
+				p:SetAttribute("ClawSkin", clawId)
+				p:SetAttribute("BaseT", p.Transparency)
+				if clawId ~= Skins.DefaultClaw then
+					p.Transparency = 1
+				end
+			end
+		end
+	end
+	CollectionService:AddTag(model, "SkinStatue")
 	-- Crouched, arms flared, claws out
 	Posture.Set(model, "Root", CFrame.new(0, -0.3, 0) * CFrame.Angles(math.rad(-14), 0, 0))
 	Posture.Set(model, "Neck", CFrame.Angles(math.rad(12), 0, 0))

@@ -326,4 +326,37 @@ task.spawn(function()
 	refresh()
 end)
 
+-- Lobby statues show the claws YOU have equipped (all skins are built onto
+-- them server-side; we just reveal the matching set locally).
+local CollectionService = game:GetService("CollectionService")
+local function statueClaws(model)
+	local mine = player:GetAttribute("Claw") or Skins.DefaultClaw
+	local folder = model:FindFirstChild("Claws")
+	if not folder then
+		return
+	end
+	for _, p in folder:GetChildren() do
+		local id = p:GetAttribute("ClawSkin")
+		if id and p:IsA("BasePart") then
+			p.Transparency = (id == mine) and (p:GetAttribute("BaseT") or 0) or 1
+		end
+	end
+end
+local function allStatues()
+	for _, m in CollectionService:GetTagged("SkinStatue") do
+		statueClaws(m)
+	end
+end
+CollectionService:GetInstanceAddedSignal("SkinStatue"):Connect(function(m)
+	task.wait(0.5) -- let its claw parts replicate
+	statueClaws(m)
+end)
+player:GetAttributeChangedSignal("Claw"):Connect(allStatues)
+task.spawn(function()
+	for _ = 1, 10 do -- statues and claws may still be replicating on join
+		allStatues()
+		task.wait(1)
+	end
+end)
+
 return Shop
