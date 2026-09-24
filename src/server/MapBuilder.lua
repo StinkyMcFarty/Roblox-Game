@@ -346,9 +346,9 @@ end
 
 local function container(parent, cf, color, openBack)
 	local L, W, H = 20, 8, 8.5
-	local style = { Material = M.CorrugatedSteel, Color = color, Vary = 0.05 }
+	local style = { Material = M.CorrodedMetal, Color = color, Vary = 0.05 }
 	block(parent, Vector3.new(W, 0.4, L), cf * CFrame.new(0, 0.2, 0), M.Metal, C.DarkMetal)
-	block(parent, Vector3.new(W, 0.4, L), cf * CFrame.new(0, H - 0.2, 0), M.CorrugatedSteel, color)
+	block(parent, Vector3.new(W, 0.4, L), cf * CFrame.new(0, H - 0.2, 0), M.CorrodedMetal, color)
 	block(parent, Vector3.new(W - 0.4, 0.3, L - 0.4), cf * CFrame.new(0, H + 0.15, 0), M.Snow, C.Snow, { CanCollide = false })
 	local y0 = cf.Position.Y + 0.4
 	local function w(ax, az, bx, bz)
@@ -385,7 +385,7 @@ local function watchtower(parent, pos)
 			block(model, Vector3.new(0.5, 6, 0.5), CFrame.new(pos + Vector3.new(x, H + 3.4, z)), M.Wood, C.DarkWood)
 		end
 	end
-	block(model, Vector3.new(12.5, 0.6, 12.5), CFrame.new(pos + Vector3.new(0, H + 6.6, 0)), M.CorrugatedSteel, C.Metal)
+	block(model, Vector3.new(12.5, 0.6, 12.5), CFrame.new(pos + Vector3.new(0, H + 6.6, 0)), M.CorrodedMetal, C.Metal)
 	block(model, Vector3.new(12, 0.3, 12), CFrame.new(pos + Vector3.new(0, H + 7, 0)), M.Snow, C.Snow)
 	make("TrussPart", model, {
 		Size = Vector3.new(2, H, 2),
@@ -703,10 +703,10 @@ end
 local function buildWarehouse(bld, props, terminals, center)
 	local model, y0 = building(bld, center, 56, 40, 16, {
 		Name = "Warehouse",
-		Wall = { Material = M.CorrugatedSteel, Color = rgb(112, 86, 70), Vary = 0.08 },
+		Wall = { Material = M.CorrodedMetal, Color = rgb(112, 86, 70), Vary = 0.08 },
 		Floor = { Material = M.Concrete, Color = rgb(88, 88, 94) },
 		Roof = "flat",
-		RoofStyle = { Material = M.CorrugatedSteel, Color = rgb(80, 82, 88) },
+		RoofStyle = { Material = M.CorrodedMetal, Color = rgb(80, 82, 88) },
 		Lights = true,
 		LightSpacing = 18,
 		LightColor = rgb(255, 210, 150),
@@ -1056,7 +1056,7 @@ end
 local function truck(parent, cf)
 	breakable(block(parent, Vector3.new(7, 5, 6), cf * CFrame.new(0, 3.3, -7), M.SmoothPlastic, rgb(30, 60, 110)))
 	breakable(block(parent, Vector3.new(6.6, 2, 0.2), cf * CFrame.new(0, 4.6, -10.05), M.Glass, rgb(40, 50, 60), { Transparency = 0.2 }))
-	breakable(block(parent, Vector3.new(7.4, 7.5, 16), cf * CFrame.new(0, 4.6, 4), M.CorrugatedSteel, rgb(200, 200, 205)))
+	breakable(block(parent, Vector3.new(7.4, 7.5, 16), cf * CFrame.new(0, 4.6, 4), M.CorrodedMetal, rgb(200, 200, 205)))
 	block(parent, Vector3.new(7, 0.3, 15.6), cf * CFrame.new(0, 8.5, 4), M.Snow, C.Snow, { CanCollide = false })
 	for _, z in { -7, 1, 8 } do
 		for _, x in { -3.3, 3.3 } do
