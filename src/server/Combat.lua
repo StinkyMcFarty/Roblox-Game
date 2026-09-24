@@ -310,11 +310,21 @@ function Combat.RipInHalf(char, base)
 	local upper, lower
 	local upperTorso = char:FindFirstChild("UpperTorso")
 	if upperTorso then
-		local waist = upperTorso:FindFirstChild("Waist")
-		if waist then
-			waist:Destroy()
-		end
 		upper, lower = upperTorso, char:FindFirstChild("LowerTorso")
+		-- cut every joint linking the halves (Motor6D, or the upgraded
+		-- AnimationConstraint + BallSocketConstraint pair)
+		for _, d in char:GetDescendants() do
+			local a0, a1
+			if d:IsA("JointInstance") or d:IsA("AnimationConstraint") then
+				a0, a1 = d.Part0, d.Part1
+			elseif d:IsA("Constraint") then
+				a0 = d.Attachment0 and d.Attachment0.Parent
+				a1 = d.Attachment1 and d.Attachment1.Parent
+			end
+			if (a0 == upper and a1 == lower) or (a0 == lower and a1 == upper) then
+				d:Destroy()
+			end
+		end
 	else -- R6: the legs come off
 		local torso = char:FindFirstChild("Torso")
 		if torso then

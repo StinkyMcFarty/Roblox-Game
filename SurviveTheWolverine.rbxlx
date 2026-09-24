@@ -975,11 +975,21 @@ function Combat.RipInHalf(char, base)
 	local upper, lower
 	local upperTorso = char:FindFirstChild("UpperTorso")
 	if upperTorso then
-		local waist = upperTorso:FindFirstChild("Waist")
-		if waist then
-			waist:Destroy()
-		end
 		upper, lower = upperTorso, char:FindFirstChild("LowerTorso")
+		-- cut every joint linking the halves (Motor6D, or the upgraded
+		-- AnimationConstraint + BallSocketConstraint pair)
+		for _, d in char:GetDescendants() do
+			local a0, a1
+			if d:IsA("JointInstance") or d:IsA("AnimationConstraint") then
+				a0, a1 = d.Part0, d.Part1
+			elseif d:IsA("Constraint") then
+				a0 = d.Attachment0 and d.Attachment0.Parent
+				a1 = d.Attachment1 and d.Attachment1.Parent
+			end
+			if (a0 == upper and a1 == lower) or (a0 == lower and a1 == upper) then
+				d:Destroy()
+			end
+		end
 	else -- R6: the legs come off
 		local torso = char:FindFirstChild("Torso")
 		if torso then
@@ -5643,7 +5653,12 @@ local Fx = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Fx")
 local VFX = {}
 
 -- Plays a keyframed clip (client/AnimClips) on a character for every player.
+local animLogs = 0
 function VFX.Anim(char, clip, speed)
+	if char and animLogs < 12 then
+		animLogs += 1
+		print(("[Anims] server -> %s plays %s"):format(char.Name, clip))
+	end
 	if char then
 		Fx:FireAllClients("Anim", { Char = char, Clip = clip, Speed = speed })
 	end
@@ -6620,6 +6635,7 @@ return Wolverine
   <Item class="StarterPlayer" referent="27">
     <Properties>
       <string name="Name">StarterPlayer</string>
+      <token name="AvatarJointUpgrade">1</token>
       <token name="GameSettingsAvatar">1</token>
     </Properties>
     <Item class="StarterCharacterScripts" referent="28">
@@ -6965,6 +6981,7 @@ local RunService = game:GetService("RunService")
 local Clips = require(script.Parent:WaitForChild("AnimClips"))
 
 local Anims = {}
+print("[Anims] animation engine running")
 
 local rad = math.rad
 local JOINTS = {
@@ -6997,6 +7014,7 @@ local R6_JOINTS = {
 }
 
 local states = setmetatable({}, { __mode = "k" })
+local diagnosed = setmetatable({}, { __mode = "k" })
 
 local function getState(char)
 	local st = states[char]
@@ -7005,12 +7023,50 @@ local function getState(char)
 		local r6 = char:FindFirstChild("Torso") ~= nil and char:FindFirstChild("UpperTorso") == nil
 		for key, info in (r6 and R6_JOINTS or JOINTS) do
 			local part = char:FindFirstChild(info[1])
-			local j = part and part:FindFirstChild(info[2])
-			if j and j:IsA("Motor6D") then
+			local j = nil
+			if part then
+				-- Prefer the upgraded AnimationConstraint joint if the avatar has one,
+				-- otherwise the classic Motor6D (both expose a writable Transform).
+				for _, child in part:GetChildren() do
+					if child.Name == info[2] and child:IsA("AnimationConstraint") then
+						j = child
+					end
+				end
+				if not j then
+					local m = part:FindFirstChild(info[2])
+					if m and m:IsA("Motor6D") then
+						j = m
+					end
+				end
+			end
+			if j then
 				motors[key] = j
 				if r6 then
 					conj[key] = j.C0 - j.C0.Position
 				end
+			end
+		end
+		local count = 0
+		for _ in motors do
+			count += 1
+		end
+		if not diagnosed[char] then
+			diagnosed[char] = true
+			local sample = motors.RShoulder
+			print(("[Anims] %s: %s rig, %d animatable joints (%s)"):format(
+				char.Name, r6 and "R6" or "R15", count, sample and sample.ClassName or "none"))
+			if count == 0 then
+				local kinds = {}
+				for _, d in char:GetDescendants() do
+					if d:IsA("JointInstance") or d:IsA("Constraint") then
+						kinds[d.ClassName .. ":" .. d.Name] = true
+					end
+				end
+				local list = {}
+				for k in kinds do
+					table.insert(list, k)
+				end
+				warn("[Anims] no joints found on " .. char.Name .. ". Joints present: " .. table.concat(list, ", "))
 			end
 		end
 		st = { Motors = motors, Conj = conj, Phase = 0, LoopBlend = 0, Loop = nil, Clip = nil, NextLook = 0, LookUntil = 0, LookSide = 1 }

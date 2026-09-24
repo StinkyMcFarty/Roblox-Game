@@ -41,7 +41,10 @@
         }
       },
       "$properties": {
-        "GameSettingsAvatar": "R15"
+        "GameSettingsAvatar": "R15",
+        "AvatarJointUpgrade": {
+          "Enum": 1
+        }
       }
     },
     "Lighting": {

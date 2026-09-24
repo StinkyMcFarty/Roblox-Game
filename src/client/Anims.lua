@@ -11,6 +11,7 @@ local RunService = game:GetService("RunService")
 local Clips = require(script.Parent:WaitForChild("AnimClips"))
 
 local Anims = {}
+print("[Anims] animation engine running")
 
 local rad = math.rad
 local JOINTS = {
@@ -43,6 +44,7 @@ local R6_JOINTS = {
 }
 
 local states = setmetatable({}, { __mode = "k" })
+local diagnosed = setmetatable({}, { __mode = "k" })
 
 local function getState(char)
 	local st = states[char]
@@ -51,12 +53,50 @@ local function getState(char)
 		local r6 = char:FindFirstChild("Torso") ~= nil and char:FindFirstChild("UpperTorso") == nil
 		for key, info in (r6 and R6_JOINTS or JOINTS) do
 			local part = char:FindFirstChild(info[1])
-			local j = part and part:FindFirstChild(info[2])
-			if j and j:IsA("Motor6D") then
+			local j = nil
+			if part then
+				-- Prefer the upgraded AnimationConstraint joint if the avatar has one,
+				-- otherwise the classic Motor6D (both expose a writable Transform).
+				for _, child in part:GetChildren() do
+					if child.Name == info[2] and child:IsA("AnimationConstraint") then
+						j = child
+					end
+				end
+				if not j then
+					local m = part:FindFirstChild(info[2])
+					if m and m:IsA("Motor6D") then
+						j = m
+					end
+				end
+			end
+			if j then
 				motors[key] = j
 				if r6 then
 					conj[key] = j.C0 - j.C0.Position
 				end
+			end
+		end
+		local count = 0
+		for _ in motors do
+			count += 1
+		end
+		if not diagnosed[char] then
+			diagnosed[char] = true
+			local sample = motors.RShoulder
+			print(("[Anims] %s: %s rig, %d animatable joints (%s)"):format(
+				char.Name, r6 and "R6" or "R15", count, sample and sample.ClassName or "none"))
+			if count == 0 then
+				local kinds = {}
+				for _, d in char:GetDescendants() do
+					if d:IsA("JointInstance") or d:IsA("Constraint") then
+						kinds[d.ClassName .. ":" .. d.Name] = true
+					end
+				end
+				local list = {}
+				for k in kinds do
+					table.insert(list, k)
+				end
+				warn("[Anims] no joints found on " .. char.Name .. ". Joints present: " .. table.concat(list, ", "))
 			end
 		end
 		st = { Motors = motors, Conj = conj, Phase = 0, LoopBlend = 0, Loop = nil, Clip = nil, NextLook = 0, LookUntil = 0, LookSide = 1 }

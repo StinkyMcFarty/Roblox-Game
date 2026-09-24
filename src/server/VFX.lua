@@ -10,7 +10,12 @@ local Fx = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Fx")
 local VFX = {}
 
 -- Plays a keyframed clip (client/AnimClips) on a character for every player.
+local animLogs = 0
 function VFX.Anim(char, clip, speed)
+	if char and animLogs < 12 then
+		animLogs += 1
+		print(("[Anims] server -> %s plays %s"):format(char.Name, clip))
+	end
 	if char then
 		Fx:FireAllClients("Anim", { Char = char, Clip = clip, Speed = speed })
 	end
