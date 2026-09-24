@@ -127,6 +127,11 @@ function PlayerData.Load(player)
 		local ok, saved = pcall(function()
 			return store:GetAsync("p_" .. player.UserId)
 		end)
+		if not ok and tostring(saved):find("StudioAccessToApisNotAllowed") then
+			-- Studio without API access: play without saving instead of erroring
+			store = nil
+			print("[PlayerData] Saving is off in Studio. To test saving: Game Settings > Security > Enable Studio Access to API Services. The live game saves normally.")
+		end
 		if ok and type(saved) == "table" then
 			data.Coins = tonumber(saved.Coins) or 0
 			for _, id in saved.Owned or {} do
