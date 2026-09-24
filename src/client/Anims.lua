@@ -19,7 +19,7 @@ local function pawStep(st, root, pitch)
 			local snd = Instance.new("Sound")
 			snd.Name = "Paw"
 			snd.SoundId = Config.Sounds.Paw
-			snd.Volume = 0.9
+			snd.Volume = 0.5
 			snd.RollOffMaxDistance = 120
 			snd.RollOffMinDistance = 8
 			snd.Parent = root
@@ -67,7 +67,7 @@ local function footstep(st, root, kind, volume, pitch)
 			snd.SoundId = id
 			snd.PlaybackRegionsEnabled = true
 			snd.RollOffMode = Enum.RollOffMode.InverseTapered
-			snd.RollOffMinDistance = kind == "StepHeavy" and 14 or 7
+			snd.RollOffMinDistance = kind == "StepHeavy" and 10 or 5
 			snd.RollOffMaxDistance = kind == "StepHeavy" and 170 or 85
 			snd.Parent = root
 			pool[i] = snd
@@ -624,13 +624,13 @@ step:Connect(function(a, b)
 			end
 		elseif CUSTOM_STEPS and speed > 1.5 and hum.FloorMaterial ~= Enum.Material.Air and not airborne then
 			local kind = role == "Sentinel" and "StepHeavy" or (METAL_FLOORS[hum.FloorMaterial] and "StepMetal" or "Step")
-			local vol, pitch = 0.5, 1
+			local vol, pitch = 0.26, 1
 			if role == "Sentinel" then
-				vol, pitch = 1, Config.Sounds.StepHeavy == Config.Sounds.StepMetal and 0.6 or 1
+				vol, pitch = 0.55, Config.Sounds.StepHeavy == Config.Sounds.StepMetal and 0.6 or 1
 			elseif role == "Wolverine" then
-				vol, pitch = 0.8, 0.86 -- heavier boots
+				vol, pitch = 0.42, 0.86 -- heavier boots
 			elseif speed > 18 then
-				vol = 0.68
+				vol = 0.36
 			end
 			local stepped = false
 			if loop and st.Loop == loop and st.LoopBlend > 0.5 then
