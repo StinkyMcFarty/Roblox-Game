@@ -533,6 +533,7 @@ local function stab(player, char, root)
 	Util.Sound(Config.Sounds.Stab, torso, { Volume = 2.2, Range = 220 })
 	Util.Sound(Config.Sounds.Gore, torso, { Pitch = 0.6, Volume = 1.4 })
 	task.delay(0.12, function()
+		Fx:FireAllClients("HitStop", { Attacker = char, Victim = vChar, Duration = 0.1 })
 		VFX.Impact(torso.Position, clawGlow, 1.3)
 		VFX.ExitSpray(vChar, Vector3.new(0, 1, 0))
 		Combat.Blood(torso, 60)
@@ -679,6 +680,7 @@ function Wolverine.Damage(amount)
 	end
 	lastDamaged = os.clock()
 	hum:TakeDamage(amount)
+	Fx:FireAllClients("HitStop", { Victim = char, Duration = 0 })
 	Util.Burst(root, Util.SparkProps, 25, 1.5) -- adamantium skeleton sparks
 end
 

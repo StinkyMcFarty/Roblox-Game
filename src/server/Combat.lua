@@ -231,6 +231,7 @@ function Combat.Wound(killer, victim, opts)
 	VFX.IFrames(char, Config.HitImmunity)
 	VFX.ThrowTrail(char, Config.Throw.Tumble + 0.3)
 	VFX.Anim(char, "HitReact")
+	Fx:FireAllClients("HitStop", { Attacker = killer.Character, Victim = char, Duration = 0.08 })
 	Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 0.5, Radius = 35 })
 
 	-- Throw them away from Wolverine
@@ -400,6 +401,7 @@ function Combat.Execute(killer, victim)
 	-- Tear (synced with the Rip clip's pull-apart key)
 	if vChar.Parent then
 		VFX.StopAnim(vChar)
+		Fx:FireAllClients("HitStop", { Attacker = kChar, Victim = vChar, Duration = 0.12 })
 		Combat.RipInHalf(vChar, base)
 		Util.Sound(Config.Sounds.Tear, kRoot, { Volume = 2, Range = 220 })
 		Fx:FireAllClients("Shake", { Position = kRoot.Position, Intensity = 1.2, Radius = 90 })

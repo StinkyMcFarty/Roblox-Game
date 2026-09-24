@@ -57,12 +57,19 @@ RunService.Heartbeat:Connect(function(dt)
 			local moving = Vector3.new(v.X, 0, v.Z).Magnitude > 2 or hum.MoveDirection.Magnitude > 0.1
 			local speed = Config.Survivor.WalkSpeed
 			local feralActive = false
+			-- momentum: keep running and you build up to top speed
+			local ramp = Config.SprintRamp
+			local charging = moving and (s.Sprint or s.Feral) and not s.Exhausted
+			s.RunTime = charging and (s.RunTime or 0) + dt or 0
+			local build = math.clamp((s.RunTime - ramp.Delay) / ramp.Time, 0, 1)
+			build = build * build * (3 - 2 * build) -- smoothstep
+			player:SetAttribute("RunBuild", math.floor(build * 20) / 20)
 
 			if role == "Wolverine" then
 				local c = Config.Wolverine
 				speed = c.WalkSpeed
 				if s.Feral and not s.Exhausted and moving then
-					speed = c.FeralSpeed
+					speed = c.FeralSpeed + (c.FeralTopSpeed - c.FeralSpeed) * build
 					feralActive = true
 					s.Stamina = math.max(0, s.Stamina - dt / c.FeralStamina)
 					if s.Stamina <= 0 then
@@ -70,7 +77,7 @@ RunService.Heartbeat:Connect(function(dt)
 					end
 				else
 					if s.Sprint then
-						speed = c.SprintSpeed
+						speed = c.SprintSpeed + (c.TopSprintSpeed - c.SprintSpeed) * build
 					end
 					s.Stamina = math.min(1, s.Stamina + dt * c.FeralRegen / c.FeralStamina)
 					if s.Exhausted and s.Stamina > 0.3 then
@@ -85,7 +92,7 @@ RunService.Heartbeat:Connect(function(dt)
 			else
 				local c = Config.Survivor
 				if s.Sprint and moving and not s.Exhausted then
-					speed = c.SprintSpeed
+					speed = c.SprintSpeed + (c.TopSpeed - c.SprintSpeed) * build
 					s.Stamina = math.max(0, s.Stamina - dt / c.Stamina)
 					if s.Stamina <= 0 then
 						s.Exhausted = true

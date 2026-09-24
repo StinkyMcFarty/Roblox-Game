@@ -234,6 +234,13 @@ Fx.OnClientEvent:Connect(function(kind, data)
 	data = data or {}
 	if kind == "Anim" then
 		Anims.Play(data.Char, data.Clip, data.Speed)
+	elseif kind == "HitStop" then
+		if data.Attacker and (data.Duration or 0) > 0 then
+			Anims.HitStop(data.Attacker, data.Duration)
+		end
+		if data.Victim then
+			Anims.Jolt(data.Victim, 1.2)
+		end
 	elseif kind == "AnimStop" then
 		Anims.Stop(data.Char, data.Clip)
 	elseif kind == "Announce" then

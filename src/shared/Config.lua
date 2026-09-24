@@ -29,7 +29,8 @@ Config.AdrenalineBonus = 8
 Config.Survivor = {
 	WalkSpeed = 16,
 	SprintSpeed = 22,
-	Stamina = 5, -- seconds of sprint
+	TopSpeed = 28, -- after a couple of seconds of running
+	Stamina = 8, -- seconds of sprint
 	StaminaRegen = 0.8, -- seconds of sprint regained per second
 }
 
@@ -39,12 +40,18 @@ Config.Wolverine = {
 	HealDelay = 3, -- seconds after taking damage before healing starts
 	Scale = 1.15,
 	WalkSpeed = 17,
-	SprintSpeed = 23,
+	SprintSpeed = 24,
+	TopSprintSpeed = 30,
 	FeralSpeed = 31, -- running on all fours
+	FeralTopSpeed = 37,
 	FeralStamina = 4.5,
 	FeralRegen = 0.6,
 	ShredSpeed = 19, -- moving faster than this tears through walls in his path
 }
+
+-- Sprint momentum: after Delay seconds of running you accelerate to top
+-- speed over Time seconds (stop running and it resets).
+Config.SprintRamp = { Delay = 0.9, Time = 2.2 }
 
 Config.Abilities = {
 	Slash = { Cooldown = 0.55, Range = 8, Width = 8 },
