@@ -100,12 +100,12 @@ Config.Fart = {
 -- Monetization ----------------------------------------------------------
 -- Create a Developer Product (80 Robux) in the Creator Dashboard under
 -- your experience > Monetization > Developer Products, then paste its ID here.
-Config.GuaranteedWolverineProductId = 0
+Config.GuaranteedWolverineProductId = 3714579231
 
 -- Game Pass: doubles your chance of being picked as Wolverine every round.
 -- Creator Dashboard > your experience > Monetization > Passes: create a pass
 -- priced 250 Robux, then paste its ID here.
-Config.DoubleChanceGamepassId = 0
+Config.DoubleChanceGamepassId = 1995650487
 
 -- Coin packs (Store button). For each pack create a Developer Product in the
 -- Creator Dashboard (Monetization > Developer Products) at the Robux price
@@ -113,10 +113,10 @@ Config.DoubleChanceGamepassId = 0
 -- Roughly: a match pays 50 (died) to 150 (survived), more for kills and takedowns;
 -- claws cost 400-2200, suits 2000-6000.
 Config.CoinPacks = {
-	{ Id = "Handful", Name = "Handful of Coins", Coins = 500, Robux = 49, Bonus = "", ProductId = 0 },
-	{ Id = "Pouch", Name = "Pouch of Coins", Coins = 1200, Robux = 99, Bonus = "+20% BONUS", ProductId = 0 },
-	{ Id = "Crate", Name = "Crate of Coins", Coins = 3000, Robux = 199, Bonus = "+50% BONUS", ProductId = 0 },
-	{ Id = "Vault", Name = "Weapon X Vault", Coins = 7000, Robux = 399, Bonus = "+75% BONUS", ProductId = 0 },
+	{ Id = "Handful", Name = "Handful of Coins", Coins = 500, Robux = 49, Bonus = "", ProductId = 3714579257 },
+	{ Id = "Pouch", Name = "Pouch of Coins", Coins = 1200, Robux = 99, Bonus = "+20% BONUS", ProductId = 3714579267 },
+	{ Id = "Crate", Name = "Crate of Coins", Coins = 3000, Robux = 199, Bonus = "+50% BONUS", ProductId = 3714579287 },
+	{ Id = "Vault", Name = "Weapon X Vault", Coins = 7000, Robux = 399, Bonus = "+75% BONUS", ProductId = 3714579305 },
 }
 
 -- AFK: players marked AFK sit out matches. Roblox fires Player.Idled after
