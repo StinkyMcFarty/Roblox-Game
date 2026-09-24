@@ -1,5 +1,6 @@
 -- Round loop: intermission -> pick Wolverine -> survive -> results.
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Server = script.Parent
@@ -103,8 +104,11 @@ local function stat(player, name, delta)
 	end
 end
 
+-- Studio = testing (1 player + bots). Live game = real players only.
+local TESTING = RunService:IsStudio()
+
 local function minPlayers()
-	return Config.MinPlayers
+	return TESTING and 1 or Config.MinPlayers
 end
 
 ---------------------------------------------------------------------------
@@ -257,7 +261,9 @@ local function runRound()
 
 	Sentinel.SetupRound(map)
 	Hiding.SetupRound(map)
-	Bots.Fill(Config.BotFill, spawns)
+	if TESTING then
+		Bots.Fill(Config.BotFill, spawns)
+	end
 	announce(wolverine.DisplayName .. " is WOLVERINE!" .. (bought and "  (guaranteed pass)" or ""), RED, 4)
 	PlayerData.Progress(wolverine, "BecomeWolverine", 1)
 	Round.EndTime = os.clock() + Config.IntroLength + Config.RoundTime

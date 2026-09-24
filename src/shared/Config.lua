@@ -2,9 +2,10 @@
 local Config = {}
 
 -- Rounds ----------------------------------------------------------------
-Config.MinPlayers = 1 -- a round starts even with 1 player (bots fill in)
--- If there are fewer survivors than this, bot survivors are added so
--- Wolverine always has someone to hunt.
+Config.MinPlayers = 2 -- real players needed to start a round in the live game
+-- Bot survivors are for testing only: in Roblox Studio a round starts with
+-- 1 player and bots fill in up to this many survivors. The published game
+-- never spawns bots.
 Config.BotFill = 5
 Config.IntermissionTime = 20
 Config.RoundTime = 150 -- seconds survivors must last (after the intro)

@@ -8,7 +8,7 @@ The whole game is written as code. The map, Wolverine's look, the claws, the "an
 
 1. Download **`SurviveTheWolverine.rbxlx`** from this repo.
 2. Double-click it (or use Studio → File → Open from File).
-3. Press **Play**. One player is enough: if there aren't enough people, **bot survivors** fill the round (up to 5 survivors) so Wolverine always has someone to hunt.
+3. Press **Play**. In Studio one player is enough: **bot survivors** fill the round (up to 5) so you can test. The published game never uses bots and needs 2+ real players (`Config.MinPlayers`).
    To test with real survivors, use **Test → Clients and Servers → 2+ players**.
 
 ## Before you publish
