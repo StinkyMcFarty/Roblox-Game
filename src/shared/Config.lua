@@ -136,14 +136,14 @@ Config.Sounds = {
 -- right-click each > Copy Asset ID, and paste the number next to its name.
 -- Anything left at 0 falls back to the built-in sound above.
 Config.UploadedSounds = {
-	Snikt = 0, Slash = 0, Whoosh = 0, Stab = 0, Impact = 0, Leap = 0, Land = 0,
-	Roar = 0, Snarl = 0, Tear = 0, Gore = 0, Break = 0, Heartbeat = 0, Fart = 0,
+	Snikt = 0, Slash = 117112770329180, Whoosh = 0, Stab = 0, Impact = 0, Leap = 0, Land = 0,
+	Roar = 84386454545822, Snarl = 0, Tear = 0, Gore = 0, Break = 0, Heartbeat = 0, Fart = 0,
 	Sniff = 0, Laser = 0, Punch = 0, Terminal = 0, UIHover = 0, UIClick = 0,
 }
 Config.Sounds.Snarl = Config.Sounds.Snarl or ""
 for name, id in Config.UploadedSounds do
 	if id and id ~= 0 then
-		Config.Sounds[name] = "rbxassetid://" .. tostring(id)
+		Config.Sounds[name] = "rbxassetid://" .. (type(id) == "number" and string.format("%.0f", id) or tostring(id))
 	end
 end
 
