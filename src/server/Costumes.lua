@@ -122,6 +122,41 @@ local function asset(id)
 	return "rbxassetid://" .. (type(id) == "number" and string.format("%.0f", id) or tostring(id))
 end
 
+-- Wolverine's hair, built from parts so it works on any avatar (blocky
+-- players usually have no hair): a close cap with the two signature tufts
+-- sweeping up and back from the temples, a lower crest between them and
+-- sideburns. opts: Tuft (height multiplier), Chops (sideburn length).
+local function wolverineHair(char, head, color, opts)
+	if not head then
+		return
+	end
+	opts = opts or {}
+	local hs = head.Size
+	local tuft = opts.Tuft or 1
+	local mat = M.SmoothPlastic
+	local function piece(name, size, cf, class)
+		return gear(char, head, name, size, color, mat, cf, class and { Class = class } or nil, "Hair")
+	end
+	-- cap, back and sides hugging the skull
+	piece("HairCap", Vector3.new(hs.X * 1.06, hs.Y * 0.2, hs.Z * 1.08), CFrame.new(0, hs.Y * 0.52, hs.Z * 0.02))
+	piece("HairBack", Vector3.new(hs.X * 1.06, hs.Y * 0.64, hs.Z * 0.12), CFrame.new(0, hs.Y * 0.2, hs.Z * 0.54))
+	for _, side in { -1, 1 } do
+		piece("HairSide", Vector3.new(hs.X * 0.1, hs.Y * 0.36, hs.Z * 0.62), CFrame.new(side * hs.X * 0.53, hs.Y * 0.3, hs.Z * 0.2))
+		-- the tufts: tall wedges rising from the temples, leaning out and swept back
+		piece("HairTuft", Vector3.new(hs.X * 0.3, hs.Y * 0.58 * tuft, hs.Z * 0.72),
+			CFrame.new(side * hs.X * 0.42, hs.Y * (0.6 + 0.2 * tuft), hs.Z * 0.12) * CFrame.Angles(rad(-30), 0, rad(-side * 36)), "WedgePart")
+		-- a second, shorter spike behind each tuft for a ragged edge
+		piece("HairSpike", Vector3.new(hs.X * 0.2, hs.Y * 0.36 * tuft, hs.Z * 0.46),
+			CFrame.new(side * hs.X * 0.5, hs.Y * (0.54 + 0.12 * tuft), hs.Z * 0.4) * CFrame.Angles(rad(-42), 0, rad(-side * 52)), "WedgePart")
+		-- sideburns running down toward the jaw
+		piece("Sideburn", Vector3.new(hs.X * 0.06, hs.Y * 0.5 * (opts.Chops or 1), hs.Z * 0.3),
+			CFrame.new(side * hs.X * 0.52, hs.Y * (0.12 - 0.25 * ((opts.Chops or 1) - 1)), -hs.Z * 0.1))
+	end
+	-- lower crest in the middle, swept back
+	piece("HairCrest", Vector3.new(hs.X * 0.42, hs.Y * 0.3 * tuft, hs.Z * 0.78),
+		CFrame.new(0, hs.Y * (0.6 + 0.1 * tuft), hs.Z * 0.12) * CFrame.Angles(rad(-16), 0, 0), "WedgePart")
+end
+
 local function comicGear(char, head)
 	local BLU, BLK = rgb(28, 56, 140), rgb(18, 18, 22)
 	-- Unmasked Jim Lee look: the face texture does the chops + snarl,
@@ -328,6 +363,9 @@ function Costumes.Dress(char, skinId)
 		weaponXGear(char, head)
 	elseif skinId == "OldManLogan" then
 		oldManGear(char)
+	end
+	if skin.Hair and (skin.HairAccessoryId or 0) == 0 then
+		wolverineHair(char, head, skin.Hair.Color, skin.Hair)
 	end
 	loadHair(char, skin.HairAccessoryId)
 end
