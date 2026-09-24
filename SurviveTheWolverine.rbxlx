@@ -116,12 +116,16 @@ Config.Sentinel = {
 	-- Laser burns through walls and flashes Wolverine's adamantium skeleton
 	-- Death ray: charge, then a 3s aimable beam that pushes him back; the suit
 	-- is sluggish for 3s after firing.
-	Laser = { Cooldown = 12, Charge = 0.6, Duration = 3, DPS = 24, Range = 260, Slow = 1.5, WallsBurned = 8, Push = 22, Recover = 3 },
+	Laser = { Cooldown = 12, Charge = 0.6, Duration = 3, DPS = 24, Range = 260, Slow = 1.5, WallsBurned = 8, Push = 22, CloseRange = 18, CloseMult = 3.2, Recover = 3 },
 	Pulse = { Cooldown = 18, Charge = 2, Radius = 20, Stun = 3, Damage = 12, CancelCooldown = 3 },
 }
 
 -- Survivor fart: masks your scent from Wolverine's Sniff
-Config.Fart = { Cooldown = 60, MaskTime = 20, CloudTime = 20 }
+Config.Fart = {
+	Cooldown = 60, MaskTime = 20, CloudTime = 20,
+	-- Wolverine caught in the fresh cloud: can't attack and staggers slowly
+	GasRadius = 7, GasWindow = 4, GasTime = 2, GasSlow = 0.4,
+}
 
 -- Monetization ----------------------------------------------------------
 -- Create a Developer Product (80 Robux) in the Creator Dashboard under
@@ -182,7 +186,8 @@ Config.UploadedSounds = {
 	Roar = 84386454545822, Snarl = 0, Tear = 0, Gore = 0, Break = 0, Heartbeat = 94699316471373, Fart = 130496994474771,
 	Sniff = 0, Laser = 0, Punch = 0, Terminal = 0, UIHover = 0, UIClick = 0, Paw = 90700737432630,
 	PounceHit = 140573962847729, Impale = 100362323212257, DeathRay = 89285816836463, Chase = 71009071343057,
-	Step = 0, StepMetal = 0, StepHeavy = 0, -- footsteps (4 takes per file; see Anims.lua)
+	PounceLeap = 0, -- pounce launch (falls back to a pitched slash)
+	Step = 101289698791450, StepMetal = 112150969278482, StepHeavy = 114217739046080, -- footsteps (4 takes per file; see Anims.lua)
 }
 Config.Sounds.Snarl = Config.Sounds.Snarl or ""
 for name, id in Config.UploadedSounds do
@@ -1010,7 +1015,11 @@ function Combat.Hit(victim, ignoreImmunity)
 	if victim:GetAttribute("Role") == "Sentinel" then
 		local armor = (victim:GetAttribute("Armor") or 1) - 1
 		victim:SetAttribute("Armor", armor)
-		return armor <= 0 and "kill" or "hit"
+		if armor <= 0 and Combat.OnSuitDestroyed then
+			-- the suit blows apart and the pilot is thrown clear (as a normal hit)
+			Combat.OnSuitDestroyed(victim)
+		end
+		return "hit"
 	end
 	local hits = (victim:GetAttribute("Hits") or 0) + 1
 	victim:SetAttribute("Hits", hits)
@@ -2457,10 +2466,13 @@ local function pipe(parent, pts, d, color, mat, flangeColor)
 	flangeColor = flangeColor or rgb(46, 48, 52)
 	for i = 1, #pts - 1 do
 		local a, b = pts[i], pts[i + 1]
-		cyl(parent, a, b, d, mat, color, nil, true)
 		local len = (b - a).Magnitude
 		local dir = (b - a).Unit
 		local count = math.max(1, math.floor(len / 12))
+		-- one section per flange gap so Wolverine can tear out a length of pipe
+		for k = 1, count do
+			cyl(parent, a + dir * ((k - 1) * len / count), a + dir * (k * len / count), d, mat, color, nil, true)
+		end
 		for k = 0, count do
 			local p = a + dir * math.clamp(k * len / count, 0.4, len - 0.4)
 			cyl(parent, p - dir * 0.15, p + dir * 0.15, d * 1.3, M.Metal, flangeColor, nil, true)
@@ -4793,6 +4805,9 @@ local Util = require(ReplicatedStorage.Shared.Util)
 local Round = require(script.Parent.Round)
 local Hiding = require(script.Parent.Hiding)
 local VFX = require(script.Parent.VFX)
+local Status = require(script.Parent.Status)
+
+local Fx = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Fx")
 
 local Fart = {}
 
@@ -4817,7 +4832,8 @@ function Fart.Use(player)
 
 	local butt = char:FindFirstChild("LowerTorso") or char:FindFirstChild("Torso") or root
 	local pos = butt.Position - root.CFrame.LookVector * 1.2 - Vector3.new(0, 0.4, 0)
-	clouds[player] = { Position = pos, Time = os.clock() }
+	local look = root.CFrame.LookVector
+	clouds[player] = { Position = Vector3.new(pos.X, root.Position.Y, pos.Z), Yaw = math.atan2(-look.X, -look.Z), Time = os.clock() }
 
 	local cloud = Instance.new("Part")
 	cloud.Name = "GasCloud"
@@ -4851,6 +4867,25 @@ function Fart.Use(player)
 	end)
 	Debris:AddItem(cloud, cfg.CloudTime + 1)
 
+	-- Wolverine caught right in the fresh cloud gags on it
+	task.spawn(function()
+		local stop = os.clock() + cfg.GasWindow
+		while os.clock() < stop and Round.Active do
+			local w = Round.Wolverine
+			local wchar = w and w.Character
+			local wroot = Util.Root(wchar)
+			if wroot and Util.IsAlive(wchar) and (wroot.Position - pos).Magnitude <= cfg.GasRadius and not Status.Has(w, "Gassed") then
+				Status.Apply(w, "Gassed", cfg.GasTime)
+				VFX.Anim(wchar, "Gassed")
+				Util.FireClient(Fx, w, "Gassed", { Duration = cfg.GasTime })
+				Util.FireClient(Fx, player, "KillFeed", { Text = "You gassed Wolverine!" })
+				Util.Sound(Config.Sounds.Sniff, wroot, { Volume = 1.6, Pitch = 0.7, Range = 80 })
+				break
+			end
+			task.wait(0.1)
+		end
+	end)
+
 	-- the initial blast out the back
 	Util.Burst(butt, {
 		Texture = "rbxasset://textures/particles/smoke_main.dds",
@@ -4868,21 +4903,24 @@ function Fart.Use(player)
 	end
 end
 
--- Returns { Name = player.Name } for trackable survivors, or
--- { Position = Vector3 } decoys for anyone hiding behind their gas.
+-- Scent marks for Wolverine's Sniff, streamed to his client while it lasts.
+-- Every mark is the same shape so a gas decoy looks exactly like a person:
+-- { Id, Position, Yaw, Hiding? }. Survivors behind their gas give the cloud's
+-- position instead of their own.
 function Fart.SniffTargets()
 	local targets = {}
 	for player in Round.Survivors do
 		local c = clouds[player]
 		local spot = Hiding.SpotOf(player)
+		local id = tostring(player.UserId or player.Name)
+		local root = Util.Root(player.Character)
 		if c and os.clock() - c.Time < Config.Fart.MaskTime then
-			table.insert(targets, { Position = c.Position })
+			table.insert(targets, { Id = id, Position = c.Position, Yaw = c.Yaw or 0 })
 		elseif spot and spot:FindFirstChild("Inside") then
-			table.insert(targets, { Position = spot.Inside.Position - Vector3.new(0, 2, 0), Hiding = true })
-		elseif player.IsBot then
-			table.insert(targets, { Char = player.Character })
-		else
-			table.insert(targets, { Name = player.Name })
+			table.insert(targets, { Id = id, Position = spot.Inside.Position, Yaw = 0, Hiding = true })
+		elseif root and Util.IsAlive(player.Character) then
+			local look = root.CFrame.LookVector
+			table.insert(targets, { Id = id, Position = root.Position, Yaw = math.atan2(-look.X, -look.Z), Big = player:GetAttribute("Role") == "Sentinel" })
 		end
 	end
 	return targets
@@ -7708,6 +7746,9 @@ RunService.Heartbeat:Connect(function(dt)
 			if Status.Has(player, "Slowed") then
 				speed *= 0.55
 			end
+			if Status.Has(player, "Gassed") then
+				speed *= Config.Fart.GasSlow
+			end
 			if Status.Has(player, "Stunned") or Status.Has(player, "Frozen") then
 				speed = 0
 			end
@@ -7729,6 +7770,9 @@ RunService.Heartbeat:Connect(function(dt)
 			if feralActive ~= s.FeralOn then
 				s.FeralOn = feralActive
 				player:SetAttribute("Feral", feralActive)
+				if not feralActive then
+					s.FeralEnded = os.clock()
+				end
 			end
 
 			if math.abs(s.Stamina - s.SentStamina) > 0.01 or (s.Stamina == 1 and s.SentStamina ~= 1) then
@@ -7738,6 +7782,15 @@ RunService.Heartbeat:Connect(function(dt)
 		end
 	end
 end)
+
+-- Is he on all fours right now (with a short grace for stride hiccups / lag)?
+function Movement.IsFeral(player)
+	local s = states[player]
+	if player:GetAttribute("Feral") then
+		return true
+	end
+	return s ~= nil and s.FeralEnded ~= nil and os.clock() - s.FeralEnded < 0.35
+end
 
 return Movement
 ]]></string>
@@ -8576,6 +8629,25 @@ function Sentinel.PowerDown(player)
 	Fx:FireClient(player, "Announce", { Text = "Suit powered down. RUN.", Color = Color3.fromRGB(255, 80, 80), Duration = 2.5 })
 end
 
+-- Wolverine tears the last of the armour off: the suit bursts apart and the
+-- scientist inside tumbles out alive (Combat.Wound then throws them clear).
+function Combat.OnSuitDestroyed(player)
+	local char = player.Character
+	local root = Util.Root(char)
+	if not root then
+		return
+	end
+	local pos = root.Position
+	Sentinel.PowerDown(player)
+	Util.Burst(root, Util.SparkProps, 80, 2.5)
+	VFX.Impact(pos, GLOW, 2.2, char)
+	VFX.Shockwave(pos - Vector3.new(0, 2.5, 0), 18)
+	Util.SoundAt(Config.Sounds.Break, pos, { Volume = 2.2, Pitch = 0.5, Range = 300 })
+	Util.SoundAt(Config.Sounds.Punch, pos, { Volume = 2, Pitch = 0.6, Range = 300 })
+	Fx:FireAllClients("Shake", { Position = pos, Intensity = 1.2, Radius = 90 })
+	announce(player.DisplayName .. "'s SENTINEL was torn apart! They're out of the suit.", Color3.fromRGB(255, 80, 80))
+end
+
 ---------------------------------------------------------------------------
 -- Suit abilities
 ---------------------------------------------------------------------------
@@ -8794,9 +8866,15 @@ local function laser(player, char, root, aim)
 				lastReveal = os.clock()
 				Wolverine.RevealSkeleton()
 			end
-			if os.clock() - lastKnock > 0.3 and wRoot then
+			-- push him back; the closer he is, the harder and more constant the
+			-- shove, so he can't just walk into the beam and keep swinging
+			local close = wRoot and math.clamp(1 - (wRoot.Position - origin).Magnitude / cfg.CloseRange, 0, 1) or 0
+			if wRoot and os.clock() - lastKnock > 0.3 - 0.14 * close then
 				lastKnock = os.clock()
-				Util.FireClient(Fx, Round.Wolverine, "Knock", { Velocity = Util.Flat(dir) * cfg.Push + Vector3.new(0, 3, 0) })
+				Util.FireClient(Fx, Round.Wolverine, "Knock", {
+					Velocity = Util.Flat(dir) * cfg.Push * (1 + (cfg.CloseMult - 1) * close) + Vector3.new(0, 3 + 4 * close, 0),
+					Duration = 0.18 + 0.1 * close,
+				})
 			end
 		end
 		Fx:FireAllClients("LaserBeam", { Char = char, From = origin, To = endPos, Hit = hitW, Burns = burns })
@@ -9688,7 +9766,11 @@ local function pounce(player, char, root)
 	swingTrails(1.3)
 	local cfg = Config.Abilities.Pounce
 	VFX.Anim(char, "Pounce")
-	Util.Sound(Config.Sounds.Slash, root, { Pitch = 0.72, Volume = 1.2 })
+	if Config.UploadedSounds.PounceLeap ~= 0 then
+		Util.Sound(Config.Sounds.PounceLeap, root, { Volume = 1.8, Range = 160 })
+	else
+		Util.Sound(Config.Sounds.Slash, root, { Pitch = 0.72, Volume = 1.2 })
+	end
 	-- The client applies the leap; the server watches for contact.
 	local untilTime = os.clock() + cfg.Window
 	task.wait(0.12)
@@ -9816,6 +9898,14 @@ local function sniff(player, root)
 	Util.Sound(Config.Sounds.Sniff, root, { Volume = 1.5 })
 	VFX.Anim(player.Character, "Sniff")
 	Util.FireClient(Fx, player, "Sniff", { Duration = cfg.Duration, Targets = Fart.SniffTargets() })
+	-- keep the scents live: positions stream to his client for the whole sniff
+	task.spawn(function()
+		local stop = os.clock() + cfg.Duration
+		while os.clock() < stop and Round.Wolverine == player and player.Parent do
+			task.wait(0.12)
+			Util.FireClient(Fx, player, "SniffUpdate", { Targets = Fart.SniffTargets() })
+		end
+	end)
 	for survivor in Round.Survivors do
 		Util.FireClient(Fx, survivor, "Sniffed", {})
 	end
@@ -9834,7 +9924,7 @@ function Wolverine.Handle(player, ability, arg)
 	if not (root and Util.IsAlive(char)) then
 		return
 	end
-	if Status.Has(player, "Busy") or Status.Has(player, "Stunned") or Status.Has(player, "Frozen") then
+	if Status.Has(player, "Busy") or Status.Has(player, "Stunned") or Status.Has(player, "Frozen") or Status.Has(player, "Gassed") then
 		return
 	end
 	local cfg = Config.Abilities[ability]
@@ -9848,6 +9938,9 @@ function Wolverine.Handle(player, ability, arg)
 	end
 	if (cd[ability] or 0) > os.clock() then
 		return
+	end
+	if ability == "Pounce" and not Movement.IsFeral(player) then
+		return -- he can only pounce out of an all-fours sprint
 	end
 	cd[ability] = os.clock() + cfg.Cooldown - 0.1 -- small latency allowance
 
@@ -9941,7 +10034,7 @@ RunService.Heartbeat:Connect(function(dt)
 	end
 
 	shredClock += dt
-	if shredClock < 0.1 or not Round.Released or Status.Has(player, "Busy") or Status.Has(player, "Stunned") then
+	if shredClock < 0.1 or not Round.Released or Status.Has(player, "Busy") or Status.Has(player, "Stunned") or Status.Has(player, "Gassed") then
 		return
 	end
 	shredClock = 0
@@ -10208,6 +10301,35 @@ Clips.Sniff = {
 		{ T = 0.55, Ease = "InOut", Pose = { Neck = { 30, 22, 0 }, Waist = { 6, 0, 0 } } },
 		{ T = 0.85, Ease = "InOut", Pose = { Neck = { 26, 0, 0 } } },
 		{ T = 1.1, Ease = "InOut", Pose = REST },
+	},
+}
+
+-- Gassed: caught in a fart cloud. Hand clamped over his nose, head turned
+-- away, the other arm fanning the air, hacking coughs. Upper body only so
+-- his legs keep (slowly) walking.
+local GAG = { Neck = { -20, 30, 0 }, Waist = { -12, 12, 0 }, RShoulder = { 108, -10, -40 }, RElbow = { 128, 0, 0 }, RWrist = { -20, 0, 0 } }
+local function gag(extra)
+	local p = table.clone(GAG)
+	for k, v in extra do
+		p[k] = v
+	end
+	return p
+end
+Clips.Gassed = {
+	Tremble = true,
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.14, Ease = "Out", Pose = gag({ Neck = { -26, 34, 0 }, LShoulder = { 40, 0, -10 }, LElbow = { 60, 0, 0 } }) },
+		{ T = 0.36, Ease = "InOut", Pose = gag({ LShoulder = { 78, 20, -4 }, LElbow = { 80, 0, 0 } }) },
+		{ T = 0.5, Ease = "Out", Pose = gag({ Neck = { -34, 30, 0 }, Waist = { -26, 10, 0 }, LShoulder = { 70, -10, -30 }, LElbow = { 70, 0, 0 } }) }, -- cough
+		{ T = 0.68, Ease = "InOut", Pose = gag({ LShoulder = { 80, 25, -2 }, LElbow = { 84, 0, 0 } }) },
+		{ T = 0.9, Ease = "InOut", Pose = gag({ LShoulder = { 72, -15, -28 }, LElbow = { 76, 0, 0 } }) },
+		{ T = 1.04, Ease = "Out", Pose = gag({ Neck = { -36, 26, 0 }, Waist = { -28, 14, 0 }, LShoulder = { 60, 0, -20 }, LElbow = { 70, 0, 0 } }) }, -- cough
+		{ T = 1.16, Ease = "Out", Pose = gag({ Neck = { -30, 30, 0 }, Waist = { -20, 12, 0 }, LShoulder = { 60, 0, -20 }, LElbow = { 70, 0, 0 } }) },
+		{ T = 1.28, Ease = "Out", Pose = gag({ Neck = { -38, 28, 0 }, Waist = { -30, 12, 0 }, LShoulder = { 60, 0, -20 }, LElbow = { 70, 0, 0 } }) }, -- cough
+		{ T = 1.5, Ease = "InOut", Pose = gag({ LShoulder = { 80, 22, -2 }, LElbow = { 84, 0, 0 } }) },
+		{ T = 1.72, Ease = "InOut", Pose = gag({ LShoulder = { 70, -12, -26 }, LElbow = { 76, 0, 0 } }) },
+		{ T = 2.0, Ease = "InOut", Pose = REST },
 	},
 }
 
@@ -11136,7 +11258,7 @@ local RED = Color3.fromRGB(230, 50, 50)
 local ROLE_KIT = {
 	Wolverine = {
 		{ Name = "Slash", Label = "Claw Slash", Desc = "Shreds survivors and walls", Icon = "🩸", KeyText = "M1", Key = Enum.KeyCode.ButtonR2, Cooldown = A.Slash.Cooldown, Click = true, Color = RED },
-		{ Name = "Pounce", Label = "Pounce", Desc = "Leap, pin them down, claw away", Icon = "🐾", KeyText = "Q", Key = Enum.KeyCode.Q, Cooldown = A.Pounce.Cooldown, Color = Color3.fromRGB(255, 140, 30) },
+		{ Name = "Pounce", Label = "Pounce", Desc = "From all fours: leap, pin them, claw away", Icon = "🐾", KeyText = "Q", Key = Enum.KeyCode.Q, Cooldown = A.Pounce.Cooldown, Color = Color3.fromRGB(255, 140, 30) },
 		{ Name = "Stab", Label = "Impale", Desc = "Both claws in. Lift them up", Icon = "🗡️", KeyText = "E", Key = Enum.KeyCode.E, Cooldown = A.Stab.Cooldown, Color = Color3.fromRGB(200, 205, 220) },
 		{ Name = "Sniff", Label = "Sniff", Desc = "Sense everyone for " .. A.Sniff.Duration .. "s", Icon = "👃", KeyText = "F", Key = Enum.KeyCode.F, Cooldown = A.Sniff.Cooldown, Color = Color3.fromRGB(200, 60, 255) },
 	},
@@ -11222,6 +11344,10 @@ local function activate(name)
 		return
 	end
 	if os.clock() < (readyAt[name] or 0) then
+		return
+	end
+	if name == "Pounce" and not player:GetAttribute("Feral") then
+		Interface.Announce("Get on all fours to pounce (hold C)", Color3.fromRGB(255, 140, 30), 1.2)
 		return
 	end
 	readyAt[name] = os.clock() + entry.Cooldown
@@ -11534,7 +11660,7 @@ Fx.OnClientEvent:Connect(function(kind, data)
 	elseif kind == "Roar" then
 		Effects.Roar(data.Position)
 	elseif kind == "Knock" then
-		Effects.Knock(data.Velocity, data.Tumble, data.Spin)
+		Effects.Knock(data.Velocity, data.Tumble, data.Spin, data.Duration)
 	elseif kind == "Hurt" then
 		Effects.Hurt()
 	elseif kind == "Grabbed" then
@@ -11546,12 +11672,18 @@ Fx.OnClientEvent:Connect(function(kind, data)
 		Effects.Gore(data.Position)
 	elseif kind == "Sniff" then
 		Effects.Sniff(data.Duration, data.Targets)
+	elseif kind == "SniffUpdate" then
+		Effects.SniffUpdate(data.Targets)
 	elseif kind == "Sniffed" then
 		Effects.Sniffed()
 	elseif kind == "KillFeed" then
 		Interface.KillFeed(data.Text)
 	elseif kind == "TimeBonus" then
 		Interface.TimeBonus(data.Seconds)
+	elseif kind == "Gassed" then
+		Interface.Announce("GASSED!", Color3.fromRGB(150, 220, 60), data.Duration)
+		Interface.Flash(Color3.fromRGB(110, 170, 30), 0.45, data.Duration)
+		Effects.Shake(0.4)
 	elseif kind == "Stunned" then
 		if data.Name == player.Name then
 			Interface.Announce("STUNNED", Color3.fromRGB(255, 210, 60), data.Duration)
@@ -11989,7 +12121,7 @@ function Effects.Hurt()
 	Effects.Shake(1)
 end
 
-function Effects.Knock(velocity, tumble, spin)
+function Effects.Knock(velocity, tumble, spin, duration)
 	local char = player.Character
 	local root = char and char:FindFirstChild("HumanoidRootPart")
 	local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -12010,7 +12142,7 @@ function Effects.Knock(velocity, tumble, spin)
 			end
 		end)
 	else
-		Effects.Impulse(root, velocity, 0.18)
+		Effects.Impulse(root, velocity, tonumber(duration) or 0.18)
 	end
 end
 
@@ -12035,99 +12167,127 @@ end
 -- Sniff tracker
 ---------------------------------------------------------------------------
 
-local function decoyMark(position)
-	-- A fake scent trail: the gas cloud glows like a survivor would
-	local ghost = Instance.new("Part")
-	ghost.Anchored = true
-	ghost.CanCollide = false
-	ghost.CanQuery = false
-	ghost.CanTouch = false
-	ghost.Size = Vector3.new(2, 5, 1)
-	ghost.Material = Enum.Material.Neon
-	ghost.Color = Color3.fromRGB(255, 40, 40)
-	ghost.Transparency = 0.5
-	ghost.Position = position + Vector3.new(0, 2, 0)
-	ghost.Parent = workspace.CurrentCamera
+-- Every scent (a real survivor, a hiding spot or a fart decoy) is drawn the
+-- same way, a glowing red body silhouette, so Wolverine can't tell a decoy
+-- from a person. Positions stream from the server (SniffUpdate), so it works
+-- at any range and doesn't depend on the target's character being loaded.
+local SCENT = Color3.fromRGB(255, 40, 40)
+local GHOST_PARTS = {
+	{ Vector3.new(2, 2, 1), Vector3.new(0, 0, 0) }, -- torso
+	{ Vector3.new(1.2, 1.2, 1.2), Vector3.new(0, 1.65, 0) }, -- head
+	{ Vector3.new(1, 2, 1), Vector3.new(-1.55, 0, 0) },
+	{ Vector3.new(1, 2, 1), Vector3.new(1.55, 0, 0) },
+	{ Vector3.new(0.95, 2, 1), Vector3.new(-0.5, -2, 0) },
+	{ Vector3.new(0.95, 2, 1), Vector3.new(0.5, -2, 0) },
+}
+
+local function scentGhost(big)
+	local model = Instance.new("Model")
+	model.Name = "Scent"
+	local scale = big and 1.8 or 1
+	local core
+	for i, spec in GHOST_PARTS do
+		local p = Instance.new("Part")
+		p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch, p.CastShadow = true, false, false, false, false
+		p.Material = Enum.Material.Neon
+		p.Color = SCENT
+		p.Transparency = 0.55
+		p.Size = spec[1] * scale
+		p:SetAttribute("Offset", spec[2] * scale)
+		p.Parent = model
+		if i == 1 then
+			core = p
+		end
+	end
+	model.PrimaryPart = core
 	local hl = Instance.new("Highlight")
-	hl.FillColor = Color3.fromRGB(255, 40, 40)
+	hl.FillColor = SCENT
 	hl.OutlineColor = Color3.fromRGB(255, 220, 220)
 	hl.FillTransparency = 0.45
 	hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-	hl.Parent = ghost
-	return ghost
+	hl.Adornee = model
+	hl.Parent = model
+
+	local bb = Instance.new("BillboardGui")
+	bb.Size = UDim2.fromOffset(120, 30)
+	bb.StudsOffset = Vector3.new(0, 3.6 * scale, 0)
+	bb.AlwaysOnTop = true
+	bb.Adornee = core
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.GothamBlack
+	label.TextScaled = true
+	label.TextColor3 = Color3.fromRGB(255, 80, 80)
+	label.TextStrokeTransparency = 0
+	label.Parent = bb
+	bb.Parent = model
+	model.Parent = workspace.CurrentCamera
+	return { Model = model, Core = core, Label = label }
+end
+
+local function placeGhost(m, cf)
+	for _, p in m.Model:GetChildren() do
+		if p:IsA("BasePart") then
+			p.CFrame = cf * CFrame.new(p:GetAttribute("Offset"))
+		end
+	end
+end
+
+local sniffMarks = nil -- [Id] = mark, while a sniff is live
+
+local function syncScents(targets)
+	if not sniffMarks then
+		return
+	end
+	local seen = {}
+	for _, t in targets or {} do
+		if type(t.Id) == "string" and typeof(t.Position) == "Vector3" then
+			seen[t.Id] = true
+			local m = sniffMarks[t.Id]
+			if m and m.Big ~= (t.Big == true) then
+				m.Model:Destroy()
+				m = nil
+			end
+			if not m then
+				m = scentGhost(t.Big)
+				m.Big = t.Big == true
+				m.CF = CFrame.new(t.Position) * CFrame.Angles(0, tonumber(t.Yaw) or 0, 0)
+				placeGhost(m, m.CF)
+				sniffMarks[t.Id] = m
+			end
+			m.Goal = CFrame.new(t.Position) * CFrame.Angles(0, tonumber(t.Yaw) or 0, 0)
+			m.Prefix = t.Hiding and "HIDING " or ""
+		end
+	end
+	for id, m in sniffMarks do
+		if not seen[id] then
+			m.Model:Destroy()
+			sniffMarks[id] = nil
+		end
+	end
+end
+
+function Effects.SniffUpdate(targets)
+	syncScents(targets)
 end
 
 function Effects.Sniff(duration, targets)
-	local marks = {}
-	local tracked = {}
-	local extraChars = {}
-	for _, t in targets or {} do
-		if typeof(t.Char) == "Instance" then
-			table.insert(extraChars, t.Char)
-		elseif t.Name then
-			tracked[t.Name] = true
-		elseif typeof(t.Position) == "Vector3" then
-			local ghost = decoyMark(t.Position)
-			local hidingTag = t.Hiding
-			local bb = Instance.new("BillboardGui")
-			bb.Size = UDim2.fromOffset(120, 30)
-			bb.StudsOffset = Vector3.new(0, 3.5, 0)
-			bb.AlwaysOnTop = true
-			bb.Adornee = ghost
-			local label = Instance.new("TextLabel")
-			label.Size = UDim2.fromScale(1, 1)
-			label.BackgroundTransparency = 1
-			label.Font = Enum.Font.GothamBlack
-			label.TextScaled = true
-			label.TextColor3 = Color3.fromRGB(255, 80, 80)
-			label.TextStrokeTransparency = 0
-			label.Parent = bb
-			bb.Parent = ghost
-			table.insert(marks, { Highlight = ghost, Billboard = bb, Label = label, Part = ghost, Prefix = hidingTag and "HIDING " or "" })
+	if sniffMarks then
+		for _, m in sniffMarks do
+			m.Model:Destroy()
 		end
 	end
-	local toMark = {}
-	for _, p in Players:GetPlayers() do
-		local role = p:GetAttribute("Role")
-		if p ~= player and p.Character and (role == "Survivor" or role == "Sentinel") and (targets == nil or tracked[p.Name]) then
-			table.insert(toMark, p.Character)
-		end
-	end
-	for _, c in extraChars do
-		table.insert(toMark, c)
-	end
-	for _, char in toMark do
-		do
-			local hl = Instance.new("Highlight")
-			hl.FillColor = Color3.fromRGB(255, 40, 40)
-			hl.OutlineColor = Color3.fromRGB(255, 220, 220)
-			hl.FillTransparency = 0.45
-			hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-			hl.Adornee = char
-			hl.Parent = char
-
-			local head = char:FindFirstChild("Head")
-			local bb = Instance.new("BillboardGui")
-			bb.Size = UDim2.fromOffset(120, 30)
-			bb.StudsOffset = Vector3.new(0, 3.5, 0)
-			bb.AlwaysOnTop = true
-			bb.Adornee = head
-			local label = Instance.new("TextLabel")
-			label.Size = UDim2.fromScale(1, 1)
-			label.BackgroundTransparency = 1
-			label.Font = Enum.Font.GothamBlack
-			label.TextScaled = true
-			label.TextColor3 = Color3.fromRGB(255, 80, 80)
-			label.TextStrokeTransparency = 0
-			label.Parent = bb
-			bb.Parent = head
-			table.insert(marks, { Highlight = hl, Billboard = bb, Label = label, Part = char:FindFirstChild("HumanoidRootPart") })
-		end
+	sniffMarks = {}
+	local myMarks = sniffMarks
+	syncScents(targets)
+	local count = 0
+	for _ in sniffMarks do
+		count += 1
 	end
 
 	TweenService:Create(tint, TweenInfo.new(0.3), { Saturation = -0.85, TintColor = Color3.fromRGB(255, 190, 180) }):Play()
-	print(("[Sniff] %d scent(s) marked for %.0fs"):format(#marks, duration or 0))
-	Interface.Announce(#marks > 0 and ("You catch their scent...  (%d)"):format(#marks) or "No scent...", Color3.fromRGB(255, 90, 90), 2)
+	Interface.Announce(count > 0 and ("You catch their scent...  (%d)"):format(count) or "No scent...", Color3.fromRGB(255, 90, 90), 2)
 	Effects.Shake(0.3)
 	-- a red scent wave rolls out from him
 	local myRoot0 = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
@@ -12136,7 +12296,7 @@ function Effects.Sniff(duration, targets)
 		wave.Shape = Enum.PartType.Ball
 		wave.Anchored, wave.CanCollide, wave.CanQuery, wave.CanTouch, wave.CastShadow = true, false, false, false, false
 		wave.Material = Enum.Material.ForceField
-		wave.Color = Color3.fromRGB(255, 40, 40)
+		wave.Color = SCENT
 		wave.Size = Vector3.one * 4
 		wave.Position = myRoot0.Position
 		wave.Parent = workspace.CurrentCamera
@@ -12152,58 +12312,68 @@ function Effects.Sniff(duration, targets)
 	arrowGui.ResetOnSpawn = false
 	arrowGui.Parent = player:WaitForChild("PlayerGui")
 	local arrows = {}
-	for i, m in marks do
-		local a = Instance.new("TextLabel")
-		a.AnchorPoint = Vector2.new(0.5, 0.5)
-		a.Size = UDim2.fromOffset(34, 34)
-		a.BackgroundTransparency = 1
-		a.Font = Enum.Font.GothamBlack
-		a.TextScaled = true
-		a.Text = "▲"
-		a.TextColor3 = Color3.fromRGB(255, 70, 70)
-		a.TextStrokeTransparency = 0.2
-		a.Parent = arrowGui
-		arrows[i] = a
-	end
 
-	local conn = RunService.RenderStepped:Connect(function()
+	local conn = RunService.RenderStepped:Connect(function(dt)
 		local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 		local cam = workspace.CurrentCamera
 		local vp = cam.ViewportSize
-		for i, m in marks do
-			local r = m.Part
-			local arrow = arrows[i]
-			if myRoot and r and r.Parent then
-				m.Label.Text = (m.Prefix or "") .. math.floor((r.Position - myRoot.Position).Magnitude) .. "m"
-				local sp, onScreen = cam:WorldToViewportPoint(r.Position)
-				if onScreen and sp.Z > 0 and sp.X > 0 and sp.X < vp.X and sp.Y > 0 and sp.Y < vp.Y then
-					arrow.Visible = false
-				else
-					-- point from screen centre toward the target, pinned to the edge
-					local rel = cam.CFrame:PointToObjectSpace(r.Position)
-					local dir = Vector2.new(rel.X, -rel.Y)
-					if dir.Magnitude < 0.01 then
-						dir = Vector2.new(0, 1)
-					end
-					dir = dir.Unit
-					local c = vp / 2
-					local k = math.min((c.X - 40) / math.max(math.abs(dir.X), 1e-3), (c.Y - 40) / math.max(math.abs(dir.Y), 1e-3))
-					local pos = c + dir * k
-					arrow.Visible = true
-					arrow.Position = UDim2.fromOffset(pos.X, pos.Y)
-					arrow.Rotation = math.deg(math.atan2(dir.Y, dir.X)) + 90
-				end
-			elseif arrow then
+		local alpha = math.min(1, dt * 12)
+		for id, m in myMarks do
+			m.CF = m.CF:Lerp(m.Goal, alpha)
+			placeGhost(m, m.CF)
+			local pos = m.CF.Position
+			local arrow = arrows[id]
+			if not arrow then
+				arrow = Instance.new("TextLabel")
+				arrow.AnchorPoint = Vector2.new(0.5, 0.5)
+				arrow.Size = UDim2.fromOffset(34, 34)
+				arrow.BackgroundTransparency = 1
+				arrow.Font = Enum.Font.GothamBlack
+				arrow.TextScaled = true
+				arrow.Text = "▲"
+				arrow.TextColor3 = Color3.fromRGB(255, 70, 70)
+				arrow.TextStrokeTransparency = 0.2
+				arrow.Parent = arrowGui
+				arrows[id] = arrow
+			end
+			if myRoot then
+				m.Label.Text = (m.Prefix or "") .. math.floor((pos - myRoot.Position).Magnitude) .. "m"
+			end
+			local sp, onScreen = cam:WorldToViewportPoint(pos)
+			if onScreen and sp.Z > 0 and sp.X > 0 and sp.X < vp.X and sp.Y > 0 and sp.Y < vp.Y then
 				arrow.Visible = false
+			else
+				-- point from screen centre toward the scent, pinned to the edge
+				local rel = cam.CFrame:PointToObjectSpace(pos)
+				local dir = Vector2.new(rel.X, -rel.Y)
+				if dir.Magnitude < 0.01 then
+					dir = Vector2.new(0, 1)
+				end
+				dir = dir.Unit
+				local c = vp / 2
+				local k = math.min((c.X - 40) / math.max(math.abs(dir.X), 1e-3), (c.Y - 40) / math.max(math.abs(dir.Y), 1e-3))
+				local at = c + dir * k
+				arrow.Visible = true
+				arrow.Position = UDim2.fromOffset(at.X, at.Y)
+				arrow.Rotation = math.deg(math.atan2(dir.Y, dir.X)) + 90
+			end
+		end
+		for id, arrow in arrows do
+			if not myMarks[id] then
+				arrow:Destroy()
+				arrows[id] = nil
 			end
 		end
 	end)
 	task.delay(duration, function()
 		conn:Disconnect()
 		arrowGui:Destroy()
-		for _, m in marks do
-			m.Highlight:Destroy()
-			m.Billboard:Destroy()
+		for _, m in myMarks do
+			m.Model:Destroy()
+		end
+		table.clear(myMarks)
+		if sniffMarks == myMarks then
+			sniffMarks = nil
 		end
 		TweenService:Create(tint, TweenInfo.new(0.8), { Saturation = 0 }):Play()
 		Effects.SetHunterVision(player:GetAttribute("Role") == "Wolverine")

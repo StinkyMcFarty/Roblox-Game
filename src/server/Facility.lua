@@ -419,10 +419,13 @@ local function pipe(parent, pts, d, color, mat, flangeColor)
 	flangeColor = flangeColor or rgb(46, 48, 52)
 	for i = 1, #pts - 1 do
 		local a, b = pts[i], pts[i + 1]
-		cyl(parent, a, b, d, mat, color, nil, true)
 		local len = (b - a).Magnitude
 		local dir = (b - a).Unit
 		local count = math.max(1, math.floor(len / 12))
+		-- one section per flange gap so Wolverine can tear out a length of pipe
+		for k = 1, count do
+			cyl(parent, a + dir * ((k - 1) * len / count), a + dir * (k * len / count), d, mat, color, nil, true)
+		end
 		for k = 0, count do
 			local p = a + dir * math.clamp(k * len / count, 0.4, len - 0.4)
 			cyl(parent, p - dir * 0.15, p + dir * 0.15, d * 1.3, M.Metal, flangeColor, nil, true)

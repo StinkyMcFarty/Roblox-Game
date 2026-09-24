@@ -321,7 +321,11 @@ function Combat.Hit(victim, ignoreImmunity)
 	if victim:GetAttribute("Role") == "Sentinel" then
 		local armor = (victim:GetAttribute("Armor") or 1) - 1
 		victim:SetAttribute("Armor", armor)
-		return armor <= 0 and "kill" or "hit"
+		if armor <= 0 and Combat.OnSuitDestroyed then
+			-- the suit blows apart and the pilot is thrown clear (as a normal hit)
+			Combat.OnSuitDestroyed(victim)
+		end
+		return "hit"
 	end
 	local hits = (victim:GetAttribute("Hits") or 0) + 1
 	victim:SetAttribute("Hits", hits)

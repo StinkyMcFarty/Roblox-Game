@@ -54,6 +54,7 @@ Anything left at `0` uses a built-in Roblox sound instead. Roblox may ask you to
 
 Also upload `DeathRay.ogg`, `Chase.ogg` (chase music), `Heartbeat.ogg` and `Fart.ogg`, then paste their IDs.
 Footsteps: upload `Step.ogg` (tile), `StepMetal.ogg` (grating) and `StepHeavy.ogg` (Sentinel stomp) and paste their IDs as `Step`, `StepMetal`, `StepHeavy`. Until `Step` is set, walking keeps the default Roblox run sound.
+Also upload `PounceLeap.ogg` (pounce launch) and paste its ID as `PounceLeap`.
 
 **Upload at least `Slash.ogg` and `Roar.ogg`.** Without them, M1 uses Roblox's old sword sound and the roar is a pitched-down placeholder.
 
@@ -73,7 +74,7 @@ Footsteps: upload `Step.ogg` (tile), `StepMetal.ogg` (grating) and `StepHeavy.og
 | F | Sniff: see every survivor through walls for **5s** (25s cooldown) |
 
 - It takes **3 hits to kill** a survivor. The 3rd hit, from any attack, triggers the finisher: he lifts them and **rips them in half**.
-- A **Sentinel suit takes 6 hits** to destroy; the 6th rips it apart.
+- A **Sentinel suit takes 6 hits** to destroy; the 6th blows it apart and the scientist inside is thrown out alive.
 - Hits 1 and 2 **throw** the survivor, who tumbles through the air with a trail. They get **2s of i-frames** (a visible white shimmer) and an adrenaline boost. Wolverine gets a short recovery, so there are no infinite combos.
 - The HUD shows animated ability cards (bottom-right) with keys, cooldown sweeps and "ready" flashes.
 - Crisp VFX: three razor-thin claw crescents on every M1, spark flecks, and an X-shaped star flare with a needle burst and a white body flash on hit. The client draws these every frame.
@@ -160,3 +161,9 @@ src/client/   ClientMain (controls), Interface (HUD), UIKit (animated UI),
               Shop (suits/claws), Daily (challenges)
 src/shared/   Config, Skins, Util
 ```
+
+### Recent rules
+- **Pounce** only works while Wolverine is running on all fours (hold C / Ctrl).
+- **Fart gas**: if Wolverine runs into a fresh cloud (first 4s, within 7 studs) he's gassed for 2s: no attacks, 40% speed, covering his nose and coughing.
+- **Sniff** marks every survivor, hiding spot and gas decoy with the same red silhouette, live-tracked for 5s, so a decoy looks exactly like a person.
+- **Death ray** shoves Wolverine back harder and more constantly the closer he is (up to 3.2x within 18 studs).

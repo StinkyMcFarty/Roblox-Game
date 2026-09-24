@@ -111,6 +111,9 @@ RunService.Heartbeat:Connect(function(dt)
 			if Status.Has(player, "Slowed") then
 				speed *= 0.55
 			end
+			if Status.Has(player, "Gassed") then
+				speed *= Config.Fart.GasSlow
+			end
 			if Status.Has(player, "Stunned") or Status.Has(player, "Frozen") then
 				speed = 0
 			end
@@ -132,6 +135,9 @@ RunService.Heartbeat:Connect(function(dt)
 			if feralActive ~= s.FeralOn then
 				s.FeralOn = feralActive
 				player:SetAttribute("Feral", feralActive)
+				if not feralActive then
+					s.FeralEnded = os.clock()
+				end
 			end
 
 			if math.abs(s.Stamina - s.SentStamina) > 0.01 or (s.Stamina == 1 and s.SentStamina ~= 1) then
@@ -141,5 +147,14 @@ RunService.Heartbeat:Connect(function(dt)
 		end
 	end
 end)
+
+-- Is he on all fours right now (with a short grace for stride hiccups / lag)?
+function Movement.IsFeral(player)
+	local s = states[player]
+	if player:GetAttribute("Feral") then
+		return true
+	end
+	return s ~= nil and s.FeralEnded ~= nil and os.clock() - s.FeralEnded < 0.35
+end
 
 return Movement

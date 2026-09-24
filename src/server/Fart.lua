@@ -8,6 +8,9 @@ local Util = require(ReplicatedStorage.Shared.Util)
 local Round = require(script.Parent.Round)
 local Hiding = require(script.Parent.Hiding)
 local VFX = require(script.Parent.VFX)
+local Status = require(script.Parent.Status)
+
+local Fx = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Fx")
 
 local Fart = {}
 
@@ -32,7 +35,8 @@ function Fart.Use(player)
 
 	local butt = char:FindFirstChild("LowerTorso") or char:FindFirstChild("Torso") or root
 	local pos = butt.Position - root.CFrame.LookVector * 1.2 - Vector3.new(0, 0.4, 0)
-	clouds[player] = { Position = pos, Time = os.clock() }
+	local look = root.CFrame.LookVector
+	clouds[player] = { Position = Vector3.new(pos.X, root.Position.Y, pos.Z), Yaw = math.atan2(-look.X, -look.Z), Time = os.clock() }
 
 	local cloud = Instance.new("Part")
 	cloud.Name = "GasCloud"
@@ -66,6 +70,25 @@ function Fart.Use(player)
 	end)
 	Debris:AddItem(cloud, cfg.CloudTime + 1)
 
+	-- Wolverine caught right in the fresh cloud gags on it
+	task.spawn(function()
+		local stop = os.clock() + cfg.GasWindow
+		while os.clock() < stop and Round.Active do
+			local w = Round.Wolverine
+			local wchar = w and w.Character
+			local wroot = Util.Root(wchar)
+			if wroot and Util.IsAlive(wchar) and (wroot.Position - pos).Magnitude <= cfg.GasRadius and not Status.Has(w, "Gassed") then
+				Status.Apply(w, "Gassed", cfg.GasTime)
+				VFX.Anim(wchar, "Gassed")
+				Util.FireClient(Fx, w, "Gassed", { Duration = cfg.GasTime })
+				Util.FireClient(Fx, player, "KillFeed", { Text = "You gassed Wolverine!" })
+				Util.Sound(Config.Sounds.Sniff, wroot, { Volume = 1.6, Pitch = 0.7, Range = 80 })
+				break
+			end
+			task.wait(0.1)
+		end
+	end)
+
 	-- the initial blast out the back
 	Util.Burst(butt, {
 		Texture = "rbxasset://textures/particles/smoke_main.dds",
@@ -83,21 +106,24 @@ function Fart.Use(player)
 	end
 end
 
--- Returns { Name = player.Name } for trackable survivors, or
--- { Position = Vector3 } decoys for anyone hiding behind their gas.
+-- Scent marks for Wolverine's Sniff, streamed to his client while it lasts.
+-- Every mark is the same shape so a gas decoy looks exactly like a person:
+-- { Id, Position, Yaw, Hiding? }. Survivors behind their gas give the cloud's
+-- position instead of their own.
 function Fart.SniffTargets()
 	local targets = {}
 	for player in Round.Survivors do
 		local c = clouds[player]
 		local spot = Hiding.SpotOf(player)
+		local id = tostring(player.UserId or player.Name)
+		local root = Util.Root(player.Character)
 		if c and os.clock() - c.Time < Config.Fart.MaskTime then
-			table.insert(targets, { Position = c.Position })
+			table.insert(targets, { Id = id, Position = c.Position, Yaw = c.Yaw or 0 })
 		elseif spot and spot:FindFirstChild("Inside") then
-			table.insert(targets, { Position = spot.Inside.Position - Vector3.new(0, 2, 0), Hiding = true })
-		elseif player.IsBot then
-			table.insert(targets, { Char = player.Character })
-		else
-			table.insert(targets, { Name = player.Name })
+			table.insert(targets, { Id = id, Position = spot.Inside.Position, Yaw = 0, Hiding = true })
+		elseif root and Util.IsAlive(player.Character) then
+			local look = root.CFrame.LookVector
+			table.insert(targets, { Id = id, Position = root.Position, Yaw = math.atan2(-look.X, -look.Z), Big = player:GetAttribute("Role") == "Sentinel" })
 		end
 	end
 	return targets

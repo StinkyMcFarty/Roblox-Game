@@ -200,6 +200,35 @@ Clips.Sniff = {
 	},
 }
 
+-- Gassed: caught in a fart cloud. Hand clamped over his nose, head turned
+-- away, the other arm fanning the air, hacking coughs. Upper body only so
+-- his legs keep (slowly) walking.
+local GAG = { Neck = { -20, 30, 0 }, Waist = { -12, 12, 0 }, RShoulder = { 108, -10, -40 }, RElbow = { 128, 0, 0 }, RWrist = { -20, 0, 0 } }
+local function gag(extra)
+	local p = table.clone(GAG)
+	for k, v in extra do
+		p[k] = v
+	end
+	return p
+end
+Clips.Gassed = {
+	Tremble = true,
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.14, Ease = "Out", Pose = gag({ Neck = { -26, 34, 0 }, LShoulder = { 40, 0, -10 }, LElbow = { 60, 0, 0 } }) },
+		{ T = 0.36, Ease = "InOut", Pose = gag({ LShoulder = { 78, 20, -4 }, LElbow = { 80, 0, 0 } }) },
+		{ T = 0.5, Ease = "Out", Pose = gag({ Neck = { -34, 30, 0 }, Waist = { -26, 10, 0 }, LShoulder = { 70, -10, -30 }, LElbow = { 70, 0, 0 } }) }, -- cough
+		{ T = 0.68, Ease = "InOut", Pose = gag({ LShoulder = { 80, 25, -2 }, LElbow = { 84, 0, 0 } }) },
+		{ T = 0.9, Ease = "InOut", Pose = gag({ LShoulder = { 72, -15, -28 }, LElbow = { 76, 0, 0 } }) },
+		{ T = 1.04, Ease = "Out", Pose = gag({ Neck = { -36, 26, 0 }, Waist = { -28, 14, 0 }, LShoulder = { 60, 0, -20 }, LElbow = { 70, 0, 0 } }) }, -- cough
+		{ T = 1.16, Ease = "Out", Pose = gag({ Neck = { -30, 30, 0 }, Waist = { -20, 12, 0 }, LShoulder = { 60, 0, -20 }, LElbow = { 70, 0, 0 } }) },
+		{ T = 1.28, Ease = "Out", Pose = gag({ Neck = { -38, 28, 0 }, Waist = { -30, 12, 0 }, LShoulder = { 60, 0, -20 }, LElbow = { 70, 0, 0 } }) }, -- cough
+		{ T = 1.5, Ease = "InOut", Pose = gag({ LShoulder = { 80, 22, -2 }, LElbow = { 84, 0, 0 } }) },
+		{ T = 1.72, Ease = "InOut", Pose = gag({ LShoulder = { 70, -12, -26 }, LElbow = { 76, 0, 0 } }) },
+		{ T = 2.0, Ease = "InOut", Pose = REST },
+	},
+}
+
 ---------------------------------------------------------------------------
 -- Victim reactions
 ---------------------------------------------------------------------------

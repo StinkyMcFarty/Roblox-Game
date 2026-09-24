@@ -280,6 +280,25 @@ function Sentinel.PowerDown(player)
 	Fx:FireClient(player, "Announce", { Text = "Suit powered down. RUN.", Color = Color3.fromRGB(255, 80, 80), Duration = 2.5 })
 end
 
+-- Wolverine tears the last of the armour off: the suit bursts apart and the
+-- scientist inside tumbles out alive (Combat.Wound then throws them clear).
+function Combat.OnSuitDestroyed(player)
+	local char = player.Character
+	local root = Util.Root(char)
+	if not root then
+		return
+	end
+	local pos = root.Position
+	Sentinel.PowerDown(player)
+	Util.Burst(root, Util.SparkProps, 80, 2.5)
+	VFX.Impact(pos, GLOW, 2.2, char)
+	VFX.Shockwave(pos - Vector3.new(0, 2.5, 0), 18)
+	Util.SoundAt(Config.Sounds.Break, pos, { Volume = 2.2, Pitch = 0.5, Range = 300 })
+	Util.SoundAt(Config.Sounds.Punch, pos, { Volume = 2, Pitch = 0.6, Range = 300 })
+	Fx:FireAllClients("Shake", { Position = pos, Intensity = 1.2, Radius = 90 })
+	announce(player.DisplayName .. "'s SENTINEL was torn apart! They're out of the suit.", Color3.fromRGB(255, 80, 80))
+end
+
 ---------------------------------------------------------------------------
 -- Suit abilities
 ---------------------------------------------------------------------------
@@ -498,9 +517,15 @@ local function laser(player, char, root, aim)
 				lastReveal = os.clock()
 				Wolverine.RevealSkeleton()
 			end
-			if os.clock() - lastKnock > 0.3 and wRoot then
+			-- push him back; the closer he is, the harder and more constant the
+			-- shove, so he can't just walk into the beam and keep swinging
+			local close = wRoot and math.clamp(1 - (wRoot.Position - origin).Magnitude / cfg.CloseRange, 0, 1) or 0
+			if wRoot and os.clock() - lastKnock > 0.3 - 0.14 * close then
 				lastKnock = os.clock()
-				Util.FireClient(Fx, Round.Wolverine, "Knock", { Velocity = Util.Flat(dir) * cfg.Push + Vector3.new(0, 3, 0) })
+				Util.FireClient(Fx, Round.Wolverine, "Knock", {
+					Velocity = Util.Flat(dir) * cfg.Push * (1 + (cfg.CloseMult - 1) * close) + Vector3.new(0, 3 + 4 * close, 0),
+					Duration = 0.18 + 0.1 * close,
+				})
 			end
 		end
 		Fx:FireAllClients("LaserBeam", { Char = char, From = origin, To = endPos, Hit = hitW, Burns = burns })

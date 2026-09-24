@@ -529,7 +529,11 @@ local function pounce(player, char, root)
 	swingTrails(1.3)
 	local cfg = Config.Abilities.Pounce
 	VFX.Anim(char, "Pounce")
-	Util.Sound(Config.Sounds.Slash, root, { Pitch = 0.72, Volume = 1.2 })
+	if Config.UploadedSounds.PounceLeap ~= 0 then
+		Util.Sound(Config.Sounds.PounceLeap, root, { Volume = 1.8, Range = 160 })
+	else
+		Util.Sound(Config.Sounds.Slash, root, { Pitch = 0.72, Volume = 1.2 })
+	end
 	-- The client applies the leap; the server watches for contact.
 	local untilTime = os.clock() + cfg.Window
 	task.wait(0.12)
@@ -657,6 +661,14 @@ local function sniff(player, root)
 	Util.Sound(Config.Sounds.Sniff, root, { Volume = 1.5 })
 	VFX.Anim(player.Character, "Sniff")
 	Util.FireClient(Fx, player, "Sniff", { Duration = cfg.Duration, Targets = Fart.SniffTargets() })
+	-- keep the scents live: positions stream to his client for the whole sniff
+	task.spawn(function()
+		local stop = os.clock() + cfg.Duration
+		while os.clock() < stop and Round.Wolverine == player and player.Parent do
+			task.wait(0.12)
+			Util.FireClient(Fx, player, "SniffUpdate", { Targets = Fart.SniffTargets() })
+		end
+	end)
 	for survivor in Round.Survivors do
 		Util.FireClient(Fx, survivor, "Sniffed", {})
 	end
@@ -675,7 +687,7 @@ function Wolverine.Handle(player, ability, arg)
 	if not (root and Util.IsAlive(char)) then
 		return
 	end
-	if Status.Has(player, "Busy") or Status.Has(player, "Stunned") or Status.Has(player, "Frozen") then
+	if Status.Has(player, "Busy") or Status.Has(player, "Stunned") or Status.Has(player, "Frozen") or Status.Has(player, "Gassed") then
 		return
 	end
 	local cfg = Config.Abilities[ability]
@@ -689,6 +701,9 @@ function Wolverine.Handle(player, ability, arg)
 	end
 	if (cd[ability] or 0) > os.clock() then
 		return
+	end
+	if ability == "Pounce" and not Movement.IsFeral(player) then
+		return -- he can only pounce out of an all-fours sprint
 	end
 	cd[ability] = os.clock() + cfg.Cooldown - 0.1 -- small latency allowance
 
@@ -782,7 +797,7 @@ RunService.Heartbeat:Connect(function(dt)
 	end
 
 	shredClock += dt
-	if shredClock < 0.1 or not Round.Released or Status.Has(player, "Busy") or Status.Has(player, "Stunned") then
+	if shredClock < 0.1 or not Round.Released or Status.Has(player, "Busy") or Status.Has(player, "Stunned") or Status.Has(player, "Gassed") then
 		return
 	end
 	shredClock = 0

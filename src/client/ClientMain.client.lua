@@ -29,7 +29,7 @@ local RED = Color3.fromRGB(230, 50, 50)
 local ROLE_KIT = {
 	Wolverine = {
 		{ Name = "Slash", Label = "Claw Slash", Desc = "Shreds survivors and walls", Icon = "🩸", KeyText = "M1", Key = Enum.KeyCode.ButtonR2, Cooldown = A.Slash.Cooldown, Click = true, Color = RED },
-		{ Name = "Pounce", Label = "Pounce", Desc = "Leap, pin them down, claw away", Icon = "🐾", KeyText = "Q", Key = Enum.KeyCode.Q, Cooldown = A.Pounce.Cooldown, Color = Color3.fromRGB(255, 140, 30) },
+		{ Name = "Pounce", Label = "Pounce", Desc = "From all fours: leap, pin them, claw away", Icon = "🐾", KeyText = "Q", Key = Enum.KeyCode.Q, Cooldown = A.Pounce.Cooldown, Color = Color3.fromRGB(255, 140, 30) },
 		{ Name = "Stab", Label = "Impale", Desc = "Both claws in. Lift them up", Icon = "🗡️", KeyText = "E", Key = Enum.KeyCode.E, Cooldown = A.Stab.Cooldown, Color = Color3.fromRGB(200, 205, 220) },
 		{ Name = "Sniff", Label = "Sniff", Desc = "Sense everyone for " .. A.Sniff.Duration .. "s", Icon = "👃", KeyText = "F", Key = Enum.KeyCode.F, Cooldown = A.Sniff.Cooldown, Color = Color3.fromRGB(200, 60, 255) },
 	},
@@ -115,6 +115,10 @@ local function activate(name)
 		return
 	end
 	if os.clock() < (readyAt[name] or 0) then
+		return
+	end
+	if name == "Pounce" and not player:GetAttribute("Feral") then
+		Interface.Announce("Get on all fours to pounce (hold C)", Color3.fromRGB(255, 140, 30), 1.2)
 		return
 	end
 	readyAt[name] = os.clock() + entry.Cooldown
@@ -427,7 +431,7 @@ Fx.OnClientEvent:Connect(function(kind, data)
 	elseif kind == "Roar" then
 		Effects.Roar(data.Position)
 	elseif kind == "Knock" then
-		Effects.Knock(data.Velocity, data.Tumble, data.Spin)
+		Effects.Knock(data.Velocity, data.Tumble, data.Spin, data.Duration)
 	elseif kind == "Hurt" then
 		Effects.Hurt()
 	elseif kind == "Grabbed" then
@@ -439,12 +443,18 @@ Fx.OnClientEvent:Connect(function(kind, data)
 		Effects.Gore(data.Position)
 	elseif kind == "Sniff" then
 		Effects.Sniff(data.Duration, data.Targets)
+	elseif kind == "SniffUpdate" then
+		Effects.SniffUpdate(data.Targets)
 	elseif kind == "Sniffed" then
 		Effects.Sniffed()
 	elseif kind == "KillFeed" then
 		Interface.KillFeed(data.Text)
 	elseif kind == "TimeBonus" then
 		Interface.TimeBonus(data.Seconds)
+	elseif kind == "Gassed" then
+		Interface.Announce("GASSED!", Color3.fromRGB(150, 220, 60), data.Duration)
+		Interface.Flash(Color3.fromRGB(110, 170, 30), 0.45, data.Duration)
+		Effects.Shake(0.4)
 	elseif kind == "Stunned" then
 		if data.Name == player.Name then
 			Interface.Announce("STUNNED", Color3.fromRGB(255, 210, 60), data.Duration)

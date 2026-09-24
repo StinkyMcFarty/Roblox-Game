@@ -78,12 +78,16 @@ Config.Sentinel = {
 	-- Laser burns through walls and flashes Wolverine's adamantium skeleton
 	-- Death ray: charge, then a 3s aimable beam that pushes him back; the suit
 	-- is sluggish for 3s after firing.
-	Laser = { Cooldown = 12, Charge = 0.6, Duration = 3, DPS = 24, Range = 260, Slow = 1.5, WallsBurned = 8, Push = 22, Recover = 3 },
+	Laser = { Cooldown = 12, Charge = 0.6, Duration = 3, DPS = 24, Range = 260, Slow = 1.5, WallsBurned = 8, Push = 22, CloseRange = 18, CloseMult = 3.2, Recover = 3 },
 	Pulse = { Cooldown = 18, Charge = 2, Radius = 20, Stun = 3, Damage = 12, CancelCooldown = 3 },
 }
 
 -- Survivor fart: masks your scent from Wolverine's Sniff
-Config.Fart = { Cooldown = 60, MaskTime = 20, CloudTime = 20 }
+Config.Fart = {
+	Cooldown = 60, MaskTime = 20, CloudTime = 20,
+	-- Wolverine caught in the fresh cloud: can't attack and staggers slowly
+	GasRadius = 7, GasWindow = 4, GasTime = 2, GasSlow = 0.4,
+}
 
 -- Monetization ----------------------------------------------------------
 -- Create a Developer Product (80 Robux) in the Creator Dashboard under
@@ -144,7 +148,8 @@ Config.UploadedSounds = {
 	Roar = 84386454545822, Snarl = 0, Tear = 0, Gore = 0, Break = 0, Heartbeat = 94699316471373, Fart = 130496994474771,
 	Sniff = 0, Laser = 0, Punch = 0, Terminal = 0, UIHover = 0, UIClick = 0, Paw = 90700737432630,
 	PounceHit = 140573962847729, Impale = 100362323212257, DeathRay = 89285816836463, Chase = 71009071343057,
-	Step = 0, StepMetal = 0, StepHeavy = 0, -- footsteps (4 takes per file; see Anims.lua)
+	PounceLeap = 0, -- pounce launch (falls back to a pitched slash)
+	Step = 101289698791450, StepMetal = 112150969278482, StepHeavy = 114217739046080, -- footsteps (4 takes per file; see Anims.lua)
 }
 Config.Sounds.Snarl = Config.Sounds.Snarl or ""
 for name, id in Config.UploadedSounds do

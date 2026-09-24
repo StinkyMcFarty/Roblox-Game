@@ -179,6 +179,20 @@ def leap():
     return finish(reverb(mix(w, rumble * 1.5), 0.3, 0.12))
 
 
+def pounce_leap():
+    """Pounce launch: a hard push-off scrape, a short feral snarl, the body
+    whooshing through the air and the claws flaring with a steel shing."""
+    t = t_axis(0.09)
+    push = mix(np.sin(2 * np.pi * (80 - 200 * t) * t) * env(0.09, 0.001, 0.03) * 1.2,
+               bandpass(noise(0.09), 900, 5000) * env(0.09, 0.002, 0.03) * 0.6)
+    grunt = growl(0.32, 120, 190, 1.2) * env(0.32, 0.02, 0.2) * 0.8
+    air = sweep_band(noise(0.55), 300, 2600, 0.7) * np.sin(np.pi * t_axis(0.55) / 0.55) ** 1.5 * 1.3
+    shing = metal_scrape(0.16, 3500, 8000) * 0.5
+    shing = mix(shing, ring([2900, 4700, 6900], 0.3, 0.06) * 0.35)
+    x = mix(push, pad(grunt, 0.02), pad(air, 0.04), pad(shing, 0.16))
+    return finish(reverb(x, 0.35, 0.12), 0.9)
+
+
 def land():
     t = t_axis(0.6)
     thud = np.sin(2 * np.pi * (48 - 18 * t / 0.6) * t) * env(0.6, 0.002, 0.2)
@@ -598,7 +612,7 @@ SOUNDS = {
     "Tear": tear, "Gore": gore, "Break": wall_break, "Heartbeat": heartbeat, "Fart": fart,
     "Sniff": sniff, "Laser": laser, "Punch": punch, "Terminal": terminal,
     "UIHover": ui_hover, "UIClick": ui_click, "Paw": paw, "PounceHit": pounce_hit, "Impale": impale, "DeathRay": death_ray, "Chase": chase,
-    "Step": step, "StepMetal": step_metal, "StepHeavy": step_heavy,
+    "PounceLeap": pounce_leap, "Step": step, "StepMetal": step_metal, "StepHeavy": step_heavy,
 }
 
 
