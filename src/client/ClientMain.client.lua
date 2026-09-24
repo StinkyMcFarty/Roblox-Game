@@ -221,6 +221,70 @@ UserInputService.InputBegan:Connect(function(input, processed)
 end)
 
 -- Jump to climb out of a hiding spot
+---------------------------------------------------------------------------
+-- Shift lock on Left Alt (Shift is sprint): mouse locked to the centre,
+-- over-the-shoulder camera, character turns with the camera.
+---------------------------------------------------------------------------
+local RunServiceSL = game:GetService("RunService")
+local shiftLock = false
+local crosshair = Instance.new("ScreenGui")
+crosshair.Name = "ShiftLock"
+crosshair.IgnoreGuiInset = true
+crosshair.ResetOnSpawn = false
+crosshair.Enabled = false
+crosshair.Parent = player:WaitForChild("PlayerGui")
+for _, sz in { Vector2.new(14, 2), Vector2.new(2, 14) } do
+	local f = Instance.new("Frame")
+	f.AnchorPoint = Vector2.new(0.5, 0.5)
+	f.Position = UDim2.fromScale(0.5, 0.5)
+	f.Size = UDim2.fromOffset(sz.X, sz.Y)
+	f.BackgroundColor3 = Color3.new(1, 1, 1)
+	f.BackgroundTransparency = 0.2
+	f.BorderSizePixel = 0
+	f.Parent = crosshair
+end
+
+local function setShiftLock(on)
+	shiftLock = on
+	crosshair.Enabled = on
+	local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+	if hum then
+		hum.AutoRotate = not on
+		hum.CameraOffset = on and Vector3.new(1.75, 0.3, 0) or Vector3.zero
+	end
+	if not on then
+		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+	end
+end
+
+UserInputService.InputBegan:Connect(function(input, processed)
+	if not processed and input.KeyCode == Enum.KeyCode.LeftAlt then
+		setShiftLock(not shiftLock)
+	end
+end)
+player.CharacterAdded:Connect(function()
+	task.defer(setShiftLock, shiftLock)
+end)
+
+RunServiceSL:BindToRenderStep("AltShiftLock", Enum.RenderPriority.Camera.Value + 1, function()
+	if not shiftLock then
+		return
+	end
+	UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if not (root and hum) or root.Anchored or hum.Health <= 0 or hum.Sit then
+		return
+	end
+	hum.AutoRotate = false
+	local look = workspace.CurrentCamera.CFrame.LookVector
+	local flat = Vector3.new(look.X, 0, look.Z)
+	if flat.Magnitude > 0.01 then
+		root.CFrame = CFrame.lookAt(root.Position, root.Position + flat)
+	end
+end)
+
 UserInputService.JumpRequest:Connect(function()
 	if player:GetAttribute("Hidden") then
 		Ability:FireServer("Unhide")

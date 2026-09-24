@@ -141,6 +141,7 @@ Config.UploadedSounds = {
 	Snikt = 0, Slash = 117112770329180, Whoosh = 0, Stab = 0, Impact = 0, Leap = 0, Land = 0,
 	Roar = 84386454545822, Snarl = 0, Tear = 0, Gore = 0, Break = 0, Heartbeat = 0, Fart = 0,
 	Sniff = 0, Laser = 0, Punch = 0, Terminal = 0, UIHover = 0, UIClick = 0, Paw = 0,
+	PounceHit = 0, Impale = 0,
 }
 Config.Sounds.Snarl = Config.Sounds.Snarl or ""
 for name, id in Config.UploadedSounds do
@@ -148,5 +149,10 @@ for name, id in Config.UploadedSounds do
 		Config.Sounds[name] = "rbxassetid://" .. (type(id) == "number" and string.format("%.0f", id) or tostring(id))
 	end
 end
+
+-- Pounce / Impale use their own clean sounds once uploaded; until then they
+-- reuse the (clean) slash rather than the old built-in sword sounds.
+Config.Sounds.PounceHit = Config.Sounds.PounceHit or Config.Sounds.Slash
+Config.Sounds.Impale = Config.Sounds.Impale or Config.Sounds.Slash
 
 return Config

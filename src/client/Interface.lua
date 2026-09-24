@@ -199,6 +199,92 @@ local stamina = new("CanvasGroup", {
 	GroupTransparency = 0,
 }, gui)
 local stamScale = new("UIScale", {}, stamina)
+-- Hand-drawn ability icons (lines + circles, no image uploads)
+local function iconLine(parent, x1, y1, x2, y2, thick, color, z, fadeEnds)
+	local dx, dy = x2 - x1, y2 - y1
+	local len = math.sqrt(dx * dx + dy * dy)
+	local f = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale((x1 + x2) / 2, (y1 + y2) / 2),
+		Size = UDim2.new(len, 0, 0, thick),
+		Rotation = math.deg(math.atan2(dy, dx)),
+		BackgroundColor3 = color,
+		BorderSizePixel = 0,
+		ZIndex = z or 2,
+	}, parent)
+	corner(f, thick)
+	if fadeEnds then
+		new("UIGradient", { Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.25, 0), NumberSequenceKeypoint.new(0.75, 0), NumberSequenceKeypoint.new(1, 1) }) }, f)
+	end
+	return f
+end
+local function iconDot(parent, x, y, r, color, z)
+	local f = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(x, y),
+		Size = UDim2.fromScale(r * 2, r * 2),
+		BackgroundColor3 = color,
+		BorderSizePixel = 0,
+		ZIndex = z or 2,
+	}, parent)
+	corner(f, 100)
+	return f
+end
+-- tapered blade: thick base, thin tip, bright edge
+local function iconBlade(parent, x1, y1, x2, y2, w)
+	local steel, edge = Color3.fromRGB(205, 212, 224), Color3.new(1, 1, 1)
+	local mx, my = x1 + (x2 - x1) * 0.62, y1 + (y2 - y1) * 0.62
+	iconLine(parent, x1, y1, mx, my, w, steel, 4)
+	iconLine(parent, mx, my, x2, y2, math.max(1, w * 0.5), steel, 4)
+	iconLine(parent, x1 + (x2 - x1) * 0.1, y1 + (y2 - y1) * 0.1, x2, y2, 1, edge, 5)
+end
+
+local BLOOD = Color3.fromRGB(190, 20, 20)
+local ICON_ART
+ICON_ART = {
+	-- three claw gashes
+	Slash = function(tile)
+		for i = -1, 1 do
+			local o = i * 0.17
+			iconLine(tile, 0.2 + o, 0.85 + o * 0.3, 0.72 + o, 0.15 + o * 0.3, 6, Color3.fromRGB(30, 4, 4), 3, true)
+			iconLine(tile, 0.24 + o, 0.8 + o * 0.3, 0.68 + o, 0.2 + o * 0.3, 2, Color3.fromRGB(255, 200, 190), 4, true)
+		end
+	end,
+	-- mid-air leap: body stretched out, claws first, speed lines behind
+	Pounce = function(tile)
+		local body = Color3.fromRGB(255, 236, 214)
+		for i, y in { 0.34, 0.5, 0.66 } do
+			iconLine(tile, 0.04, y + 0.04, 0.24 - i * 0.03, y, 2, Color3.new(1, 1, 1), 2, true).BackgroundTransparency = 0.3
+		end
+		iconLine(tile, 0.34, 0.6, 0.6, 0.42, 10, body, 3) -- torso
+		iconDot(tile, 0.66, 0.35, 0.09, body, 3) -- head
+		iconLine(tile, 0.58, 0.42, 0.8, 0.26, 4, body, 3) -- arms reaching
+		iconLine(tile, 0.56, 0.47, 0.8, 0.4, 4, body, 3)
+		for k = -1, 1 do -- claws
+			iconLine(tile, 0.8, 0.26, 0.96, 0.18 + k * 0.045, 1.5, Color3.fromRGB(235, 240, 250), 4)
+			iconLine(tile, 0.8, 0.4, 0.96, 0.36 + k * 0.045, 1.5, Color3.fromRGB(235, 240, 250), 4)
+		end
+		iconLine(tile, 0.36, 0.58, 0.18, 0.56, 4, body, 3) -- trailing legs, knees bent
+		iconLine(tile, 0.18, 0.56, 0.08, 0.66, 4, body, 3)
+		iconLine(tile, 0.36, 0.62, 0.24, 0.76, 4, body, 3)
+		iconLine(tile, 0.24, 0.76, 0.1, 0.8, 4, body, 3)
+	end,
+	-- three claws punched up through a body, blood running down
+	Stab = function(tile)
+		iconDot(tile, 0.58, 0.38, 0.24, Color3.fromRGB(70, 18, 18), 2) -- victim
+		iconDot(tile, 0.62, 0.34, 0.14, Color3.fromRGB(110, 26, 26), 2)
+		local fist = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.26, 0.82), Size = UDim2.fromScale(0.3, 0.22), Rotation = -35, BackgroundColor3 = Color3.fromRGB(230, 190, 150), BorderSizePixel = 0, ZIndex = 5 }, tile)
+		corner(fist, 5)
+		for i = -1, 1 do -- spread across the blade direction
+			local ox, oy = i * 0.075 * 0.81, i * 0.075 * 0.59
+			iconBlade(tile, 0.3 + ox, 0.76 + oy, 0.74 + ox, 0.12 + oy, 3)
+		end
+		for _, d in { { 0.47, 0.5, 0.045 }, { 0.42, 0.62, 0.035 }, { 0.62, 0.62, 0.04 }, { 0.66, 0.74, 0.03 } } do
+			iconDot(tile, d[1], d[2], d[3], BLOOD, 6)
+		end
+	end,
+}
+
 local stamIcon = new("TextLabel", {
 	Size = UDim2.fromOffset(34, 34),
 	BackgroundColor3 = K.Ink,
@@ -328,6 +414,11 @@ local function makeCard(a, order, isHold)
 		ZIndex = 2,
 	}, tile)
 	new("UIPadding", { PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6), PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }, icon)
+	local art = ICON_ART[a.Name]
+	if art then
+		icon.Text = ""
+		art(tile)
+	end
 	-- sweep overlay that drains top->bottom as the cooldown finishes
 	local sweep = new("Frame", {
 		AnchorPoint = Vector2.new(0, 1),

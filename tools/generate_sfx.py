@@ -376,6 +376,35 @@ def paw():
     return finish(reverb(mix(thump * 1.3, pad_ * 0.8, scuff, clicks), 0.18, 0.08), 0.85)
 
 
+def pounce_hit():
+    """Pounce strike: two claw sets punch in (crisp double 'shk-shk') over a tight thump."""
+    parts = []
+    for k, t0 in enumerate((0.0, 0.045)):
+        cut = sweep_band(noise(0.08), 8500, 3500, 0.5, 12) * env(0.08, 0.001, 0.025, 6)
+        tick = highpass(noise(0.01), 5000) * env(0.01, 0.0003, 0.003)
+        parts.append(pad(mix(cut * (1 - k * 0.2), tick * 0.6), t0))
+    t = t_axis(0.3)
+    thump = np.sin(2 * np.pi * (110 - 260 * np.minimum(t, 0.3)) * t) * env(0.3, 0.001, 0.06)
+    parts.append(pad(thump * 1.4, 0.04))
+    shimmer = ring([3600, 5400, 7900], 0.35, 0.06) * 0.25
+    parts.append(pad(shimmer, 0.05))
+    x = np.tanh(mix(*parts) * 1.3)
+    return finish(reverb(highpass(x, 60, 2), 0.25, 0.1), 0.72, 0.04)
+
+
+def impale():
+    """Impale: steel pierces in (short rising scrape), bright ring, heavy low hit."""
+    scrape = sweep_band(noise(0.11), 2500, 7000, 0.35, 16) * env(0.11, 0.004, 0.06, 5)
+    t = t_axis(0.45)
+    hit = np.sin(2 * np.pi * (80 - 140 * np.minimum(t, 0.45)) * t) * env(0.45, 0.001, 0.1)
+    steel = ring([2400, 3900, 5600, 8200], 0.6, 0.12) * 0.35
+    tick = highpass(noise(0.012), 4000) * env(0.012, 0.0003, 0.004)
+    body = lowpass(noise(0.12), 900) * env(0.12, 0.002, 0.03) * 0.5
+    x = mix(scrape * 0.9, pad(tick, 0.09), pad(hit * 1.5, 0.095), pad(steel, 0.095), pad(body, 0.1))
+    x = np.tanh(x * 1.2)
+    return finish(reverb(highpass(x, 50, 2), 0.3, 0.12), 0.72, 0.05)
+
+
 def ui_hover():
     return finish(whoosh(0.13, 2200, 7000, 1.0), 0.6)
 
@@ -391,7 +420,7 @@ SOUNDS = {
     "Stab": stab, "Impact": impact, "Leap": leap, "Land": land, "Roar": roar, "Snarl": snarl,
     "Tear": tear, "Gore": gore, "Break": wall_break, "Heartbeat": heartbeat, "Fart": fart,
     "Sniff": sniff, "Laser": laser, "Punch": punch, "Terminal": terminal,
-    "UIHover": ui_hover, "UIClick": ui_click, "Paw": paw,
+    "UIHover": ui_hover, "UIClick": ui_click, "Paw": paw, "PounceHit": pounce_hit, "Impale": impale,
 }
 
 

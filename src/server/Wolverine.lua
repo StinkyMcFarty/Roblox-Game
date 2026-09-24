@@ -479,8 +479,7 @@ local function pounceStrike(player, char, root, target)
 	VFX.Anim(char, "PounceStrike")
 	local dir = Util.Flat(target.Root.Position - root.Position)
 	local torso = Util.Torso(target.Char) or target.Root
-	Util.Sound(Config.Sounds.Stab, torso, { Volume = 2, Range = 200 })
-	Util.Sound(Config.Sounds.Impact, torso, { Volume = 2, Range = 200 })
+	Util.Sound(Config.Sounds.PounceHit, torso, { Volume = 2, Range = 200, Pitch = Config.UploadedSounds.PounceHit ~= 0 and 1 or 0.85 })
 	VFX.Pierce(root, clawGlow)
 	VFX.Impact(torso.Position, clawGlow, 1.3, target.Char)
 	VFX.ExitSpray(target.Char, dir)
@@ -501,7 +500,7 @@ local function pounce(player, char, root)
 	swingTrails(1.3)
 	local cfg = Config.Abilities.Pounce
 	VFX.Anim(char, "Pounce")
-	Util.Sound(Config.Sounds.Leap, root, { Pitch = 0.9, Volume = 1.8 })
+	Util.Sound(Config.Sounds.Slash, root, { Pitch = 0.72, Volume = 1.2 })
 	-- The client applies the leap; the server watches for contact.
 	local untilTime = os.clock() + cfg.Window
 	task.wait(0.12)
@@ -525,7 +524,7 @@ local function stab(player, char, root)
 	swingTrails(1.1)
 	local cfg = Config.Abilities.Stab
 	VFX.Anim(char, "Impale")
-	Util.Sound(Config.Sounds.Whoosh, root, { Pitch = 0.8, Volume = 1.4 })
+
 	task.wait(0.14)
 	if not (char.Parent and Util.IsAlive(char)) then
 		return
@@ -558,8 +557,8 @@ local function stab(player, char, root)
 		CFrame = base * CFrame.new(1.05 * scale, 4.8 * scale, -0.35) * CFrame.Angles(0, math.pi, 0) * CFrame.Angles(math.rad(-22), 0, 0),
 	}):Play()
 	local torso = Util.Torso(vChar) or vRoot
-	Util.Sound(Config.Sounds.Stab, torso, { Volume = 2.2, Range = 220 })
-	Util.Sound(Config.Sounds.Gore, torso, { Pitch = 0.6, Volume = 1.4 })
+	Util.Sound(Config.Sounds.Impale, torso, { Volume = 2.2, Range = 220, Pitch = Config.UploadedSounds.Impale ~= 0 and 1 or 0.7 })
+	Util.Sound(Config.Sounds.Gore, torso, { Pitch = 0.8, Volume = 0.5 })
 	task.delay(0.12, function()
 		Fx:FireAllClients("HitStop", { Attacker = char, Victim = vChar, Duration = 0.1 })
 		VFX.Impact(torso.Position, clawGlow, 1.3)
