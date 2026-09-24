@@ -277,15 +277,14 @@ Skins.List = {
 			UpperLeg = DENIM, LowerLeg = DENIM, Foot = BOOT,
 		},
 		Hair = { Color = rgb(34, 26, 21) }, -- built swept-up Wolverine hair (see Costumes)
-		Textures = { Shirt = 0, Pants = 80981964263373, Face = 127116209556275 }, -- jacket is built in 3D (Costumes loganGear); old tee shirt: 72143365011183
+		Textures = { Shirt = 0, Pants = 80981964263373, Face = 0 }, -- jacket is built in 3D (Costumes loganGear); old tee shirt: 72143365011183
 		HairAccessoryId = 0,
 	},
 	Comic = {
 		Name = "Comic Wolverine",
 		Price = 2000,
-		Description = "Jim Lee classic. Wild hair, mutton chops, shoulder pads, tiger stripes.",
-		Hair = { Color = rgb(18, 16, 16), Tuft = 1.15 },
-		Textures = { Shirt = 112579941158359, Pants = 84892200431804, Face = 108529900389924 },
+		Description = "Straight off the page. Cowl, fins, shoulder pads, tiger stripes.",
+		Textures = { Shirt = 112579941158359, Pants = 84892200431804, Face = 0 },
 		HairAccessoryId = 0,
 		Swatch = YELLOW,
 		Colors = {
@@ -298,7 +297,7 @@ Skins.List = {
 		Name = "Weapon X",
 		Price = 4000,
 		Description = "Fresh out of the tank. Visor helmet, cables, harness, scars.",
-		Textures = { Shirt = 125698769813626, Pants = 121111924489660, Face = 101452932954846 },
+		Textures = { Shirt = 125698769813626, Pants = 121111924489660, Face = 0 },
 		HairAccessoryId = 0,
 		Swatch = rgb(120, 200, 190),
 		Colors = {
@@ -312,7 +311,7 @@ Skins.List = {
 		Price = 6000,
 		Description = "Grey beard, long duster coat, and a lot of anger left.",
 		Hair = { Color = rgb(170, 168, 164), Tuft = 0.7, Chops = 1.3 },
-		Textures = { Shirt = 91199990464230, Pants = 131767294384086, Face = 109948303211918 },
+		Textures = { Shirt = 91199990464230, Pants = 131767294384086, Face = 0 },
 		HairAccessoryId = 0,
 		Swatch = rgb(150, 150, 150),
 		Colors = {
@@ -1549,9 +1548,20 @@ local function wolverineHair(char, head, color, opts)
 end
 
 local function comicGear(char, head)
-	local BLU, BLK = rgb(28, 56, 140), rgb(18, 18, 22)
-	-- Unmasked Jim Lee look: the face texture does the chops + snarl,
-	-- the player's own hair (or HairAccessoryId) sits on top.
+	local YEL, BLU, BLK = rgb(238, 184, 20), rgb(28, 56, 140), rgb(18, 18, 22)
+	if head then
+		local hs = head.Size
+		head.Color = YEL
+		-- sculpted cowl over the top of the head
+		gear(char, head, "Cowl", Vector3.new(hs.X * 1.1, hs.Y * 0.55, hs.Z * 1.1), YEL, M.SmoothPlastic,
+			CFrame.new(0, hs.Y * 0.38, hs.Z * 0.02), { Mesh = Enum.MeshType.Sphere })
+		-- the iconic swept-back fins
+		for s = -1, 1, 2 do
+			gear(char, head, "Fin", Vector3.new(0.1, hs.Y * 0.95, hs.Z * 0.62), BLK, M.SmoothPlastic,
+				CFrame.new(s * hs.X * 0.47, hs.Y * 0.62, hs.Z * 0.12) * CFrame.Angles(rad(-12), 0, rad(-s * 16)),
+				{ Class = "WedgePart" })
+		end
+	end
 	-- rounded blue shoulder pads
 	for _, n in { "RightUpperArm", "LeftUpperArm" } do
 		local arm = char:FindFirstChild(n)

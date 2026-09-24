@@ -158,9 +158,20 @@ local function wolverineHair(char, head, color, opts)
 end
 
 local function comicGear(char, head)
-	local BLU, BLK = rgb(28, 56, 140), rgb(18, 18, 22)
-	-- Unmasked Jim Lee look: the face texture does the chops + snarl,
-	-- the player's own hair (or HairAccessoryId) sits on top.
+	local YEL, BLU, BLK = rgb(238, 184, 20), rgb(28, 56, 140), rgb(18, 18, 22)
+	if head then
+		local hs = head.Size
+		head.Color = YEL
+		-- sculpted cowl over the top of the head
+		gear(char, head, "Cowl", Vector3.new(hs.X * 1.1, hs.Y * 0.55, hs.Z * 1.1), YEL, M.SmoothPlastic,
+			CFrame.new(0, hs.Y * 0.38, hs.Z * 0.02), { Mesh = Enum.MeshType.Sphere })
+		-- the iconic swept-back fins
+		for s = -1, 1, 2 do
+			gear(char, head, "Fin", Vector3.new(0.1, hs.Y * 0.95, hs.Z * 0.62), BLK, M.SmoothPlastic,
+				CFrame.new(s * hs.X * 0.47, hs.Y * 0.62, hs.Z * 0.12) * CFrame.Angles(rad(-12), 0, rad(-s * 16)),
+				{ Class = "WedgePart" })
+		end
+	end
 	-- rounded blue shoulder pads
 	for _, n in { "RightUpperArm", "LeftUpperArm" } do
 		local arm = char:FindFirstChild(n)
