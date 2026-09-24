@@ -157,108 +157,15 @@ local function wolverineHair(char, head, color, opts)
 		CFrame.new(0, hs.Y * (0.6 + 0.1 * tuft), hs.Z * 0.12) * CFrame.Angles(rad(-16), 0, 0), "WedgePart")
 end
 
--- Wolverine's face, built from thin parts on the front of the head (image
--- faces looked muddy): angry brows, narrowed eyes, a gritted-teeth snarl and
--- the mutton chops. opts:
---   Hair   colour of brows/chops/beard      Skin  lower-face colour (Comic mask)
---   Eyes   "plain" | "mask" (comic eye patches) | "none" (visor covers them)
---   Beard  full beard + moustache (Old Man Logan)
-local function wolverineFace(char, head, opts)
-	if not head then
-		return
-	end
-	local hs = head.Size
-	-- The classic Roblox head is a rounded cylinder, so a flat piece only
-	-- touches it in the middle and floats off at the cheeks. Each piece is cut
-	-- into thin vertical strips and every strip is laid on the curve (like a
-	-- decal wrapping round). Layers sit 0.01 apart so nothing flickers.
-	local t = 0.02
-	local r = hs.Z / 2
-	local hair = opts.Hair or rgb(30, 24, 20)
-	local function f(name, w, h, x, y, color, rot, depth, mat)
-		local a = rad(rot or 0)
-		local width = hs.X * w
-		local strips = math.max(1, math.ceil(width / (hs.X * 0.08)))
-		local sw = width / strips
-		local first
-		for i = 1, strips do
-			local s = -width / 2 + (i - 0.5) * sw
-			local cx = math.clamp(hs.X * x + math.cos(a) * s, -r * 0.97, r * 0.97)
-			local cy = hs.Y * y + math.sin(a) * s
-			local theta = math.asin(cx / r)
-			-- the top and bottom edges of the head are bevelled too
-			local bevel = math.max(0, math.abs(cy) - hs.Y * 0.36) * 0.5
-			local rr = r + (depth or 0) * 0.01 - bevel
-			local cf = CFrame.new(math.sin(theta) * rr, cy, -math.cos(theta) * rr) * CFrame.Angles(0, -theta, 0) * CFrame.Angles(0, 0, a)
-			local p = gear(char, head, name, Vector3.new(sw * 1.08, hs.Y * h, t), color, mat or M.SmoothPlastic, cf, nil, "Face")
-			p.CastShadow = false
-			first = first or p
-		end
-		return first
-	end
-	-- the built face replaces the avatar's own face for good: Roblox re-applies
-	-- the avatar (and its face decal) after we dress, so keep removing it
-	local function strip(d)
-		if d:IsA("Decal") or d:IsA("Texture") then
-			d:Destroy()
-		end
-	end
-	for _, d in head:GetChildren() do
-		strip(d)
-	end
-	if not head:GetAttribute("BuiltFace") then
-		head:SetAttribute("BuiltFace", true)
-		pcall(function()
-			head.ChildAdded:Connect(function(d)
-				task.defer(function()
-					if d.Parent == head and head:GetAttribute("BuiltFace") then
-						strip(d)
-					end
-				end)
-			end)
-		end)
-	end
-	pcall(function()
-		if head:IsA("MeshPart") then
-			head.TextureID = "" -- dynamic heads paint the face into the mesh texture
-		end
-	end)
-
-	if opts.Skin then
-		-- the comic mask leaves the jaw bare
-		f("Jaw", 1.0, 0.44, 0, -0.28, opts.Skin, 0, 1)
-	end
-	for _, side in { -1, 1 } do
-		if opts.Eyes == "mask" then
-			f("EyePatch", 0.34, 0.2, side * 0.2, 0.06, rgb(16, 16, 20), side * 14, 2)
-			f("Eye", 0.2, 0.06, side * 0.19, 0.05, Color3.new(1, 1, 1), side * 14, 3)
-		elseif opts.Eyes ~= "none" then
-			f("Eye", 0.14, 0.06, side * 0.2, 0.05, rgb(245, 240, 232), side * 8, 1)
-			f("Pupil", 0.06, 0.06, side * 0.18, 0.05, rgb(20, 16, 14), side * 8, 2)
-			-- heavy angry brows, low at the middle
-			f("Brow", 0.3, 0.08, side * 0.2, 0.16, hair, side * 16, 3)
-		end
-		-- mutton chops down the cheeks, curling in toward the mouth (chin bare)
-		f("Chop", 0.16, 0.46, side * 0.42, -0.12, hair, 0, 2)
-		f("ChopCurl", 0.2, 0.12, side * 0.3, -0.31, hair, side * -18, 2)
-	end
-	-- gritted-teeth snarl
-	if opts.Beard then
-		f("Beard", 0.92, 0.26, 0, -0.38, hair, 0, 3)
-		f("Moustache", 0.44, 0.07, 0, -0.17, hair, 0, 6)
-	end
-	f("Mouth", 0.34, 0.1, 0, -0.24, rgb(40, 14, 14), 0, 4)
-	f("Teeth", 0.28, 0.045, 0, -0.235, rgb(236, 232, 220), 0, 5)
-end
-
 local function comicGear(char, head)
 	local YEL, BLU, BLK = rgb(238, 184, 20), rgb(28, 56, 140), rgb(18, 18, 22)
 	if head then
 		local hs = head.Size
 		head.Color = YEL
 		-- sculpted cowl over the top of the head
-		gear(char, head, "Cowl", Vector3.new(hs.X * 1.1, hs.Y * 0.55, hs.Z * 1.1), YEL, M.SmoothPlastic,
-			CFrame.new(0, hs.Y * 0.38, hs.Z * 0.02), { Mesh = Enum.MeshType.Sphere })
+		-- (kept above the brow line so it never cuts through the face)
+		gear(char, head, "Cowl", Vector3.new(hs.X * 1.08, hs.Y * 0.44, hs.Z * 1.08), YEL, M.SmoothPlastic,
+			CFrame.new(0, hs.Y * 0.47, hs.Z * 0.03), { Mesh = Enum.MeshType.Sphere })
 		-- the iconic swept-back fins
 		for s = -1, 1, 2 do
 			gear(char, head, "Fin", Vector3.new(0.1, hs.Y * 0.95, hs.Z * 0.62), BLK, M.SmoothPlastic,
@@ -503,26 +410,33 @@ function Costumes.Dress(char, skinId)
 		p.Parent = char
 	end
 	if head and asset(tex.Face) then
-		local face = head:FindFirstChildOfClass("Decal")
-		if not face then
-			face = Instance.new("Decal")
-			face.Name = "face"
-			face.Face = Enum.NormalId.Front
-			face.Parent = head
+		-- Wolverine's face as a decal (decals wrap the round head properly).
+		-- The avatar finishes loading after we dress and re-adds its own face,
+		-- so any other face decal that shows up is removed.
+		for _, d in head:GetChildren() do
+			if d:IsA("Decal") and d.Name ~= "WolverineFace" then
+				d:Destroy()
+			end
 		end
+		local face = head:FindFirstChild("WolverineFace") or Instance.new("Decal")
+		face.Name = "WolverineFace"
+		face.Face = Enum.NormalId.Front
 		face.Texture = asset(tex.Face)
+		face.Parent = head
+		if not head:GetAttribute("FaceGuard") then
+			head:SetAttribute("FaceGuard", true)
+			pcall(function()
+				head.ChildAdded:Connect(function(d)
+					task.defer(function()
+						if d.Parent == head and d:IsA("Decal") and d.Name ~= "WolverineFace" then
+							d:Destroy()
+						end
+					end)
+				end)
+			end)
+		end
 	end
 
-	-- the built Wolverine face (Face texture, if any, is used instead)
-	if not asset(tex.Face) then
-		local face = skin.Face or {}
-		wolverineFace(char, head, {
-			Hair = face.Hair or (skin.Hair and skin.Hair.Color),
-			Eyes = face.Eyes,
-			Beard = face.Beard,
-			Skin = face.MaskJaw and skinTone or nil,
-		})
-	end
 	if skinId == "Logan" then
 		loganGear(char)
 	elseif skinId == "Comic" then

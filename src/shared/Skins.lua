@@ -30,7 +30,6 @@ Skins.List = {
 			UpperLeg = DENIM, LowerLeg = DENIM, Foot = BOOT,
 		},
 		Hair = { Color = rgb(34, 26, 21) }, -- built swept-up Wolverine hair (see Costumes)
-		Face = { Eyes = "plain" }, -- built face: brows, snarl, mutton chops
 		Textures = { Shirt = 0, Pants = 80981964263373, Face = 0 }, -- jacket is built in 3D (Costumes loganGear); old tee shirt: 72143365011183
 		HairAccessoryId = 0,
 	},
@@ -38,7 +37,6 @@ Skins.List = {
 		Name = "Comic Wolverine",
 		Price = 2000,
 		Description = "Straight off the page. Cowl, fins, shoulder pads, tiger stripes.",
-		Face = { Eyes = "mask", MaskJaw = true, Hair = rgb(18, 16, 16) },
 		Textures = { Shirt = 112579941158359, Pants = 84892200431804, Face = 0 },
 		HairAccessoryId = 0,
 		Swatch = YELLOW,
@@ -52,7 +50,6 @@ Skins.List = {
 		Name = "Weapon X",
 		Price = 4000,
 		Description = "Fresh out of the tank. Visor helmet, cables, harness, scars.",
-		Face = { Eyes = "none", Hair = rgb(34, 26, 21) },
 		Textures = { Shirt = 125698769813626, Pants = 121111924489660, Face = 0 },
 		HairAccessoryId = 0,
 		Swatch = rgb(120, 200, 190),
@@ -67,7 +64,6 @@ Skins.List = {
 		Price = 6000,
 		Description = "Grey beard, long duster coat, and a lot of anger left.",
 		Hair = { Color = rgb(170, 168, 164), Tuft = 0.7, Chops = 1.3 },
-		Face = { Eyes = "plain", Beard = true },
 		Textures = { Shirt = 91199990464230, Pants = 131767294384086, Face = 0 },
 		HairAccessoryId = 0,
 		Swatch = rgb(150, 150, 150),

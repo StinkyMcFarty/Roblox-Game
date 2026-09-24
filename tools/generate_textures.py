@@ -588,100 +588,161 @@ def beard(img, color, box=(70, 250, F - 70, 500), density=3200, alpha=(150, 235)
     hair_strokes(d, (cx - 95, 322, cx + 95, 362), color, density=500, length=(6, 12), angle=(60, 120), width=2)
 
 
-def logan_face():
-    img = Image.new("RGBA", (F, F), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    # under-eye shadows + forehead creases (tired, intense look)
-    for s_ in (-1, 1):
-        cx = F / 2 + s_ * 78
-        d.arc([cx - 36, 205, cx + 36, 250], 20, 160, fill=(80, 50, 40, 90), width=5)
-    for k in range(2):
-        d.arc([F / 2 - 80, 95 + k * 16, F / 2 + 80, 135 + k * 16], 200, 340, fill=(90, 60, 50, 90), width=2)
-    beard(img, (46, 34, 26))
-    d = ImageDraw.Draw(img)
-    mutton_chops(d, (44, 32, 24))
-    brows(d, (38, 28, 20), thick=18)
-    eyes(d, iris=(90, 70, 45))
-    d.line([(F / 2 - 50, 378), (F / 2 + 50, 378)], fill=(110, 60, 55, 255), width=6)  # lips
-    d.line([(F / 2 - 12, 300), (F / 2 - 20, 325), (F / 2 + 6, 330)], fill=(120, 80, 60, 150), width=3)  # nose shadow
-    return img
+# --- Cartoon faces --------------------------------------------------------
+# Bold Roblox-style decals: flat colours, thick outlines, crisp edges (drawn
+# 4x size and downsampled). No fuzzy hair strokes: at in-game size those read
+# as brown smudges.
+SS = 4
+INK = (18, 14, 12, 255)
 
 
-def snarl(d, y=372, w=78):
-    """Gritted-teeth snarl."""
+def canvas():
+    return Image.new("RGBA", (F * SS, F * SS), (0, 0, 0, 0))
+
+
+def P(pts):
+    return [(x * SS, y * SS) for x, y in pts]
+
+
+def finish_face(img):
+    return img.resize((F, F), Image.LANCZOS)
+
+
+def outlined(img, pts, fill, width=7):
+    """Filled polygon with a thick ink outline."""
+    d = ImageDraw.Draw(img)
+    d.polygon(P(pts), fill=fill)
+    d.line(P(pts + [pts[0]]), fill=INK, width=width * SS, joint="curve")
+
+
+def cartoon_eyes(img, y=226, spacing=74, iris=(92, 70, 44), white=(250, 248, 242, 255)):
+    """Narrowed angry eyes: almond shape with the top cut flat and slanting
+    down toward the nose, pupil pushed up under the lid."""
+    for s in (-1, 1):
+        cx = F / 2 + s * spacing
+        inner, outer = cx - s * 34, cx + s * 34
+        mask = Image.new("L", img.size, 0)
+        md = ImageDraw.Draw(mask)
+        md.ellipse(P([(cx - 36, y - 20), (cx + 36, y + 18)]), fill=255)
+        # angry lid: everything above the slanted line is cut away
+        md.polygon(P([(inner - s * 10, y + 2), (outer + s * 10, y - 16), (outer + s * 10, y - 40), (inner - s * 10, y - 40)]), fill=0)
+        eye = Image.new("RGBA", img.size, white)
+        pupil = ImageDraw.Draw(eye)
+        pupil.ellipse(P([(cx - s * 4 - 14, y - 12), (cx - s * 4 + 14, y + 16)]), fill=iris + (255,))
+        pupil.ellipse(P([(cx - s * 4 - 7, y - 5), (cx - s * 4 + 7, y + 9)]), fill=INK)
+        pupil.ellipse(P([(cx - s * 4 - 10, y - 8), (cx - s * 4 - 4, y - 2)]), fill=(255, 255, 255, 230))
+        img.paste(eye, (0, 0), mask)
+        # ink outline = dilated mask minus mask
+        edge = mask.filter(ImageFilter.MaxFilter(5 * SS + 1))
+        ring = Image.new("RGBA", img.size, INK)
+        edge_only = Image.fromarray(np.clip(np.asarray(edge, np.int16) - np.asarray(mask, np.int16), 0, 255).astype(np.uint8))
+        img.paste(ring, (0, 0), edge_only)
+        # heavy lid line
+        ImageDraw.Draw(img).line(P([(inner - s * 8, y + 2), (outer + s * 8, y - 16)]), fill=INK, width=8 * SS)
+
+
+def cartoon_brows(img, color, y=178, spacing=74):
+    """Thick brows, tapering out, the inner ends pulled down into a scowl."""
+    for s in (-1, 1):
+        cx = F / 2 + s * spacing
+        pts = [(cx - s * 46, y + 22), (cx + s * 50, y - 16), (cx + s * 54, y - 4), (cx - s * 40, y + 40)]
+        outlined(img, pts, color + (255,), 5)
+    d = ImageDraw.Draw(img)
+    for k in (-1, 1):  # scowl creases between the brows
+        d.line(P([(F / 2 + k * 8, y + 20), (F / 2 + k * 5, y + 44)]), fill=(120, 70, 50, 200), width=4 * SS)
+
+
+def cartoon_nose(img, y=300):
+    d = ImageDraw.Draw(img)
+    d.line(P([(F / 2 - 6, y - 40), (F / 2 - 14, y), (F / 2 + 12, y + 4)]), fill=(130, 78, 56, 200), width=5 * SS, joint="curve")
+
+
+def cartoon_snarl(img, y=366, w=74):
+    """Gritted teeth, lips pulled back."""
     cx = F / 2
-    d.polygon([(cx - w, y - 6), (cx - w * 0.4, y - 24), (cx + w * 0.4, y - 24), (cx + w, y - 6),
-               (cx + w * 0.6, y + 22), (cx - w * 0.6, y + 22)], fill=(70, 18, 18, 255))
-    d.rectangle([cx - w * 0.78, y - 16, cx + w * 0.78, y + 12], fill=(232, 226, 210, 255))
-    d.line([(cx - w * 0.78, y - 2), (cx + w * 0.78, y - 2)], fill=(120, 110, 100, 255), width=2)
-    for k in range(-5, 6):
-        x = cx + k * w * 0.14
-        d.line([(x, y - 16), (x, y + 12)], fill=(150, 140, 125, 255), width=1)
-    d.line([(cx - w, y - 6), (cx - w * 0.4, y - 26), (cx + w * 0.4, y - 26), (cx + w, y - 6)], fill=(40, 12, 12, 255), width=5)
-    d.line([(cx - w * 0.6, y + 24), (cx + w * 0.6, y + 24)], fill=(40, 12, 12, 255), width=5)
-    # snarl creases
-    for s_ in (-1, 1):
-        d.arc([cx + s_ * w * 0.9 - 30, y - 70, cx + s_ * w * 0.9 + 30, y + 10], 250 if s_ < 0 else 200, 340 if s_ < 0 else 290, fill=(90, 50, 40, 170), width=3)
+    outer = [(cx - w, y - 4), (cx - w * 0.5, y - 26), (cx + w * 0.5, y - 26), (cx + w, y - 4), (cx + w * 0.55, y + 24), (cx - w * 0.55, y + 24)]
+    outlined(img, outer, (96, 22, 24, 255), 6)
+    d = ImageDraw.Draw(img)
+    d.rectangle(P([(cx - w * 0.74, y - 16), (cx + w * 0.74, y + 12)]), fill=(246, 242, 228, 255))
+    d.line(P([(cx - w * 0.74, y - 2), (cx + w * 0.74, y - 2)]), fill=(150, 140, 120, 255), width=3 * SS)
+    for k in range(-4, 5):
+        x = cx + k * w * 0.17
+        d.line(P([(x, y - 16), (x, y + 12)]), fill=(150, 140, 120, 255), width=2 * SS)
+    d.rectangle(P([(cx - w * 0.74, y - 16), (cx + w * 0.74, y + 12)]), outline=INK, width=4 * SS)
+
+
+def cartoon_chops(img, color, reach=1.0):
+    """Wolverine's mutton chops: from the temples down the cheeks, flaring
+    into points toward the mouth corners; the chin stays bare."""
+    for s in (-1, 1):
+        cx = F / 2
+        e = cx + s * 250  # face edge (wraps round the head)
+        pts = [(e, 130), (cx + s * 196, 150), (cx + s * 190, 250), (cx + s * 150, 318), (cx + s * (96 - 20 * (reach - 1)), 366),
+               (cx + s * 132, 388), (cx + s * 170, 380), (cx + s * 150, 410), (cx + s * 196, 420), (e, 400)]
+        outlined(img, pts, color + (255,), 5)
+
+
+def logan_face():
+    img = canvas()
+    cartoon_chops(img, (58, 40, 28))
+    cartoon_brows(img, (40, 28, 20))
+    cartoon_eyes(img)
+    cartoon_nose(img)
+    cartoon_snarl(img)
+    return finish_face(img)
 
 
 def comic_face():
-    """Jim Lee style: unmasked, huge black mutton chops, gritted teeth."""
-    img = Image.new("RGBA", (F, F), (0, 0, 0, 0))
-    black = (22, 22, 30)
-    stubble(img, (150, 330, 362, 480), color=(25, 25, 32), amount=0.3)
-    d = ImageDraw.Draw(img)
-    for s_ in (-1, 1):
-        cx = F / 2
-        x_out = cx + s_ * 256
-        x_in = cx + s_ * 190
-        pts = [(x_out, 110), (x_in, 150), (x_in + s_ * 4, 290), (cx + s_ * 118, 372), (cx + s_ * 96, 430), (x_out, 420)]
-        d.polygon(pts, fill=black + (245,))
-        hair_strokes(d, (x_out, 120, cx + s_ * 100, 425), black, density=1400, length=(10, 20), angle=(75 - s_ * 20, 105 - s_ * 20), width=2)
-    # big angry brows meeting in a scowl
-    for s_ in (-1, 1):
-        cx = F / 2 + s_ * 80
-        d.polygon([(cx - s_ * 60, 196), (cx + s_ * 58, 150), (cx + s_ * 62, 172), (cx - s_ * 56, 214)], fill=black + (255,))
-    eyes(d, iris=(40, 30, 25), y=222)
-    d.line([(F / 2 - 18, 245), (F / 2 - 24, 305), (F / 2 + 8, 312)], fill=(120, 70, 55, 170), width=4)  # nose
-    for k in range(3):  # scowl lines between brows
-        d.line([(F / 2 - 10 + k * 10, 175), (F / 2 - 6 + k * 6, 205)], fill=(110, 70, 55, 140), width=2)
-    snarl(d)
-    return img
+    """Under the cowl: black mask round white slit eyes, bare jaw (skin painted
+    over the yellow head), black chops, gritted teeth."""
+    img = canvas()
+    skin = (236, 186, 142, 255)
+    # bare lower face
+    outlined(img, [(-10, 272), (F / 2 - 120, 262), (F / 2, 272), (F / 2 + 120, 262), (F + 10, 272), (F + 10, F + 10), (-10, F + 10)], skin, 5)
+    cartoon_chops(img, (20, 20, 26), reach=1.2)
+    # the mask's black eye pieces sweeping up and out
+    for s in (-1, 1):
+        cx = F / 2 + s * 78
+        outlined(img, [(F / 2 + s * 14, 206), (cx + s * 70, 150), (cx + s * 96, 176), (cx + s * 64, 262), (F / 2 + s * 18, 250)], (18, 18, 24, 255), 4)
+        # blank white comic eyes
+        outlined(img, [(F / 2 + s * 36, 220), (cx + s * 50, 196), (cx + s * 44, 226), (F / 2 + s * 40, 238)], (255, 255, 255, 255), 3)
+    cartoon_snarl(img, y=372)
+    return finish_face(img)
 
 
 def weaponx_face():
-    img = logan_face()
+    """The visor covers the eyes: chops, snarl and the fresh scars."""
+    img = canvas()
+    cartoon_chops(img, (58, 40, 28))
+    cartoon_nose(img)
+    cartoon_snarl(img)
     d = ImageDraw.Draw(img)
-    for x0, y0, x1, y1 in ((150, 120, 210, 300), (330, 240, 370, 330)):
-        d.line([(x0, y0), (x1, y1)], fill=(140, 30, 30, 200), width=4)
-        for k in range(6):
-            t = (k + 0.5) / 6
+    for x0, y0, x1, y1 in ((150, 260, 196, 340), (330, 280, 362, 350)):
+        d.line(P([(x0, y0), (x1, y1)]), fill=(150, 30, 30, 255), width=6 * SS)
+        for k in range(4):
+            t = (k + 0.5) / 4
             px, py = x0 + (x1 - x0) * t, y0 + (y1 - y0) * t
-            d.line([(px - 7, py), (px + 7, py)], fill=(30, 20, 20, 220), width=2)
-    return img
+            d.line(P([(px - 8, py), (px + 8, py)]), fill=INK, width=3 * SS)
+    return finish_face(img)
 
 
 def oldman_face():
-    img = Image.new("RGBA", (F, F), (0, 0, 0, 0))
+    img = canvas()
+    grey = (184, 182, 176)
+    cartoon_eyes(img, iris=(90, 110, 120))
+    cartoon_brows(img, grey)
+    cartoon_nose(img, y=292)
+    # full beard: jaw to jaw with a ragged bottom, mouth left clear
+    cx = F / 2
+    beard = [(-6, 150), (58, 150), (70, 280), (cx - 110, 330), (cx, 322), (cx + 110, 330), (F - 70, 280), (F - 58, 150), (F + 6, 150),
+             (F + 6, 440), (cx + 150, 470), (cx + 90, 500), (cx + 40, 486), (cx, 506), (cx - 40, 486), (cx - 90, 500), (cx - 150, 470), (-6, 440)]
+    outlined(img, beard, grey + (255,), 5)
     d = ImageDraw.Draw(img)
-    grey = (170, 168, 162)
-    # wrinkles
-    for s in (-1, 1):
-        cx = F / 2 + s * 78
-        for k in range(3):
-            d.arc([cx - 40 + s * 20, 225 + k * 6, cx + 40 + s * 20, 260 + k * 6], 200 if s < 0 else 300, 250 if s < 0 else 350, fill=(90, 60, 50, 150), width=2)
-    for k in range(3):
-        d.arc([F / 2 - 90, 90 + k * 14, F / 2 + 90, 130 + k * 14], 200, 340, fill=(90, 60, 50, 110), width=2)
-    # full grey beard + moustache
-    beard(img, grey, box=(80, 260, F - 80, 505), density=3600)
-    d = ImageDraw.Draw(img)
-    d.polygon([(F / 2 - 110, 320), (F / 2, 300), (F / 2 + 110, 320), (F / 2 + 100, 350), (F / 2, 335), (F / 2 - 100, 350)], fill=(150, 148, 142, 255))
-    hair_strokes(d, (F / 2 - 110, 300, F / 2 + 110, 350), (190, 188, 182), density=500, length=(8, 16), angle=(60, 120), width=2)
-    d.line([(F / 2 - 50, 378), (F / 2 + 50, 378)], fill=(70, 40, 40, 255), width=5)
-    mutton_chops(d, grey)
-    brows(d, (185, 183, 178), thick=20)
-    eyes(d, iris=(90, 110, 120))
-    return img
+    d.rectangle(P([(cx - 46, 364), (cx + 46, 380)]), fill=(70, 30, 30, 255), outline=INK, width=4 * SS)  # grim mouth
+    outlined(img, [(cx - 96, 346), (cx, 330), (cx + 96, 346), (cx + 88, 364), (cx, 352), (cx - 88, 364)], (200, 198, 192, 255), 4)  # moustache
+    for k in range(-3, 4):  # a few beard strands
+        d.line(P([(cx + k * 34, 400), (cx + k * 34 + 6, 450)]), fill=(140, 138, 132, 255), width=3 * SS)
+    return finish_face(img)
 
 
 def main():
