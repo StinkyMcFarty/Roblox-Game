@@ -5,7 +5,22 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Util = require(ReplicatedStorage.Shared.Util)
 
+local Fx = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Fx")
+
 local VFX = {}
+
+-- Plays a keyframed clip (client/AnimClips) on a character for every player.
+function VFX.Anim(char, clip, speed)
+	if char then
+		Fx:FireAllClients("Anim", { Char = char, Clip = clip, Speed = speed })
+	end
+end
+
+function VFX.StopAnim(char, clip)
+	if char then
+		Fx:FireAllClients("AnimStop", { Char = char, Clip = clip })
+	end
+end
 
 local function fxPart(props)
 	local p = Instance.new("Part")

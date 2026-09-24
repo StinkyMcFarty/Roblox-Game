@@ -84,6 +84,7 @@ local function makeClaws(char, clawId)
 end
 
 local function popClaws(char)
+	VFX.Anim(char, "Snikt")
 	if not clawSet then
 		return
 	end
@@ -181,7 +182,8 @@ local function roar(char)
 	if not (head and root) then
 		return
 	end
-	Posture.Roar(char)
+	VFX.Anim(char, "Roar")
+	VFX.Shockwave(root.Position - Vector3.new(0, 2.8, 0), 22, Color3.fromRGB(255, 80, 60))
 	if Config.Sounds.Roar ~= "" then
 		Util.Sound(Config.Sounds.Roar, head, { Volume = 3, Range = 900, MinRange = 40 })
 	else
@@ -194,9 +196,6 @@ local function roar(char)
 		end
 	end
 	Fx:FireAllClients("Roar", { Position = root.Position })
-	task.delay(1.8, function()
-		Posture.RestoreAll(char, 0.3)
-	end)
 end
 
 local function clawStreaks(root, side)
@@ -420,16 +419,23 @@ end
 local function slash(player, char, root)
 	combo = combo % 2 + 1
 	local side = combo == 1 and "R" or "L"
-	Posture.Swipe(char, side)
-	clawStreaks(root, side)
-	Util.Sound(Config.Sounds.Slash, root, { Pitch = 0.9 + math.random() * 0.25, Volume = 1.2 })
-	local cfg = Config.Abilities.Slash
-	local cf = root.CFrame * CFrame.new(0, 0, -cfg.Range / 2)
-	Combat.BreakInBox(cf, Vector3.new(cfg.Width, 9, cfg.Range), root.Position, 35)
-	local target = Combat.FindTargets(cf, Vector3.new(cfg.Width, 8, cfg.Range + 1))[1]
-	if target then
-		Combat.Resolve(player, target.Player)
-	end
+	VFX.Anim(char, side == "R" and "SlashR" or "SlashL")
+	Util.Sound(Config.Sounds.Whoosh, root, { Pitch = 0.95 + math.random() * 0.2, Volume = 1 })
+	-- land the hit on the strike frame of the animation (wind-up first)
+	task.delay(0.12, function()
+		if not (char.Parent and Util.IsAlive(char)) then
+			return
+		end
+		clawStreaks(root, side)
+		Util.Sound(Config.Sounds.Slash, root, { Pitch = 0.9 + math.random() * 0.25, Volume = 1.2 })
+		local cfg = Config.Abilities.Slash
+		local cf = root.CFrame * CFrame.new(0, 0, -cfg.Range / 2)
+		Combat.BreakInBox(cf, Vector3.new(cfg.Width, 9, cfg.Range), root.Position, 35)
+		local target = Combat.FindTargets(cf, Vector3.new(cfg.Width, 8, cfg.Range + 1))[1]
+		if target then
+			Combat.Resolve(player, target.Player)
+		end
+	end)
 end
 
 local function groundY(position, exclude)
@@ -440,93 +446,58 @@ local function groundY(position, exclude)
 	return hit and hit.Position.Y or position.Y - 3
 end
 
--- Pinned to the ground and clawed at.
-local function pin(player, victim)
-	local kChar, vChar = player.Character, victim.Character
-	local kRoot, vRoot = Util.Root(kChar), Util.Root(vChar)
-	if not (kRoot and vRoot) then
-		return
-	end
+-- Mid-dive contact: both claws slam into them and drive them back.
+local function pounceStrike(player, char, root, target)
+	local victim = target.Player
 	Combat.PullOut(victim)
-	for _, p in { player, victim } do
-		Status.Apply(p, "Busy", 4)
-		Status.Apply(p, "Frozen", 4)
-	end
-	local look = Util.Flat(vRoot.Position - kRoot.Position)
-	local y = groundY(vRoot.Position, { kChar, vChar })
-	local base = CFrame.lookAt(Vector3.new(vRoot.Position.X, y, vRoot.Position.Z), Vector3.new(vRoot.Position.X, y, vRoot.Position.Z) + look)
-	kRoot.Anchored = true
-	vRoot.Anchored = true
-	vRoot.CFrame = base * CFrame.new(0, 1, 0) * CFrame.Angles(math.rad(90), 0, 0)
-	kRoot.CFrame = base * CFrame.new(0, 2.6, 1.6)
-	Posture.Set(kChar, "Root", CFrame.Angles(math.rad(-45), 0, 0), 0.12)
-	Util.Sound(Config.Sounds.Land, kRoot, { Volume = 2, Pitch = 0.7 })
-	VFX.Shockwave(Vector3.new(vRoot.Position.X, y + 0.2, vRoot.Position.Z), 12)
-	Fx:FireAllClients("Shake", { Position = kRoot.Position, Intensity = 0.8, Radius = 60 })
-	Util.FireClient(Fx, victim, "Grabbed", {})
-
-	for i = 1, 3 do
-		task.wait(0.28)
-		if not (vChar.Parent and kChar.Parent) then
-			break
-		end
-		local side = i % 2 == 1 and "R" or "L"
-		Posture.Swipe(kChar, side)
-		Util.Sound(Config.Sounds.Slash, vRoot, { Pitch = 0.8 + i * 0.1, Volume = 1.3 })
-		Combat.Blood(Util.Torso(vChar), 18)
-		local vt = Util.Torso(vChar)
-		if vt then
-			VFX.Impact(vt.Position, clawGlow, 0.7)
-		end
-		Util.FireClient(Fx, victim, "Shake", { Position = vRoot.Position, Intensity = 0.5, Radius = 10 })
-	end
-	task.wait(0.2)
-
-	Posture.Restore(kChar, "Root", 0.15)
+	VFX.Anim(char, "PounceStrike")
+	local dir = Util.Flat(target.Root.Position - root.Position)
+	local torso = Util.Torso(target.Char) or target.Root
+	Util.Sound(Config.Sounds.Stab, torso, { Volume = 2, Range = 200 })
+	Util.Sound(Config.Sounds.Impact, torso, { Volume = 2, Range = 200 })
+	VFX.Pierce(root, clawGlow)
+	VFX.Impact(torso.Position, clawGlow, 1.3)
+	VFX.ExitSpray(target.Char, dir)
+	VFX.Shockwave(Vector3.new(target.Root.Position.X, groundY(target.Root.Position, { char, target.Char }) + 0.2, target.Root.Position.Z), 14)
+	Combat.Blood(torso, 40)
+	Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 1, Radius = 70 })
+	-- he lands on his feet where they were standing
+	Util.FireClient(Fx, player, "Knock", { Velocity = dir * 10 + Vector3.new(0, -20, 0) })
 	local result = Combat.Hit(victim, true)
 	if result == "kill" then
-		kRoot.CFrame = base * CFrame.new(0, 2.6, 3)
 		Combat.Execute(player, victim)
-	else
-		if vRoot.Parent then
-			vRoot.Anchored = false
-			vRoot.CFrame = base * CFrame.new(0, 3, 0)
-		end
-		if kRoot.Parent then
-			kRoot.Anchored = false
-		end
-		for _, p in { player, victim } do
-			Status.Clear(p, "Busy")
-			Status.Clear(p, "Frozen")
-		end
-		if result == "hit" then
-			Combat.Wound(player, victim)
-		end
+	elseif result == "hit" then
+		Combat.Wound(player, victim, { Force = 95, Up = 24, Dir = dir })
 	end
 end
 
 local function pounce(player, char, root)
 	local cfg = Config.Abilities.Pounce
-	Util.Sound(Config.Sounds.Lunge, root, { Pitch = 0.65, Volume = 1.6 })
-	Posture.ArmsForward(char, 0.1)
+	VFX.Anim(char, "Pounce")
+	Util.Sound(Config.Sounds.Leap, root, { Pitch = 0.9, Volume = 1.8 })
 	-- The client applies the leap; the server watches for contact.
 	local untilTime = os.clock() + cfg.Window
+	task.wait(0.12)
 	while os.clock() < untilTime and char.Parent and Util.IsAlive(char) do
 		Combat.BreakInBox(root.CFrame * CFrame.new(0, 0, -2.5), Vector3.new(6, 8, 5), root.Position, 55)
 		local target = Combat.FindNear(root.Position, cfg.GrabRadius)[1]
 		if target and not Status.Has(target.Player, "Immune") then
-			pin(player, target.Player)
+			pounceStrike(player, char, root, target)
 			return
 		end
 		task.wait()
 	end
-	Posture.RestoreAll(char, 0.2)
+	-- whiffed: land hard
+	VFX.StopAnim(char, "Pounce")
+	Util.Sound(Config.Sounds.Land, root, { Volume = 1.6, Pitch = 0.8 })
+	VFX.Shockwave(Vector3.new(root.Position.X, groundY(root.Position, { char }) + 0.2, root.Position.Z), 9)
 end
 
+-- Uppercut impale: drive the claws up through them and hoist them overhead.
 local function stab(player, char, root)
 	local cfg = Config.Abilities.Stab
-	Util.Sound(Config.Sounds.Lunge, root, { Pitch = 0.9, Volume = 1.4 })
-	Posture.ArmsForward(char, 0.08)
+	VFX.Anim(char, "Impale")
+	Util.Sound(Config.Sounds.Whoosh, root, { Pitch = 0.8, Volume = 1.4 })
 	task.wait(0.14)
 	if not (char.Parent and Util.IsAlive(char)) then
 		return
@@ -535,43 +506,58 @@ local function stab(player, char, root)
 	Combat.BreakInBox(cf, Vector3.new(6, 9, cfg.Range), root.Position, 65)
 	local target = Combat.FindTargets(cf, Vector3.new(6, 8, cfg.Range + 1))[1]
 	if not target or Status.Has(target.Player, "Immune") then
-		task.wait(0.25)
-		Posture.RestoreAll(char, 0.2)
+		task.wait(0.3)
+		VFX.StopAnim(char, "Impale")
 		return
 	end
 
-	-- Impaled on both sets of claws and lifted
 	local victim = target.Player
 	Combat.PullOut(victim)
-	local vRoot = target.Root
+	local vChar, vRoot = target.Char, target.Root
 	for _, p in { player, victim } do
-		Status.Apply(p, "Busy", 3)
-		Status.Apply(p, "Frozen", 3)
+		Status.Apply(p, "Busy", 3.2)
+		Status.Apply(p, "Frozen", 3.2)
 	end
 	root.Anchored = true
 	vRoot.Anchored = true
 	local base = CFrame.lookAt(root.Position, root.Position + Util.Flat(vRoot.Position - root.Position))
+	local scale = Config.Wolverine.Scale
 	root.CFrame = base
-	vRoot.CFrame = base * CFrame.new(0, 0.8, -2.8) * CFrame.Angles(0, math.pi, 0)
-	TweenService:Create(vRoot, TweenInfo.new(0.35, Enum.EasingStyle.Quad), {
-		CFrame = base * CFrame.new(0, 2.6, -2.6) * CFrame.Angles(math.rad(-15), math.pi, 0),
+	vRoot.CFrame = base * CFrame.new(0.8, 0.4, -2.2) * CFrame.Angles(0, math.pi, 0)
+	VFX.Anim(vChar, "Impaled")
+	-- hoisted up onto the right claws as the uppercut lands
+	TweenService:Create(vRoot, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		CFrame = base * CFrame.new(1.05 * scale, 4.8 * scale, -0.35) * CFrame.Angles(0, math.pi, 0) * CFrame.Angles(math.rad(-22), 0, 0),
 	}):Play()
-	Posture.Set(char, "RShoulder", CFrame.Angles(math.rad(115), 0, 0), 0.3)
-	Posture.Set(char, "LShoulder", CFrame.Angles(math.rad(115), 0, 0), 0.3)
-	Util.Sound(Config.Sounds.Slash, vRoot, { Pitch = 0.6, Volume = 1.6 })
-	Util.Sound(Config.Sounds.Gore, vRoot, { Pitch = 0.6, Volume = 1.2 })
-	Combat.Blood(Util.Torso(target.Char), 45)
-	VFX.Pierce(root, clawGlow)
-	VFX.ExitSpray(target.Char, base.LookVector)
-	VFX.Impact(vRoot.Position + Vector3.new(0, 1, 0), clawGlow, 1.1)
-	Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 0.7, Radius = 60 })
+	local torso = Util.Torso(vChar) or vRoot
+	Util.Sound(Config.Sounds.Stab, torso, { Volume = 2.2, Range = 220 })
+	Util.Sound(Config.Sounds.Gore, torso, { Pitch = 0.6, Volume = 1.4 })
+	task.delay(0.12, function()
+		VFX.Impact(torso.Position, clawGlow, 1.3)
+		VFX.ExitSpray(vChar, Vector3.new(0, 1, 0))
+		Combat.Blood(torso, 60)
+	end)
+	Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 0.9, Radius = 70 })
 	Util.FireClient(Fx, victim, "Grabbed", {})
-	task.wait(0.65)
+
+	-- held up there, bleeding
+	for _ = 1, 4 do
+		task.wait(0.25)
+		if vChar.Parent then
+			Combat.Blood(torso, 8)
+		end
+	end
 
 	local result = Combat.Hit(victim, true)
 	if result == "kill" then
+		VFX.StopAnim(char, "Impale")
+		VFX.StopAnim(vChar, "Impaled")
 		Combat.Execute(player, victim)
 	else
+		-- hurl them off the claws
+		VFX.Anim(char, "ImpaleThrow")
+		VFX.StopAnim(vChar, "Impaled")
+		task.wait(0.12)
 		if vRoot.Parent then
 			vRoot.Anchored = false
 		end
@@ -582,9 +568,8 @@ local function stab(player, char, root)
 			Status.Clear(p, "Busy")
 			Status.Clear(p, "Frozen")
 		end
-		Posture.RestoreAll(char, 0.2)
 		if result == "hit" then
-			Combat.Wound(player, victim)
+			Combat.Wound(player, victim, { Force = 80, Up = 30, Dir = base.LookVector })
 		end
 	end
 end
@@ -592,6 +577,7 @@ end
 local function sniff(player, root)
 	local cfg = Config.Abilities.Sniff
 	Util.Sound(Config.Sounds.Sniff, root, { Volume = 1.5 })
+	VFX.Anim(player.Character, "Sniff")
 	Util.FireClient(Fx, player, "Sniff", { Duration = cfg.Duration, Targets = Fart.SniffTargets() })
 	for survivor in Round.Survivors do
 		Util.FireClient(Fx, survivor, "Sniffed", {})
@@ -738,7 +724,7 @@ RunService.Heartbeat:Connect(function(dt)
 			combo = combo % 2 + 1
 			local side = combo == 1 and "R" or "L"
 			if not player:GetAttribute("Feral") then
-				Posture.Swipe(char, side)
+				VFX.Anim(char, side == "R" and "SlashR" or "SlashL", 1.4)
 			end
 			clawStreaks(root, side)
 			Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 0.5, Radius = 50 })

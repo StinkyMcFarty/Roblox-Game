@@ -9,7 +9,7 @@ local Interface = require(script.Parent:WaitForChild("Interface"))
 local Effects = require(script.Parent:WaitForChild("Effects"))
 require(script.Parent:WaitForChild("Shop"))
 local Daily = require(script.Parent:WaitForChild("Daily"))
-require(script.Parent:WaitForChild("Anims"))
+local Anims = require(script.Parent:WaitForChild("Anims"))
 
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local Ability = Remotes:WaitForChild("Ability")
@@ -67,6 +67,8 @@ local HINTS = {
 }
 
 local readyAt = {}
+local slashSide = 0
+local PREDICT = { Pounce = "Pounce", Stab = "Impale", Sniff = "Sniff", Punch = "Punch", Laser = "Laser", Pulse = "Pulse", Fart = "Fart" }
 local currentKit = {}
 
 local function kitEntry(name)
@@ -107,12 +109,22 @@ local function activate(name)
 	readyAt[name] = os.clock() + entry.Cooldown
 	Interface.StartCooldown(name, entry.Cooldown)
 
+	-- play our own animation instantly (the server's copy is de-duplicated)
+	local predict = PREDICT[name]
+	if name == "Slash" then
+		slashSide = slashSide % 2 + 1
+		predict = slashSide == 1 and "SlashR" or "SlashL"
+	end
+	if predict then
+		Anims.Play(char, predict)
+	end
+
 	local look = Vector3.new(root.CFrame.LookVector.X, 0, root.CFrame.LookVector.Z).Unit
 	if name == "Pounce" then
 		Effects.Impulse(root, look * A.Pounce.Forward + Vector3.new(0, A.Pounce.Up, 0), 0.22)
 		Effects.Shake(0.3)
 	elseif name == "Stab" then
-		Effects.Impulse(root, look * A.Stab.Lunge + Vector3.new(0, 4, 0), 0.14)
+		Effects.Impulse(root, look * A.Stab.Lunge * 0.6 + Vector3.new(0, 2, 0), 0.12)
 	end
 
 	local arg = nil
@@ -220,7 +232,11 @@ applyRole(player:GetAttribute("Role"))
 
 Fx.OnClientEvent:Connect(function(kind, data)
 	data = data or {}
-	if kind == "Announce" then
+	if kind == "Anim" then
+		Anims.Play(data.Char, data.Clip, data.Speed)
+	elseif kind == "AnimStop" then
+		Anims.Stop(data.Char, data.Clip)
+	elseif kind == "Announce" then
 		Interface.Announce(data.Text, data.Color, data.Duration)
 	elseif kind == "Shake" then
 		Effects.ShakeAt(data.Position, data.Intensity, data.Radius)

@@ -7,6 +7,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Util = require(ReplicatedStorage.Shared.Util)
 local Round = require(script.Parent.Round)
 local Hiding = require(script.Parent.Hiding)
+local VFX = require(script.Parent.VFX)
 
 local Fart = {}
 
@@ -27,6 +28,7 @@ function Fart.Use(player)
 		return
 	end
 	lastUsed[player] = os.clock()
+	VFX.Anim(char, "Fart")
 
 	local butt = char:FindFirstChild("LowerTorso") or char:FindFirstChild("Torso") or root
 	local pos = butt.Position - root.CFrame.LookVector * 1.2 - Vector3.new(0, 0.4, 0)

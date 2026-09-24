@@ -50,8 +50,8 @@ end
 
 -- Lighting zones: bright snowy day in the lobby, dark night in the arena.
 local NIGHT, DAY = nil, {
-	ClockTime = 13.5, Brightness = 2.6, ExposureCompensation = 0.25,
-	Ambient = Color3.fromRGB(135, 132, 128), OutdoorAmbient = Color3.fromRGB(165, 168, 180),
+	ClockTime = 15.5, Brightness = 1.5, ExposureCompensation = -0.15,
+	Ambient = Color3.fromRGB(78, 76, 74), OutdoorAmbient = Color3.fromRGB(112, 116, 128),
 }
 local inLobby = nil
 local function applyZone(lobby)

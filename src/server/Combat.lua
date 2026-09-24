@@ -7,7 +7,6 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Util = require(ReplicatedStorage.Shared.Util)
 local Round = require(script.Parent.Round)
 local Status = require(script.Parent.Status)
-local Posture = require(script.Parent.Posture)
 local Hiding = require(script.Parent.Hiding)
 local VFX = require(script.Parent.VFX)
 
@@ -203,7 +202,9 @@ function Combat.Hit(victim, ignoreImmunity)
 end
 
 -- Non-lethal hit: blood, knockback, i-frames and an adrenaline burst.
-function Combat.Wound(killer, victim)
+-- opts (optional): { Force, Up, Dir } to customise the throw.
+function Combat.Wound(killer, victim, opts)
+	opts = opts or {}
 	local char = victim.Character
 	local hum, root = Util.Humanoid(char), Util.Root(char)
 	if not (hum and root) then
@@ -229,12 +230,13 @@ function Combat.Wound(killer, victim)
 	VFX.WoundMarks(char)
 	VFX.IFrames(char, Config.HitImmunity)
 	VFX.ThrowTrail(char, Config.Throw.Tumble + 0.3)
+	VFX.Anim(char, "HitReact")
 	Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 0.5, Radius = 35 })
 
 	-- Throw them away from Wolverine
 	local kRoot = Util.Root(killer.Character)
-	local dir = kRoot and Util.Flat(root.Position - kRoot.Position) or Util.Flat(-root.CFrame.LookVector)
-	local throw = dir * Config.Throw.Force + Vector3.new(0, Config.Throw.Up, 0)
+	local dir = opts.Dir or (kRoot and Util.Flat(root.Position - kRoot.Position) or Util.Flat(-root.CFrame.LookVector))
+	local throw = dir * (opts.Force or Config.Throw.Force) + Vector3.new(0, opts.Up or Config.Throw.Up, 0)
 	if victim.IsBot then
 		local hum2 = Util.Humanoid(char)
 		hum2.PlatformStand = true
@@ -260,7 +262,7 @@ local function bloodPool(position)
 	local result = workspace:Raycast(position + Vector3.new(0, 2, 0), Vector3.new(0, -20, 0), (function()
 		local p = RaycastParams.new()
 		p.FilterType = Enum.RaycastFilterType.Include
-		p.FilterDescendantsInstances = { Round.Map }
+		p.FilterDescendantsInstances = { Round.Map, workspace:FindFirstChildOfClass("Terrain") }
 		return p
 	end)())
 	if not result then
@@ -385,25 +387,30 @@ function Combat.Execute(killer, victim)
 	vRoot.CFrame = base * CFrame.new(0, 0.5, -3) * CFrame.Angles(0, math.pi, 0)
 
 	-- Grab & lift
-	Posture.ArmsForward(kChar, 0.15)
+	VFX.Anim(kChar, "Rip")
+	VFX.Anim(vChar, "Grabbed")
 	Util.Sound(Config.Sounds.Lunge, kRoot, { Pitch = 0.8, Volume = 1.5 })
 	TweenService:Create(vRoot, TweenInfo.new(0.4, Enum.EasingStyle.Quad), {
 		CFrame = base * CFrame.new(0, 2.4, -2.7) * CFrame.Angles(0, math.pi, 0),
 	}):Play()
 	Fx:FireAllClients("Shake", { Position = kRoot.Position, Intensity = 0.7, Radius = 70 })
 	Util.FireClient(Fx, victim, "Grabbed", {})
-	task.wait(0.55)
+	task.wait(0.62)
 
-	-- Tear
+	-- Tear (synced with the Rip clip's pull-apart key)
 	if vChar.Parent then
-		Posture.Set(kChar, "RShoulder", CFrame.Angles(math.rad(90), 0, math.rad(65)), 0.12)
-		Posture.Set(kChar, "LShoulder", CFrame.Angles(math.rad(90), 0, math.rad(-65)), 0.12)
+		VFX.StopAnim(vChar)
 		Combat.RipInHalf(vChar, base)
+		Util.Sound(Config.Sounds.Tear, kRoot, { Volume = 2, Range = 220 })
 		Fx:FireAllClients("Shake", { Position = kRoot.Position, Intensity = 1.2, Radius = 90 })
 		Fx:FireAllClients("Gore", { Position = kRoot.Position, Victim = victim.Name })
 	end
-	task.wait(0.4)
-	Posture.RestoreAll(kChar, 0.25)
+	task.wait(0.55)
+	VFX.Anim(kChar, "Snarl")
+	local kHead = kChar:FindFirstChild("Head")
+	if kHead then
+		Util.Sound(Config.Sounds.Snarl, kHead, { Volume = 2, Range = 300 })
+	end
 	if kRoot.Parent then
 		kRoot.Anchored = false
 	end

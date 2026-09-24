@@ -29,6 +29,7 @@ local GREEN = Color3.fromRGB(90, 255, 140)
 
 Players.RespawnTime = 4
 MapBuilder.SetupLighting()
+MapBuilder.SetupTerrain()
 local lobby = MapBuilder.BuildLobby()
 
 -- Lobby: statues, live status screen and leaderboard

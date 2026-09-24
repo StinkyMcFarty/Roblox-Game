@@ -120,20 +120,9 @@ local function asset(id)
 end
 
 local function comicGear(char, head)
-	local YEL, BLU, BLK = rgb(238, 184, 20), rgb(28, 56, 140), rgb(18, 18, 22)
-	if head then
-		local hs = head.Size
-		head.Color = YEL
-		-- sculpted cowl over the top of the head
-		gear(char, head, "Cowl", Vector3.new(hs.X * 1.1, hs.Y * 0.55, hs.Z * 1.1), YEL, M.SmoothPlastic,
-			CFrame.new(0, hs.Y * 0.38, hs.Z * 0.02), { Mesh = Enum.MeshType.Sphere })
-		-- the iconic swept-back fins
-		for s = -1, 1, 2 do
-			gear(char, head, "Fin", Vector3.new(0.1, hs.Y * 0.95, hs.Z * 0.62), BLK, M.SmoothPlastic,
-				CFrame.new(s * hs.X * 0.47, hs.Y * 0.62, hs.Z * 0.12) * CFrame.Angles(rad(-12), 0, rad(-s * 16)),
-				{ Class = "WedgePart" })
-		end
-	end
+	local BLU, BLK = rgb(28, 56, 140), rgb(18, 18, 22)
+	-- Unmasked Jim Lee look: the face texture does the chops + snarl,
+	-- the player's own hair (or HairAccessoryId) sits on top.
 	-- rounded blue shoulder pads
 	for _, n in { "RightUpperArm", "LeftUpperArm" } do
 		local arm = char:FindFirstChild(n)
@@ -348,61 +337,109 @@ local function lighten(c, f)
 	return c:Lerp(Color3.new(1, 1, 1), f)
 end
 
--- Builds 3 claws per hand. Returns { Roots = { {Weld, Extended, Retracted} }, Parts, Tips, Bases }.
-function Costumes.BuildClaws(char, claw, extended)
+-- Three claw blades on one hand/fist part. `owner` is the model that holds the gear folder.
+local function bladesOn(owner, hand, claw, extended, set)
 	local L = Costumes.CLAW_LEN
 	local thick = claw.Thick or 1
-	local set = { Roots = {}, Parts = {}, Tips = {}, Bases = {} }
 	local edgeColor = lighten(claw.Color, 0.65)
 	local spineColor = claw.Color:Lerp(Color3.new(0, 0, 0), 0.35)
+	local out = CFrame.new(0, -hand.Size.Y * 0.3, -hand.Size.Z * 0.1)
+	local tucked = CFrame.new(0, L * 0.5, -hand.Size.Z * 0.1)
+	local root, rootWeld = Costumes.Gear(owner, hand, "ClawRoot", Vector3.one * 0.05, Color3.new(), M.SmoothPlastic, extended and out or tucked, { Transparency = 1 }, "Claws")
+	table.insert(set.Roots, { Weld = rootWeld, Extended = out })
+	local spread = math.max(0.11, hand.Size.Z * 0.32)
+	for i = -1, 1 do
+		local f = CFrame.new(0, 0, i * spread) * CFrame.Angles(0, 0, rad(i * 2))
+		local segs = {
+			{ Len = L * 0.44, W = 0.2, T = 0.07, Ang = 0 },
+			{ Len = L * 0.26, W = 0.19, T = 0.066, Ang = 5 },
+			{ Len = L * 0.16, W = 0.17, T = 0.06, Ang = 7 },
+		}
+		for k, sg in segs do
+			f = f * CFrame.Angles(rad(sg.Ang), 0, 0)
+			local center = f * CFrame.new(0, -sg.Len / 2, 0)
+			local w, t = sg.W * thick, sg.T * thick
+			local body = Costumes.Gear(owner, root, "Claw", Vector3.new(t, sg.Len + 0.02, w), claw.Color, claw.Material, center, { Reflectance = claw.Reflectance, Transparency = extended and 0 or 1 }, "Claws")
+			-- bright honed edge along the inside curve
+			local edge = Costumes.Gear(owner, root, "Claw", Vector3.new(t * 0.7, sg.Len + 0.02, 0.035), edgeColor, M.SmoothPlastic,
+				center * CFrame.new(0, 0, -w / 2 - 0.012), { Reflectance = math.min(1, claw.Reflectance + 0.35), Transparency = extended and 0 or 1 }, "Claws")
+			-- bevel line on both flats
+			for sx = -1, 1, 2 do
+				local bevel = Costumes.Gear(owner, root, "Claw", Vector3.new(0.012, sg.Len, w * 0.06), spineColor, M.SmoothPlastic,
+					center * CFrame.new(sx * t / 2, 0, w * 0.12), { Transparency = extended and 0 or 1 }, "Claws")
+				table.insert(set.Parts, bevel)
+			end
+			table.insert(set.Parts, body)
+			table.insert(set.Parts, edge)
+			if k == 1 then
+				table.insert(set.Bases, body)
+			end
+			f = f * CFrame.new(0, -sg.Len, 0)
+		end
+		-- sharp tapered tip
+		local tipLen = L * 0.2
+		f = f * CFrame.Angles(rad(9), 0, 0)
+		local tip = Costumes.Gear(owner, root, "Claw", Vector3.new(0.058 * thick, tipLen, 0.17 * thick), claw.Color, claw.Material,
+			f * CFrame.new(0, -tipLen / 2, 0) * CFrame.Angles(0, 0, math.pi), { Class = "WedgePart", Reflectance = claw.Reflectance, Transparency = extended and 0 or 1 }, "Claws")
+		table.insert(set.Parts, tip)
+		table.insert(set.Tips, tip)
+	end
+end
 
+-- Builds 3 claws per hand. Returns { Roots = { {Weld, Extended} }, Parts, Tips, Bases }.
+function Costumes.BuildClaws(char, claw, extended)
+	local set = { Roots = {}, Parts = {}, Tips = {}, Bases = {} }
 	for _, side in { "Right", "Left" } do
 		local hand = Util.Hand(char, side)
 		if hand then
-			local out = CFrame.new(0, -hand.Size.Y * 0.3, -hand.Size.Z * 0.1)
-			local tucked = CFrame.new(0, L * 0.5, -hand.Size.Z * 0.1)
-			local root, rootWeld = Costumes.Gear(char, hand, "ClawRoot", Vector3.one * 0.05, Color3.new(), M.SmoothPlastic, extended and out or tucked, { Transparency = 1 }, "Claws")
-			table.insert(set.Roots, { Weld = rootWeld, Extended = out })
-			local spread = math.max(0.11, hand.Size.Z * 0.32)
-			for i = -1, 1 do
-				local f = CFrame.new(0, 0, i * spread) * CFrame.Angles(0, 0, rad(i * 2))
-				local segs = {
-					{ Len = L * 0.44, W = 0.2, T = 0.07, Ang = 0 },
-					{ Len = L * 0.26, W = 0.19, T = 0.066, Ang = 5 },
-					{ Len = L * 0.16, W = 0.17, T = 0.06, Ang = 7 },
-				}
-				for k, sg in segs do
-					f = f * CFrame.Angles(rad(sg.Ang), 0, 0)
-					local center = f * CFrame.new(0, -sg.Len / 2, 0)
-					local w, t = sg.W * thick, sg.T * thick
-					local body = Costumes.Gear(char, root, "Claw", Vector3.new(t, sg.Len + 0.02, w), claw.Color, claw.Material, center, { Reflectance = claw.Reflectance, Transparency = extended and 0 or 1 }, "Claws")
-					-- bright honed edge along the inside curve
-					local edge = Costumes.Gear(char, root, "Claw", Vector3.new(t * 0.7, sg.Len + 0.02, 0.035), edgeColor, M.SmoothPlastic,
-						center * CFrame.new(0, 0, -w / 2 - 0.012), { Reflectance = math.min(1, claw.Reflectance + 0.35), Transparency = extended and 0 or 1 }, "Claws")
-					-- bevel line on both flats
-					for sx = -1, 1, 2 do
-						local bevel = Costumes.Gear(char, root, "Claw", Vector3.new(0.012, sg.Len, w * 0.06), spineColor, M.SmoothPlastic,
-							center * CFrame.new(sx * t / 2, 0, w * 0.12), { Transparency = extended and 0 or 1 }, "Claws")
-						table.insert(set.Parts, bevel)
-					end
-					table.insert(set.Parts, body)
-					table.insert(set.Parts, edge)
-					if k == 1 then
-						table.insert(set.Bases, body)
-					end
-					f = f * CFrame.new(0, -sg.Len, 0)
-				end
-				-- sharp tapered tip
-				local tipLen = L * 0.2
-				f = f * CFrame.Angles(rad(9), 0, 0)
-				local tip = Costumes.Gear(char, root, "Claw", Vector3.new(0.058 * thick, tipLen, 0.17 * thick), claw.Color, claw.Material,
-					f * CFrame.new(0, -tipLen / 2, 0) * CFrame.Angles(0, 0, math.pi), { Class = "WedgePart", Reflectance = claw.Reflectance, Transparency = extended and 0 or 1 }, "Claws")
-				table.insert(set.Parts, tip)
-				table.insert(set.Tips, tip)
-			end
+			bladesOn(char, hand, claw, extended, set)
 		end
 	end
 	return set
+end
+
+-- Display piece: a gloved fist with its claws out (used in the lobby).
+function Costumes.ClawDisplay(parent, cframe, claw)
+	local model = Instance.new("Model")
+	model.Name = "ClawDisplay"
+	local function p(size, cf, color, mat, props)
+		local part = Instance.new(props and props.Class or "Part")
+		part.Anchored = true
+		part.CanCollide = false
+		part.Size = size
+		part.CFrame = cf
+		part.Color = color
+		part.Material = mat
+		part.TopSurface = Enum.SurfaceType.Smooth
+		part.BottomSurface = Enum.SurfaceType.Smooth
+		if props then
+			for k, v in props do
+				if k ~= "Class" then
+					part[k] = v
+				end
+			end
+		end
+		part.Parent = model
+		return part
+	end
+	-- the fist points its knuckles up: hand -Y = up
+	local fistCf = cframe * CFrame.Angles(math.pi, 0, 0)
+	local glove = rgb(26, 24, 28)
+	local fist = p(Vector3.new(0.8, 0.9, 1.05), fistCf, glove, M.Leather)
+	for k = -1, 1 do -- knuckle ridge
+		p(Vector3.new(0.82, 0.18, 0.28), fistCf * CFrame.new(0, -0.4, k * 0.32), rgb(40, 38, 44), M.Leather)
+	end
+	p(Vector3.new(0.3, 0.5, 0.9), fistCf * CFrame.new(0.5, 0.05, 0), glove, M.Leather) -- thumb
+	p(Vector3.new(1.4, 0.7, 0.7), fistCf * CFrame.new(0, 0.8, 0) * CFrame.Angles(0, 0, rad(90)), rgb(34, 32, 36), M.Leather, { Shape = Enum.PartType.Cylinder })
+	p(Vector3.new(0.18, 0.76, 0.76), fistCf * CFrame.new(0, 0.55, 0) * CFrame.Angles(0, 0, rad(90)), rgb(120, 122, 128), M.Metal, { Shape = Enum.PartType.Cylinder })
+	bladesOn(model, fist, claw, true, { Roots = {}, Parts = {}, Tips = {}, Bases = {} })
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.Anchored = true
+		end
+	end
+	model.Parent = parent
+	return model
 end
 
 -- SNIKT: blades slide out of the knuckles.

@@ -86,7 +86,7 @@ Config.Wolverine = {
 
 Config.Abilities = {
 	Slash = { Cooldown = 0.55, Range = 8, Width = 8 },
-	Pounce = { Cooldown = 9, Forward = 90, Up = 38, GrabRadius = 6.5, Window = 1.0 },
+	Pounce = { Cooldown = 9, Forward = 78, Up = 52, GrabRadius = 7, Window = 1.2 },
 	Stab = { Cooldown = 6, Range = 8, Lunge = 60 },
 	Sniff = { Cooldown = 25, Duration = 5 }, -- only 5s of tracking so he can't wallhack all round
 }
@@ -152,7 +152,31 @@ Config.Sounds = {
 	Heartbeat = "",
 	Punch = "rbxasset://sounds/action_jump_land.mp3",
 	Laser = "rbxasset://sounds/electronicpingshort.wav",
+	-- New crisp SFX (synthesised in tools/generate_sfx.py, upload & paste IDs):
+	Whoosh = "rbxasset://sounds/swordlunge.wav",
+	Stab = "rbxasset://sounds/swordslash.wav",
+	Impact = "rbxasset://sounds/action_jump_land.mp3",
+	Leap = "rbxasset://sounds/swordlunge.wav",
+	Tear = "rbxasset://sounds/impact_water.mp3",
+	UIHover = "rbxasset://sounds/swordslash.wav",
+	UIClick = "rbxasset://sounds/unsheath.wav",
 }
+
+-- CRISP SFX: original sounds synthesised by tools/generate_sfx.py live in
+-- assets/sfx/*.ogg. Upload them (Studio: View > Asset Manager > Bulk Import),
+-- right-click each > Copy Asset ID, and paste the number next to its name.
+-- Anything left at 0 falls back to the built-in sound above.
+Config.UploadedSounds = {
+	Snikt = 0, Slash = 0, Whoosh = 0, Stab = 0, Impact = 0, Leap = 0, Land = 0,
+	Roar = 0, Snarl = 0, Tear = 0, Gore = 0, Break = 0, Heartbeat = 0, Fart = 0,
+	Sniff = 0, Laser = 0, Punch = 0, Terminal = 0, UIHover = 0, UIClick = 0,
+}
+Config.Sounds.Snarl = Config.Sounds.Snarl or ""
+for name, id in Config.UploadedSounds do
+	if id and id ~= 0 then
+		Config.Sounds[name] = "rbxassetid://" .. tostring(id)
+	end
+end
 
 return Config
 ]]></string>
@@ -199,13 +223,14 @@ Skins.List = {
 	Comic = {
 		Name = "Comic Wolverine",
 		Price = 1000,
-		Description = "Straight off the page. Cowl, fins, shoulder pads, tiger stripes.",
+		Description = "Jim Lee classic. Wild hair, mutton chops, shoulder pads, tiger stripes.",
+		KeepHair = true,
 		Textures = { Shirt = 0, Pants = 0, Face = 0 },
 		HairAccessoryId = 0,
 		Swatch = YELLOW,
 		Colors = {
 			UpperTorso = YELLOW, LowerTorso = BLUE,
-			UpperArm = YELLOW, LowerArm = YELLOW, Hand = BLUE,
+			UpperArm = "Skin", LowerArm = BLUE, Hand = BLUE,
 			UpperLeg = YELLOW, LowerLeg = BLUE, Foot = BLUE,
 		},
 	},
@@ -640,7 +665,6 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Util = require(ReplicatedStorage.Shared.Util)
 local Round = require(script.Parent.Round)
 local Status = require(script.Parent.Status)
-local Posture = require(script.Parent.Posture)
 local Hiding = require(script.Parent.Hiding)
 local VFX = require(script.Parent.VFX)
 
@@ -836,7 +860,9 @@ function Combat.Hit(victim, ignoreImmunity)
 end
 
 -- Non-lethal hit: blood, knockback, i-frames and an adrenaline burst.
-function Combat.Wound(killer, victim)
+-- opts (optional): { Force, Up, Dir } to customise the throw.
+function Combat.Wound(killer, victim, opts)
+	opts = opts or {}
 	local char = victim.Character
 	local hum, root = Util.Humanoid(char), Util.Root(char)
 	if not (hum and root) then
@@ -862,12 +888,13 @@ function Combat.Wound(killer, victim)
 	VFX.WoundMarks(char)
 	VFX.IFrames(char, Config.HitImmunity)
 	VFX.ThrowTrail(char, Config.Throw.Tumble + 0.3)
+	VFX.Anim(char, "HitReact")
 	Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 0.5, Radius = 35 })
 
 	-- Throw them away from Wolverine
 	local kRoot = Util.Root(killer.Character)
-	local dir = kRoot and Util.Flat(root.Position - kRoot.Position) or Util.Flat(-root.CFrame.LookVector)
-	local throw = dir * Config.Throw.Force + Vector3.new(0, Config.Throw.Up, 0)
+	local dir = opts.Dir or (kRoot and Util.Flat(root.Position - kRoot.Position) or Util.Flat(-root.CFrame.LookVector))
+	local throw = dir * (opts.Force or Config.Throw.Force) + Vector3.new(0, opts.Up or Config.Throw.Up, 0)
 	if victim.IsBot then
 		local hum2 = Util.Humanoid(char)
 		hum2.PlatformStand = true
@@ -893,7 +920,7 @@ local function bloodPool(position)
 	local result = workspace:Raycast(position + Vector3.new(0, 2, 0), Vector3.new(0, -20, 0), (function()
 		local p = RaycastParams.new()
 		p.FilterType = Enum.RaycastFilterType.Include
-		p.FilterDescendantsInstances = { Round.Map }
+		p.FilterDescendantsInstances = { Round.Map, workspace:FindFirstChildOfClass("Terrain") }
 		return p
 	end)())
 	if not result then
@@ -1018,25 +1045,30 @@ function Combat.Execute(killer, victim)
 	vRoot.CFrame = base * CFrame.new(0, 0.5, -3) * CFrame.Angles(0, math.pi, 0)
 
 	-- Grab & lift
-	Posture.ArmsForward(kChar, 0.15)
+	VFX.Anim(kChar, "Rip")
+	VFX.Anim(vChar, "Grabbed")
 	Util.Sound(Config.Sounds.Lunge, kRoot, { Pitch = 0.8, Volume = 1.5 })
 	TweenService:Create(vRoot, TweenInfo.new(0.4, Enum.EasingStyle.Quad), {
 		CFrame = base * CFrame.new(0, 2.4, -2.7) * CFrame.Angles(0, math.pi, 0),
 	}):Play()
 	Fx:FireAllClients("Shake", { Position = kRoot.Position, Intensity = 0.7, Radius = 70 })
 	Util.FireClient(Fx, victim, "Grabbed", {})
-	task.wait(0.55)
+	task.wait(0.62)
 
-	-- Tear
+	-- Tear (synced with the Rip clip's pull-apart key)
 	if vChar.Parent then
-		Posture.Set(kChar, "RShoulder", CFrame.Angles(math.rad(90), 0, math.rad(65)), 0.12)
-		Posture.Set(kChar, "LShoulder", CFrame.Angles(math.rad(90), 0, math.rad(-65)), 0.12)
+		VFX.StopAnim(vChar)
 		Combat.RipInHalf(vChar, base)
+		Util.Sound(Config.Sounds.Tear, kRoot, { Volume = 2, Range = 220 })
 		Fx:FireAllClients("Shake", { Position = kRoot.Position, Intensity = 1.2, Radius = 90 })
 		Fx:FireAllClients("Gore", { Position = kRoot.Position, Victim = victim.Name })
 	end
-	task.wait(0.4)
-	Posture.RestoreAll(kChar, 0.25)
+	task.wait(0.55)
+	VFX.Anim(kChar, "Snarl")
+	local kHead = kChar:FindFirstChild("Head")
+	if kHead then
+		Util.Sound(Config.Sounds.Snarl, kHead, { Volume = 2, Range = 300 })
+	end
 	if kRoot.Parent then
 		kRoot.Anchored = false
 	end
@@ -1185,20 +1217,9 @@ local function asset(id)
 end
 
 local function comicGear(char, head)
-	local YEL, BLU, BLK = rgb(238, 184, 20), rgb(28, 56, 140), rgb(18, 18, 22)
-	if head then
-		local hs = head.Size
-		head.Color = YEL
-		-- sculpted cowl over the top of the head
-		gear(char, head, "Cowl", Vector3.new(hs.X * 1.1, hs.Y * 0.55, hs.Z * 1.1), YEL, M.SmoothPlastic,
-			CFrame.new(0, hs.Y * 0.38, hs.Z * 0.02), { Mesh = Enum.MeshType.Sphere })
-		-- the iconic swept-back fins
-		for s = -1, 1, 2 do
-			gear(char, head, "Fin", Vector3.new(0.1, hs.Y * 0.95, hs.Z * 0.62), BLK, M.SmoothPlastic,
-				CFrame.new(s * hs.X * 0.47, hs.Y * 0.62, hs.Z * 0.12) * CFrame.Angles(rad(-12), 0, rad(-s * 16)),
-				{ Class = "WedgePart" })
-		end
-	end
+	local BLU, BLK = rgb(28, 56, 140), rgb(18, 18, 22)
+	-- Unmasked Jim Lee look: the face texture does the chops + snarl,
+	-- the player's own hair (or HairAccessoryId) sits on top.
 	-- rounded blue shoulder pads
 	for _, n in { "RightUpperArm", "LeftUpperArm" } do
 		local arm = char:FindFirstChild(n)
@@ -1413,61 +1434,109 @@ local function lighten(c, f)
 	return c:Lerp(Color3.new(1, 1, 1), f)
 end
 
--- Builds 3 claws per hand. Returns { Roots = { {Weld, Extended, Retracted} }, Parts, Tips, Bases }.
-function Costumes.BuildClaws(char, claw, extended)
+-- Three claw blades on one hand/fist part. `owner` is the model that holds the gear folder.
+local function bladesOn(owner, hand, claw, extended, set)
 	local L = Costumes.CLAW_LEN
 	local thick = claw.Thick or 1
-	local set = { Roots = {}, Parts = {}, Tips = {}, Bases = {} }
 	local edgeColor = lighten(claw.Color, 0.65)
 	local spineColor = claw.Color:Lerp(Color3.new(0, 0, 0), 0.35)
+	local out = CFrame.new(0, -hand.Size.Y * 0.3, -hand.Size.Z * 0.1)
+	local tucked = CFrame.new(0, L * 0.5, -hand.Size.Z * 0.1)
+	local root, rootWeld = Costumes.Gear(owner, hand, "ClawRoot", Vector3.one * 0.05, Color3.new(), M.SmoothPlastic, extended and out or tucked, { Transparency = 1 }, "Claws")
+	table.insert(set.Roots, { Weld = rootWeld, Extended = out })
+	local spread = math.max(0.11, hand.Size.Z * 0.32)
+	for i = -1, 1 do
+		local f = CFrame.new(0, 0, i * spread) * CFrame.Angles(0, 0, rad(i * 2))
+		local segs = {
+			{ Len = L * 0.44, W = 0.2, T = 0.07, Ang = 0 },
+			{ Len = L * 0.26, W = 0.19, T = 0.066, Ang = 5 },
+			{ Len = L * 0.16, W = 0.17, T = 0.06, Ang = 7 },
+		}
+		for k, sg in segs do
+			f = f * CFrame.Angles(rad(sg.Ang), 0, 0)
+			local center = f * CFrame.new(0, -sg.Len / 2, 0)
+			local w, t = sg.W * thick, sg.T * thick
+			local body = Costumes.Gear(owner, root, "Claw", Vector3.new(t, sg.Len + 0.02, w), claw.Color, claw.Material, center, { Reflectance = claw.Reflectance, Transparency = extended and 0 or 1 }, "Claws")
+			-- bright honed edge along the inside curve
+			local edge = Costumes.Gear(owner, root, "Claw", Vector3.new(t * 0.7, sg.Len + 0.02, 0.035), edgeColor, M.SmoothPlastic,
+				center * CFrame.new(0, 0, -w / 2 - 0.012), { Reflectance = math.min(1, claw.Reflectance + 0.35), Transparency = extended and 0 or 1 }, "Claws")
+			-- bevel line on both flats
+			for sx = -1, 1, 2 do
+				local bevel = Costumes.Gear(owner, root, "Claw", Vector3.new(0.012, sg.Len, w * 0.06), spineColor, M.SmoothPlastic,
+					center * CFrame.new(sx * t / 2, 0, w * 0.12), { Transparency = extended and 0 or 1 }, "Claws")
+				table.insert(set.Parts, bevel)
+			end
+			table.insert(set.Parts, body)
+			table.insert(set.Parts, edge)
+			if k == 1 then
+				table.insert(set.Bases, body)
+			end
+			f = f * CFrame.new(0, -sg.Len, 0)
+		end
+		-- sharp tapered tip
+		local tipLen = L * 0.2
+		f = f * CFrame.Angles(rad(9), 0, 0)
+		local tip = Costumes.Gear(owner, root, "Claw", Vector3.new(0.058 * thick, tipLen, 0.17 * thick), claw.Color, claw.Material,
+			f * CFrame.new(0, -tipLen / 2, 0) * CFrame.Angles(0, 0, math.pi), { Class = "WedgePart", Reflectance = claw.Reflectance, Transparency = extended and 0 or 1 }, "Claws")
+		table.insert(set.Parts, tip)
+		table.insert(set.Tips, tip)
+	end
+end
 
+-- Builds 3 claws per hand. Returns { Roots = { {Weld, Extended} }, Parts, Tips, Bases }.
+function Costumes.BuildClaws(char, claw, extended)
+	local set = { Roots = {}, Parts = {}, Tips = {}, Bases = {} }
 	for _, side in { "Right", "Left" } do
 		local hand = Util.Hand(char, side)
 		if hand then
-			local out = CFrame.new(0, -hand.Size.Y * 0.3, -hand.Size.Z * 0.1)
-			local tucked = CFrame.new(0, L * 0.5, -hand.Size.Z * 0.1)
-			local root, rootWeld = Costumes.Gear(char, hand, "ClawRoot", Vector3.one * 0.05, Color3.new(), M.SmoothPlastic, extended and out or tucked, { Transparency = 1 }, "Claws")
-			table.insert(set.Roots, { Weld = rootWeld, Extended = out })
-			local spread = math.max(0.11, hand.Size.Z * 0.32)
-			for i = -1, 1 do
-				local f = CFrame.new(0, 0, i * spread) * CFrame.Angles(0, 0, rad(i * 2))
-				local segs = {
-					{ Len = L * 0.44, W = 0.2, T = 0.07, Ang = 0 },
-					{ Len = L * 0.26, W = 0.19, T = 0.066, Ang = 5 },
-					{ Len = L * 0.16, W = 0.17, T = 0.06, Ang = 7 },
-				}
-				for k, sg in segs do
-					f = f * CFrame.Angles(rad(sg.Ang), 0, 0)
-					local center = f * CFrame.new(0, -sg.Len / 2, 0)
-					local w, t = sg.W * thick, sg.T * thick
-					local body = Costumes.Gear(char, root, "Claw", Vector3.new(t, sg.Len + 0.02, w), claw.Color, claw.Material, center, { Reflectance = claw.Reflectance, Transparency = extended and 0 or 1 }, "Claws")
-					-- bright honed edge along the inside curve
-					local edge = Costumes.Gear(char, root, "Claw", Vector3.new(t * 0.7, sg.Len + 0.02, 0.035), edgeColor, M.SmoothPlastic,
-						center * CFrame.new(0, 0, -w / 2 - 0.012), { Reflectance = math.min(1, claw.Reflectance + 0.35), Transparency = extended and 0 or 1 }, "Claws")
-					-- bevel line on both flats
-					for sx = -1, 1, 2 do
-						local bevel = Costumes.Gear(char, root, "Claw", Vector3.new(0.012, sg.Len, w * 0.06), spineColor, M.SmoothPlastic,
-							center * CFrame.new(sx * t / 2, 0, w * 0.12), { Transparency = extended and 0 or 1 }, "Claws")
-						table.insert(set.Parts, bevel)
-					end
-					table.insert(set.Parts, body)
-					table.insert(set.Parts, edge)
-					if k == 1 then
-						table.insert(set.Bases, body)
-					end
-					f = f * CFrame.new(0, -sg.Len, 0)
-				end
-				-- sharp tapered tip
-				local tipLen = L * 0.2
-				f = f * CFrame.Angles(rad(9), 0, 0)
-				local tip = Costumes.Gear(char, root, "Claw", Vector3.new(0.058 * thick, tipLen, 0.17 * thick), claw.Color, claw.Material,
-					f * CFrame.new(0, -tipLen / 2, 0) * CFrame.Angles(0, 0, math.pi), { Class = "WedgePart", Reflectance = claw.Reflectance, Transparency = extended and 0 or 1 }, "Claws")
-				table.insert(set.Parts, tip)
-				table.insert(set.Tips, tip)
-			end
+			bladesOn(char, hand, claw, extended, set)
 		end
 	end
 	return set
+end
+
+-- Display piece: a gloved fist with its claws out (used in the lobby).
+function Costumes.ClawDisplay(parent, cframe, claw)
+	local model = Instance.new("Model")
+	model.Name = "ClawDisplay"
+	local function p(size, cf, color, mat, props)
+		local part = Instance.new(props and props.Class or "Part")
+		part.Anchored = true
+		part.CanCollide = false
+		part.Size = size
+		part.CFrame = cf
+		part.Color = color
+		part.Material = mat
+		part.TopSurface = Enum.SurfaceType.Smooth
+		part.BottomSurface = Enum.SurfaceType.Smooth
+		if props then
+			for k, v in props do
+				if k ~= "Class" then
+					part[k] = v
+				end
+			end
+		end
+		part.Parent = model
+		return part
+	end
+	-- the fist points its knuckles up: hand -Y = up
+	local fistCf = cframe * CFrame.Angles(math.pi, 0, 0)
+	local glove = rgb(26, 24, 28)
+	local fist = p(Vector3.new(0.8, 0.9, 1.05), fistCf, glove, M.Leather)
+	for k = -1, 1 do -- knuckle ridge
+		p(Vector3.new(0.82, 0.18, 0.28), fistCf * CFrame.new(0, -0.4, k * 0.32), rgb(40, 38, 44), M.Leather)
+	end
+	p(Vector3.new(0.3, 0.5, 0.9), fistCf * CFrame.new(0.5, 0.05, 0), glove, M.Leather) -- thumb
+	p(Vector3.new(1.4, 0.7, 0.7), fistCf * CFrame.new(0, 0.8, 0) * CFrame.Angles(0, 0, rad(90)), rgb(34, 32, 36), M.Leather, { Shape = Enum.PartType.Cylinder })
+	p(Vector3.new(0.18, 0.76, 0.76), fistCf * CFrame.new(0, 0.55, 0) * CFrame.Angles(0, 0, rad(90)), rgb(120, 122, 128), M.Metal, { Shape = Enum.PartType.Cylinder })
+	bladesOn(model, fist, claw, true, { Roots = {}, Parts = {}, Tips = {}, Bases = {} })
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.Anchored = true
+		end
+	end
+	model.Parent = parent
+	return model
 end
 
 -- SNIKT: blades slide out of the knuckles.
@@ -1623,6 +1692,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Util = require(ReplicatedStorage.Shared.Util)
 local Round = require(script.Parent.Round)
 local Hiding = require(script.Parent.Hiding)
+local VFX = require(script.Parent.VFX)
 
 local Fart = {}
 
@@ -1643,6 +1713,7 @@ function Fart.Use(player)
 		return
 	end
 	lastUsed[player] = os.clock()
+	VFX.Anim(char, "Fart")
 
 	local butt = char:FindFirstChild("LowerTorso") or char:FindFirstChild("Torso") or root
 	local pos = butt.Position - root.CFrame.LookVector * 1.2 - Vector3.new(0, 0.4, 0)
@@ -1761,6 +1832,7 @@ local GREEN = Color3.fromRGB(90, 255, 140)
 
 Players.RespawnTime = 4
 MapBuilder.SetupLighting()
+MapBuilder.SetupTerrain()
 local lobby = MapBuilder.BuildLobby()
 
 -- Lobby: statues, live status screen and leaderboard
@@ -2679,33 +2751,80 @@ end
 
 local function lamp(parent, pos, facing, flicker)
 	local base = CFrame.lookAt(pos, pos + facing)
-	block(parent, Vector3.new(0.6, 14, 0.6), base * CFrame.new(0, 7, 0), M.Metal, C.DarkMetal)
-	block(parent, Vector3.new(0.4, 0.4, 3.2), base * CFrame.new(0, 13.8, -1.4), M.Metal, C.DarkMetal)
-	local head = block(parent, Vector3.new(1.4, 0.4, 1.2), base * CFrame.new(0, 13.5, -2.8), M.Neon, C.Lamp)
-	light(head, { Range = 30, Brightness = 1.6, Color = C.Lamp, Shadows = true })
+	local metal = rgb(58, 62, 68)
+	block(parent, Vector3.new(1.4, 0.6, 1.4), base * CFrame.new(0, 0.3, 0), M.Concrete, rgb(120, 120, 124))
+	block(parent, Vector3.new(1, 0.9, 0.9), base * CFrame.new(0, 1, 0) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, metal, { Shape = Enum.PartType.Cylinder })
+	block(parent, Vector3.new(8, 0.55, 0.55), base * CFrame.new(0, 5, 0) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, metal, { Shape = Enum.PartType.Cylinder })
+	block(parent, Vector3.new(6, 0.4, 0.4), base * CFrame.new(0, 12, 0) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, metal, { Shape = Enum.PartType.Cylinder })
+	block(parent, Vector3.new(0.32, 0.32, 3.4), base * CFrame.new(0, 14.75, -1.6) * CFrame.Angles(math.rad(6), 0, 0), M.Metal, metal)
+	local housing = block(parent, Vector3.new(1.3, 0.35, 2.6), base * CFrame.new(0, 14.4, -3.3), M.Metal, metal)
+	local head = block(parent, Vector3.new(1.05, 0.08, 2.2), base * CFrame.new(0, 14.2, -3.3), M.Neon, C.Lamp)
+	make("SpotLight", head, { Face = Enum.NormalId.Bottom, Range = 38, Angle = 110, Brightness = 3, Color = C.Lamp, Shadows = true })
+	light(housing, { Range = 12, Brightness = 0.5, Color = C.Lamp })
 	if flicker then
 		CollectionService:AddTag(head, "Flicker")
 	end
 end
 
-local function tree(parent, pos, scale)
+-- A round terraced cone: shrinking discs = one tier of a pine.
+local function coneTier(parent, base, w, h, color, discs, collide)
+	for i = 0, discs - 1 do
+		local r = w / 2 * (1 - i / discs * 0.82)
+		local dh = h / discs
+		make("Part", parent, {
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(dh * 1.05, r * 2, r * 2),
+			CFrame = CFrame.new(base + Vector3.new(0, dh * (i + 0.5), 0)) * CFrame.Angles(0, 0, math.rad(90)),
+			Material = M.Grass,
+			Color = vary(color, 0.08),
+			CanCollide = collide and i == 0,
+		})
+	end
+end
+
+local function tree(parent, pos, scale, simple)
 	local model = Instance.new("Model")
 	model.Name = "Pine"
 	local s = scale
-	local trunk = block(model, Vector3.new(1.3 * s, 7 * s, 1.3 * s), CFrame.new(pos + Vector3.new(0, 3.5 * s, 0)), M.Wood, C.DarkWood)
+	local trunk = block(model, Vector3.new(6 * s, 1.1 * s, 1.1 * s), CFrame.new(pos + Vector3.new(0, 3 * s, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.Wood, C.DarkWood, { Shape = Enum.PartType.Cylinder })
 	breakable(trunk)
 	trunk:SetAttribute("Topple", true)
-	local spin = rng:NextNumber() * math.pi
-	for i, w in { 10, 8, 6, 4, 2.2 } do
-		local y = (4.5 + i * 2.3) * s
-		local cf = CFrame.new(pos + Vector3.new(0, y, 0)) * CFrame.Angles(0, spin + i * 0.45, 0)
-		block(model, Vector3.new(w * s, 2.6 * s, w * s), cf, M.Grass, i % 2 == 0 and C.Pine or C.PineDark, { CanCollide = i == 1 })
-		block(model, Vector3.new(w * s * 0.8, 0.35 * s, w * s * 0.8), cf * CFrame.new(0, 1.35 * s, 0), M.Snow, C.Snow, { CanCollide = false })
+	local tiers = simple and { { 10, 7, 2.2 }, { 6.5, 6, 7.2 } }
+		or { { 10.5, 5.4, 2.2 }, { 8.4, 4.8, 5.4 }, { 6.2, 4.2, 8.4 }, { 3.8, 3.8, 11.2 } }
+	for i, t in tiers do
+		local w, h, y = t[1] * s, t[2] * s, t[3] * s
+		local base = pos + Vector3.new(0, y, 0)
+		coneTier(model, base, w, h, i % 2 == 0 and C.Pine or C.PineDark, simple and 3 or 4, i == 1)
+		if not simple then -- snow settled on the branches
+			for k, f in { 0.25, 0.75 } do
+				local rr = w / 2 * (1 - (f - 0.25) * 0.82) * 0.94
+				make("Part", model, {
+					Shape = Enum.PartType.Cylinder,
+					Size = Vector3.new(0.25 * s, rr * 2, rr * 2),
+					CFrame = CFrame.new(base + Vector3.new(0, h * f + 0.05 * s + 0.01 * k, 0)) * CFrame.Angles(0, 0, math.rad(90)),
+					Material = M.Snow,
+					Color = C.Snow,
+					CanCollide = false,
+				})
+			end
+		end
 	end
 	model.Parent = parent
 end
 
+local function terrain()
+	return workspace:FindFirstChildOfClass("Terrain")
+end
+
 local function rock(parent, pos, size)
+	local t = terrain()
+	if t then
+		local r = math.max(size.X, size.Z) * 0.6
+		t:FillBall(pos + Vector3.new(0, -r * 0.35, 0), r, Enum.Material.Rock)
+		t:FillBall(pos + Vector3.new(r * 0.3, -r * 0.5, -r * 0.2), r * 0.8, Enum.Material.Slate)
+		t:FillBall(pos + Vector3.new(0, r * 0.25, 0), r * 0.55, Enum.Material.Snow)
+		return
+	end
 	local cf = CFrame.new(pos + Vector3.new(0, size.Y * 0.35, 0)) * CFrame.Angles(rng:NextNumber() * 0.4, rng:NextNumber() * 6, rng:NextNumber() * 0.4)
 	block(parent, size, cf, M.Slate, vary(C.Rock, 0.2))
 	block(parent, Vector3.new(size.X * 0.85, 0.4, size.Z * 0.85), cf * CFrame.new(0, size.Y / 2, 0), M.Snow, C.Snow, { CanCollide = false })
@@ -3246,6 +3365,12 @@ local function buildRoads(env, props)
 		zone(cx, cz, sx, sz)
 		local alongX = sx > sz
 		local len = alongX and sx or sz
+		-- solid white edge lines
+		for _, off in { -1, 1 } do
+			local w = (alongX and sz or sx) / 2 - 0.7
+			local p = alongX and Vector3.new(cx, 0.215, cz + off * w) or Vector3.new(cx + off * w, 0.215, cz)
+			block(env, alongX and Vector3.new(len - 2, 0.03, 0.25) or Vector3.new(0.25, 0.03, len - 2), CFrame.new(p), M.SmoothPlastic, rgb(215, 215, 210), { CanCollide = false })
+		end
 		for t = -len / 2 + 4, len / 2 - 4, 10 do
 			local p = alongX and Vector3.new(cx + t, 0.22, cz) or Vector3.new(cx, 0.22, cz + t)
 			block(env, alongX and Vector3.new(4, 0.05, 0.4) or Vector3.new(0.4, 0.05, 4), CFrame.new(p), M.SmoothPlastic, C.Line)
@@ -3259,6 +3384,30 @@ local function buildRoads(env, props)
 	road(0, -121, 12, 118) -- north road
 	road(124, 0, 112, 12) -- east
 	road(-124, 0, 112, 12) -- west
+
+	-- Crosswalks where the main roads meet the ring road
+	for _, c in { { 0, 68, false }, { 0, -68, false }, { 74, 0, true }, { -74, 0, true } } do
+		for k = -2, 2 do
+			local p = c[3] and Vector3.new(c[1], 0.22, c[2] + k * 2.1) or Vector3.new(c[1] + k * 2.1, 0.22, c[2])
+			block(env, c[3] and Vector3.new(4.5, 0.04, 1.1) or Vector3.new(1.1, 0.04, 4.5), CFrame.new(p), M.SmoothPlastic, rgb(225, 225, 220), { CanCollide = false })
+		end
+	end
+	-- Manhole covers
+	for _, p in { Vector3.new(0, 0.21, 95), Vector3.new(0, 0.21, -100), Vector3.new(110, 0.21, 0), Vector3.new(-120, 0.21, 0), Vector3.new(-30, 0.21, -56), Vector3.new(40, 0.21, 56) } do
+		block(env, Vector3.new(0.05, 2.4, 2.4), CFrame.new(p) * CFrame.Angles(0, 0, math.rad(90)), M.DiamondPlate, rgb(40, 40, 42), { Shape = Enum.PartType.Cylinder, CanCollide = false })
+	end
+	-- Curbed sidewalk around the lab + entrance plazas
+	local pave, curb = rgb(138, 138, 144), rgb(170, 170, 172)
+	for _, sw in { { 0, -48, 112, 4 }, { 0, 48, 112, 4 }, { -54, 0, 4, 92 }, { 54, 0, 4, 92 } } do
+		block(env, Vector3.new(sw[3], 0.5, sw[4]), CFrame.new(sw[1], 0.25, sw[2]), M.Pavement, pave)
+		local outer = sw[3] > sw[4]
+		local ex = outer and 0 or (sw[1] > 0 and 1 or -1) * (sw[3] / 2 - 0.2)
+		local ez = outer and (sw[2] > 0 and 1 or -1) * (sw[4] / 2 - 0.2) or 0
+		block(env, outer and Vector3.new(sw[3], 0.6, 0.4) or Vector3.new(0.4, 0.6, sw[4]), CFrame.new(sw[1] + ex, 0.3, sw[2] + ez), M.Concrete, curb)
+	end
+	for _, pz in { { 0, 41, 16, 11 }, { 48.5, 0, 7, 10 }, { -48.5, 0, 7, 10 }, { 25, -41, 8, 11 }, { -25, -41, 8, 11 } } do
+		block(env, Vector3.new(pz[3], 0.5, pz[4]), CFrame.new(pz[1], 0.25, pz[2]), M.Pavement, pave)
+	end
 
 	-- snow drifts on the roads
 	for _ = 1, 40 do
@@ -3325,10 +3474,10 @@ local function buildBoundary(env)
 		local r = rng:NextNumber(HALF + 12, HALF + 80)
 		local x, z = math.cos(a) * r, math.sin(a) * r
 		if math.abs(x) > HALF + 8 or math.abs(z) > HALF + 8 then
-			tree(env, Vector3.new(x, 0, z), rng:NextNumber(1.2, 2))
+			tree(env, Vector3.new(x, 0, z), rng:NextNumber(1.2, 2), true)
 		end
 	end
-	for i = 1, 18 do
+	for i = 1, (terrain() and 0 or 18) do
 		local a = (i / 18) * math.pi * 2 + rng:NextNumber() * 0.2
 		local r = rng:NextNumber(330, 400)
 		local h = rng:NextNumber(90, 190)
@@ -3351,7 +3500,13 @@ local function buildWilderness(env, props)
 				rock(props, Vector3.new(x, 0, z), Vector3.new(rng:NextNumber(4, 9), rng:NextNumber(3, 6), rng:NextNumber(4, 9)))
 				zone(x, z, 8, 8)
 			else
-				block(env, Vector3.one * rng:NextNumber(8, 14), CFrame.new(x, -4, z), M.Snow, C.SnowShade, { Shape = Enum.PartType.Ball })
+				local t = terrain()
+				local r = rng:NextNumber(6, 11)
+				if t then
+					t:FillBall(Vector3.new(x, -r * 0.55, z), r, Enum.Material.Snow)
+				else
+					block(env, Vector3.one * r * 2, CFrame.new(x, -r * 0.55, z), M.Snow, C.SnowShade, { Shape = Enum.PartType.Ball })
+				end
 			end
 		end
 	end
@@ -3573,35 +3728,93 @@ end
 ---------------------------------------------------------------------------
 
 function MapBuilder.SetupLighting()
-	Lighting.ClockTime = 0.3
-	Lighting.Brightness = 1.5
-	Lighting.Ambient = rgb(38, 42, 58)
-	Lighting.OutdoorAmbient = rgb(70, 80, 105)
-	Lighting.EnvironmentDiffuseScale = 0.35
-	Lighting.EnvironmentSpecularScale = 0.6
+	Lighting.ClockTime = 0.4
+	Lighting.Brightness = 2
+	Lighting.Ambient = rgb(34, 38, 52)
+	Lighting.OutdoorAmbient = rgb(72, 82, 108)
+	Lighting.EnvironmentDiffuseScale = 1
+	Lighting.EnvironmentSpecularScale = 1
 	Lighting.GlobalShadows = true
-	Lighting.GeographicLatitude = 55
+	Lighting.ShadowSoftness = 0.2
+	Lighting.GeographicLatitude = 48
+	Lighting.ExposureCompensation = 0.1
 	for _, c in Lighting:GetChildren() do
 		if c:IsA("PostEffect") or c:IsA("Atmosphere") or c:IsA("Sky") then
 			c:Destroy()
 		end
 	end
 	make("Atmosphere", Lighting, {
-		Density = 0.42,
-		Offset = 0.1,
-		Color = rgb(95, 105, 130),
-		Decay = rgb(30, 36, 52),
-		Glare = 0,
-		Haze = 2.2,
+		Density = 0.36,
+		Offset = 0.15,
+		Color = rgb(100, 112, 140),
+		Decay = rgb(28, 34, 54),
+		Glare = 0.25,
+		Haze = 1.7,
 	})
-	make("Sky", Lighting, { StarCount = 3000, MoonAngularSize = 14, CelestialBodiesShown = true })
+	make("Sky", Lighting, { StarCount = 5000, MoonAngularSize = 16, CelestialBodiesShown = true })
 	make("ColorCorrectionEffect", Lighting, {
-		Brightness = 0.02,
-		Contrast = 0.15,
-		Saturation = -0.25,
-		TintColor = rgb(215, 225, 255),
+		Brightness = 0.01,
+		Contrast = 0.2,
+		Saturation = -0.12,
+		TintColor = rgb(212, 224, 255),
 	})
-	make("BloomEffect", Lighting, { Intensity = 0.7, Size = 28, Threshold = 1.4 })
+	make("BloomEffect", Lighting, { Intensity = 0.9, Size = 26, Threshold = 1.15 })
+	make("SunRaysEffect", Lighting, { Intensity = 0.04, Spread = 0.6 })
+	make("DepthOfFieldEffect", Lighting, { FarIntensity = 0.18, FocusDistance = 70, InFocusRadius = 60, NearIntensity = 0 })
+end
+
+-- Terrain: textured snow ground, frozen earth, drifts, hills, mountains, a
+-- frozen pond and the lobby's mountain ledge. Built once at server start.
+function MapBuilder.SetupTerrain()
+	local t = terrain()
+	if not t then
+		return
+	end
+	local r = Random.new(99)
+	local Mat = Enum.Material
+	t:Clear()
+	t:FillBlock(CFrame.new(0, -8, 0), Vector3.new(1400, 16, 1400), Mat.Snow)
+	-- frozen earth and packed snow showing through
+	for _ = 1, 70 do
+		local x, z = r:NextNumber(-HALF, HALF), r:NextNumber(-HALF, HALF)
+		local rad = r:NextNumber(5, 11)
+		t:FillBall(Vector3.new(x, -rad + 1.6, z), rad, r:NextNumber() < 0.6 and Mat.Ground or Mat.Glacier)
+	end
+	-- frozen pond with a snowy rim
+	t:FillCylinder(CFrame.new(-100, -2, 45), 4, 14, Mat.Ice)
+	-- hills ringing the fence
+	for i = 1, 40 do
+		local a = i / 40 * math.pi * 2 + r:NextNumber() * 0.1
+		local d = r:NextNumber(HALF + 30, HALF + 75)
+		local rad = r:NextNumber(24, 44)
+		local pos = Vector3.new(math.cos(a) * d, -rad * 0.4, math.sin(a) * d)
+		t:FillBall(pos, rad, Mat.Snow)
+		if r:NextNumber() < 0.5 then
+			t:FillBall(pos + Vector3.new(r:NextNumber(-10, 10), rad * 0.3, r:NextNumber(-10, 10)), rad * 0.35, Mat.Rock)
+		end
+	end
+	-- mountains on the horizon
+	for i = 1, 16 do
+		local a = i / 16 * math.pi * 2 + r:NextNumber() * 0.2
+		local d = r:NextNumber(340, 420)
+		local rad = r:NextNumber(70, 115)
+		local pos = Vector3.new(math.cos(a) * d, -rad * 0.2, math.sin(a) * d)
+		t:FillBall(pos, rad, Mat.Rock)
+		t:FillBall(pos + Vector3.new(0, rad * 0.5, 0), rad * 0.62, Mat.Snow)
+	end
+	-- the lobby ledge (lobby floor sits on a foundation at y=400)
+	t:FillBlock(CFrame.new(0, 392, 0), Vector3.new(460, 8, 460), Mat.Snow)
+	for i = 1, 12 do
+		local a = i / 12 * math.pi * 2
+		local d = r:NextNumber(230, 300)
+		local rad = r:NextNumber(50, 80)
+		local pos = Vector3.new(math.cos(a) * d, 396 - rad * 0.25, math.sin(a) * d)
+		t:FillBall(pos, rad, Mat.Rock)
+		t:FillBall(pos + Vector3.new(0, rad * 0.45, 0), rad * 0.62, Mat.Snow)
+	end
+	pcall(function()
+		t.WaterColor = rgb(40, 70, 90)
+	end)
 end
 
 -- The lobby: a Weapon X holding hangar on a snowy mountain ledge.
@@ -3691,8 +3904,8 @@ local function hangingLamp(parent, pos, color)
 	block(parent, Vector3.new(0.15, 6, 0.15), CFrame.new(pos + Vector3.new(0, 3, 0)), M.Metal, rgb(30, 30, 30))
 	local shade = block(parent, Vector3.new(1.6, 3.4, 3.4), CFrame.new(pos) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, rgb(40, 42, 46), { Shape = Enum.PartType.Cylinder })
 	local bulb = block(parent, Vector3.new(1.2, 1.2, 1.2), CFrame.new(pos - Vector3.new(0, 0.9, 0)), M.Neon, color, { Shape = Enum.PartType.Ball })
-	make("SpotLight", shade, { Face = Enum.NormalId.Left, Range = 50, Angle = 90, Brightness = 4, Color = color, Shadows = true })
-	light(bulb, { Range = 22, Brightness = 1.2, Color = color })
+	make("SpotLight", shade, { Face = Enum.NormalId.Left, Range = 44, Angle = 80, Brightness = 2.4, Color = color, Shadows = true })
+	light(bulb, { Range = 16, Brightness = 0.6, Color = color })
 	return bulb
 end
 
@@ -3719,14 +3932,21 @@ function MapBuilder.BuildLobby()
 	local W, D, H = 120, 90, 28
 	local hx, hz = W / 2, D / 2
 
-	-- Mountain ledge + backdrop
-	block(lobby, Vector3.new(420, 4, 420), CFrame.new(0, Y - 2.2, 0), M.Snow, C.Snow)
+	-- Mountain ledge + backdrop (terrain when available)
+	local hasTerrain = terrain() ~= nil
+	local groundY = hasTerrain and Y - 4 or Y - 0.2
+	if hasTerrain then
+		block(lobby, Vector3.new(W + 2, 4.6, D + 2), CFrame.new(0, Y - 2.3, 0), M.Concrete, rgb(96, 96, 100))
+		block(lobby, Vector3.new(W + 3, 0.6, D + 3), CFrame.new(0, Y - 4.1, 0), M.Concrete, rgb(80, 80, 84))
+	else
+		block(lobby, Vector3.new(420, 4, 420), CFrame.new(0, Y - 2.2, 0), M.Snow, C.Snow)
+	end
 	for _ = 1, 60 do
 		local a = rng:NextNumber() * math.pi * 2
 		local r = rng:NextNumber(80, 190)
-		tree(lobby, Vector3.new(math.cos(a) * r, Y - 0.2, math.sin(a) * r), rng:NextNumber(1.3, 2.2))
+		tree(lobby, Vector3.new(math.cos(a) * r, groundY, math.sin(a) * r), rng:NextNumber(1.3, 2.2), true)
 	end
-	for i = 1, 10 do
+	for i = 1, (hasTerrain and 0 or 10) do
 		local a = (i / 10) * math.pi * 2
 		local r = rng:NextNumber(260, 320)
 		local h = rng:NextNumber(90, 170)
@@ -3746,14 +3966,53 @@ function MapBuilder.BuildLobby()
 	end
 	block(lobby, Vector3.new(10, 0.1, D - 10), CFrame.new(0, Y + 0.05, 0), M.DiamondPlate, rgb(80, 84, 92))
 
-	-- Glowing X emblem in the floor
-	local ringY = Y + 0.12
-	block(lobby, Vector3.new(0.1, 22, 22), CFrame.new(0, ringY, 0) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, rgb(20, 20, 24), { Shape = Enum.PartType.Cylinder })
-	block(lobby, Vector3.new(0.12, 21, 21), CFrame.new(0, ringY + 0.01, 0) * CFrame.Angles(0, 0, math.rad(90)), M.Neon, rgb(170, 20, 20), { Shape = Enum.PartType.Cylinder })
-	block(lobby, Vector3.new(0.14, 19, 19), CFrame.new(0, ringY + 0.02, 0) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, rgb(20, 20, 24), { Shape = Enum.PartType.Cylinder })
-	for _, a in { 45, -45 } do
-		block(lobby, Vector3.new(2.2, 0.1, 17), CFrame.new(0, ringY + 0.05, 0) * CFrame.Angles(0, math.rad(a), 0), M.Neon, rgb(255, 190, 30))
+	-- X-Men logo in the floor: yellow ring broken by the X, worn paint
+	local logoY = Y + 0.17
+	local LR, ringW = 10, 1.7
+	local yellow = rgb(232, 196, 58)
+	block(lobby, Vector3.new(0.08, LR * 2 + 4, LR * 2 + 4), CFrame.new(0, logoY - 0.02, 0) * CFrame.Angles(0, 0, math.rad(90)), M.Slate, rgb(20, 20, 24), { Shape = Enum.PartType.Cylinder })
+	local armW = LR * 0.36
+	local function inGap(deg)
+		for _, g in { 45, 225 } do
+			local d = math.abs((deg - g + 180) % 360 - 180)
+			if d < 15 then
+				return true
+			end
+		end
+		return false
 	end
+	local segs = 72
+	local rMid = LR - ringW / 2
+	for i = 0, segs - 1 do
+		local deg = (i + 0.5) * 360 / segs
+		if not inGap(deg) then
+			local a0 = math.rad(deg)
+			local len = 2 * math.pi * rMid / segs * 1.04
+			block(lobby, Vector3.new(len, 0.06, ringW), CFrame.new(math.cos(a0) * rMid, logoY, math.sin(a0) * rMid) * CFrame.Angles(0, -a0 + math.pi / 2, 0), M.Concrete, yellow)
+		end
+	end
+	-- the X: a thick stroke punching out through the ring gaps, and a thinner cross stroke
+	block(lobby, Vector3.new(armW, 0.07, LR * 2.12), CFrame.new(0, logoY + 0.005, 0) * CFrame.Angles(0, math.rad(45), 0), M.Concrete, yellow)
+	for _, sgn in { -1, 1 } do
+		block(lobby, Vector3.new(armW * 0.8, 0.07, LR * 0.62), CFrame.new(sgn * LR * 0.25, logoY + 0.005, -sgn * LR * 0.25) * CFrame.Angles(0, math.rad(-45), 0), M.Concrete, yellow)
+	end
+	-- black cut lines separating the X from the ring
+	for _, g in { 45, 225 } do
+		for _, off in { -1, 1 } do
+			local a0 = math.rad(g + off * 13)
+			block(lobby, Vector3.new(0.35, 0.09, ringW + 0.3), CFrame.new(math.cos(a0) * rMid, logoY + 0.01, math.sin(a0) * rMid) * CFrame.Angles(0, math.pi / 2 - a0, 0), M.Slate, rgb(20, 20, 24))
+		end
+	end
+	-- worn / scuffed paint specks
+	for _ = 1, 110 do
+		local r = math.sqrt(rng:NextNumber()) * LR
+		local t = rng:NextNumber() * math.pi * 2
+		block(lobby, Vector3.new(rng:NextNumber(0.12, 0.5), 0.1, rng:NextNumber(0.12, 0.4)),
+			CFrame.new(math.cos(t) * r, logoY + 0.02, math.sin(t) * r) * CFrame.Angles(0, rng:NextNumber() * 6, 0), M.Slate, rgb(24, 22, 20), { CanCollide = false, CanQuery = false })
+	end
+	-- warm spotlight on the emblem
+	local emblemLamp = block(lobby, Vector3.new(1.4, 0.6, 1.4), CFrame.new(0, Y + H - 2.2, 8), M.Metal, C.DarkMetal)
+	make("SpotLight", emblemLamp, { Face = Enum.NormalId.Bottom, Range = 36, Angle = 45, Brightness = 2.5, Color = rgb(255, 225, 160), Shadows = true })
 	make("SpawnLocation", lobby, {
 		Size = Vector3.new(12, 0.2, 12),
 		CFrame = CFrame.new(0, Y + 0.2, 0),
@@ -3819,20 +4078,20 @@ function MapBuilder.BuildLobby()
 	-- Wall sconces + ceiling light strips so the hangar is well lit
 	for x = -hx + 7.5, hx - 7.5, 15 do
 		for _, z in { -hz + 1.6, hz - 1.6 } do
-			local sc = block(lobby, Vector3.new(1.4, 1.8, 0.6), CFrame.new(x, Y + 11, z), M.Neon, rgb(255, 225, 180))
-			light(sc, { Range = 24, Brightness = 2, Color = rgb(255, 220, 170) })
+			local sc = block(lobby, Vector3.new(1.4, 1.8, 0.6), CFrame.new(x, Y + 11, z), M.Neon, rgb(255, 196, 140))
+			light(sc, { Range = 18, Brightness = 0.9, Color = rgb(255, 200, 150) })
 		end
 	end
 	for z = -hz + 7.5, hz - 7.5, 15 do
 		for _, x in { -hx + 1.6, hx - 1.6 } do
-			local sc = block(lobby, Vector3.new(0.6, 1.8, 1.4), CFrame.new(x, Y + 11, z), M.Neon, rgb(255, 225, 180))
-			light(sc, { Range = 24, Brightness = 2, Color = rgb(255, 220, 170) })
+			local sc = block(lobby, Vector3.new(0.6, 1.8, 1.4), CFrame.new(x, Y + 11, z), M.Neon, rgb(255, 196, 140))
+			light(sc, { Range = 18, Brightness = 0.9, Color = rgb(255, 200, 150) })
 		end
 	end
 	for z = -hz + 10, hz - 10, 15 do
 		for x = -45, 45, 30 do
-			local strip = block(lobby, Vector3.new(14, 0.3, 1), CFrame.new(x, Y + H - 1.6, z + 3), M.Neon, rgb(235, 240, 255))
-			light(strip, { Range = 30, Brightness = 1.6, Color = rgb(235, 240, 255) })
+			local strip = block(lobby, Vector3.new(14, 0.3, 1), CFrame.new(x, Y + H - 1.6, z + 3), M.Neon, rgb(200, 210, 225))
+			light(strip, { Range = 24, Brightness = 0.7, Color = rgb(225, 232, 245) })
 		end
 	end
 
@@ -3900,29 +4159,80 @@ function MapBuilder.BuildLobby()
 		block(lobby, Vector3.new(0.4, 1.4, 0.4), CFrame.new(gx - 4, Y + 0.7, z), M.Metal, C.DarkMetal)
 	end
 
-	-- CLAW RACK (south-east) -------------------------------------------
-	local rackC = CFrame.new(40, Y, hz - 5)
-	block(lobby, Vector3.new(26, 3, 5), rackC * CFrame.new(0, 1.5, 0), M.Wood, rgb(40, 28, 20))
-	block(lobby, Vector3.new(26.4, 0.3, 5.4), rackC * CFrame.new(0, 3.1, 0), M.Metal, C.DarkMetal)
-	block(lobby, Vector3.new(26, 6, 5), rackC * CFrame.new(0, 6.2, 0), M.Glass, rgb(190, 220, 235), { Transparency = 0.8 })
-	local rackLight = block(lobby, Vector3.new(25, 0.2, 0.5), rackC * CFrame.new(0, 9.1, 0), M.Neon, rgb(255, 240, 220))
-	light(rackLight, { Range = 12, Brightness = 1.5, Color = rgb(255, 240, 220) })
-	local rackTitle = block(lobby, Vector3.new(16, 2, 0.2), rackC * CFrame.new(0, 10.8, -2.4), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
-	surfaceText(rackTitle, Enum.NormalId.Front, { Text = "CLAW COLLECTION", Font = Enum.Font.LuckiestGuy, TextColor3 = rgb(210, 230, 255) })
+	-- CLAW COLLECTION (south wall): one lit glass case per claw set --------
 	local Skins = require(ReplicatedStorage.Shared.Skins)
+	local Costumes = require(script.Parent.Costumes)
+	local cz = hz - 6.5
+	local rackTitle = block(lobby, Vector3.new(24, 2.6, 0.2), CFrame.new(17, Y + 13.5, hz - 1.6) * CFrame.Angles(0, math.pi, 0), M.SmoothPlastic, rgb(18, 18, 22))
+	surfaceText(rackTitle, Enum.NormalId.Back, { Text = "CLAW COLLECTION", Font = Enum.Font.LuckiestGuy, TextColor3 = rgb(210, 230, 255) })
 	for i, id in Skins.ClawOrder do
 		local item = Skins.Claws[id]
-		local cx = -10.5 + (i - 1) * 4.2
-		for b = -1, 1 do
-			local blade = block(lobby, Vector3.new(0.12 * (item.Thick or 1), 3.6, 0.3 * (item.Thick or 1)),
-				rackC * CFrame.new(cx + b * 0.5, 5.6, 0) * CFrame.Angles(0, 0, math.rad(b * 6)), item.Material, item.Color, { Reflectance = item.Reflectance })
-			if item.Material == M.Neon then
-				light(blade, { Range = 5, Brightness = 1, Color = item.Glow })
+		local x = 2 + (i - 1) * 6.2
+		local base = CFrame.new(x, Y, cz)
+		block(lobby, Vector3.new(3.4, 3.2, 3.4), base * CFrame.new(0, 1.6, 0), M.Marble, rgb(30, 30, 34))
+		block(lobby, Vector3.new(3.6, 0.25, 3.6), base * CFrame.new(0, 3.3, 0), M.Metal, rgb(70, 72, 78), { Reflectance = 0.2 })
+		block(lobby, Vector3.new(3.5, 0.15, 3.5), base * CFrame.new(0, 0.1, 0), M.Neon, item.Glow)
+		block(lobby, Vector3.new(3.2, 5.2, 3.2), base * CFrame.new(0, 6, 0), M.Glass, rgb(200, 225, 240), { Transparency = 0.85, Reflectance = 0.15 })
+		for _, cx in { -1.6, 1.6 } do
+			for _, czz in { -1.6, 1.6 } do
+				block(lobby, Vector3.new(0.14, 5.2, 0.14), base * CFrame.new(cx, 6, czz), M.Metal, rgb(50, 50, 56))
 			end
 		end
-		block(lobby, Vector3.new(1.6, 0.8, 0.8), rackC * CFrame.new(cx, 3.7, 0), M.Leather, rgb(30, 22, 18))
-		local tag = block(lobby, Vector3.new(3.6, 0.8, 0.1), rackC * CFrame.new(cx, 3.4, -2.56) * CFrame.Angles(math.rad(20), 0, 0), M.SmoothPlastic, rgb(20, 20, 24))
-		surfaceText(tag, Enum.NormalId.Front, { Text = item.Name .. (item.Price > 0 and ("  🪙" .. item.Price) or "  FREE"), TextColor3 = item.Glow, Font = Enum.Font.GothamBold })
+		local cap = block(lobby, Vector3.new(3.4, 0.3, 3.4), base * CFrame.new(0, 8.75, 0), M.Metal, rgb(50, 50, 56))
+		make("SpotLight", cap, { Face = Enum.NormalId.Bottom, Range = 10, Angle = 70, Brightness = 3, Color = item.Glow:Lerp(Color3.new(1, 1, 1), 0.6) })
+		Costumes.ClawDisplay(lobby, base * CFrame.new(0, 4.35, 0) * CFrame.Angles(0, math.rad(90 + 18), math.rad(6)), item)
+		local plaque = block(lobby, Vector3.new(3.2, 0.9, 0.1), base * CFrame.new(0, 2.2, -1.75) * CFrame.Angles(math.rad(12), 0, 0), M.Metal, rgb(22, 22, 26))
+		surfaceText(plaque, Enum.NormalId.Front, { Text = item.Name .. (item.Price > 0 and ("  🪙" .. item.Price) or "  FREE"), TextColor3 = item.Glow, Font = Enum.Font.GothamBold })
+	end
+
+	-- BRIEFING TABLE: holographic mini-map of the arena --------------------
+	local bt = Vector3.new(-6, Y, -22)
+	block(lobby, Vector3.new(1.2, 3, 3), CFrame.new(bt + Vector3.new(0, 1.5, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, rgb(40, 42, 48), { Shape = Enum.PartType.Cylinder })
+	block(lobby, Vector3.new(0.6, 14, 14), CFrame.new(bt + Vector3.new(0, 3.2, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, rgb(30, 32, 38), { Shape = Enum.PartType.Cylinder })
+	block(lobby, Vector3.new(0.2, 14.4, 14.4), CFrame.new(bt + Vector3.new(0, 3.2, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.Neon, rgb(60, 170, 255), { Shape = Enum.PartType.Cylinder })
+	local holoBase = block(lobby, Vector3.new(0.1, 12, 12), CFrame.new(bt + Vector3.new(0, 3.55, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.Neon, rgb(40, 140, 255), { Shape = Enum.PartType.Cylinder, Transparency = 0.55 })
+	light(holoBase, { Range = 16, Brightness = 1.4, Color = rgb(80, 170, 255) })
+	local HOLO = rgb(90, 200, 255)
+	local mini = 12 / 380 -- arena scaled onto the table
+	for _, b in { { 0, 0, 90, 70, 16 }, { 120, -118, 56, 40, 17 }, { 118, 100, 36, 22, 11 }, { -125, -112, 22, 16, 9 }, { -42, 140, 22, 16, 9 }, { 38, -148, 22, 16, 9 }, { 152, 30, 22, 16, 9 } } do
+		local h = b[5] * mini * 3
+		block(lobby, Vector3.new(b[3] * mini, h, b[4] * mini), CFrame.new(bt + Vector3.new(b[1] * mini, 3.6 + h / 2, b[2] * mini)), M.Neon, HOLO, { Transparency = 0.45, CanCollide = false })
+	end
+	for _, r in { { 0, -56, 136, 12 }, { 0, 56, 136, 12 }, { -62, 0, 12, 100 }, { 62, 0, 12, 100 }, { 0, 121, 12, 118 }, { 0, -121, 12, 118 }, { 124, 0, 112, 12 }, { -124, 0, 112, 12 } } do
+		block(lobby, Vector3.new(r[3] * mini, 0.03, r[4] * mini), CFrame.new(bt + Vector3.new(r[1] * mini, 3.62, r[2] * mini)), M.Neon, rgb(60, 140, 220), { Transparency = 0.5, CanCollide = false })
+	end
+	local blip = block(lobby, Vector3.new(0.35, 0.35, 0.35), CFrame.new(bt + Vector3.new(0, 4.2, 0)), M.Neon, rgb(255, 60, 40), { Shape = Enum.PartType.Ball, CanCollide = false })
+	light(blip, { Range = 6, Brightness = 2, Color = rgb(255, 60, 40) })
+	CollectionService:AddTag(blip, "Flicker")
+	for k = 0, 5 do -- stools around the table
+		local a = k / 6 * math.pi * 2
+		local sp = bt + Vector3.new(math.cos(a) * 9.5, 0, math.sin(a) * 9.5)
+		block(lobby, Vector3.new(1.8, 0.4, 1.8), CFrame.new(sp + Vector3.new(0, 1.2, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, rgb(46, 48, 54), { Shape = Enum.PartType.Cylinder })
+		block(lobby, Vector3.new(0.3, 2.2, 2.2), CFrame.new(sp + Vector3.new(0, 2.4, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.Leather, rgb(60, 24, 24), { Shape = Enum.PartType.Cylinder })
+	end
+
+	-- Planters with small pines along the walkway
+	for _, z in { -34, 16, 30 } do
+		for _, x in { -8.5, 8.5 } do
+			local pp = Vector3.new(x, Y, z)
+			block(lobby, Vector3.new(3.4, 1.6, 3.4), CFrame.new(pp + Vector3.new(0, 0.8, 0)), M.Concrete, rgb(88, 88, 94))
+			block(lobby, Vector3.new(3, 0.2, 3), CFrame.new(pp + Vector3.new(0, 1.62, 0)), M.Ground, rgb(60, 44, 32))
+			tree(lobby, pp + Vector3.new(0, 1.5, 0), 0.32, true)
+		end
+	end
+
+	-- Vending machines against the south wall
+	for i, col in { rgb(170, 20, 30), rgb(20, 70, 160) } do
+		local vp = Vector3.new(-30 + i * 5, Y, hz - 3.2)
+		block(lobby, Vector3.new(4, 7.5, 2.8), CFrame.new(vp + Vector3.new(0, 3.75, 0)), M.Metal, col)
+		local glass = block(lobby, Vector3.new(2.6, 5, 0.1), CFrame.new(vp + Vector3.new(-0.4, 4.3, -1.42)), M.Neon, rgb(230, 240, 255), { Transparency = 0.35 })
+		light(glass, { Range = 9, Brightness = 1, Color = rgb(220, 235, 255) })
+		for r = 0, 3 do
+			for c = 0, 2 do
+				block(lobby, Vector3.new(0.5, 0.7, 0.3), CFrame.new(vp + Vector3.new(-1.2 + c * 0.8, 2.5 + r * 1.2, -1.3)), M.SmoothPlastic, vary(({ rgb(220, 40, 40), rgb(250, 200, 30), rgb(40, 160, 70), rgb(60, 120, 230) })[(r + c) % 4 + 1], 0.2))
+			end
+		end
+		block(lobby, Vector3.new(0.8, 1.6, 0.12), CFrame.new(vp + Vector3.new(1.5, 4.5, -1.45)), M.Metal, rgb(30, 30, 34))
 	end
 
 	-- LOUNGE (west) ----------------------------------------------------
@@ -4008,7 +4318,7 @@ function MapBuilder.BuildLobby()
 	block(lobby, Vector3.new(18.4, 0.3, 18.4), CFrame.new(0, Y + 13.4, 0), M.Neon, rgb(200, 30, 30))
 
 	-- Supply crates + barrels for detail
-	for i, p in { Vector3.new(-30, Y, -34), Vector3.new(22, Y, -36), Vector3.new(-38, Y, 34), Vector3.new(14, Y, 36) } do
+	for i, p in { Vector3.new(-30, Y, -34), Vector3.new(22, Y, -36), Vector3.new(-38, Y, 34) } do
 		local yaw = rng:NextNumber() * 0.5
 		woodCrate(lobby, CFrame.new(p) * CFrame.Angles(0, yaw, 0), Vector3.new(5, 4, 4), false)
 		woodCrate(lobby, CFrame.new(p + Vector3.new(0.3, 4, 0.2)) * CFrame.Angles(0, yaw + 0.3, 0), Vector3.new(3, 3, 3), false)
@@ -4047,7 +4357,16 @@ function MapBuilder.Build()
 	folder("HidingSpots")
 	folder("Debris")
 
-	block(env, Vector3.new(2 * HALF + 260, 4, 2 * HALF + 260), CFrame.new(0, -2, 0), M.Snow, C.Snow)
+	if not terrain() then
+		block(env, Vector3.new(2 * HALF + 260, 4, 2 * HALF + 260), CFrame.new(0, -2, 0), M.Snow, C.Snow)
+	end
+	zone(-100, 45, 32, 32) -- frozen pond
+	-- reeds poking out of the frozen pond edge
+	for k = 1, 26 do
+		local a = k / 26 * math.pi * 2
+		local rr = 14 + rng:NextNumber(-0.5, 1.5)
+		block(env, Vector3.new(0.12, rng:NextNumber(1.2, 2.6), 0.12), CFrame.new(-100 + math.cos(a) * rr, 0.8, 45 + math.sin(a) * rr) * CFrame.Angles(rng:NextNumber(-0.2, 0.2), 0, rng:NextNumber(-0.2, 0.2)), M.Grass, rgb(120, 110, 70), { CanCollide = false })
+	end
 
 	buildLab(bld, props, map)
 	buildWarehouse(bld, props, terminals, Vector3.new(120, 0, -118))
@@ -4078,7 +4397,7 @@ function MapBuilder.Build()
 	}
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Include
-	params.FilterDescendantsInstances = { map }
+	params.FilterDescendantsInstances = terrain() and { map, terrain() } or { map }
 	for i, c in candidates do
 		local hit = workspace:Raycast(Vector3.new(c[1], 80, c[2]), Vector3.new(0, -100, 0), params)
 		if hit and hit.Position.Y < 1.5 then
@@ -4108,7 +4427,6 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Util = require(ReplicatedStorage.Shared.Util)
 local Round = require(script.Parent.Round)
 local Status = require(script.Parent.Status)
-local Posture = require(script.Parent.Posture)
 
 local Movement = {}
 local states = {}
@@ -4226,7 +4544,6 @@ RunService.Heartbeat:Connect(function(dt)
 
 			if feralActive ~= s.FeralOn then
 				s.FeralOn = feralActive
-				Posture.Feral(char, feralActive)
 				player:SetAttribute("Feral", feralActive)
 			end
 
@@ -4806,6 +5123,7 @@ local Posture = require(script.Parent.Posture)
 local Wolverine = require(script.Parent.Wolverine)
 local Combat = require(script.Parent.Combat)
 local Costumes = require(script.Parent.Costumes)
+local VFX = require(script.Parent.VFX)
 local PlayerData = require(script.Parent.PlayerData)
 local Skins = require(ReplicatedStorage.Shared.Skins)
 
@@ -5092,10 +5410,8 @@ end
 
 local function punch(player, char, root)
 	local cfg = Config.Sentinel.Punch
-	Posture.Set(char, "RShoulder", CFrame.Angles(math.rad(95), 0, 0), 0.06)
-	task.delay(0.2, function()
-		Posture.Restore(char, "RShoulder", 0.2)
-	end)
+	VFX.Anim(char, "Punch")
+	task.wait(0.12) -- connect on the punch frame
 	local w, _, wRoot = wolverineParts()
 	if not wRoot then
 		return
@@ -5150,10 +5466,7 @@ local function laser(player, char, root, aim)
 		end
 	end
 
-	Posture.ArmsForward(char, 0.05)
-	task.delay(0.35, function()
-		Posture.RestoreAll(char, 0.2)
-	end)
+	VFX.Anim(char, "Laser")
 	Util.Sound(Config.Sounds.Laser, root, { Volume = 2, Pitch = 0.4, Range = 250 })
 	Util.Burst(origin, Util.SparkProps, 20, 1)
 
@@ -5199,6 +5512,8 @@ local function laser(player, char, root, aim)
 end
 
 local function pulse(player, char, root)
+	VFX.Anim(char, "Pulse")
+	task.wait(0.28) -- slam frame
 	local cfg = Config.Sentinel.Pulse
 	local ring = Instance.new("Part")
 	ring.Shape = Enum.PartType.Ball
@@ -5307,7 +5622,22 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Util = require(ReplicatedStorage.Shared.Util)
 
+local Fx = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Fx")
+
 local VFX = {}
+
+-- Plays a keyframed clip (client/AnimClips) on a character for every player.
+function VFX.Anim(char, clip, speed)
+	if char then
+		Fx:FireAllClients("Anim", { Char = char, Clip = clip, Speed = speed })
+	end
+end
+
+function VFX.StopAnim(char, clip)
+	if char then
+		Fx:FireAllClients("AnimStop", { Char = char, Clip = clip })
+	end
+end
 
 local function fxPart(props)
 	local p = Instance.new("Part")
@@ -5615,6 +5945,7 @@ local function makeClaws(char, clawId)
 end
 
 local function popClaws(char)
+	VFX.Anim(char, "Snikt")
 	if not clawSet then
 		return
 	end
@@ -5712,7 +6043,8 @@ local function roar(char)
 	if not (head and root) then
 		return
 	end
-	Posture.Roar(char)
+	VFX.Anim(char, "Roar")
+	VFX.Shockwave(root.Position - Vector3.new(0, 2.8, 0), 22, Color3.fromRGB(255, 80, 60))
 	if Config.Sounds.Roar ~= "" then
 		Util.Sound(Config.Sounds.Roar, head, { Volume = 3, Range = 900, MinRange = 40 })
 	else
@@ -5725,9 +6057,6 @@ local function roar(char)
 		end
 	end
 	Fx:FireAllClients("Roar", { Position = root.Position })
-	task.delay(1.8, function()
-		Posture.RestoreAll(char, 0.3)
-	end)
 end
 
 local function clawStreaks(root, side)
@@ -5951,16 +6280,23 @@ end
 local function slash(player, char, root)
 	combo = combo % 2 + 1
 	local side = combo == 1 and "R" or "L"
-	Posture.Swipe(char, side)
-	clawStreaks(root, side)
-	Util.Sound(Config.Sounds.Slash, root, { Pitch = 0.9 + math.random() * 0.25, Volume = 1.2 })
-	local cfg = Config.Abilities.Slash
-	local cf = root.CFrame * CFrame.new(0, 0, -cfg.Range / 2)
-	Combat.BreakInBox(cf, Vector3.new(cfg.Width, 9, cfg.Range), root.Position, 35)
-	local target = Combat.FindTargets(cf, Vector3.new(cfg.Width, 8, cfg.Range + 1))[1]
-	if target then
-		Combat.Resolve(player, target.Player)
-	end
+	VFX.Anim(char, side == "R" and "SlashR" or "SlashL")
+	Util.Sound(Config.Sounds.Whoosh, root, { Pitch = 0.95 + math.random() * 0.2, Volume = 1 })
+	-- land the hit on the strike frame of the animation (wind-up first)
+	task.delay(0.12, function()
+		if not (char.Parent and Util.IsAlive(char)) then
+			return
+		end
+		clawStreaks(root, side)
+		Util.Sound(Config.Sounds.Slash, root, { Pitch = 0.9 + math.random() * 0.25, Volume = 1.2 })
+		local cfg = Config.Abilities.Slash
+		local cf = root.CFrame * CFrame.new(0, 0, -cfg.Range / 2)
+		Combat.BreakInBox(cf, Vector3.new(cfg.Width, 9, cfg.Range), root.Position, 35)
+		local target = Combat.FindTargets(cf, Vector3.new(cfg.Width, 8, cfg.Range + 1))[1]
+		if target then
+			Combat.Resolve(player, target.Player)
+		end
+	end)
 end
 
 local function groundY(position, exclude)
@@ -5971,93 +6307,58 @@ local function groundY(position, exclude)
 	return hit and hit.Position.Y or position.Y - 3
 end
 
--- Pinned to the ground and clawed at.
-local function pin(player, victim)
-	local kChar, vChar = player.Character, victim.Character
-	local kRoot, vRoot = Util.Root(kChar), Util.Root(vChar)
-	if not (kRoot and vRoot) then
-		return
-	end
+-- Mid-dive contact: both claws slam into them and drive them back.
+local function pounceStrike(player, char, root, target)
+	local victim = target.Player
 	Combat.PullOut(victim)
-	for _, p in { player, victim } do
-		Status.Apply(p, "Busy", 4)
-		Status.Apply(p, "Frozen", 4)
-	end
-	local look = Util.Flat(vRoot.Position - kRoot.Position)
-	local y = groundY(vRoot.Position, { kChar, vChar })
-	local base = CFrame.lookAt(Vector3.new(vRoot.Position.X, y, vRoot.Position.Z), Vector3.new(vRoot.Position.X, y, vRoot.Position.Z) + look)
-	kRoot.Anchored = true
-	vRoot.Anchored = true
-	vRoot.CFrame = base * CFrame.new(0, 1, 0) * CFrame.Angles(math.rad(90), 0, 0)
-	kRoot.CFrame = base * CFrame.new(0, 2.6, 1.6)
-	Posture.Set(kChar, "Root", CFrame.Angles(math.rad(-45), 0, 0), 0.12)
-	Util.Sound(Config.Sounds.Land, kRoot, { Volume = 2, Pitch = 0.7 })
-	VFX.Shockwave(Vector3.new(vRoot.Position.X, y + 0.2, vRoot.Position.Z), 12)
-	Fx:FireAllClients("Shake", { Position = kRoot.Position, Intensity = 0.8, Radius = 60 })
-	Util.FireClient(Fx, victim, "Grabbed", {})
-
-	for i = 1, 3 do
-		task.wait(0.28)
-		if not (vChar.Parent and kChar.Parent) then
-			break
-		end
-		local side = i % 2 == 1 and "R" or "L"
-		Posture.Swipe(kChar, side)
-		Util.Sound(Config.Sounds.Slash, vRoot, { Pitch = 0.8 + i * 0.1, Volume = 1.3 })
-		Combat.Blood(Util.Torso(vChar), 18)
-		local vt = Util.Torso(vChar)
-		if vt then
-			VFX.Impact(vt.Position, clawGlow, 0.7)
-		end
-		Util.FireClient(Fx, victim, "Shake", { Position = vRoot.Position, Intensity = 0.5, Radius = 10 })
-	end
-	task.wait(0.2)
-
-	Posture.Restore(kChar, "Root", 0.15)
+	VFX.Anim(char, "PounceStrike")
+	local dir = Util.Flat(target.Root.Position - root.Position)
+	local torso = Util.Torso(target.Char) or target.Root
+	Util.Sound(Config.Sounds.Stab, torso, { Volume = 2, Range = 200 })
+	Util.Sound(Config.Sounds.Impact, torso, { Volume = 2, Range = 200 })
+	VFX.Pierce(root, clawGlow)
+	VFX.Impact(torso.Position, clawGlow, 1.3)
+	VFX.ExitSpray(target.Char, dir)
+	VFX.Shockwave(Vector3.new(target.Root.Position.X, groundY(target.Root.Position, { char, target.Char }) + 0.2, target.Root.Position.Z), 14)
+	Combat.Blood(torso, 40)
+	Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 1, Radius = 70 })
+	-- he lands on his feet where they were standing
+	Util.FireClient(Fx, player, "Knock", { Velocity = dir * 10 + Vector3.new(0, -20, 0) })
 	local result = Combat.Hit(victim, true)
 	if result == "kill" then
-		kRoot.CFrame = base * CFrame.new(0, 2.6, 3)
 		Combat.Execute(player, victim)
-	else
-		if vRoot.Parent then
-			vRoot.Anchored = false
-			vRoot.CFrame = base * CFrame.new(0, 3, 0)
-		end
-		if kRoot.Parent then
-			kRoot.Anchored = false
-		end
-		for _, p in { player, victim } do
-			Status.Clear(p, "Busy")
-			Status.Clear(p, "Frozen")
-		end
-		if result == "hit" then
-			Combat.Wound(player, victim)
-		end
+	elseif result == "hit" then
+		Combat.Wound(player, victim, { Force = 95, Up = 24, Dir = dir })
 	end
 end
 
 local function pounce(player, char, root)
 	local cfg = Config.Abilities.Pounce
-	Util.Sound(Config.Sounds.Lunge, root, { Pitch = 0.65, Volume = 1.6 })
-	Posture.ArmsForward(char, 0.1)
+	VFX.Anim(char, "Pounce")
+	Util.Sound(Config.Sounds.Leap, root, { Pitch = 0.9, Volume = 1.8 })
 	-- The client applies the leap; the server watches for contact.
 	local untilTime = os.clock() + cfg.Window
+	task.wait(0.12)
 	while os.clock() < untilTime and char.Parent and Util.IsAlive(char) do
 		Combat.BreakInBox(root.CFrame * CFrame.new(0, 0, -2.5), Vector3.new(6, 8, 5), root.Position, 55)
 		local target = Combat.FindNear(root.Position, cfg.GrabRadius)[1]
 		if target and not Status.Has(target.Player, "Immune") then
-			pin(player, target.Player)
+			pounceStrike(player, char, root, target)
 			return
 		end
 		task.wait()
 	end
-	Posture.RestoreAll(char, 0.2)
+	-- whiffed: land hard
+	VFX.StopAnim(char, "Pounce")
+	Util.Sound(Config.Sounds.Land, root, { Volume = 1.6, Pitch = 0.8 })
+	VFX.Shockwave(Vector3.new(root.Position.X, groundY(root.Position, { char }) + 0.2, root.Position.Z), 9)
 end
 
+-- Uppercut impale: drive the claws up through them and hoist them overhead.
 local function stab(player, char, root)
 	local cfg = Config.Abilities.Stab
-	Util.Sound(Config.Sounds.Lunge, root, { Pitch = 0.9, Volume = 1.4 })
-	Posture.ArmsForward(char, 0.08)
+	VFX.Anim(char, "Impale")
+	Util.Sound(Config.Sounds.Whoosh, root, { Pitch = 0.8, Volume = 1.4 })
 	task.wait(0.14)
 	if not (char.Parent and Util.IsAlive(char)) then
 		return
@@ -6066,43 +6367,58 @@ local function stab(player, char, root)
 	Combat.BreakInBox(cf, Vector3.new(6, 9, cfg.Range), root.Position, 65)
 	local target = Combat.FindTargets(cf, Vector3.new(6, 8, cfg.Range + 1))[1]
 	if not target or Status.Has(target.Player, "Immune") then
-		task.wait(0.25)
-		Posture.RestoreAll(char, 0.2)
+		task.wait(0.3)
+		VFX.StopAnim(char, "Impale")
 		return
 	end
 
-	-- Impaled on both sets of claws and lifted
 	local victim = target.Player
 	Combat.PullOut(victim)
-	local vRoot = target.Root
+	local vChar, vRoot = target.Char, target.Root
 	for _, p in { player, victim } do
-		Status.Apply(p, "Busy", 3)
-		Status.Apply(p, "Frozen", 3)
+		Status.Apply(p, "Busy", 3.2)
+		Status.Apply(p, "Frozen", 3.2)
 	end
 	root.Anchored = true
 	vRoot.Anchored = true
 	local base = CFrame.lookAt(root.Position, root.Position + Util.Flat(vRoot.Position - root.Position))
+	local scale = Config.Wolverine.Scale
 	root.CFrame = base
-	vRoot.CFrame = base * CFrame.new(0, 0.8, -2.8) * CFrame.Angles(0, math.pi, 0)
-	TweenService:Create(vRoot, TweenInfo.new(0.35, Enum.EasingStyle.Quad), {
-		CFrame = base * CFrame.new(0, 2.6, -2.6) * CFrame.Angles(math.rad(-15), math.pi, 0),
+	vRoot.CFrame = base * CFrame.new(0.8, 0.4, -2.2) * CFrame.Angles(0, math.pi, 0)
+	VFX.Anim(vChar, "Impaled")
+	-- hoisted up onto the right claws as the uppercut lands
+	TweenService:Create(vRoot, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		CFrame = base * CFrame.new(1.05 * scale, 4.8 * scale, -0.35) * CFrame.Angles(0, math.pi, 0) * CFrame.Angles(math.rad(-22), 0, 0),
 	}):Play()
-	Posture.Set(char, "RShoulder", CFrame.Angles(math.rad(115), 0, 0), 0.3)
-	Posture.Set(char, "LShoulder", CFrame.Angles(math.rad(115), 0, 0), 0.3)
-	Util.Sound(Config.Sounds.Slash, vRoot, { Pitch = 0.6, Volume = 1.6 })
-	Util.Sound(Config.Sounds.Gore, vRoot, { Pitch = 0.6, Volume = 1.2 })
-	Combat.Blood(Util.Torso(target.Char), 45)
-	VFX.Pierce(root, clawGlow)
-	VFX.ExitSpray(target.Char, base.LookVector)
-	VFX.Impact(vRoot.Position + Vector3.new(0, 1, 0), clawGlow, 1.1)
-	Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 0.7, Radius = 60 })
+	local torso = Util.Torso(vChar) or vRoot
+	Util.Sound(Config.Sounds.Stab, torso, { Volume = 2.2, Range = 220 })
+	Util.Sound(Config.Sounds.Gore, torso, { Pitch = 0.6, Volume = 1.4 })
+	task.delay(0.12, function()
+		VFX.Impact(torso.Position, clawGlow, 1.3)
+		VFX.ExitSpray(vChar, Vector3.new(0, 1, 0))
+		Combat.Blood(torso, 60)
+	end)
+	Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 0.9, Radius = 70 })
 	Util.FireClient(Fx, victim, "Grabbed", {})
-	task.wait(0.65)
+
+	-- held up there, bleeding
+	for _ = 1, 4 do
+		task.wait(0.25)
+		if vChar.Parent then
+			Combat.Blood(torso, 8)
+		end
+	end
 
 	local result = Combat.Hit(victim, true)
 	if result == "kill" then
+		VFX.StopAnim(char, "Impale")
+		VFX.StopAnim(vChar, "Impaled")
 		Combat.Execute(player, victim)
 	else
+		-- hurl them off the claws
+		VFX.Anim(char, "ImpaleThrow")
+		VFX.StopAnim(vChar, "Impaled")
+		task.wait(0.12)
 		if vRoot.Parent then
 			vRoot.Anchored = false
 		end
@@ -6113,9 +6429,8 @@ local function stab(player, char, root)
 			Status.Clear(p, "Busy")
 			Status.Clear(p, "Frozen")
 		end
-		Posture.RestoreAll(char, 0.2)
 		if result == "hit" then
-			Combat.Wound(player, victim)
+			Combat.Wound(player, victim, { Force = 80, Up = 30, Dir = base.LookVector })
 		end
 	end
 end
@@ -6123,6 +6438,7 @@ end
 local function sniff(player, root)
 	local cfg = Config.Abilities.Sniff
 	Util.Sound(Config.Sounds.Sniff, root, { Volume = 1.5 })
+	VFX.Anim(player.Character, "Sniff")
 	Util.FireClient(Fx, player, "Sniff", { Duration = cfg.Duration, Targets = Fart.SniffTargets() })
 	for survivor in Round.Survivors do
 		Util.FireClient(Fx, survivor, "Sniffed", {})
@@ -6269,7 +6585,7 @@ RunService.Heartbeat:Connect(function(dt)
 			combo = combo % 2 + 1
 			local side = combo == 1 and "R" or "L"
 			if not player:GetAttribute("Feral") then
-				Posture.Swipe(char, side)
+				VFX.Anim(char, side == "R" and "SlashR" or "SlashL", 1.4)
 			end
 			clawStreaks(root, side)
 			Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 0.5, Radius = 50 })
@@ -6312,13 +6628,322 @@ return Wolverine
         </Properties>
         <Item class="ModuleScript" referent="32">
           <Properties>
+            <string name="Name">AnimClips</string>
+            <string name="Source"><![CDATA[-- Keyframed animation clips (R15). Poses are joint rotations in degrees:
+--   { x, y, z [, tx, ty, tz] }
+-- Joint conventions (Motor6D.Transform):
+--   Shoulder +x = arm forward/up (90 forward, 180 straight up), +z = right arm out (left arm: -z)
+--   Elbow +x = bend.  Hip +x = leg forward.  Knee -x = bend.
+--   Root -x = whole body pitches forward, +y = turn left.  Neck +x = head back.
+-- Each key: { T = seconds, Ease = "In"|"Out"|"InOut"|"Linear" (easing INTO this key), Pose = {...} }
+-- Clips can set Hold = true to freeze on the last key until stopped.
+
+local Clips = {}
+
+local REST = {}
+
+---------------------------------------------------------------------------
+-- Wolverine: M1 slash (lunge, claw cocked high behind the head, rip across)
+---------------------------------------------------------------------------
+Clips.SlashR = {
+	Group = "Slash",
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.09, Ease = "Out", Pose = {
+			Root = { -10, -28, 0, 0, -0.25, 0 }, Waist = { 6, -22, 0 }, Neck = { -4, 18, 0 },
+			RShoulder = { 168, 0, 34 }, RElbow = { 75, 0, 0 },
+			LShoulder = { 82, 0, -18 }, LElbow = { 18, 0, 0 },
+			RHip = { -28, 0, 0 }, RKnee = { -30, 0, 0 }, LHip = { 42, 0, 0 }, LKnee = { -38, 0, 0 },
+		} },
+		{ T = 0.19, Ease = "In", Pose = {
+			Root = { -24, 32, 0, 0, -0.35, 0 }, Waist = { -12, 32, 0 }, Neck = { -6, -16, 0 },
+			RShoulder = { 52, 0, -46 }, RElbow = { 8, 0, 0 },
+			LShoulder = { -32, 0, -26 }, LElbow = { 64, 0, 0 },
+			RHip = { -38, 0, 0 }, RKnee = { -22, 0, 0 }, LHip = { 48, 0, 0 }, LKnee = { -42, 0, 0 },
+		} },
+		{ T = 0.5, Ease = "InOut", Pose = REST },
+	},
+}
+
+---------------------------------------------------------------------------
+-- Pounce: crouch, then a full-length dive with both claws out front
+---------------------------------------------------------------------------
+local DIVE = {
+	Root = { -78, 0, 0 }, Waist = { 4, 0, 0 }, Neck = { 58, 0, 0 },
+	RShoulder = { 172, 0, 14 }, LShoulder = { 172, 0, -14 }, RElbow = { 6, 0, 0 }, LElbow = { 6, 0, 0 },
+	RHip = { -12, 0, 0 }, LHip = { -28, 0, 0 }, RKnee = { -46, 0, 0 }, LKnee = { -18, 0, 0 },
+}
+Clips.Pounce = {
+	Hold = true,
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.1, Ease = "Out", Pose = {
+			Root = { -32, 0, 0, 0, -0.9, 0 }, Waist = { -10, 0, 0 }, Neck = { 22, 0, 0 },
+			RShoulder = { -45, 0, 26 }, LShoulder = { -45, 0, -26 }, RElbow = { 30, 0, 0 }, LElbow = { 30, 0, 0 },
+			RHip = { 72, 0, 0 }, LHip = { 72, 0, 0 }, RKnee = { -112, 0, 0 }, LKnee = { -112, 0, 0 },
+		} },
+		{ T = 0.24, Ease = "Out", Pose = DIVE },
+		{ T = 1.1, Ease = "Linear", Pose = DIVE },
+	},
+}
+
+-- Contact: both claws slam down into them, landing crouch
+Clips.PounceStrike = {
+	Keys = {
+		{ T = 0, Pose = DIVE },
+		{ T = 0.1, Ease = "In", Pose = {
+			Root = { -38, 0, 0, 0, -0.6, 0 }, Waist = { -14, 0, 0 }, Neck = { 12, 0, 0 },
+			RShoulder = { 102, 0, 10 }, LShoulder = { 102, 0, -10 }, RElbow = { 0, 0, 0 }, LElbow = { 0, 0, 0 },
+			RHip = { 62, 0, 0 }, LHip = { 40, 0, 0 }, RKnee = { -95, 0, 0 }, LKnee = { -70, 0, 0 },
+		} },
+		{ T = 0.3, Pose = {
+			Root = { -30, 0, 0, 0, -0.5, 0 }, Waist = { -8, 0, 0 }, Neck = { 18, 0, 0 },
+			RShoulder = { 88, 0, 16 }, LShoulder = { 88, 0, -16 },
+			RHip = { 55, 0, 0 }, LHip = { 35, 0, 0 }, RKnee = { -85, 0, 0 }, LKnee = { -60, 0, 0 },
+		} },
+		{ T = 0.65, Ease = "InOut", Pose = REST },
+	},
+}
+
+---------------------------------------------------------------------------
+-- Impale: low crouch, then an uppercut that lifts them overhead on one arm
+---------------------------------------------------------------------------
+local LIFTED = {
+	Root = { 6, 14, 0, 0, 0.1, 0 }, Waist = { 12, 10, 0 }, Neck = { 38, 0, 0 },
+	RShoulder = { 176, 0, -6 }, RElbow = { 2, 0, 0 },
+	LShoulder = { -22, 0, -28 }, LElbow = { 42, 0, 0 },
+	RHip = { -16, 0, 0 }, LHip = { 26, 0, 0 }, RKnee = { -12, 0, 0 }, LKnee = { -18, 0, 0 },
+}
+Clips.Impale = {
+	Hold = true,
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.12, Ease = "Out", Pose = {
+			Root = { -16, -22, 0, 0, -0.55, 0 }, Waist = { -6, -12, 0 }, Neck = { 6, 0, 0 },
+			RShoulder = { -38, 0, 22 }, RElbow = { 62, 0, 0 },
+			LShoulder = { 34, 0, -22 }, LElbow = { 40, 0, 0 },
+			RHip = { 42, 0, 0 }, LHip = { -12, 0, 0 }, RKnee = { -64, 0, 0 }, LKnee = { -32, 0, 0 },
+		} },
+		{ T = 0.25, Ease = "In", Pose = LIFTED },
+		{ T = 1.5, Ease = "Linear", Pose = LIFTED },
+	},
+}
+
+-- Hurl them off the claws
+Clips.ImpaleThrow = {
+	Keys = {
+		{ T = 0, Pose = LIFTED },
+		{ T = 0.14, Ease = "In", Pose = {
+			Root = { -18, -10, 0 }, Waist = { -14, -18, 0 }, Neck = { -4, 0, 0 },
+			RShoulder = { 100, 0, -34 }, RElbow = { 4, 0, 0 },
+			LShoulder = { -30, 0, -20 }, RHip = { 30, 0, 0 }, LHip = { -20, 0, 0 },
+		} },
+		{ T = 0.5, Ease = "InOut", Pose = REST },
+	},
+}
+
+---------------------------------------------------------------------------
+-- Finisher: grab, then tear them apart
+---------------------------------------------------------------------------
+Clips.Rip = {
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.2, Ease = "Out", Pose = {
+			Root = { -6, 0, 0 }, Waist = { -6, 0, 0 }, Neck = { 8, 0, 0 },
+			RShoulder = { 122, 0, 10 }, LShoulder = { 122, 0, -10 }, RElbow = { 30, 0, 0 }, LElbow = { 30, 0, 0 },
+		} },
+		{ T = 0.5, Pose = {
+			Root = { -4, 0, 0, 0, -0.2, 0 }, Waist = { -2, 0, 0 }, Neck = { 12, 0, 0 },
+			RShoulder = { 128, 0, 14 }, LShoulder = { 128, 0, -14 }, RElbow = { 24, 0, 0 }, LElbow = { 24, 0, 0 },
+			RKnee = { -20, 0, 0 }, LKnee = { -20, 0, 0 },
+		} },
+		{ T = 0.64, Ease = "In", Pose = {
+			Root = { 6, 0, 0 }, Waist = { 16, 0, 0 }, Neck = { 38, 0, 0 },
+			RShoulder = { 96, 0, 86 }, LShoulder = { 96, 0, -86 }, RElbow = { 8, 0, 0 }, LElbow = { 8, 0, 0 },
+		} },
+		{ T = 1.1, Pose = {
+			Root = { 8, 0, 0 }, Waist = { 18, 0, 0 }, Neck = { 40, 0, 0 },
+			RShoulder = { 88, 0, 90 }, LShoulder = { 88, 0, -90 },
+		} },
+		{ T = 1.4, Ease = "InOut", Pose = REST },
+	},
+}
+
+---------------------------------------------------------------------------
+-- Intro: SNIKT (fists up, claws out) and the roar
+---------------------------------------------------------------------------
+Clips.Snikt = {
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.18, Ease = "Out", Pose = {
+			Waist = { 6, 0, 0 }, Neck = { -12, 0, 0 },
+			RShoulder = { 94, 0, 26 }, LShoulder = { 94, 0, -26 }, RElbow = { 112, 0, 0 }, LElbow = { 112, 0, 0 },
+			RHip = { 10, 0, 0 }, RKnee = { -18, 0, 0 }, LKnee = { -10, 0, 0 },
+		} },
+		{ T = 0.3, Ease = "In", Pose = {
+			Waist = { 8, 0, 0 }, Neck = { -14, 0, 0 },
+			RShoulder = { 100, 0, 38 }, LShoulder = { 100, 0, -38 }, RElbow = { 98, 0, 0 }, LElbow = { 98, 0, 0 },
+			RHip = { 10, 0, 0 }, RKnee = { -18, 0, 0 }, LKnee = { -10, 0, 0 },
+		} },
+		{ T = 1.1, Pose = {
+			Waist = { 8, 0, 0 }, Neck = { -14, 0, 0 },
+			RShoulder = { 100, 0, 38 }, LShoulder = { 100, 0, -38 }, RElbow = { 98, 0, 0 }, LElbow = { 98, 0, 0 },
+			RKnee = { -18, 0, 0 }, LKnee = { -10, 0, 0 },
+		} },
+		{ T = 1.4, Ease = "InOut", Pose = REST },
+	},
+}
+
+local ROAR = {
+	Root = { 8, 0, 0, 0, -0.35, 0 }, Waist = { 22, 0, 0 }, Neck = { 42, 0, 0 },
+	RShoulder = { 30, 0, 72 }, LShoulder = { 30, 0, -72 }, RElbow = { 72, 0, 0 }, LElbow = { 72, 0, 0 },
+	RHip = { 6, 0, 12 }, LHip = { 6, 0, -12 }, RKnee = { -22, 0, 0 }, LKnee = { -22, 0, 0 },
+}
+Clips.Roar = {
+	Tremble = true,
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.28, Ease = "Out", Pose = ROAR },
+		{ T = 1.7, Pose = ROAR },
+		{ T = 2.1, Ease = "InOut", Pose = REST },
+	},
+}
+
+-- Quick snarl after every kill
+Clips.Snarl = {
+	Tremble = true,
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.18, Ease = "Out", Pose = { Waist = { 14, 0, 0 }, Neck = { 30, 0, 0 }, RShoulder = { 40, 0, 50 }, LShoulder = { 40, 0, -50 }, RElbow = { 60, 0, 0 }, LElbow = { 60, 0, 0 } } },
+		{ T = 0.8, Pose = { Waist = { 14, 0, 0 }, Neck = { 30, 0, 0 }, RShoulder = { 40, 0, 50 }, LShoulder = { 40, 0, -50 }, RElbow = { 60, 0, 0 }, LElbow = { 60, 0, 0 } } },
+		{ T = 1.05, Ease = "InOut", Pose = REST },
+	},
+}
+
+-- Sniff: head up, testing the air
+Clips.Sniff = {
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.25, Ease = "Out", Pose = { Neck = { 32, -20, 0 }, Waist = { 6, 0, 0 } } },
+		{ T = 0.55, Ease = "InOut", Pose = { Neck = { 30, 22, 0 }, Waist = { 6, 0, 0 } } },
+		{ T = 0.85, Ease = "InOut", Pose = { Neck = { 26, 0, 0 } } },
+		{ T = 1.1, Ease = "InOut", Pose = REST },
+	},
+}
+
+---------------------------------------------------------------------------
+-- Victim reactions
+---------------------------------------------------------------------------
+Clips.HitReact = {
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.07, Ease = "Out", Pose = { Root = { 14, 0, 0 }, Waist = { 22, 0, 0 }, Neck = { 26, 0, 0 }, RShoulder = { 40, 0, 50 }, LShoulder = { 40, 0, -50 }, RElbow = { 50, 0, 0 }, LElbow = { 50, 0, 0 } } },
+		{ T = 0.5, Ease = "InOut", Pose = REST },
+	},
+}
+
+Clips.Impaled = {
+	Hold = true,
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.15, Ease = "Out", Pose = {
+			Root = { 24, 0, 0 }, Waist = { 30, 0, 0 }, Neck = { 44, 0, 0 },
+			RShoulder = { 30, 0, 62 }, LShoulder = { 40, 0, -55 }, RElbow = { 20, 0, 0 }, LElbow = { 40, 0, 0 },
+			RHip = { 18, 0, 0 }, LHip = { -16, 0, 0 }, RKnee = { -40, 0, 0 }, LKnee = { -20, 0, 0 },
+		} },
+	},
+}
+
+Clips.Grabbed = {
+	Hold = true,
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.15, Ease = "Out", Pose = {
+			Waist = { 18, 0, 0 }, Neck = { 30, 0, 0 },
+			RShoulder = { 140, 0, 40 }, LShoulder = { 140, 0, -40 }, RElbow = { 60, 0, 0 }, LElbow = { 60, 0, 0 },
+			RHip = { 20, 0, 0 }, LHip = { -12, 0, 0 }, RKnee = { -50, 0, 0 }, LKnee = { -24, 0, 0 },
+		} },
+	},
+}
+
+Clips.Fart = {
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.15, Ease = "Out", Pose = { Root = { -26, 0, 0 }, Waist = { -12, 0, 0 }, Neck = { 20, 0, 0 }, RHip = { 26, 0, 0 }, LHip = { 26, 0, 0 } } },
+		{ T = 0.55, Pose = { Root = { -26, 0, 0 }, Waist = { -12, 0, 0 }, Neck = { 20, 0, 0 }, RHip = { 26, 0, 0 }, LHip = { 26, 0, 0 } } },
+		{ T = 0.8, Ease = "InOut", Pose = REST },
+	},
+}
+
+---------------------------------------------------------------------------
+-- Sentinel
+---------------------------------------------------------------------------
+Clips.Punch = {
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.09, Ease = "Out", Pose = { Waist = { 0, -26, 0 }, Root = { -4, -10, 0 }, RShoulder = { -40, 0, 22 }, RElbow = { 100, 0, 0 }, LShoulder = { 60, 0, -10 }, LElbow = { 80, 0, 0 } } },
+		{ T = 0.17, Ease = "In", Pose = { Waist = { -6, 28, 0 }, Root = { -12, 14, 0 }, RShoulder = { 92, 0, 0 }, RElbow = { 0, 0, 0 }, LShoulder = { 20, 0, -20 }, LElbow = { 90, 0, 0 }, LHip = { 24, 0, 0 } } },
+		{ T = 0.5, Ease = "InOut", Pose = REST },
+	},
+}
+
+Clips.Laser = {
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.12, Ease = "Out", Pose = { Waist = { 18, 0, 0 }, Neck = { 12, 0, 0 }, RShoulder = { -30, 0, 44 }, LShoulder = { -30, 0, -44 }, RElbow = { 30, 0, 0 }, LElbow = { 30, 0, 0 }, Root = { 4, 0, 0, 0, -0.2, 0 } } },
+		{ T = 0.5, Pose = { Waist = { 20, 0, 0 }, Neck = { 12, 0, 0 }, RShoulder = { -32, 0, 46 }, LShoulder = { -32, 0, -46 }, RElbow = { 30, 0, 0 }, LElbow = { 30, 0, 0 }, Root = { 4, 0, 0, 0, -0.2, 0 } } },
+		{ T = 0.75, Ease = "InOut", Pose = REST },
+	},
+}
+
+Clips.Pulse = {
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.16, Ease = "Out", Pose = { RShoulder = { 170, 0, 20 }, LShoulder = { 170, 0, -20 }, Neck = { 20, 0, 0 }, Waist = { 10, 0, 0 } } },
+		{ T = 0.3, Ease = "In", Pose = { RShoulder = { 40, 0, 60 }, LShoulder = { 40, 0, -60 }, Root = { -20, 0, 0, 0, -0.7, 0 }, RHip = { 50, 0, 0 }, LHip = { 50, 0, 0 }, RKnee = { -70, 0, 0 }, LKnee = { -70, 0, 0 } } },
+		{ T = 0.75, Ease = "InOut", Pose = REST },
+	},
+}
+
+---------------------------------------------------------------------------
+-- Mirroring (makes SlashL from SlashR)
+---------------------------------------------------------------------------
+local SWAP = {
+	RShoulder = "LShoulder", LShoulder = "RShoulder", RElbow = "LElbow", LElbow = "RElbow",
+	RWrist = "LWrist", LWrist = "RWrist", RHip = "LHip", LHip = "RHip",
+	RKnee = "LKnee", LKnee = "RKnee", RAnkle = "LAnkle", LAnkle = "RAnkle",
+}
+local function mirror(clip)
+	local out = { Group = clip.Group, Hold = clip.Hold, Tremble = clip.Tremble, Keys = {} }
+	for _, k in clip.Keys do
+		local pose = {}
+		for joint, a in k.Pose do
+			pose[SWAP[joint] or joint] = { a[1], -a[2], -a[3], -(a[4] or 0), a[5] or 0, a[6] or 0 }
+		end
+		table.insert(out.Keys, { T = k.T, Ease = k.Ease, Pose = pose })
+	end
+	return out
+end
+Clips.SlashL = mirror(Clips.SlashR)
+
+return Clips
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="33">
+          <Properties>
             <string name="Name">Anims</string>
-            <string name="Source"><![CDATA[-- Procedural sprint animations, applied on every client to every sprinting
--- character. We override Motor6D.Transform after Roblox's Animator runs
--- (PreSimulation), so this fully replaces the default run while sprinting.
+            <string name="Source"><![CDATA[-- Client animation engine. Runs on every client for every character, so all
+-- players see smooth full-framerate animation.
+--   * Loops: survivor flee sprint, Wolverine's feral hunting run, all-fours gallop
+--   * One-shot clips (AnimClips) triggered by the server: slashes, pounce,
+--     impale, rip, roar, reactions, Sentinel moves...
+-- Poses override Motor6D.Transform after Roblox's Animator (PreSimulation).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+
+local Clips = require(script.Parent:WaitForChild("AnimClips"))
 
 local Anims = {}
 
@@ -6341,39 +6966,106 @@ local JOINTS = {
 	LAnkle = { "LeftFoot", "LeftAnkle" },
 }
 
-local state = setmetatable({}, { __mode = "k" }) -- [Model] = { Phase, Blend, Motors, LookUntil, NextLook, LookSide }
+local states = setmetatable({}, { __mode = "k" })
 
-local function motors(char)
-	local m = {}
-	for key, info in JOINTS do
-		local part = char:FindFirstChild(info[1])
-		local j = part and part:FindFirstChild(info[2])
-		if j and j:IsA("Motor6D") then
-			m[key] = j
+local function getState(char)
+	local st = states[char]
+	if not st then
+		local motors = {}
+		for key, info in JOINTS do
+			local part = char:FindFirstChild(info[1])
+			local j = part and part:FindFirstChild(info[2])
+			if j and j:IsA("Motor6D") then
+				motors[key] = j
+			end
+		end
+		st = { Motors = motors, Phase = 0, LoopBlend = 0, Loop = nil, Clip = nil, NextLook = 0, LookUntil = 0, LookSide = 1 }
+		states[char] = st
+	end
+	return st
+end
+
+local function cf(a)
+	return CFrame.new(a[4] or 0, a[5] or 0, a[6] or 0) * CFrame.Angles(rad(a[1]), rad(a[2]), rad(a[3]))
+end
+
+local EASE = {
+	Linear = function(t) return t end,
+	In = function(t) return t * t * t end,
+	Out = function(t) return 1 - (1 - t) ^ 3 end,
+	InOut = function(t) return t < 0.5 and 4 * t * t * t or 1 - (-2 * t + 2) ^ 3 / 2 end,
+}
+
+-- Samples a clip at time t. Returns { joint = CFrame }.
+local function sample(clip, t)
+	local keys = clip.Keys
+	local last = keys[#keys]
+	if t >= last.T then
+		local out = {}
+		for j, a in last.Pose do
+			out[j] = cf(a)
+		end
+		-- joints animated earlier in the clip return to rest
+		for _, k in keys do
+			for j in k.Pose do
+				out[j] = out[j] or CFrame.identity
+			end
+		end
+		return out
+	end
+	local k0, k1 = keys[1], keys[2]
+	for i = 1, #keys - 1 do
+		if t >= keys[i].T and t < keys[i + 1].T then
+			k0, k1 = keys[i], keys[i + 1]
+			break
 		end
 	end
-	return m
-end
-
-local function isSprinting(char)
-	if char:GetAttribute("Sprinting") then
-		return true, char:GetAttribute("Role") or "Survivor"
+	local alpha = (t - k0.T) / math.max(1e-3, k1.T - k0.T)
+	alpha = (EASE[k1.Ease or "InOut"] or EASE.InOut)(math.clamp(alpha, 0, 1))
+	local out = {}
+	local seen = {}
+	for _, k in keys do
+		for j in k.Pose do
+			seen[j] = true
+		end
 	end
-	local p = Players:GetPlayerFromCharacter(char)
-	if p and p:GetAttribute("Sprinting") then
-		return true, p:GetAttribute("Role")
+	for j in seen do
+		local a = k0.Pose[j] and cf(k0.Pose[j]) or CFrame.identity
+		local b = k1.Pose[j] and cf(k1.Pose[j]) or CFrame.identity
+		out[j] = a:Lerp(b, alpha)
 	end
-	return false, nil
+	return out
 end
 
-local function wolverineNear(root)
-	local name = ReplicatedStorage:GetAttribute("Wolverine")
-	local w = name and Players:FindFirstChild(name)
-	local wRoot = w and w.Character and w.Character:FindFirstChild("HumanoidRootPart")
-	return wRoot ~= nil and (wRoot.Position - root.Position).Magnitude < 70
+---------------------------------------------------------------------------
+-- Public API
+---------------------------------------------------------------------------
+
+function Anims.Play(char, name, speed)
+	local clip = Clips[name]
+	if not (char and clip) then
+		return
+	end
+	local st = getState(char)
+	-- ignore the server echo of a clip we already predicted locally
+	if st.Clip and (st.Clip.Name == name or (clip.Group and st.Clip.Def.Group == clip.Group)) and os.clock() - st.Clip.Start < 0.25 then
+		return
+	end
+	st.Clip = { Name = name, Def = clip, Start = os.clock(), Speed = speed or 1, Weight = 0, Stopping = false }
 end
 
--- Survivor: running for their life.
+function Anims.Stop(char, name)
+	local st = states[char]
+	if st and st.Clip and (name == nil or st.Clip.Name == name) then
+		st.Clip.Stopping = true
+	end
+end
+
+---------------------------------------------------------------------------
+-- Loops
+---------------------------------------------------------------------------
+
+-- Survivor: running for their life (looks back when he's close)
 local function fleePose(s, c, look)
 	local up = math.abs(c)
 	return {
@@ -6384,8 +7076,6 @@ local function fleePose(s, c, look)
 		LShoulder = CFrame.Angles(rad(75 * s + 15), 0, rad(-6)),
 		RElbow = CFrame.Angles(rad(85 + 15 * s), 0, 0),
 		LElbow = CFrame.Angles(rad(85 - 15 * s), 0, 0),
-		RWrist = CFrame.Angles(rad(10), 0, 0),
-		LWrist = CFrame.Angles(rad(10), 0, 0),
 		RHip = CFrame.Angles(rad(60 * s + 8), 0, 0),
 		LHip = CFrame.Angles(rad(-60 * s + 8), 0, 0),
 		RKnee = CFrame.Angles(rad(-(15 + 85 * math.max(0, -s))), 0, 0),
@@ -6395,26 +7085,65 @@ local function fleePose(s, c, look)
 	}
 end
 
--- Wolverine: low, heavy, claws forward, shoulders rolling.
+-- Wolverine: feral charge. Deep forward lean, arms swept back and out so
+-- the claws trail behind him, huge powerful strides.
 local function huntPose(s, c)
 	local up = math.abs(c)
 	return {
-		Root = CFrame.new(0, up * 0.18 - 0.25, 0) * CFrame.Angles(rad(-24), 0, 0),
-		Waist = CFrame.Angles(rad(-10), rad(18 * s), 0),
-		Neck = CFrame.Angles(rad(22), rad(-10 * s), 0),
-		RShoulder = CFrame.Angles(rad(-55 * s + 35), 0, rad(18)),
-		LShoulder = CFrame.Angles(rad(55 * s + 35), 0, rad(-18)),
-		RElbow = CFrame.Angles(rad(45), 0, 0),
-		LElbow = CFrame.Angles(rad(45), 0, 0),
-		RWrist = CFrame.identity,
-		LWrist = CFrame.identity,
-		RHip = CFrame.Angles(rad(55 * s + 15), 0, 0),
-		LHip = CFrame.Angles(rad(-55 * s + 15), 0, 0),
-		RKnee = CFrame.Angles(rad(-(25 + 75 * math.max(0, -s))), 0, 0),
-		LKnee = CFrame.Angles(rad(-(25 + 75 * math.max(0, s))), 0, 0),
-		RAnkle = CFrame.Angles(rad(-15 * s), 0, 0),
-		LAnkle = CFrame.Angles(rad(15 * s), 0, 0),
+		Root = CFrame.new(0, up * 0.22 - 0.35, 0) * CFrame.Angles(rad(-34), rad(6 * s), 0),
+		Waist = CFrame.Angles(rad(-8), rad(12 * s), 0),
+		Neck = CFrame.Angles(rad(34), rad(-8 * s), 0),
+		RShoulder = CFrame.Angles(rad(-58 + 16 * s), 0, rad(34)),
+		LShoulder = CFrame.Angles(rad(-58 - 16 * s), 0, rad(-34)),
+		RElbow = CFrame.Angles(rad(22), 0, 0),
+		LElbow = CFrame.Angles(rad(22), 0, 0),
+		RWrist = CFrame.Angles(rad(-20), 0, 0),
+		LWrist = CFrame.Angles(rad(-20), 0, 0),
+		RHip = CFrame.Angles(rad(70 * s + 22), 0, 0),
+		LHip = CFrame.Angles(rad(-70 * s + 22), 0, 0),
+		RKnee = CFrame.Angles(rad(-(28 + 95 * math.max(0, -s))), 0, 0),
+		LKnee = CFrame.Angles(rad(-(28 + 95 * math.max(0, s))), 0, 0),
+		RAnkle = CFrame.Angles(rad(-25 * s), 0, 0),
+		LAnkle = CFrame.Angles(rad(25 * s), 0, 0),
 	}
+end
+
+-- Wolverine on all fours: a real quadruped gallop.
+local function gallopPose(p)
+	local front = math.sin(p)
+	local back = math.sin(p + math.pi * 0.85)
+	local flex = math.sin(p * 2)
+	return {
+		Root = CFrame.new(0, -0.55 + math.abs(math.sin(p)) * 0.3, 0) * CFrame.Angles(rad(-74 + flex * 6), 0, 0),
+		Waist = CFrame.Angles(rad(flex * 10), 0, 0),
+		Neck = CFrame.Angles(rad(62 - flex * 6), 0, 0),
+		RShoulder = CFrame.Angles(rad(82 + front * 42), 0, rad(8)),
+		LShoulder = CFrame.Angles(rad(82 + math.sin(p + 0.45) * 42), 0, rad(-8)),
+		RElbow = CFrame.Angles(rad(18 + 40 * math.max(0, -front)), 0, 0),
+		LElbow = CFrame.Angles(rad(18 + 40 * math.max(0, -math.sin(p + 0.45))), 0, 0),
+		RWrist = CFrame.Angles(rad(-35), 0, 0),
+		LWrist = CFrame.Angles(rad(-35), 0, 0),
+		RHip = CFrame.Angles(rad(78 + back * 44), 0, 0),
+		LHip = CFrame.Angles(rad(78 + math.sin(p + math.pi * 0.85 + 0.4) * 44), 0, 0),
+		RKnee = CFrame.Angles(rad(-(40 + 60 * math.max(0, back))), 0, 0),
+		LKnee = CFrame.Angles(rad(-(40 + 60 * math.max(0, math.sin(p + math.pi * 0.85 + 0.4)))), 0, 0),
+	}
+end
+
+local function attr(char, name)
+	local v = char:GetAttribute(name)
+	if v ~= nil then
+		return v
+	end
+	local p = Players:GetPlayerFromCharacter(char)
+	return p and p:GetAttribute(name)
+end
+
+local function wolverineNear(root)
+	local name = ReplicatedStorage:GetAttribute("Wolverine")
+	local w = name and Players:FindFirstChild(name)
+	local wRoot = w and w.Character and w.Character:FindFirstChild("HumanoidRootPart")
+	return wRoot ~= nil and (wRoot.Position - root.Position).Magnitude < 70
 end
 
 local function characters()
@@ -6428,13 +7157,22 @@ local function characters()
 	local debris = map and map:FindFirstChild("Debris")
 	if debris then
 		for _, m in debris:GetChildren() do
-			if m:IsA("Model") and m:GetAttribute("Sprinting") ~= nil then
+			if m:IsA("Model") and m:FindFirstChildOfClass("Humanoid") then
 				table.insert(list, m)
 			end
 		end
 	end
+	for char in states do
+		if char.Parent and not table.find(list, char) then
+			table.insert(list, char)
+		end
+	end
 	return list
 end
+
+---------------------------------------------------------------------------
+-- Per-frame
+---------------------------------------------------------------------------
 
 local step = RunService.PreSimulation or RunService.Stepped
 step:Connect(function(a, b)
@@ -6443,48 +7181,101 @@ step:Connect(function(a, b)
 	for _, char in characters() do
 		local hum = char:FindFirstChildOfClass("Humanoid")
 		local root = char:FindFirstChild("HumanoidRootPart")
-		if hum and root and hum.Health > 0 and hum.RigType == Enum.HumanoidRigType.R15 then
-			local st = state[char]
-			local sprinting, role = isSprinting(char)
-			local v = root.AssemblyLinearVelocity
-			local speed = Vector3.new(v.X, 0, v.Z).Magnitude
-			local feral = role == "Wolverine" and (Players:GetPlayerFromCharacter(char) or char):GetAttribute("Feral")
-			local active = sprinting and speed > 8 and not root.Anchored and not feral
-				and hum:GetState() ~= Enum.HumanoidStateType.Freefall
+		if not (hum and root and hum.RigType == Enum.HumanoidRigType.R15) then
+			continue
+		end
+		local st = states[char]
+		local role = attr(char, "Role")
+		local v = root.AssemblyLinearVelocity
+		local speed = Vector3.new(v.X, 0, v.Z).Magnitude
+		local airborne = hum:GetState() == Enum.HumanoidStateType.Freefall
+		local alive = hum.Health > 0
 
-			if active and not st then
-				st = { Phase = 0, Blend = 0, Motors = motors(char), LookUntil = 0, NextLook = now + 1.5, LookSide = 1 }
-				state[char] = st
+		-- choose the loop
+		local loop = nil
+		if alive and not root.Anchored then
+			if attr(char, "Feral") and speed > 4 then
+				loop = "Gallop"
+			elseif attr(char, "Sprinting") and speed > 8 and not airborne then
+				loop = role == "Wolverine" and "Hunt" or "Flee"
 			end
-			if st then
-				st.Blend = math.clamp(st.Blend + (active and dt * 8 or -dt * 8), 0, 1)
-				if st.Blend <= 0 and not active then
-					state[char] = nil
-				else
-					st.Phase += dt * math.max(speed, 10) * 0.52
-					local s, c = math.sin(st.Phase), math.cos(st.Phase)
-					local pose
-					if role == "Wolverine" then
-						pose = huntPose(s, c)
-					else
-						-- Panicked glances back when he's close
-						local look = 0
-						if now > st.NextLook and wolverineNear(root) then
-							st.LookUntil = now + 0.45
-							st.NextLook = now + 1.6 + math.random() * 1.8
-							st.LookSide = math.random() < 0.5 and -1 or 1
+		end
+		if not st and not loop then
+			continue
+		end
+		st = st or getState(char)
+
+		-- loop blend
+		if loop then
+			st.Loop = loop
+		end
+		st.LoopBlend = math.clamp(st.LoopBlend + (loop and dt * 7 or -dt * 7), 0, 1)
+		st.Phase += dt * math.max(speed, 10) * (st.Loop == "Gallop" and 0.36 or 0.5)
+
+		local pose = {}
+		if st.LoopBlend > 0 and st.Loop then
+			local s, c = math.sin(st.Phase), math.cos(st.Phase)
+			if st.Loop == "Gallop" then
+				pose = gallopPose(st.Phase)
+			elseif st.Loop == "Hunt" then
+				pose = huntPose(s, c)
+			else
+				local look = 0
+				if now > st.NextLook and wolverineNear(root) then
+					st.LookUntil = now + 0.45
+					st.NextLook = now + 1.6 + math.random() * 1.8
+					st.LookSide = math.random() < 0.5 and -1 or 1
+				end
+				if now < st.LookUntil then
+					look = rad(70) * st.LookSide
+				end
+				pose = fleePose(s, c, look)
+			end
+		end
+
+		-- one-shot clip on top
+		local clipPose, clipWeight = nil, 0
+		local clip = st.Clip
+		if clip then
+			local t = (now - clip.Start) * clip.Speed
+			local length = clip.Def.Keys[#clip.Def.Keys].T
+			local ending = clip.Stopping or (not clip.Def.Hold and t >= length)
+			clip.Weight = math.clamp(clip.Weight + (ending and -dt * 9 or dt * 18), 0, 1)
+			if ending and clip.Weight <= 0 then
+				st.Clip = nil
+			else
+				clipPose = sample(clip.Def, math.min(t, length))
+				clipWeight = clip.Weight
+				if clip.Def.Tremble then
+					local j = rad(1.6)
+					for _, key in { "Neck", "Waist", "RShoulder", "LShoulder" } do
+						if clipPose[key] then
+							clipPose[key] = clipPose[key] * CFrame.Angles((math.random() - 0.5) * j, (math.random() - 0.5) * j, 0)
 						end
-						if now < st.LookUntil then
-							look = rad(70) * st.LookSide
-						end
-						pose = fleePose(s, c, look)
 					end
-					for key, cf in pose do
-						local m = st.Motors[key]
-						if m and m.Parent then
-							m.Transform = m.Transform:Lerp(cf, st.Blend)
-						end
-					end
+				end
+			end
+		end
+
+		if st.LoopBlend <= 0 and not st.Clip then
+			states[char] = nil
+			continue
+		end
+
+		for key, m in st.Motors do
+			if m.Parent then
+				local base = m.Transform
+				local target = base
+				local lp = pose[key]
+				if lp then
+					target = base:Lerp(lp, st.LoopBlend)
+				end
+				local cp = clipPose and clipPose[key]
+				if cp then
+					target = target:Lerp(cp, clipWeight)
+				end
+				if target ~= base then
+					m.Transform = target
 				end
 			end
 		end
@@ -6495,7 +7286,7 @@ return Anims
 ]]></string>
           </Properties>
         </Item>
-        <Item class="LocalScript" referent="33">
+        <Item class="LocalScript" referent="34">
           <Properties>
             <string name="Name">ClientMain</string>
             <string name="Source"><![CDATA[-- Input + role handling. PC keys, gamepad and mobile touch buttons.
@@ -6509,7 +7300,7 @@ local Interface = require(script.Parent:WaitForChild("Interface"))
 local Effects = require(script.Parent:WaitForChild("Effects"))
 require(script.Parent:WaitForChild("Shop"))
 local Daily = require(script.Parent:WaitForChild("Daily"))
-require(script.Parent:WaitForChild("Anims"))
+local Anims = require(script.Parent:WaitForChild("Anims"))
 
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local Ability = Remotes:WaitForChild("Ability")
@@ -6567,6 +7358,8 @@ local HINTS = {
 }
 
 local readyAt = {}
+local slashSide = 0
+local PREDICT = { Pounce = "Pounce", Stab = "Impale", Sniff = "Sniff", Punch = "Punch", Laser = "Laser", Pulse = "Pulse", Fart = "Fart" }
 local currentKit = {}
 
 local function kitEntry(name)
@@ -6607,12 +7400,22 @@ local function activate(name)
 	readyAt[name] = os.clock() + entry.Cooldown
 	Interface.StartCooldown(name, entry.Cooldown)
 
+	-- play our own animation instantly (the server's copy is de-duplicated)
+	local predict = PREDICT[name]
+	if name == "Slash" then
+		slashSide = slashSide % 2 + 1
+		predict = slashSide == 1 and "SlashR" or "SlashL"
+	end
+	if predict then
+		Anims.Play(char, predict)
+	end
+
 	local look = Vector3.new(root.CFrame.LookVector.X, 0, root.CFrame.LookVector.Z).Unit
 	if name == "Pounce" then
 		Effects.Impulse(root, look * A.Pounce.Forward + Vector3.new(0, A.Pounce.Up, 0), 0.22)
 		Effects.Shake(0.3)
 	elseif name == "Stab" then
-		Effects.Impulse(root, look * A.Stab.Lunge + Vector3.new(0, 4, 0), 0.14)
+		Effects.Impulse(root, look * A.Stab.Lunge * 0.6 + Vector3.new(0, 2, 0), 0.12)
 	end
 
 	local arg = nil
@@ -6720,7 +7523,11 @@ applyRole(player:GetAttribute("Role"))
 
 Fx.OnClientEvent:Connect(function(kind, data)
 	data = data or {}
-	if kind == "Announce" then
+	if kind == "Anim" then
+		Anims.Play(data.Char, data.Clip, data.Speed)
+	elseif kind == "AnimStop" then
+		Anims.Stop(data.Char, data.Clip)
+	elseif kind == "Announce" then
 		Interface.Announce(data.Text, data.Color, data.Duration)
 	elseif kind == "Shake" then
 		Effects.ShakeAt(data.Position, data.Intensity, data.Radius)
@@ -6758,7 +7565,7 @@ end)
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="34">
+        <Item class="ModuleScript" referent="35">
           <Properties>
             <string name="Name">Daily</string>
             <string name="Source"><![CDATA[-- Daily challenges, login streak, Wolverine odds and the Robux pass.
@@ -7059,7 +7866,7 @@ return Daily
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="35">
+        <Item class="ModuleScript" referent="36">
           <Properties>
             <string name="Name">Effects</string>
             <string name="Source"><![CDATA[-- Client-only atmosphere: camera shake, snowfall, flickering lights,
@@ -7114,8 +7921,8 @@ end
 
 -- Lighting zones: bright snowy day in the lobby, dark night in the arena.
 local NIGHT, DAY = nil, {
-	ClockTime = 13.5, Brightness = 2.6, ExposureCompensation = 0.25,
-	Ambient = Color3.fromRGB(135, 132, 128), OutdoorAmbient = Color3.fromRGB(165, 168, 180),
+	ClockTime = 15.5, Brightness = 1.5, ExposureCompensation = -0.15,
+	Ambient = Color3.fromRGB(78, 76, 74), OutdoorAmbient = Color3.fromRGB(112, 116, 128),
 }
 local inLobby = nil
 local function applyZone(lobby)
@@ -7448,7 +8255,7 @@ return Effects
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="36">
+        <Item class="ModuleScript" referent="37">
           <Properties>
             <string name="Name">Interface</string>
             <string name="Source"><![CDATA[-- HUD built entirely from code.
@@ -8198,7 +9005,7 @@ return Interface
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="37">
+        <Item class="ModuleScript" referent="38">
           <Properties>
             <string name="Name">Shop</string>
             <string name="Source"><![CDATA[-- Wolverine shop: suits + claws, and the left-side menu dock.
@@ -8540,12 +9347,14 @@ return Shop
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="38">
+        <Item class="ModuleScript" referent="39">
           <Properties>
             <string name="Name">UIKit</string>
             <string name="Source"><![CDATA[-- Shared UI building blocks: animated buttons, panels, gradients.
 local TweenService = game:GetService("TweenService")
 local SoundService = game:GetService("SoundService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 
 local UIKit = {}
 
@@ -8600,13 +9409,13 @@ end
 
 -- Hover = a quick blade slice, click = a short metallic SNIKT
 local clickSound = Instance.new("Sound")
-clickSound.SoundId = "rbxasset://sounds/unsheath.wav"
+clickSound.SoundId = Config.Sounds.UIClick
 clickSound.Volume = 0.35
 clickSound.PlaybackSpeed = 1.5
 clickSound.Parent = SoundService
 
 local hoverSound = Instance.new("Sound")
-hoverSound.SoundId = "rbxasset://sounds/swordslash.wav"
+hoverSound.SoundId = Config.Sounds.UIHover
 hoverSound.Volume = 0.18
 hoverSound.PlaybackSpeed = 1.6
 hoverSound.Parent = SoundService
@@ -8860,7 +9669,7 @@ return UIKit
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="39">
+  <Item class="Workspace" referent="40">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>

@@ -7,7 +7,6 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Util = require(ReplicatedStorage.Shared.Util)
 local Round = require(script.Parent.Round)
 local Status = require(script.Parent.Status)
-local Posture = require(script.Parent.Posture)
 
 local Movement = {}
 local states = {}
@@ -125,7 +124,6 @@ RunService.Heartbeat:Connect(function(dt)
 
 			if feralActive ~= s.FeralOn then
 				s.FeralOn = feralActive
-				Posture.Feral(char, feralActive)
 				player:SetAttribute("Feral", feralActive)
 			end
 

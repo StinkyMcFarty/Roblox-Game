@@ -16,6 +16,7 @@ local Posture = require(script.Parent.Posture)
 local Wolverine = require(script.Parent.Wolverine)
 local Combat = require(script.Parent.Combat)
 local Costumes = require(script.Parent.Costumes)
+local VFX = require(script.Parent.VFX)
 local PlayerData = require(script.Parent.PlayerData)
 local Skins = require(ReplicatedStorage.Shared.Skins)
 
@@ -302,10 +303,8 @@ end
 
 local function punch(player, char, root)
 	local cfg = Config.Sentinel.Punch
-	Posture.Set(char, "RShoulder", CFrame.Angles(math.rad(95), 0, 0), 0.06)
-	task.delay(0.2, function()
-		Posture.Restore(char, "RShoulder", 0.2)
-	end)
+	VFX.Anim(char, "Punch")
+	task.wait(0.12) -- connect on the punch frame
 	local w, _, wRoot = wolverineParts()
 	if not wRoot then
 		return
@@ -360,10 +359,7 @@ local function laser(player, char, root, aim)
 		end
 	end
 
-	Posture.ArmsForward(char, 0.05)
-	task.delay(0.35, function()
-		Posture.RestoreAll(char, 0.2)
-	end)
+	VFX.Anim(char, "Laser")
 	Util.Sound(Config.Sounds.Laser, root, { Volume = 2, Pitch = 0.4, Range = 250 })
 	Util.Burst(origin, Util.SparkProps, 20, 1)
 
@@ -409,6 +405,8 @@ local function laser(player, char, root, aim)
 end
 
 local function pulse(player, char, root)
+	VFX.Anim(char, "Pulse")
+	task.wait(0.28) -- slam frame
 	local cfg = Config.Sentinel.Pulse
 	local ring = Instance.new("Part")
 	ring.Shape = Enum.PartType.Ball

@@ -189,12 +189,18 @@ def comic_shirt():
             elif face == "D":
                 d.rectangle([0, 0, w, h], fill=rgba(BLUE))
             else:
+                # bare muscular arm between the shoulder pad and the glove
+                d.rectangle([0, h * 0.2, w, h * 0.55], fill=(0, 0, 0, 0))
                 # blue shoulder cap w/ black trim
                 d.rectangle([0, 0, w, h * 0.2], fill=rgba(BLUE))
                 d.polygon([(0, h * 0.2), (w, h * 0.2), (w, h * 0.24), (w * 0.5, h * 0.3), (0, h * 0.24)], fill=rgba(BLACK))
                 # glove from the forearm down, with black cuff
-                d.rectangle([0, h * 0.74, w, h], fill=rgba(BLUE))
-                d.polygon([(0, h * 0.72), (w, h * 0.72), (w, h * 0.77), (w * 0.5, h * 0.82), (0, h * 0.77)], fill=rgba(BLACK))
+                # long blue glove from mid-forearm, jagged black stripes
+                d.polygon([(0, h * 0.5), (w * 0.5, h * 0.58), (w, h * 0.5), (w, h), (0, h)], fill=rgba(BLUE))
+                for k in range(2):
+                    yy = h * (0.64 + k * 0.1)
+                    d.polygon([(0, yy), (w * 0.55, yy + 5), (0, yy + 10)], fill=rgba(BLACK))
+                    d.polygon([(w, yy + 3), (w * 0.45, yy + 8), (w, yy + 13)], fill=rgba(BLACK))
             paste(c, reg, img.filter(ImageFilter.GaussianBlur(0.4)))
     return c
 
@@ -288,7 +294,6 @@ def logan_shirt():
                 img.alpha_composite(sleeve, (0, 0))
                 d = ImageDraw.Draw(img)
                 seam(d, [(0, h * 0.3 - 3), (w, h * 0.3 - 3)], color=(140, 142, 140), stitch=(205, 207, 205), width=1)
-                d.line([(w * 0.45, h * 0.4), (w * 0.52, h * 0.55), (w * 0.48, h * 0.72)], fill=(90, 70, 110, 60), width=2)
             paste(c, reg, img.filter(ImageFilter.GaussianBlur(0.5)))
     return c
 
@@ -602,20 +607,45 @@ def logan_face():
     return img
 
 
+def snarl(d, y=372, w=78):
+    """Gritted-teeth snarl."""
+    cx = F / 2
+    d.polygon([(cx - w, y - 6), (cx - w * 0.4, y - 24), (cx + w * 0.4, y - 24), (cx + w, y - 6),
+               (cx + w * 0.6, y + 22), (cx - w * 0.6, y + 22)], fill=(70, 18, 18, 255))
+    d.rectangle([cx - w * 0.78, y - 16, cx + w * 0.78, y + 12], fill=(232, 226, 210, 255))
+    d.line([(cx - w * 0.78, y - 2), (cx + w * 0.78, y - 2)], fill=(120, 110, 100, 255), width=2)
+    for k in range(-5, 6):
+        x = cx + k * w * 0.14
+        d.line([(x, y - 16), (x, y + 12)], fill=(150, 140, 125, 255), width=1)
+    d.line([(cx - w, y - 6), (cx - w * 0.4, y - 26), (cx + w * 0.4, y - 26), (cx + w, y - 6)], fill=(40, 12, 12, 255), width=5)
+    d.line([(cx - w * 0.6, y + 24), (cx + w * 0.6, y + 24)], fill=(40, 12, 12, 255), width=5)
+    # snarl creases
+    for s_ in (-1, 1):
+        d.arc([cx + s_ * w * 0.9 - 30, y - 70, cx + s_ * w * 0.9 + 30, y + 10], 250 if s_ < 0 else 200, 340 if s_ < 0 else 290, fill=(90, 50, 40, 170), width=3)
+
+
 def comic_face():
+    """Jim Lee style: unmasked, huge black mutton chops, gritted teeth."""
     img = Image.new("RGBA", (F, F), (0, 0, 0, 0))
+    black = (22, 22, 30)
+    stubble(img, (150, 330, 362, 480), color=(25, 25, 32), amount=0.3)
     d = ImageDraw.Draw(img)
-    # yellow cowl top + black mask around the eyes, skin jaw left transparent
-    d.rectangle([0, 0, F, 290], fill=(238, 184, 20, 255))
-    d.polygon([(0, 120), (F / 2, 175), (F, 120), (F, 300), (F / 2, 270), (0, 300)], fill=(20, 20, 24, 255))
-    for s in (-1, 1):  # the iconic mask "wings"
-        d.polygon([(F / 2 + s * 60, 150), (F / 2 + s * 250, 0), (F / 2 + s * 210, 170)], fill=(20, 20, 24, 255))
-    eyes(d, lens=True, y=225)
-    d.line([(F / 2 - 90, 180), (F / 2 - 20, 205)], fill=(20, 20, 24, 255), width=10)
-    d.line([(F / 2 + 90, 180), (F / 2 + 20, 205)], fill=(20, 20, 24, 255), width=10)
-    stubble(img, (130, 320, 382, 470), amount=0.2)
-    d = ImageDraw.Draw(img)
-    scowl(d, y=380)
+    for s_ in (-1, 1):
+        cx = F / 2
+        x_out = cx + s_ * 256
+        x_in = cx + s_ * 190
+        pts = [(x_out, 110), (x_in, 150), (x_in + s_ * 4, 290), (cx + s_ * 118, 372), (cx + s_ * 96, 430), (x_out, 420)]
+        d.polygon(pts, fill=black + (245,))
+        hair_strokes(d, (x_out, 120, cx + s_ * 100, 425), black, density=1400, length=(10, 20), angle=(75 - s_ * 20, 105 - s_ * 20), width=2)
+    # big angry brows meeting in a scowl
+    for s_ in (-1, 1):
+        cx = F / 2 + s_ * 80
+        d.polygon([(cx - s_ * 60, 196), (cx + s_ * 58, 150), (cx + s_ * 62, 172), (cx - s_ * 56, 214)], fill=black + (255,))
+    eyes(d, iris=(40, 30, 25), y=222)
+    d.line([(F / 2 - 18, 245), (F / 2 - 24, 305), (F / 2 + 8, 312)], fill=(120, 70, 55, 170), width=4)  # nose
+    for k in range(3):  # scowl lines between brows
+        d.line([(F / 2 - 10 + k * 10, 175), (F / 2 - 6 + k * 6, 205)], fill=(110, 70, 55, 140), width=2)
+    snarl(d)
     return img
 
 

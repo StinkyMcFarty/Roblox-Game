@@ -34,6 +34,24 @@ Until you do this, each suit uses flat colours plus its 3D gear.
 
 To change the textures, edit `tools/generate_textures.py` and run `python3 tools/generate_textures.py`.
 
+## Make the sounds crisp (upload the SFX)
+
+`assets/sfx/` holds 20 original sound effects synthesised by `tools/generate_sfx.py`:
+
+- Snikt, Slash, Whoosh, Stab, Impact, Leap, Land
+- a layered beast Roar and Snarl
+- Tear, Gore, wall Break, Heartbeat, Fart, Sniff
+- Sentinel Laser and Punch
+- Terminal beep, UI hover slice and UI click
+
+No copyrighted audio is used.
+
+1. In Studio, open **View → Asset Manager → Bulk Import** and select every `.ogg` in `assets/sfx/`.
+2. Right-click each sound → **Copy Asset ID**.
+3. Paste the numbers into `Config.UploadedSounds` in `src/shared/Config.lua`.
+
+Anything left at `0` uses a built-in Roblox sound instead. Roblox may ask you to verify your account before uploading audio.
+
 ## How it plays
 
 **Round:** 20s intermission. Then Wolverine wakes up locked inside the glass tank room of the Weapon X lab. After ~2.5s his claws pop out (**SNIKT!**), then he **roars** and every player's screen shakes. After 7s he's released. Survivors have **2:30** to last. **Every kill adds +15s.**

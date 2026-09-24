@@ -381,33 +381,80 @@ end
 
 local function lamp(parent, pos, facing, flicker)
 	local base = CFrame.lookAt(pos, pos + facing)
-	block(parent, Vector3.new(0.6, 14, 0.6), base * CFrame.new(0, 7, 0), M.Metal, C.DarkMetal)
-	block(parent, Vector3.new(0.4, 0.4, 3.2), base * CFrame.new(0, 13.8, -1.4), M.Metal, C.DarkMetal)
-	local head = block(parent, Vector3.new(1.4, 0.4, 1.2), base * CFrame.new(0, 13.5, -2.8), M.Neon, C.Lamp)
-	light(head, { Range = 30, Brightness = 1.6, Color = C.Lamp, Shadows = true })
+	local metal = rgb(58, 62, 68)
+	block(parent, Vector3.new(1.4, 0.6, 1.4), base * CFrame.new(0, 0.3, 0), M.Concrete, rgb(120, 120, 124))
+	block(parent, Vector3.new(1, 0.9, 0.9), base * CFrame.new(0, 1, 0) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, metal, { Shape = Enum.PartType.Cylinder })
+	block(parent, Vector3.new(8, 0.55, 0.55), base * CFrame.new(0, 5, 0) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, metal, { Shape = Enum.PartType.Cylinder })
+	block(parent, Vector3.new(6, 0.4, 0.4), base * CFrame.new(0, 12, 0) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, metal, { Shape = Enum.PartType.Cylinder })
+	block(parent, Vector3.new(0.32, 0.32, 3.4), base * CFrame.new(0, 14.75, -1.6) * CFrame.Angles(math.rad(6), 0, 0), M.Metal, metal)
+	local housing = block(parent, Vector3.new(1.3, 0.35, 2.6), base * CFrame.new(0, 14.4, -3.3), M.Metal, metal)
+	local head = block(parent, Vector3.new(1.05, 0.08, 2.2), base * CFrame.new(0, 14.2, -3.3), M.Neon, C.Lamp)
+	make("SpotLight", head, { Face = Enum.NormalId.Bottom, Range = 38, Angle = 110, Brightness = 3, Color = C.Lamp, Shadows = true })
+	light(housing, { Range = 12, Brightness = 0.5, Color = C.Lamp })
 	if flicker then
 		CollectionService:AddTag(head, "Flicker")
 	end
 end
 
-local function tree(parent, pos, scale)
+-- A round terraced cone: shrinking discs = one tier of a pine.
+local function coneTier(parent, base, w, h, color, discs, collide)
+	for i = 0, discs - 1 do
+		local r = w / 2 * (1 - i / discs * 0.82)
+		local dh = h / discs
+		make("Part", parent, {
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(dh * 1.05, r * 2, r * 2),
+			CFrame = CFrame.new(base + Vector3.new(0, dh * (i + 0.5), 0)) * CFrame.Angles(0, 0, math.rad(90)),
+			Material = M.Grass,
+			Color = vary(color, 0.08),
+			CanCollide = collide and i == 0,
+		})
+	end
+end
+
+local function tree(parent, pos, scale, simple)
 	local model = Instance.new("Model")
 	model.Name = "Pine"
 	local s = scale
-	local trunk = block(model, Vector3.new(1.3 * s, 7 * s, 1.3 * s), CFrame.new(pos + Vector3.new(0, 3.5 * s, 0)), M.Wood, C.DarkWood)
+	local trunk = block(model, Vector3.new(6 * s, 1.1 * s, 1.1 * s), CFrame.new(pos + Vector3.new(0, 3 * s, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.Wood, C.DarkWood, { Shape = Enum.PartType.Cylinder })
 	breakable(trunk)
 	trunk:SetAttribute("Topple", true)
-	local spin = rng:NextNumber() * math.pi
-	for i, w in { 10, 8, 6, 4, 2.2 } do
-		local y = (4.5 + i * 2.3) * s
-		local cf = CFrame.new(pos + Vector3.new(0, y, 0)) * CFrame.Angles(0, spin + i * 0.45, 0)
-		block(model, Vector3.new(w * s, 2.6 * s, w * s), cf, M.Grass, i % 2 == 0 and C.Pine or C.PineDark, { CanCollide = i == 1 })
-		block(model, Vector3.new(w * s * 0.8, 0.35 * s, w * s * 0.8), cf * CFrame.new(0, 1.35 * s, 0), M.Snow, C.Snow, { CanCollide = false })
+	local tiers = simple and { { 10, 7, 2.2 }, { 6.5, 6, 7.2 } }
+		or { { 10.5, 5.4, 2.2 }, { 8.4, 4.8, 5.4 }, { 6.2, 4.2, 8.4 }, { 3.8, 3.8, 11.2 } }
+	for i, t in tiers do
+		local w, h, y = t[1] * s, t[2] * s, t[3] * s
+		local base = pos + Vector3.new(0, y, 0)
+		coneTier(model, base, w, h, i % 2 == 0 and C.Pine or C.PineDark, simple and 3 or 4, i == 1)
+		if not simple then -- snow settled on the branches
+			for k, f in { 0.25, 0.75 } do
+				local rr = w / 2 * (1 - (f - 0.25) * 0.82) * 0.94
+				make("Part", model, {
+					Shape = Enum.PartType.Cylinder,
+					Size = Vector3.new(0.25 * s, rr * 2, rr * 2),
+					CFrame = CFrame.new(base + Vector3.new(0, h * f + 0.05 * s + 0.01 * k, 0)) * CFrame.Angles(0, 0, math.rad(90)),
+					Material = M.Snow,
+					Color = C.Snow,
+					CanCollide = false,
+				})
+			end
+		end
 	end
 	model.Parent = parent
 end
 
+local function terrain()
+	return workspace:FindFirstChildOfClass("Terrain")
+end
+
 local function rock(parent, pos, size)
+	local t = terrain()
+	if t then
+		local r = math.max(size.X, size.Z) * 0.6
+		t:FillBall(pos + Vector3.new(0, -r * 0.35, 0), r, Enum.Material.Rock)
+		t:FillBall(pos + Vector3.new(r * 0.3, -r * 0.5, -r * 0.2), r * 0.8, Enum.Material.Slate)
+		t:FillBall(pos + Vector3.new(0, r * 0.25, 0), r * 0.55, Enum.Material.Snow)
+		return
+	end
 	local cf = CFrame.new(pos + Vector3.new(0, size.Y * 0.35, 0)) * CFrame.Angles(rng:NextNumber() * 0.4, rng:NextNumber() * 6, rng:NextNumber() * 0.4)
 	block(parent, size, cf, M.Slate, vary(C.Rock, 0.2))
 	block(parent, Vector3.new(size.X * 0.85, 0.4, size.Z * 0.85), cf * CFrame.new(0, size.Y / 2, 0), M.Snow, C.Snow, { CanCollide = false })
@@ -948,6 +995,12 @@ local function buildRoads(env, props)
 		zone(cx, cz, sx, sz)
 		local alongX = sx > sz
 		local len = alongX and sx or sz
+		-- solid white edge lines
+		for _, off in { -1, 1 } do
+			local w = (alongX and sz or sx) / 2 - 0.7
+			local p = alongX and Vector3.new(cx, 0.215, cz + off * w) or Vector3.new(cx + off * w, 0.215, cz)
+			block(env, alongX and Vector3.new(len - 2, 0.03, 0.25) or Vector3.new(0.25, 0.03, len - 2), CFrame.new(p), M.SmoothPlastic, rgb(215, 215, 210), { CanCollide = false })
+		end
 		for t = -len / 2 + 4, len / 2 - 4, 10 do
 			local p = alongX and Vector3.new(cx + t, 0.22, cz) or Vector3.new(cx, 0.22, cz + t)
 			block(env, alongX and Vector3.new(4, 0.05, 0.4) or Vector3.new(0.4, 0.05, 4), CFrame.new(p), M.SmoothPlastic, C.Line)
@@ -961,6 +1014,30 @@ local function buildRoads(env, props)
 	road(0, -121, 12, 118) -- north road
 	road(124, 0, 112, 12) -- east
 	road(-124, 0, 112, 12) -- west
+
+	-- Crosswalks where the main roads meet the ring road
+	for _, c in { { 0, 68, false }, { 0, -68, false }, { 74, 0, true }, { -74, 0, true } } do
+		for k = -2, 2 do
+			local p = c[3] and Vector3.new(c[1], 0.22, c[2] + k * 2.1) or Vector3.new(c[1] + k * 2.1, 0.22, c[2])
+			block(env, c[3] and Vector3.new(4.5, 0.04, 1.1) or Vector3.new(1.1, 0.04, 4.5), CFrame.new(p), M.SmoothPlastic, rgb(225, 225, 220), { CanCollide = false })
+		end
+	end
+	-- Manhole covers
+	for _, p in { Vector3.new(0, 0.21, 95), Vector3.new(0, 0.21, -100), Vector3.new(110, 0.21, 0), Vector3.new(-120, 0.21, 0), Vector3.new(-30, 0.21, -56), Vector3.new(40, 0.21, 56) } do
+		block(env, Vector3.new(0.05, 2.4, 2.4), CFrame.new(p) * CFrame.Angles(0, 0, math.rad(90)), M.DiamondPlate, rgb(40, 40, 42), { Shape = Enum.PartType.Cylinder, CanCollide = false })
+	end
+	-- Curbed sidewalk around the lab + entrance plazas
+	local pave, curb = rgb(138, 138, 144), rgb(170, 170, 172)
+	for _, sw in { { 0, -48, 112, 4 }, { 0, 48, 112, 4 }, { -54, 0, 4, 92 }, { 54, 0, 4, 92 } } do
+		block(env, Vector3.new(sw[3], 0.5, sw[4]), CFrame.new(sw[1], 0.25, sw[2]), M.Pavement, pave)
+		local outer = sw[3] > sw[4]
+		local ex = outer and 0 or (sw[1] > 0 and 1 or -1) * (sw[3] / 2 - 0.2)
+		local ez = outer and (sw[2] > 0 and 1 or -1) * (sw[4] / 2 - 0.2) or 0
+		block(env, outer and Vector3.new(sw[3], 0.6, 0.4) or Vector3.new(0.4, 0.6, sw[4]), CFrame.new(sw[1] + ex, 0.3, sw[2] + ez), M.Concrete, curb)
+	end
+	for _, pz in { { 0, 41, 16, 11 }, { 48.5, 0, 7, 10 }, { -48.5, 0, 7, 10 }, { 25, -41, 8, 11 }, { -25, -41, 8, 11 } } do
+		block(env, Vector3.new(pz[3], 0.5, pz[4]), CFrame.new(pz[1], 0.25, pz[2]), M.Pavement, pave)
+	end
 
 	-- snow drifts on the roads
 	for _ = 1, 40 do
@@ -1027,10 +1104,10 @@ local function buildBoundary(env)
 		local r = rng:NextNumber(HALF + 12, HALF + 80)
 		local x, z = math.cos(a) * r, math.sin(a) * r
 		if math.abs(x) > HALF + 8 or math.abs(z) > HALF + 8 then
-			tree(env, Vector3.new(x, 0, z), rng:NextNumber(1.2, 2))
+			tree(env, Vector3.new(x, 0, z), rng:NextNumber(1.2, 2), true)
 		end
 	end
-	for i = 1, 18 do
+	for i = 1, (terrain() and 0 or 18) do
 		local a = (i / 18) * math.pi * 2 + rng:NextNumber() * 0.2
 		local r = rng:NextNumber(330, 400)
 		local h = rng:NextNumber(90, 190)
@@ -1053,7 +1130,13 @@ local function buildWilderness(env, props)
 				rock(props, Vector3.new(x, 0, z), Vector3.new(rng:NextNumber(4, 9), rng:NextNumber(3, 6), rng:NextNumber(4, 9)))
 				zone(x, z, 8, 8)
 			else
-				block(env, Vector3.one * rng:NextNumber(8, 14), CFrame.new(x, -4, z), M.Snow, C.SnowShade, { Shape = Enum.PartType.Ball })
+				local t = terrain()
+				local r = rng:NextNumber(6, 11)
+				if t then
+					t:FillBall(Vector3.new(x, -r * 0.55, z), r, Enum.Material.Snow)
+				else
+					block(env, Vector3.one * r * 2, CFrame.new(x, -r * 0.55, z), M.Snow, C.SnowShade, { Shape = Enum.PartType.Ball })
+				end
 			end
 		end
 	end
@@ -1275,35 +1358,93 @@ end
 ---------------------------------------------------------------------------
 
 function MapBuilder.SetupLighting()
-	Lighting.ClockTime = 0.3
-	Lighting.Brightness = 1.5
-	Lighting.Ambient = rgb(38, 42, 58)
-	Lighting.OutdoorAmbient = rgb(70, 80, 105)
-	Lighting.EnvironmentDiffuseScale = 0.35
-	Lighting.EnvironmentSpecularScale = 0.6
+	Lighting.ClockTime = 0.4
+	Lighting.Brightness = 2
+	Lighting.Ambient = rgb(34, 38, 52)
+	Lighting.OutdoorAmbient = rgb(72, 82, 108)
+	Lighting.EnvironmentDiffuseScale = 1
+	Lighting.EnvironmentSpecularScale = 1
 	Lighting.GlobalShadows = true
-	Lighting.GeographicLatitude = 55
+	Lighting.ShadowSoftness = 0.2
+	Lighting.GeographicLatitude = 48
+	Lighting.ExposureCompensation = 0.1
 	for _, c in Lighting:GetChildren() do
 		if c:IsA("PostEffect") or c:IsA("Atmosphere") or c:IsA("Sky") then
 			c:Destroy()
 		end
 	end
 	make("Atmosphere", Lighting, {
-		Density = 0.42,
-		Offset = 0.1,
-		Color = rgb(95, 105, 130),
-		Decay = rgb(30, 36, 52),
-		Glare = 0,
-		Haze = 2.2,
+		Density = 0.36,
+		Offset = 0.15,
+		Color = rgb(100, 112, 140),
+		Decay = rgb(28, 34, 54),
+		Glare = 0.25,
+		Haze = 1.7,
 	})
-	make("Sky", Lighting, { StarCount = 3000, MoonAngularSize = 14, CelestialBodiesShown = true })
+	make("Sky", Lighting, { StarCount = 5000, MoonAngularSize = 16, CelestialBodiesShown = true })
 	make("ColorCorrectionEffect", Lighting, {
-		Brightness = 0.02,
-		Contrast = 0.15,
-		Saturation = -0.25,
-		TintColor = rgb(215, 225, 255),
+		Brightness = 0.01,
+		Contrast = 0.2,
+		Saturation = -0.12,
+		TintColor = rgb(212, 224, 255),
 	})
-	make("BloomEffect", Lighting, { Intensity = 0.7, Size = 28, Threshold = 1.4 })
+	make("BloomEffect", Lighting, { Intensity = 0.9, Size = 26, Threshold = 1.15 })
+	make("SunRaysEffect", Lighting, { Intensity = 0.04, Spread = 0.6 })
+	make("DepthOfFieldEffect", Lighting, { FarIntensity = 0.18, FocusDistance = 70, InFocusRadius = 60, NearIntensity = 0 })
+end
+
+-- Terrain: textured snow ground, frozen earth, drifts, hills, mountains, a
+-- frozen pond and the lobby's mountain ledge. Built once at server start.
+function MapBuilder.SetupTerrain()
+	local t = terrain()
+	if not t then
+		return
+	end
+	local r = Random.new(99)
+	local Mat = Enum.Material
+	t:Clear()
+	t:FillBlock(CFrame.new(0, -8, 0), Vector3.new(1400, 16, 1400), Mat.Snow)
+	-- frozen earth and packed snow showing through
+	for _ = 1, 70 do
+		local x, z = r:NextNumber(-HALF, HALF), r:NextNumber(-HALF, HALF)
+		local rad = r:NextNumber(5, 11)
+		t:FillBall(Vector3.new(x, -rad + 1.6, z), rad, r:NextNumber() < 0.6 and Mat.Ground or Mat.Glacier)
+	end
+	-- frozen pond with a snowy rim
+	t:FillCylinder(CFrame.new(-100, -2, 45), 4, 14, Mat.Ice)
+	-- hills ringing the fence
+	for i = 1, 40 do
+		local a = i / 40 * math.pi * 2 + r:NextNumber() * 0.1
+		local d = r:NextNumber(HALF + 30, HALF + 75)
+		local rad = r:NextNumber(24, 44)
+		local pos = Vector3.new(math.cos(a) * d, -rad * 0.4, math.sin(a) * d)
+		t:FillBall(pos, rad, Mat.Snow)
+		if r:NextNumber() < 0.5 then
+			t:FillBall(pos + Vector3.new(r:NextNumber(-10, 10), rad * 0.3, r:NextNumber(-10, 10)), rad * 0.35, Mat.Rock)
+		end
+	end
+	-- mountains on the horizon
+	for i = 1, 16 do
+		local a = i / 16 * math.pi * 2 + r:NextNumber() * 0.2
+		local d = r:NextNumber(340, 420)
+		local rad = r:NextNumber(70, 115)
+		local pos = Vector3.new(math.cos(a) * d, -rad * 0.2, math.sin(a) * d)
+		t:FillBall(pos, rad, Mat.Rock)
+		t:FillBall(pos + Vector3.new(0, rad * 0.5, 0), rad * 0.62, Mat.Snow)
+	end
+	-- the lobby ledge (lobby floor sits on a foundation at y=400)
+	t:FillBlock(CFrame.new(0, 392, 0), Vector3.new(460, 8, 460), Mat.Snow)
+	for i = 1, 12 do
+		local a = i / 12 * math.pi * 2
+		local d = r:NextNumber(230, 300)
+		local rad = r:NextNumber(50, 80)
+		local pos = Vector3.new(math.cos(a) * d, 396 - rad * 0.25, math.sin(a) * d)
+		t:FillBall(pos, rad, Mat.Rock)
+		t:FillBall(pos + Vector3.new(0, rad * 0.45, 0), rad * 0.62, Mat.Snow)
+	end
+	pcall(function()
+		t.WaterColor = rgb(40, 70, 90)
+	end)
 end
 
 -- The lobby: a Weapon X holding hangar on a snowy mountain ledge.
@@ -1393,8 +1534,8 @@ local function hangingLamp(parent, pos, color)
 	block(parent, Vector3.new(0.15, 6, 0.15), CFrame.new(pos + Vector3.new(0, 3, 0)), M.Metal, rgb(30, 30, 30))
 	local shade = block(parent, Vector3.new(1.6, 3.4, 3.4), CFrame.new(pos) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, rgb(40, 42, 46), { Shape = Enum.PartType.Cylinder })
 	local bulb = block(parent, Vector3.new(1.2, 1.2, 1.2), CFrame.new(pos - Vector3.new(0, 0.9, 0)), M.Neon, color, { Shape = Enum.PartType.Ball })
-	make("SpotLight", shade, { Face = Enum.NormalId.Left, Range = 50, Angle = 90, Brightness = 4, Color = color, Shadows = true })
-	light(bulb, { Range = 22, Brightness = 1.2, Color = color })
+	make("SpotLight", shade, { Face = Enum.NormalId.Left, Range = 44, Angle = 80, Brightness = 2.4, Color = color, Shadows = true })
+	light(bulb, { Range = 16, Brightness = 0.6, Color = color })
 	return bulb
 end
 
@@ -1421,14 +1562,21 @@ function MapBuilder.BuildLobby()
 	local W, D, H = 120, 90, 28
 	local hx, hz = W / 2, D / 2
 
-	-- Mountain ledge + backdrop
-	block(lobby, Vector3.new(420, 4, 420), CFrame.new(0, Y - 2.2, 0), M.Snow, C.Snow)
+	-- Mountain ledge + backdrop (terrain when available)
+	local hasTerrain = terrain() ~= nil
+	local groundY = hasTerrain and Y - 4 or Y - 0.2
+	if hasTerrain then
+		block(lobby, Vector3.new(W + 2, 4.6, D + 2), CFrame.new(0, Y - 2.3, 0), M.Concrete, rgb(96, 96, 100))
+		block(lobby, Vector3.new(W + 3, 0.6, D + 3), CFrame.new(0, Y - 4.1, 0), M.Concrete, rgb(80, 80, 84))
+	else
+		block(lobby, Vector3.new(420, 4, 420), CFrame.new(0, Y - 2.2, 0), M.Snow, C.Snow)
+	end
 	for _ = 1, 60 do
 		local a = rng:NextNumber() * math.pi * 2
 		local r = rng:NextNumber(80, 190)
-		tree(lobby, Vector3.new(math.cos(a) * r, Y - 0.2, math.sin(a) * r), rng:NextNumber(1.3, 2.2))
+		tree(lobby, Vector3.new(math.cos(a) * r, groundY, math.sin(a) * r), rng:NextNumber(1.3, 2.2), true)
 	end
-	for i = 1, 10 do
+	for i = 1, (hasTerrain and 0 or 10) do
 		local a = (i / 10) * math.pi * 2
 		local r = rng:NextNumber(260, 320)
 		local h = rng:NextNumber(90, 170)
@@ -1448,14 +1596,53 @@ function MapBuilder.BuildLobby()
 	end
 	block(lobby, Vector3.new(10, 0.1, D - 10), CFrame.new(0, Y + 0.05, 0), M.DiamondPlate, rgb(80, 84, 92))
 
-	-- Glowing X emblem in the floor
-	local ringY = Y + 0.12
-	block(lobby, Vector3.new(0.1, 22, 22), CFrame.new(0, ringY, 0) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, rgb(20, 20, 24), { Shape = Enum.PartType.Cylinder })
-	block(lobby, Vector3.new(0.12, 21, 21), CFrame.new(0, ringY + 0.01, 0) * CFrame.Angles(0, 0, math.rad(90)), M.Neon, rgb(170, 20, 20), { Shape = Enum.PartType.Cylinder })
-	block(lobby, Vector3.new(0.14, 19, 19), CFrame.new(0, ringY + 0.02, 0) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, rgb(20, 20, 24), { Shape = Enum.PartType.Cylinder })
-	for _, a in { 45, -45 } do
-		block(lobby, Vector3.new(2.2, 0.1, 17), CFrame.new(0, ringY + 0.05, 0) * CFrame.Angles(0, math.rad(a), 0), M.Neon, rgb(255, 190, 30))
+	-- X-Men logo in the floor: yellow ring broken by the X, worn paint
+	local logoY = Y + 0.17
+	local LR, ringW = 10, 1.7
+	local yellow = rgb(232, 196, 58)
+	block(lobby, Vector3.new(0.08, LR * 2 + 4, LR * 2 + 4), CFrame.new(0, logoY - 0.02, 0) * CFrame.Angles(0, 0, math.rad(90)), M.Slate, rgb(20, 20, 24), { Shape = Enum.PartType.Cylinder })
+	local armW = LR * 0.36
+	local function inGap(deg)
+		for _, g in { 45, 225 } do
+			local d = math.abs((deg - g + 180) % 360 - 180)
+			if d < 15 then
+				return true
+			end
+		end
+		return false
 	end
+	local segs = 72
+	local rMid = LR - ringW / 2
+	for i = 0, segs - 1 do
+		local deg = (i + 0.5) * 360 / segs
+		if not inGap(deg) then
+			local a0 = math.rad(deg)
+			local len = 2 * math.pi * rMid / segs * 1.04
+			block(lobby, Vector3.new(len, 0.06, ringW), CFrame.new(math.cos(a0) * rMid, logoY, math.sin(a0) * rMid) * CFrame.Angles(0, -a0 + math.pi / 2, 0), M.Concrete, yellow)
+		end
+	end
+	-- the X: a thick stroke punching out through the ring gaps, and a thinner cross stroke
+	block(lobby, Vector3.new(armW, 0.07, LR * 2.12), CFrame.new(0, logoY + 0.005, 0) * CFrame.Angles(0, math.rad(45), 0), M.Concrete, yellow)
+	for _, sgn in { -1, 1 } do
+		block(lobby, Vector3.new(armW * 0.8, 0.07, LR * 0.62), CFrame.new(sgn * LR * 0.25, logoY + 0.005, -sgn * LR * 0.25) * CFrame.Angles(0, math.rad(-45), 0), M.Concrete, yellow)
+	end
+	-- black cut lines separating the X from the ring
+	for _, g in { 45, 225 } do
+		for _, off in { -1, 1 } do
+			local a0 = math.rad(g + off * 13)
+			block(lobby, Vector3.new(0.35, 0.09, ringW + 0.3), CFrame.new(math.cos(a0) * rMid, logoY + 0.01, math.sin(a0) * rMid) * CFrame.Angles(0, math.pi / 2 - a0, 0), M.Slate, rgb(20, 20, 24))
+		end
+	end
+	-- worn / scuffed paint specks
+	for _ = 1, 110 do
+		local r = math.sqrt(rng:NextNumber()) * LR
+		local t = rng:NextNumber() * math.pi * 2
+		block(lobby, Vector3.new(rng:NextNumber(0.12, 0.5), 0.1, rng:NextNumber(0.12, 0.4)),
+			CFrame.new(math.cos(t) * r, logoY + 0.02, math.sin(t) * r) * CFrame.Angles(0, rng:NextNumber() * 6, 0), M.Slate, rgb(24, 22, 20), { CanCollide = false, CanQuery = false })
+	end
+	-- warm spotlight on the emblem
+	local emblemLamp = block(lobby, Vector3.new(1.4, 0.6, 1.4), CFrame.new(0, Y + H - 2.2, 8), M.Metal, C.DarkMetal)
+	make("SpotLight", emblemLamp, { Face = Enum.NormalId.Bottom, Range = 36, Angle = 45, Brightness = 2.5, Color = rgb(255, 225, 160), Shadows = true })
 	make("SpawnLocation", lobby, {
 		Size = Vector3.new(12, 0.2, 12),
 		CFrame = CFrame.new(0, Y + 0.2, 0),
@@ -1521,20 +1708,20 @@ function MapBuilder.BuildLobby()
 	-- Wall sconces + ceiling light strips so the hangar is well lit
 	for x = -hx + 7.5, hx - 7.5, 15 do
 		for _, z in { -hz + 1.6, hz - 1.6 } do
-			local sc = block(lobby, Vector3.new(1.4, 1.8, 0.6), CFrame.new(x, Y + 11, z), M.Neon, rgb(255, 225, 180))
-			light(sc, { Range = 24, Brightness = 2, Color = rgb(255, 220, 170) })
+			local sc = block(lobby, Vector3.new(1.4, 1.8, 0.6), CFrame.new(x, Y + 11, z), M.Neon, rgb(255, 196, 140))
+			light(sc, { Range = 18, Brightness = 0.9, Color = rgb(255, 200, 150) })
 		end
 	end
 	for z = -hz + 7.5, hz - 7.5, 15 do
 		for _, x in { -hx + 1.6, hx - 1.6 } do
-			local sc = block(lobby, Vector3.new(0.6, 1.8, 1.4), CFrame.new(x, Y + 11, z), M.Neon, rgb(255, 225, 180))
-			light(sc, { Range = 24, Brightness = 2, Color = rgb(255, 220, 170) })
+			local sc = block(lobby, Vector3.new(0.6, 1.8, 1.4), CFrame.new(x, Y + 11, z), M.Neon, rgb(255, 196, 140))
+			light(sc, { Range = 18, Brightness = 0.9, Color = rgb(255, 200, 150) })
 		end
 	end
 	for z = -hz + 10, hz - 10, 15 do
 		for x = -45, 45, 30 do
-			local strip = block(lobby, Vector3.new(14, 0.3, 1), CFrame.new(x, Y + H - 1.6, z + 3), M.Neon, rgb(235, 240, 255))
-			light(strip, { Range = 30, Brightness = 1.6, Color = rgb(235, 240, 255) })
+			local strip = block(lobby, Vector3.new(14, 0.3, 1), CFrame.new(x, Y + H - 1.6, z + 3), M.Neon, rgb(200, 210, 225))
+			light(strip, { Range = 24, Brightness = 0.7, Color = rgb(225, 232, 245) })
 		end
 	end
 
@@ -1602,29 +1789,80 @@ function MapBuilder.BuildLobby()
 		block(lobby, Vector3.new(0.4, 1.4, 0.4), CFrame.new(gx - 4, Y + 0.7, z), M.Metal, C.DarkMetal)
 	end
 
-	-- CLAW RACK (south-east) -------------------------------------------
-	local rackC = CFrame.new(40, Y, hz - 5)
-	block(lobby, Vector3.new(26, 3, 5), rackC * CFrame.new(0, 1.5, 0), M.Wood, rgb(40, 28, 20))
-	block(lobby, Vector3.new(26.4, 0.3, 5.4), rackC * CFrame.new(0, 3.1, 0), M.Metal, C.DarkMetal)
-	block(lobby, Vector3.new(26, 6, 5), rackC * CFrame.new(0, 6.2, 0), M.Glass, rgb(190, 220, 235), { Transparency = 0.8 })
-	local rackLight = block(lobby, Vector3.new(25, 0.2, 0.5), rackC * CFrame.new(0, 9.1, 0), M.Neon, rgb(255, 240, 220))
-	light(rackLight, { Range = 12, Brightness = 1.5, Color = rgb(255, 240, 220) })
-	local rackTitle = block(lobby, Vector3.new(16, 2, 0.2), rackC * CFrame.new(0, 10.8, -2.4), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
-	surfaceText(rackTitle, Enum.NormalId.Front, { Text = "CLAW COLLECTION", Font = Enum.Font.LuckiestGuy, TextColor3 = rgb(210, 230, 255) })
+	-- CLAW COLLECTION (south wall): one lit glass case per claw set --------
 	local Skins = require(ReplicatedStorage.Shared.Skins)
+	local Costumes = require(script.Parent.Costumes)
+	local cz = hz - 6.5
+	local rackTitle = block(lobby, Vector3.new(24, 2.6, 0.2), CFrame.new(17, Y + 13.5, hz - 1.6) * CFrame.Angles(0, math.pi, 0), M.SmoothPlastic, rgb(18, 18, 22))
+	surfaceText(rackTitle, Enum.NormalId.Back, { Text = "CLAW COLLECTION", Font = Enum.Font.LuckiestGuy, TextColor3 = rgb(210, 230, 255) })
 	for i, id in Skins.ClawOrder do
 		local item = Skins.Claws[id]
-		local cx = -10.5 + (i - 1) * 4.2
-		for b = -1, 1 do
-			local blade = block(lobby, Vector3.new(0.12 * (item.Thick or 1), 3.6, 0.3 * (item.Thick or 1)),
-				rackC * CFrame.new(cx + b * 0.5, 5.6, 0) * CFrame.Angles(0, 0, math.rad(b * 6)), item.Material, item.Color, { Reflectance = item.Reflectance })
-			if item.Material == M.Neon then
-				light(blade, { Range = 5, Brightness = 1, Color = item.Glow })
+		local x = 2 + (i - 1) * 6.2
+		local base = CFrame.new(x, Y, cz)
+		block(lobby, Vector3.new(3.4, 3.2, 3.4), base * CFrame.new(0, 1.6, 0), M.Marble, rgb(30, 30, 34))
+		block(lobby, Vector3.new(3.6, 0.25, 3.6), base * CFrame.new(0, 3.3, 0), M.Metal, rgb(70, 72, 78), { Reflectance = 0.2 })
+		block(lobby, Vector3.new(3.5, 0.15, 3.5), base * CFrame.new(0, 0.1, 0), M.Neon, item.Glow)
+		block(lobby, Vector3.new(3.2, 5.2, 3.2), base * CFrame.new(0, 6, 0), M.Glass, rgb(200, 225, 240), { Transparency = 0.85, Reflectance = 0.15 })
+		for _, cx in { -1.6, 1.6 } do
+			for _, czz in { -1.6, 1.6 } do
+				block(lobby, Vector3.new(0.14, 5.2, 0.14), base * CFrame.new(cx, 6, czz), M.Metal, rgb(50, 50, 56))
 			end
 		end
-		block(lobby, Vector3.new(1.6, 0.8, 0.8), rackC * CFrame.new(cx, 3.7, 0), M.Leather, rgb(30, 22, 18))
-		local tag = block(lobby, Vector3.new(3.6, 0.8, 0.1), rackC * CFrame.new(cx, 3.4, -2.56) * CFrame.Angles(math.rad(20), 0, 0), M.SmoothPlastic, rgb(20, 20, 24))
-		surfaceText(tag, Enum.NormalId.Front, { Text = item.Name .. (item.Price > 0 and ("  🪙" .. item.Price) or "  FREE"), TextColor3 = item.Glow, Font = Enum.Font.GothamBold })
+		local cap = block(lobby, Vector3.new(3.4, 0.3, 3.4), base * CFrame.new(0, 8.75, 0), M.Metal, rgb(50, 50, 56))
+		make("SpotLight", cap, { Face = Enum.NormalId.Bottom, Range = 10, Angle = 70, Brightness = 3, Color = item.Glow:Lerp(Color3.new(1, 1, 1), 0.6) })
+		Costumes.ClawDisplay(lobby, base * CFrame.new(0, 4.35, 0) * CFrame.Angles(0, math.rad(90 + 18), math.rad(6)), item)
+		local plaque = block(lobby, Vector3.new(3.2, 0.9, 0.1), base * CFrame.new(0, 2.2, -1.75) * CFrame.Angles(math.rad(12), 0, 0), M.Metal, rgb(22, 22, 26))
+		surfaceText(plaque, Enum.NormalId.Front, { Text = item.Name .. (item.Price > 0 and ("  🪙" .. item.Price) or "  FREE"), TextColor3 = item.Glow, Font = Enum.Font.GothamBold })
+	end
+
+	-- BRIEFING TABLE: holographic mini-map of the arena --------------------
+	local bt = Vector3.new(-6, Y, -22)
+	block(lobby, Vector3.new(1.2, 3, 3), CFrame.new(bt + Vector3.new(0, 1.5, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, rgb(40, 42, 48), { Shape = Enum.PartType.Cylinder })
+	block(lobby, Vector3.new(0.6, 14, 14), CFrame.new(bt + Vector3.new(0, 3.2, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, rgb(30, 32, 38), { Shape = Enum.PartType.Cylinder })
+	block(lobby, Vector3.new(0.2, 14.4, 14.4), CFrame.new(bt + Vector3.new(0, 3.2, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.Neon, rgb(60, 170, 255), { Shape = Enum.PartType.Cylinder })
+	local holoBase = block(lobby, Vector3.new(0.1, 12, 12), CFrame.new(bt + Vector3.new(0, 3.55, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.Neon, rgb(40, 140, 255), { Shape = Enum.PartType.Cylinder, Transparency = 0.55 })
+	light(holoBase, { Range = 16, Brightness = 1.4, Color = rgb(80, 170, 255) })
+	local HOLO = rgb(90, 200, 255)
+	local mini = 12 / 380 -- arena scaled onto the table
+	for _, b in { { 0, 0, 90, 70, 16 }, { 120, -118, 56, 40, 17 }, { 118, 100, 36, 22, 11 }, { -125, -112, 22, 16, 9 }, { -42, 140, 22, 16, 9 }, { 38, -148, 22, 16, 9 }, { 152, 30, 22, 16, 9 } } do
+		local h = b[5] * mini * 3
+		block(lobby, Vector3.new(b[3] * mini, h, b[4] * mini), CFrame.new(bt + Vector3.new(b[1] * mini, 3.6 + h / 2, b[2] * mini)), M.Neon, HOLO, { Transparency = 0.45, CanCollide = false })
+	end
+	for _, r in { { 0, -56, 136, 12 }, { 0, 56, 136, 12 }, { -62, 0, 12, 100 }, { 62, 0, 12, 100 }, { 0, 121, 12, 118 }, { 0, -121, 12, 118 }, { 124, 0, 112, 12 }, { -124, 0, 112, 12 } } do
+		block(lobby, Vector3.new(r[3] * mini, 0.03, r[4] * mini), CFrame.new(bt + Vector3.new(r[1] * mini, 3.62, r[2] * mini)), M.Neon, rgb(60, 140, 220), { Transparency = 0.5, CanCollide = false })
+	end
+	local blip = block(lobby, Vector3.new(0.35, 0.35, 0.35), CFrame.new(bt + Vector3.new(0, 4.2, 0)), M.Neon, rgb(255, 60, 40), { Shape = Enum.PartType.Ball, CanCollide = false })
+	light(blip, { Range = 6, Brightness = 2, Color = rgb(255, 60, 40) })
+	CollectionService:AddTag(blip, "Flicker")
+	for k = 0, 5 do -- stools around the table
+		local a = k / 6 * math.pi * 2
+		local sp = bt + Vector3.new(math.cos(a) * 9.5, 0, math.sin(a) * 9.5)
+		block(lobby, Vector3.new(1.8, 0.4, 1.8), CFrame.new(sp + Vector3.new(0, 1.2, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, rgb(46, 48, 54), { Shape = Enum.PartType.Cylinder })
+		block(lobby, Vector3.new(0.3, 2.2, 2.2), CFrame.new(sp + Vector3.new(0, 2.4, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.Leather, rgb(60, 24, 24), { Shape = Enum.PartType.Cylinder })
+	end
+
+	-- Planters with small pines along the walkway
+	for _, z in { -34, 16, 30 } do
+		for _, x in { -8.5, 8.5 } do
+			local pp = Vector3.new(x, Y, z)
+			block(lobby, Vector3.new(3.4, 1.6, 3.4), CFrame.new(pp + Vector3.new(0, 0.8, 0)), M.Concrete, rgb(88, 88, 94))
+			block(lobby, Vector3.new(3, 0.2, 3), CFrame.new(pp + Vector3.new(0, 1.62, 0)), M.Ground, rgb(60, 44, 32))
+			tree(lobby, pp + Vector3.new(0, 1.5, 0), 0.32, true)
+		end
+	end
+
+	-- Vending machines against the south wall
+	for i, col in { rgb(170, 20, 30), rgb(20, 70, 160) } do
+		local vp = Vector3.new(-30 + i * 5, Y, hz - 3.2)
+		block(lobby, Vector3.new(4, 7.5, 2.8), CFrame.new(vp + Vector3.new(0, 3.75, 0)), M.Metal, col)
+		local glass = block(lobby, Vector3.new(2.6, 5, 0.1), CFrame.new(vp + Vector3.new(-0.4, 4.3, -1.42)), M.Neon, rgb(230, 240, 255), { Transparency = 0.35 })
+		light(glass, { Range = 9, Brightness = 1, Color = rgb(220, 235, 255) })
+		for r = 0, 3 do
+			for c = 0, 2 do
+				block(lobby, Vector3.new(0.5, 0.7, 0.3), CFrame.new(vp + Vector3.new(-1.2 + c * 0.8, 2.5 + r * 1.2, -1.3)), M.SmoothPlastic, vary(({ rgb(220, 40, 40), rgb(250, 200, 30), rgb(40, 160, 70), rgb(60, 120, 230) })[(r + c) % 4 + 1], 0.2))
+			end
+		end
+		block(lobby, Vector3.new(0.8, 1.6, 0.12), CFrame.new(vp + Vector3.new(1.5, 4.5, -1.45)), M.Metal, rgb(30, 30, 34))
 	end
 
 	-- LOUNGE (west) ----------------------------------------------------
@@ -1710,7 +1948,7 @@ function MapBuilder.BuildLobby()
 	block(lobby, Vector3.new(18.4, 0.3, 18.4), CFrame.new(0, Y + 13.4, 0), M.Neon, rgb(200, 30, 30))
 
 	-- Supply crates + barrels for detail
-	for i, p in { Vector3.new(-30, Y, -34), Vector3.new(22, Y, -36), Vector3.new(-38, Y, 34), Vector3.new(14, Y, 36) } do
+	for i, p in { Vector3.new(-30, Y, -34), Vector3.new(22, Y, -36), Vector3.new(-38, Y, 34) } do
 		local yaw = rng:NextNumber() * 0.5
 		woodCrate(lobby, CFrame.new(p) * CFrame.Angles(0, yaw, 0), Vector3.new(5, 4, 4), false)
 		woodCrate(lobby, CFrame.new(p + Vector3.new(0.3, 4, 0.2)) * CFrame.Angles(0, yaw + 0.3, 0), Vector3.new(3, 3, 3), false)
@@ -1749,7 +1987,16 @@ function MapBuilder.Build()
 	folder("HidingSpots")
 	folder("Debris")
 
-	block(env, Vector3.new(2 * HALF + 260, 4, 2 * HALF + 260), CFrame.new(0, -2, 0), M.Snow, C.Snow)
+	if not terrain() then
+		block(env, Vector3.new(2 * HALF + 260, 4, 2 * HALF + 260), CFrame.new(0, -2, 0), M.Snow, C.Snow)
+	end
+	zone(-100, 45, 32, 32) -- frozen pond
+	-- reeds poking out of the frozen pond edge
+	for k = 1, 26 do
+		local a = k / 26 * math.pi * 2
+		local rr = 14 + rng:NextNumber(-0.5, 1.5)
+		block(env, Vector3.new(0.12, rng:NextNumber(1.2, 2.6), 0.12), CFrame.new(-100 + math.cos(a) * rr, 0.8, 45 + math.sin(a) * rr) * CFrame.Angles(rng:NextNumber(-0.2, 0.2), 0, rng:NextNumber(-0.2, 0.2)), M.Grass, rgb(120, 110, 70), { CanCollide = false })
+	end
 
 	buildLab(bld, props, map)
 	buildWarehouse(bld, props, terminals, Vector3.new(120, 0, -118))
@@ -1780,7 +2027,7 @@ function MapBuilder.Build()
 	}
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Include
-	params.FilterDescendantsInstances = { map }
+	params.FilterDescendantsInstances = terrain() and { map, terrain() } or { map }
 	for i, c in candidates do
 		local hit = workspace:Raycast(Vector3.new(c[1], 80, c[2]), Vector3.new(0, -100, 0), params)
 		if hit and hit.Position.Y < 1.5 then

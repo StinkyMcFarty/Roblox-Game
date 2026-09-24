@@ -36,13 +36,14 @@ Skins.List = {
 	Comic = {
 		Name = "Comic Wolverine",
 		Price = 1000,
-		Description = "Straight off the page. Cowl, fins, shoulder pads, tiger stripes.",
+		Description = "Jim Lee classic. Wild hair, mutton chops, shoulder pads, tiger stripes.",
+		KeepHair = true,
 		Textures = { Shirt = 0, Pants = 0, Face = 0 },
 		HairAccessoryId = 0,
 		Swatch = YELLOW,
 		Colors = {
 			UpperTorso = YELLOW, LowerTorso = BLUE,
-			UpperArm = YELLOW, LowerArm = YELLOW, Hand = BLUE,
+			UpperArm = "Skin", LowerArm = BLUE, Hand = BLUE,
 			UpperLeg = YELLOW, LowerLeg = BLUE, Foot = BLUE,
 		},
 	},

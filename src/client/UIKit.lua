@@ -1,6 +1,8 @@
 -- Shared UI building blocks: animated buttons, panels, gradients.
 local TweenService = game:GetService("TweenService")
 local SoundService = game:GetService("SoundService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 
 local UIKit = {}
 
@@ -55,13 +57,13 @@ end
 
 -- Hover = a quick blade slice, click = a short metallic SNIKT
 local clickSound = Instance.new("Sound")
-clickSound.SoundId = "rbxasset://sounds/unsheath.wav"
+clickSound.SoundId = Config.Sounds.UIClick
 clickSound.Volume = 0.35
 clickSound.PlaybackSpeed = 1.5
 clickSound.Parent = SoundService
 
 local hoverSound = Instance.new("Sound")
-hoverSound.SoundId = "rbxasset://sounds/swordslash.wav"
+hoverSound.SoundId = Config.Sounds.UIHover
 hoverSound.Volume = 0.18
 hoverSound.PlaybackSpeed = 1.6
 hoverSound.Parent = SoundService

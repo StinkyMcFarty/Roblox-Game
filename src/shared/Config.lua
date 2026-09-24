@@ -48,7 +48,7 @@ Config.Wolverine = {
 
 Config.Abilities = {
 	Slash = { Cooldown = 0.55, Range = 8, Width = 8 },
-	Pounce = { Cooldown = 9, Forward = 90, Up = 38, GrabRadius = 6.5, Window = 1.0 },
+	Pounce = { Cooldown = 9, Forward = 78, Up = 52, GrabRadius = 7, Window = 1.2 },
 	Stab = { Cooldown = 6, Range = 8, Lunge = 60 },
 	Sniff = { Cooldown = 25, Duration = 5 }, -- only 5s of tracking so he can't wallhack all round
 }
@@ -114,6 +114,30 @@ Config.Sounds = {
 	Heartbeat = "",
 	Punch = "rbxasset://sounds/action_jump_land.mp3",
 	Laser = "rbxasset://sounds/electronicpingshort.wav",
+	-- New crisp SFX (synthesised in tools/generate_sfx.py, upload & paste IDs):
+	Whoosh = "rbxasset://sounds/swordlunge.wav",
+	Stab = "rbxasset://sounds/swordslash.wav",
+	Impact = "rbxasset://sounds/action_jump_land.mp3",
+	Leap = "rbxasset://sounds/swordlunge.wav",
+	Tear = "rbxasset://sounds/impact_water.mp3",
+	UIHover = "rbxasset://sounds/swordslash.wav",
+	UIClick = "rbxasset://sounds/unsheath.wav",
 }
+
+-- CRISP SFX: original sounds synthesised by tools/generate_sfx.py live in
+-- assets/sfx/*.ogg. Upload them (Studio: View > Asset Manager > Bulk Import),
+-- right-click each > Copy Asset ID, and paste the number next to its name.
+-- Anything left at 0 falls back to the built-in sound above.
+Config.UploadedSounds = {
+	Snikt = 0, Slash = 0, Whoosh = 0, Stab = 0, Impact = 0, Leap = 0, Land = 0,
+	Roar = 0, Snarl = 0, Tear = 0, Gore = 0, Break = 0, Heartbeat = 0, Fart = 0,
+	Sniff = 0, Laser = 0, Punch = 0, Terminal = 0, UIHover = 0, UIClick = 0,
+}
+Config.Sounds.Snarl = Config.Sounds.Snarl or ""
+for name, id in Config.UploadedSounds do
+	if id and id ~= 0 then
+		Config.Sounds[name] = "rbxassetid://" .. tostring(id)
+	end
+end
 
 return Config
