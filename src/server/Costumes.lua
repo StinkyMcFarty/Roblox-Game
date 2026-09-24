@@ -262,6 +262,57 @@ local function weaponXGear(char, head)
 	wrap(char, char:FindFirstChild("RightLowerLeg"), 1.4, 0.08, 0.4, -0.2)
 end
 
+-- Logan: brown leather jacket (open over a maroon shirt and grey tee) with
+-- the orange-striped sleeves, jeans and a heavy belt.
+local function loganGear(char)
+	local LEATHER, DARK, STRIPE = rgb(92, 58, 36), rgb(58, 36, 22), rgb(206, 118, 44)
+	local MAROON, TEE = rgb(104, 34, 40), rgb(128, 128, 132)
+	local torso = char:FindFirstChild("UpperTorso")
+	if torso then
+		local s = torso.Size
+		local t = 0.08
+		local fz = -(s.Z / 2 + t / 2)
+		gear(char, torso, "JacketBack", Vector3.new(s.X + 2 * t, s.Y, t), LEATHER, M.Leather, CFrame.new(0, 0, s.Z / 2 + t / 2))
+		for _, side in { -1, 1 } do
+			gear(char, torso, "JacketSide", Vector3.new(t, s.Y, s.Z), LEATHER, M.Leather, CFrame.new(side * (s.X / 2 + t / 2), 0, 0))
+			-- open front panels, the shirt shows down the middle
+			gear(char, torso, "JacketFront", Vector3.new(s.X * 0.34, s.Y, t), LEATHER, M.Leather, CFrame.new(side * s.X * 0.33, 0, fz))
+			gear(char, torso, "JacketShoulder", Vector3.new(s.X * 0.36, t, s.Z + 2 * t), LEATHER, M.Leather, CFrame.new(side * s.X * 0.33, s.Y / 2 + t / 2, 0))
+			-- folded-back collar
+			gear(char, torso, "Lapel", Vector3.new(s.X * 0.15, s.Y * 0.34, t), DARK, M.Leather,
+				CFrame.new(side * s.X * 0.19, s.Y * 0.3, fz - t) * CFrame.Angles(0, 0, rad(side * 24)))
+			-- hem band
+			gear(char, torso, "JacketHem", Vector3.new(s.X * 0.34, s.Y * 0.08, t * 1.4), DARK, M.Leather, CFrame.new(side * s.X * 0.33, -s.Y * 0.46, fz))
+		end
+		-- maroon shirt and the grey tee at the neck
+		gear(char, torso, "ShirtFront", Vector3.new(s.X * 0.34, s.Y * 0.98, t * 0.5), MAROON, M.Fabric, CFrame.new(0, 0, -(s.Z / 2 + t * 0.25)))
+		gear(char, torso, "TeeNeck", Vector3.new(s.X * 0.22, s.Y * 0.16, t * 0.8), TEE, M.Fabric, CFrame.new(0, s.Y * 0.41, -(s.Z / 2 + t * 0.4)))
+		gear(char, torso, "Zip", Vector3.new(0.05, s.Y * 0.5, t * 0.6), rgb(30, 22, 16), M.Metal, CFrame.new(-s.X * 0.4, -s.Y * 0.08, fz - t * 0.5))
+	end
+	for _, n in { "RightUpperArm", "LeftUpperArm", "RightLowerArm", "LeftLowerArm" } do
+		local arm = char:FindFirstChild(n)
+		if arm then
+			local s = arm.Size
+			gear(char, arm, "Sleeve", Vector3.new(s.X * 1.06, s.Y * 1.0, s.Z * 1.06), LEATHER, M.Leather, CFrame.new())
+			if n:find("Upper") then
+				-- the three orange racing stripes round each sleeve
+				for k = 0, 2 do
+					gear(char, arm, "SleeveStripe", Vector3.new(s.X * 1.1, s.Y * 0.06, s.Z * 1.1), STRIPE, M.Fabric, CFrame.new(0, -s.Y * (0.02 + k * 0.12), 0))
+				end
+			else
+				gear(char, arm, "Cuff", Vector3.new(s.X * 1.1, s.Y * 0.14, s.Z * 1.1), DARK, M.Leather, CFrame.new(0, -s.Y * 0.43, 0))
+			end
+		end
+	end
+	local lower = char:FindFirstChild("LowerTorso")
+	if lower then
+		local s = lower.Size
+		gear(char, lower, "Belt", Vector3.new(s.X * 1.05, s.Y * 0.3, s.Z * 1.06), rgb(34, 26, 20), M.Leather, CFrame.new(0, s.Y * 0.3, 0))
+		local buckle = gear(char, lower, "Buckle", Vector3.new(s.X * 0.16, s.Y * 0.34, 0.06), rgb(170, 170, 176), M.Metal, CFrame.new(0, s.Y * 0.3, -s.Z * 0.56))
+		buckle.Reflectance = 0.25
+	end
+end
+
 local function oldManGear(char)
 	local lower = char:FindFirstChild("LowerTorso")
 	if lower then
@@ -357,7 +408,9 @@ function Costumes.Dress(char, skinId)
 		face.Texture = asset(tex.Face)
 	end
 
-	if skinId == "Comic" then
+	if skinId == "Logan" then
+		loganGear(char)
+	elseif skinId == "Comic" then
 		comicGear(char, head)
 	elseif skinId == "WeaponX" then
 		weaponXGear(char, head)

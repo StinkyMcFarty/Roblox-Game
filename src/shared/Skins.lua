@@ -22,15 +22,15 @@ Skins.List = {
 	Logan = {
 		Name = "Logan",
 		Price = 0,
-		Description = "The regular. Grey tee, jeans, beard and a bad attitude.",
-		Swatch = rgb(196, 198, 196),
+		Description = "Leather jacket, jeans, sideburns and a bad attitude.",
+		Swatch = rgb(92, 58, 36),
 		Colors = {
-			UpperTorso = rgb(196, 198, 196), LowerTorso = DENIM,
-			UpperArm = rgb(196, 198, 196), LowerArm = "Skin", Hand = "Skin",
+			UpperTorso = rgb(104, 34, 40), LowerTorso = DENIM,
+			UpperArm = rgb(92, 58, 36), LowerArm = rgb(92, 58, 36), Hand = "Skin",
 			UpperLeg = DENIM, LowerLeg = DENIM, Foot = BOOT,
 		},
 		Hair = { Color = rgb(34, 26, 21) }, -- built swept-up Wolverine hair (see Costumes)
-		Textures = { Shirt = 72143365011183, Pants = 80981964263373, Face = 127116209556275 },
+		Textures = { Shirt = 0, Pants = 80981964263373, Face = 127116209556275 }, -- jacket is built in 3D (Costumes loganGear); old tee shirt: 72143365011183
 		HairAccessoryId = 0,
 	},
 	Comic = {
