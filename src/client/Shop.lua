@@ -48,14 +48,7 @@ local coinPlate = new("Frame", { Size = UDim2.fromOffset(170, 40), BackgroundCol
 corner(coinPlate, 20)
 gradient(coinPlate, Color3.fromRGB(60, 46, 10), Color3.fromRGB(24, 18, 6))
 stroke(coinPlate, K.Yellow, 2)
-local coinIcon = new("TextLabel", {
-	Size = UDim2.fromOffset(40, 40),
-	BackgroundTransparency = 1,
-	Font = Enum.Font.GothamBlack,
-	TextScaled = true,
-	Text = "🪙",
-}, coinPlate)
-new("UIPadding", { PaddingTop = UDim.new(0, 7), PaddingBottom = UDim.new(0, 7) }, coinIcon)
+UIKit.Coin(coinPlate, 28, { Position = UDim2.fromOffset(7, 6) })
 local coinText = new("TextLabel", {
 	Position = UDim2.fromOffset(42, 0),
 	Size = UDim2.new(1, -52, 1, 0),
@@ -130,17 +123,17 @@ local function refresh()
 	for id, card in cards do
 		local item = list[id]
 		if equipped == id then
-			card.Label.Text = "EQUIPPED"
+			UIKit.CoinText(card.Label, "EQUIPPED", false)
 			UIKit.Recolor(card.Button, K.Green)
 			card.Stroke.Color = K.Green
 			card.Stroke.Thickness = 3
 		elseif owned[id] then
-			card.Label.Text = "EQUIP"
+			UIKit.CoinText(card.Label, "EQUIP", false)
 			UIKit.Recolor(card.Button, K.Blue)
 			card.Stroke.Color = Color3.fromRGB(70, 70, 80)
 			card.Stroke.Thickness = 2
 		else
-			card.Label.Text = "🪙 " .. item.Price
+			UIKit.CoinText(card.Label, tostring(item.Price))
 			UIKit.Recolor(card.Button, coins() >= item.Price and K.Yellow or Color3.fromRGB(90, 90, 96))
 			card.Stroke.Color = Color3.fromRGB(70, 70, 80)
 			card.Stroke.Thickness = 2

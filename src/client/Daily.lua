@@ -18,8 +18,8 @@ local K = UIKit.Colors
 local gui = new("ScreenGui", { Name = "DailyUI", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling }, player:WaitForChild("PlayerGui"))
 
 local dailyButton = Shop.DockButton("DAILY", "🎁", K.Green, 2)
-local buyButton, buyLabel = Shop.DockButton("BE HIM", "👑", K.Red, 3)
-buyLabel.Text = "BE HIM  R$80"
+local buyButton, buyLabel = Shop.DockButton("BECOME WOLVERINE", "👑", K.Red, 3)
+buyLabel.Text = "BECOME WOLVERINE  R$80"
 
 -- Wolverine odds pill
 local odds = new("Frame", { Size = UDim2.fromOffset(170, 46), BackgroundColor3 = Color3.new(1, 1, 1), LayoutOrder = 4 }, Shop.Dock)
@@ -121,9 +121,10 @@ for i, c in Config.DailyChallenges do
 		TextScaled = true,
 		TextXAlignment = Enum.TextXAlignment.Right,
 		TextColor3 = K.Yellow,
-		Text = "🪙 " .. c.Reward,
+		Text = "",
 		ZIndex = 33,
 	}, row)
+	UIKit.CoinText(reward, tostring(c.Reward))
 	local bar = new("Frame", { Position = UDim2.fromOffset(58, 32), Size = UDim2.new(1, -68, 0, 14), BackgroundColor3 = K.Ink, ZIndex = 33 }, row)
 	corner(bar, 7)
 	local fill = new("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, ZIndex = 34 }, bar)
@@ -189,7 +190,7 @@ buyButton.Activated:Connect(function()
 	if Config.GuaranteedWolverineProductId == 0 then
 		buyLabel.Text = "NOT SET UP"
 		task.delay(2, function()
-			buyLabel.Text = "BE HIM  R$80"
+			buyLabel.Text = "BECOME WOLVERINE  R$80"
 		end)
 		return
 	end
@@ -256,9 +257,10 @@ function Daily.ShowReward(amount, days)
 		Font = Enum.Font.GothamBlack,
 		TextScaled = true,
 		TextColor3 = K.White,
-		Text = "🪙 +" .. amount,
+		Text = "",
 		ZIndex = 43,
 	}, holder)
+	UIKit.CoinText(amountLabel, "+" .. amount)
 	new("UIStroke", { Thickness = 2.5 }, amountLabel)
 	new("TextLabel", {
 		Position = UDim2.new(0, 10, 1, -86),

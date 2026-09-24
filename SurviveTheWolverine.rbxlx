@@ -4849,7 +4849,7 @@ task.spawn(function()
 		local skin = Skins.List[id]
 		for _, d in lobby:GetDescendants() do
 			if d.Name == "PlaqueText" and d.Text == id and skin then
-				d.Text = skin.Name .. (skin.Price > 0 and ("   🪙 " .. skin.Price) or "   FREE")
+				d.Text = skin.Name .. (skin.Price > 0 and ("   " .. skin.Price .. " COINS") or "   FREE")
 			end
 		end
 	end
@@ -7233,7 +7233,7 @@ function MapBuilder.BuildLobby()
 		make("SpotLight", cap, { Face = Enum.NormalId.Bottom, Range = 10, Angle = 70, Brightness = 3, Color = item.Glow:Lerp(Color3.new(1, 1, 1), 0.6) })
 		Costumes.ClawDisplay(lobby, base * CFrame.new(0, 4.35, 0) * CFrame.Angles(0, math.rad(90 + 18), math.rad(6)), item)
 		local plaque = block(lobby, Vector3.new(3.2, 0.9, 0.1), base * CFrame.new(0, 2.2, -1.75) * CFrame.Angles(math.rad(12), 0, 0), M.Metal, rgb(22, 22, 26))
-		surfaceText(plaque, Enum.NormalId.Front, { Text = item.Name .. (item.Price > 0 and ("  🪙" .. item.Price) or "  FREE"), TextColor3 = item.Glow, Font = Enum.Font.GothamBold })
+		surfaceText(plaque, Enum.NormalId.Front, { Text = item.Name .. (item.Price > 0 and ("  " .. item.Price .. " COINS") or "  FREE"), TextColor3 = item.Glow, Font = Enum.Font.GothamBold })
 	end
 
 	-- BRIEFING TABLE: holographic mini-map of the arena --------------------
@@ -11280,8 +11280,8 @@ local K = UIKit.Colors
 local gui = new("ScreenGui", { Name = "DailyUI", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling }, player:WaitForChild("PlayerGui"))
 
 local dailyButton = Shop.DockButton("DAILY", "🎁", K.Green, 2)
-local buyButton, buyLabel = Shop.DockButton("BE HIM", "👑", K.Red, 3)
-buyLabel.Text = "BE HIM  R$80"
+local buyButton, buyLabel = Shop.DockButton("BECOME WOLVERINE", "👑", K.Red, 3)
+buyLabel.Text = "BECOME WOLVERINE  R$80"
 
 -- Wolverine odds pill
 local odds = new("Frame", { Size = UDim2.fromOffset(170, 46), BackgroundColor3 = Color3.new(1, 1, 1), LayoutOrder = 4 }, Shop.Dock)
@@ -11383,9 +11383,10 @@ for i, c in Config.DailyChallenges do
 		TextScaled = true,
 		TextXAlignment = Enum.TextXAlignment.Right,
 		TextColor3 = K.Yellow,
-		Text = "🪙 " .. c.Reward,
+		Text = "",
 		ZIndex = 33,
 	}, row)
+	UIKit.CoinText(reward, tostring(c.Reward))
 	local bar = new("Frame", { Position = UDim2.fromOffset(58, 32), Size = UDim2.new(1, -68, 0, 14), BackgroundColor3 = K.Ink, ZIndex = 33 }, row)
 	corner(bar, 7)
 	local fill = new("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, ZIndex = 34 }, bar)
@@ -11451,7 +11452,7 @@ buyButton.Activated:Connect(function()
 	if Config.GuaranteedWolverineProductId == 0 then
 		buyLabel.Text = "NOT SET UP"
 		task.delay(2, function()
-			buyLabel.Text = "BE HIM  R$80"
+			buyLabel.Text = "BECOME WOLVERINE  R$80"
 		end)
 		return
 	end
@@ -11518,9 +11519,10 @@ function Daily.ShowReward(amount, days)
 		Font = Enum.Font.GothamBlack,
 		TextScaled = true,
 		TextColor3 = K.White,
-		Text = "🪙 +" .. amount,
+		Text = "",
 		ZIndex = 43,
 	}, holder)
+	UIKit.CoinText(amountLabel, "+" .. amount)
 	new("UIStroke", { Thickness = 2.5 }, amountLabel)
 	new("TextLabel", {
 		Position = UDim2.new(0, 10, 1, -86),
@@ -13414,14 +13416,7 @@ local coinPlate = new("Frame", { Size = UDim2.fromOffset(170, 40), BackgroundCol
 corner(coinPlate, 20)
 gradient(coinPlate, Color3.fromRGB(60, 46, 10), Color3.fromRGB(24, 18, 6))
 stroke(coinPlate, K.Yellow, 2)
-local coinIcon = new("TextLabel", {
-	Size = UDim2.fromOffset(40, 40),
-	BackgroundTransparency = 1,
-	Font = Enum.Font.GothamBlack,
-	TextScaled = true,
-	Text = "🪙",
-}, coinPlate)
-new("UIPadding", { PaddingTop = UDim.new(0, 7), PaddingBottom = UDim.new(0, 7) }, coinIcon)
+UIKit.Coin(coinPlate, 28, { Position = UDim2.fromOffset(7, 6) })
 local coinText = new("TextLabel", {
 	Position = UDim2.fromOffset(42, 0),
 	Size = UDim2.new(1, -52, 1, 0),
@@ -13496,17 +13491,17 @@ local function refresh()
 	for id, card in cards do
 		local item = list[id]
 		if equipped == id then
-			card.Label.Text = "EQUIPPED"
+			UIKit.CoinText(card.Label, "EQUIPPED", false)
 			UIKit.Recolor(card.Button, K.Green)
 			card.Stroke.Color = K.Green
 			card.Stroke.Thickness = 3
 		elseif owned[id] then
-			card.Label.Text = "EQUIP"
+			UIKit.CoinText(card.Label, "EQUIP", false)
 			UIKit.Recolor(card.Button, K.Blue)
 			card.Stroke.Color = Color3.fromRGB(70, 70, 80)
 			card.Stroke.Thickness = 2
 		else
-			card.Label.Text = "🪙 " .. item.Price
+			UIKit.CoinText(card.Label, tostring(item.Price))
 			UIKit.Recolor(card.Button, coins() >= item.Price and K.Yellow or Color3.fromRGB(90, 90, 96))
 			card.Stroke.Color = Color3.fromRGB(70, 70, 80)
 			card.Stroke.Thickness = 2
@@ -14775,6 +14770,87 @@ function UIKit.Window(parent, title, size, accent)
 	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fit)
 	fit()
 	return api
+end
+
+-- A drawn gold coin (the coin emoji doesn't render in Roblox fonts).
+function UIKit.Coin(parent, size, props)
+	local coin = new("Frame", {
+		Name = "Coin",
+		Size = UDim2.fromOffset(size, size),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+	}, parent)
+	UIKit.Corner(coin, size)
+	new("UIGradient", { Color = ColorSequence.new(Color3.fromRGB(255, 226, 110), Color3.fromRGB(196, 128, 18)), Rotation = 60 }, coin)
+	new("UIStroke", { Color = Color3.fromRGB(120, 72, 6), Thickness = math.max(1, size / 14), ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, coin)
+	local inner = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.68, 0.68),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+	}, coin)
+	UIKit.Corner(inner, size)
+	new("UIGradient", { Color = ColorSequence.new(Color3.fromRGB(214, 150, 26), Color3.fromRGB(255, 214, 90)), Rotation = 60 }, inner)
+	-- three claw marks stamped in the middle
+	for i = -1, 1 do
+		new("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5 + i * 0.16, 0.5),
+			Size = UDim2.new(0, math.max(1, size / 12), 0.62, 0),
+			Rotation = 18,
+			BackgroundColor3 = Color3.fromRGB(150, 90, 8),
+			BorderSizePixel = 0,
+		}, inner)
+	end
+	-- glint
+	local glint = new("Frame", { Position = UDim2.fromScale(0.2, 0.14), Size = UDim2.fromScale(0.22, 0.12), Rotation = -30, BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.35, BorderSizePixel = 0 }, coin)
+	UIKit.Corner(glint, size)
+	if props then
+		for k, v in props do
+			coin[k] = v
+		end
+	end
+	return coin
+end
+
+-- Puts a drawn coin in front of a TextLabel's text (any alignment).
+-- Call again whenever the text changes; pass show = false to hide the coin.
+function UIKit.CoinText(label, text, show)
+	label.Text = text
+	local coin = label:FindFirstChild("Coin")
+	if show == false then
+		if coin then
+			coin.Visible = false
+		end
+		return
+	end
+	if not coin then
+		coin = UIKit.Coin(label, 16, { AnchorPoint = Vector2.new(0, 0.5), ZIndex = label.ZIndex + 1 })
+		local function place()
+			local h = math.max(10, math.min(label.AbsoluteSize.Y, label.TextBounds.Y + 4))
+			coin.Size = UDim2.fromOffset(h, h)
+			local w = label.TextBounds.X
+			local x
+			if label.TextXAlignment == Enum.TextXAlignment.Left then
+				x = -(h + 4) -- sits in the left padding
+			elseif label.TextXAlignment == Enum.TextXAlignment.Right then
+				x = label.AbsoluteSize.X - w - h - 4
+			else
+				x = (label.AbsoluteSize.X - w) / 2 - h - 4
+			end
+			coin.Position = UDim2.new(0, x, 0.5, 0)
+		end
+		label:GetPropertyChangedSignal("TextBounds"):Connect(place)
+		label:GetPropertyChangedSignal("AbsoluteSize"):Connect(place)
+		task.defer(place)
+		if label.TextXAlignment == Enum.TextXAlignment.Left then
+			local pad = label:FindFirstChildOfClass("UIPadding") or new("UIPadding", {}, label)
+			pad.PaddingLeft = UDim.new(0, 22)
+			coin.Position = UDim2.new(0, -22, 0.5, 0)
+		end
+	end
+	coin.Visible = true
 end
 
 return UIKit

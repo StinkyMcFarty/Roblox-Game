@@ -43,7 +43,7 @@ task.spawn(function()
 		local skin = Skins.List[id]
 		for _, d in lobby:GetDescendants() do
 			if d.Name == "PlaqueText" and d.Text == id and skin then
-				d.Text = skin.Name .. (skin.Price > 0 and ("   🪙 " .. skin.Price) or "   FREE")
+				d.Text = skin.Name .. (skin.Price > 0 and ("   " .. skin.Price .. " COINS") or "   FREE")
 			end
 		end
 	end

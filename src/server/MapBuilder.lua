@@ -1805,7 +1805,7 @@ function MapBuilder.BuildLobby()
 		make("SpotLight", cap, { Face = Enum.NormalId.Bottom, Range = 10, Angle = 70, Brightness = 3, Color = item.Glow:Lerp(Color3.new(1, 1, 1), 0.6) })
 		Costumes.ClawDisplay(lobby, base * CFrame.new(0, 4.35, 0) * CFrame.Angles(0, math.rad(90 + 18), math.rad(6)), item)
 		local plaque = block(lobby, Vector3.new(3.2, 0.9, 0.1), base * CFrame.new(0, 2.2, -1.75) * CFrame.Angles(math.rad(12), 0, 0), M.Metal, rgb(22, 22, 26))
-		surfaceText(plaque, Enum.NormalId.Front, { Text = item.Name .. (item.Price > 0 and ("  🪙" .. item.Price) or "  FREE"), TextColor3 = item.Glow, Font = Enum.Font.GothamBold })
+		surfaceText(plaque, Enum.NormalId.Front, { Text = item.Name .. (item.Price > 0 and ("  " .. item.Price .. " COINS") or "  FREE"), TextColor3 = item.Glow, Font = Enum.Font.GothamBold })
 	end
 
 	-- BRIEFING TABLE: holographic mini-map of the arena --------------------

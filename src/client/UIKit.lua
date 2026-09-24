@@ -310,4 +310,85 @@ function UIKit.Window(parent, title, size, accent)
 	return api
 end
 
+-- A drawn gold coin (the coin emoji doesn't render in Roblox fonts).
+function UIKit.Coin(parent, size, props)
+	local coin = new("Frame", {
+		Name = "Coin",
+		Size = UDim2.fromOffset(size, size),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+	}, parent)
+	UIKit.Corner(coin, size)
+	new("UIGradient", { Color = ColorSequence.new(Color3.fromRGB(255, 226, 110), Color3.fromRGB(196, 128, 18)), Rotation = 60 }, coin)
+	new("UIStroke", { Color = Color3.fromRGB(120, 72, 6), Thickness = math.max(1, size / 14), ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, coin)
+	local inner = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.68, 0.68),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+	}, coin)
+	UIKit.Corner(inner, size)
+	new("UIGradient", { Color = ColorSequence.new(Color3.fromRGB(214, 150, 26), Color3.fromRGB(255, 214, 90)), Rotation = 60 }, inner)
+	-- three claw marks stamped in the middle
+	for i = -1, 1 do
+		new("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5 + i * 0.16, 0.5),
+			Size = UDim2.new(0, math.max(1, size / 12), 0.62, 0),
+			Rotation = 18,
+			BackgroundColor3 = Color3.fromRGB(150, 90, 8),
+			BorderSizePixel = 0,
+		}, inner)
+	end
+	-- glint
+	local glint = new("Frame", { Position = UDim2.fromScale(0.2, 0.14), Size = UDim2.fromScale(0.22, 0.12), Rotation = -30, BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.35, BorderSizePixel = 0 }, coin)
+	UIKit.Corner(glint, size)
+	if props then
+		for k, v in props do
+			coin[k] = v
+		end
+	end
+	return coin
+end
+
+-- Puts a drawn coin in front of a TextLabel's text (any alignment).
+-- Call again whenever the text changes; pass show = false to hide the coin.
+function UIKit.CoinText(label, text, show)
+	label.Text = text
+	local coin = label:FindFirstChild("Coin")
+	if show == false then
+		if coin then
+			coin.Visible = false
+		end
+		return
+	end
+	if not coin then
+		coin = UIKit.Coin(label, 16, { AnchorPoint = Vector2.new(0, 0.5), ZIndex = label.ZIndex + 1 })
+		local function place()
+			local h = math.max(10, math.min(label.AbsoluteSize.Y, label.TextBounds.Y + 4))
+			coin.Size = UDim2.fromOffset(h, h)
+			local w = label.TextBounds.X
+			local x
+			if label.TextXAlignment == Enum.TextXAlignment.Left then
+				x = -(h + 4) -- sits in the left padding
+			elseif label.TextXAlignment == Enum.TextXAlignment.Right then
+				x = label.AbsoluteSize.X - w - h - 4
+			else
+				x = (label.AbsoluteSize.X - w) / 2 - h - 4
+			end
+			coin.Position = UDim2.new(0, x, 0.5, 0)
+		end
+		label:GetPropertyChangedSignal("TextBounds"):Connect(place)
+		label:GetPropertyChangedSignal("AbsoluteSize"):Connect(place)
+		task.defer(place)
+		if label.TextXAlignment == Enum.TextXAlignment.Left then
+			local pad = label:FindFirstChildOfClass("UIPadding") or new("UIPadding", {}, label)
+			pad.PaddingLeft = UDim.new(0, 22)
+			coin.Position = UDim2.new(0, -22, 0.5, 0)
+		end
+	end
+	coin.Visible = true
+end
+
 return UIKit
