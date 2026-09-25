@@ -432,6 +432,36 @@ Clips.Punch = {
 	},
 }
 
+-- Ground Slam: both arms thrown up high, a beat at the top, then the suit
+-- folds forward and drives both fists into the floor (impact at ~0.49s),
+-- knees buckling with the weight; it stays down a moment, then rises.
+Clips.Slam = {
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.3, Ease = "Out", Pose = {
+			Root = { 8, 0, 0, 0, 0.25, 0 }, Waist = { 14, 0, 0 }, Neck = { 22, 0, 0 },
+			RShoulder = { 172, 0, 18 }, LShoulder = { 172, 0, -18 }, RElbow = { 25, 0, 0 }, LElbow = { 25, 0, 0 },
+			RHip = { -6, 0, 8 }, LHip = { -6, 0, -8 }, RKnee = { -8, 0, 0 }, LKnee = { -8, 0, 0 },
+		} },
+		{ T = 0.4, Pose = {
+			Root = { 10, 0, 0, 0, 0.3, 0 }, Waist = { 16, 0, 0 }, Neck = { 24, 0, 0 },
+			RShoulder = { 178, 0, 14 }, LShoulder = { 178, 0, -14 }, RElbow = { 30, 0, 0 }, LElbow = { 30, 0, 0 },
+			RHip = { -8, 0, 8 }, LHip = { -8, 0, -8 }, RKnee = { -10, 0, 0 }, LKnee = { -10, 0, 0 },
+		} },
+		{ T = 0.49, Ease = "In", Pose = {
+			Root = { -30, 0, 0, 0, -1.1, -0.5 }, Waist = { -26, 0, 0 }, Neck = { -18, 0, 0 },
+			RShoulder = { 70, 0, 12 }, LShoulder = { 70, 0, -12 }, RElbow = { 10, 0, 0 }, LElbow = { 10, 0, 0 },
+			RHip = { 60, 0, 14 }, LHip = { 60, 0, -14 }, RKnee = { -80, 0, 0 }, LKnee = { -80, 0, 0 },
+		} },
+		{ T = 0.8, Pose = {
+			Root = { -28, 0, 0, 0, -1.05, -0.45 }, Waist = { -24, 0, 0 }, Neck = { -14, 0, 0 },
+			RShoulder = { 72, 0, 14 }, LShoulder = { 72, 0, -14 }, RElbow = { 14, 0, 0 }, LElbow = { 14, 0, 0 },
+			RHip = { 58, 0, 14 }, LHip = { 58, 0, -14 }, RKnee = { -78, 0, 0 }, LKnee = { -78, 0, 0 },
+		} },
+		{ T = 1.3, Ease = "InOut", Pose = REST },
+	},
+}
+
 Clips.Laser = {
 	Keys = {
 		{ T = 0, Pose = REST },

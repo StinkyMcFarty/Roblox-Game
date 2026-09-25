@@ -97,6 +97,10 @@ Config.Sentinel = {
 	Pursuit = { Start = 70, Stop = 30, Bonus = 14, Ramp = 1 },
 	Scale = 1.8, -- same size as the docked suits in the Hangar
 	Punch = { Cooldown = 0.9, Damage = 40, Range = 9, Stun = 0.6, Knockback = 70 },
+	-- Ground Slam (right mouse): both fists overhead, then down into the floor.
+	-- 1.75x a punch's damage, 1.8x its wind-up (the punch lands at 0.27s), hits
+	-- him anywhere within Radius studs. The floor cracks and heals like the walls.
+	Slam = { Cooldown = 8, Damage = 40 * 1.75, WindUp = 0.27 * 1.8, Radius = 30, Stun = 1, Knockback = 55 },
 	-- Laser burns through walls and flashes Wolverine's adamantium skeleton
 	-- Death ray: charge, then a 3s aimable beam that pushes him back; the suit
 	-- is sluggish for 3s after firing.

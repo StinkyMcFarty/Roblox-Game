@@ -47,6 +47,7 @@ local ROLE_KIT = {
 		{ Name = "Punch", Label = "Hydraulic Smash", Desc = "Piston-driven haymaker. Smashes through walls, stuns and launches him", Icon = "👊", KeyText = "M1", Key = Enum.KeyCode.ButtonR2, Cooldown = S.Punch.Cooldown, Click = true, Color = Color3.fromRGB(200, 160, 255) },
 		{ Name = "Laser", Label = "Death Ray", Desc = "Melts through walls. Burns him to the adamantium", Icon = "🔴", KeyText = "Q", Key = Enum.KeyCode.Q, Cooldown = S.Laser.Cooldown, Color = Color3.fromRGB(255, 90, 60) },
 		{ Name = "Pulse", Label = "Inhibitor Blast", Desc = "Charge 2s (E again to cancel). Stuns him for 3s", Icon = "💥", KeyText = "E", Key = Enum.KeyCode.E, Cooldown = S.Pulse.Cooldown, Color = Color3.fromRGB(255, 210, 60) },
+		{ Name = "Slam", Label = "Ground Slam", Desc = ("Both fists into the floor: %.2gx damage to him within %d studs"):format(S.Slam.Damage / S.Punch.Damage, S.Slam.Radius), Icon = "🌋", KeyText = "M2", Key = Enum.KeyCode.ButtonL2, Cooldown = S.Slam.Cooldown, RightClick = true, Color = Color3.fromRGB(255, 150, 70) },
 	},
 }
 
@@ -73,7 +74,7 @@ local ROLE_TITLE = {
 
 local HINTS = {
 	Wolverine = "Shift: sprint   C / Ctrl: run on all fours\nClaw (M1) or pounce through walls. Hit anyone 3 times to rip them in half.",
-	Sentinel = "MUTANT-HUNTER ONLINE. M1 Hydraulic Smash · Q Death Ray · E Inhibitor Blast.\nLinked: " .. S.LinkedMultiplier .. "x power. Apart: " .. S.SoloMultiplier .. "x. Last suit standing: 1x. Core burns out in " .. S.Duration .. "s.",
+	Sentinel = "MUTANT-HUNTER ONLINE. M1 Hydraulic Smash · M2 Ground Slam · Q Death Ray · E Inhibitor Blast.\nLinked: " .. S.LinkedMultiplier .. "x power. Apart: " .. S.SoloMultiplier .. "x. Last suit standing: 1x. Core burns out in " .. S.Duration .. "s.",
 	Survivor = "Subject X is loose. Reboot the 3 Sentinel Protocol consoles (Foundry, Genetics Lab, Command Centre), then suit up in the Hangar.\nShift: sprint. G: fart (hides your scent). He tears through walls — keep moving.",
 	Lobby = "Waiting for the next round.",
 	Dead = "You were torn apart. Wait for the next round.",
@@ -82,7 +83,7 @@ local HINTS = {
 local readyAt = {}
 local slashSide = 0
 local lastPredictedSlash = -1
-local PREDICT = { Pounce = "Pounce", Stab = "Impale", Sniff = "Sniff", Punch = "Punch", Laser = "DeathRay", Pulse = "PulseCharge", Fart = "Fart" }
+local PREDICT = { Pounce = "Pounce", Stab = "Impale", Sniff = "Sniff", Punch = "Punch", Laser = "DeathRay", Pulse = "PulseCharge", Fart = "Fart", Slam = "Slam" }
 local currentKit = {}
 
 local function kitEntry(name)
@@ -249,6 +250,12 @@ UserInputService.InputBegan:Connect(function(input, processed)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 then
 		for _, a in currentKit do
 			if a.Click then
+				activate(a.Name)
+			end
+		end
+	elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+		for _, a in currentKit do
+			if a.RightClick then
 				activate(a.Name)
 			end
 		end
@@ -448,6 +455,8 @@ Fx.OnClientEvent:Connect(function(kind, data)
 		SlashFX.BeamUpdate(data.Char, data.From, data.To, data.Hit, data.Burns)
 	elseif kind == "LaserEnd" then
 		SlashFX.BeamEnd(data.Char)
+	elseif kind == "Slam" then
+		SlashFX.GroundSlam(data.Position, data.Radius)
 	elseif kind == "Smash" then
 		SlashFX.Smash(data.Char, data.Position, data.Dir, data.Hit)
 	elseif kind == "HitFlash" then

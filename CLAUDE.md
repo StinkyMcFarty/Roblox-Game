@@ -45,6 +45,9 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
   x1.5 (390) while he's 70+ studs from that suit.
   Inhibitor Blast (`Config.Sentinel.Pulse`): radius 30, shatters his i-frames, and during its
   stun a punch grants i-frames only every 2nd hit (`pulseStun` in `Sentinel.lua`).
+- Sentinel moves run one at a time (`perform`/`acting` in `Sentinel.lua`, `Acting` attribute).
+  Ground Slam (`Config.Sentinel.Slam`, right mouse / L2): 1.75x punch damage within 30 studs;
+  floor cracks are client-side (`SlashFX.GroundSlam`) and heal after `Config.WallRegen`.
 - Sentinels see Wolverine's outline through walls while they're 50+ studs from him
   (`src/client/SentinelTracker.lua`). A fart while sprinting skips the sprint build-up
   (`Movement.MaxOut`). Death ray colours live in the `BEAM` table in `SlashFX.lua`.

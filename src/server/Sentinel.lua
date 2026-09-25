@@ -405,6 +405,21 @@ end)
 -- The Inhibitor Blast's stun window, and the punches landed inside it
 local pulseStun = { Until = 0, Hits = 0 }
 
+-- i-frames after a Sentinel blow lands, the same as a Sentinel gets when he
+-- hits them. Inside an Inhibitor Blast stun he only gets them every
+-- IFramesEvery-th hit.
+local function grantIFrames(w, wChar)
+	local grant = true
+	if os.clock() < pulseStun.Until then
+		pulseStun.Hits += 1
+		grant = pulseStun.Hits % Config.Sentinel.Pulse.IFramesEvery == 0
+	end
+	if grant then
+		Status.Apply(w, "Immune", Config.HitImmunity)
+		VFX.IFrames(wChar, Config.HitImmunity)
+	end
+end
+
 local function stunWolverine(duration)
 	local w = Round.Wolverine
 	if w then
@@ -471,17 +486,7 @@ local function punch(player, char, root)
 				VFX.Shockwave(floorBelow(wRoot.Position, { char, wChar }) + Vector3.new(0, 0.2, 0), 11)
 				Fx:FireAllClients("Shake", { Position = wRoot.Position, Intensity = 1.4, Radius = 80 })
 				Fx:FireAllClients("HitStop", { Attacker = char, Victim = wChar, Duration = 0.15 })
-				-- i-frames, the same as a Sentinel gets when he hits them. Inside an
-				-- Inhibitor Blast stun he only gets them every IFramesEvery-th hit.
-				local grant = true
-				if os.clock() < pulseStun.Until then
-					pulseStun.Hits += 1
-					grant = pulseStun.Hits % Config.Sentinel.Pulse.IFramesEvery == 0
-				end
-				if grant then
-					Status.Apply(w, "Immune", Config.HitImmunity)
-					VFX.IFrames(wChar, Config.HitImmunity)
-				end
+				grantIFrames(w, wChar)
 			end
 		end
 	end
@@ -503,6 +508,53 @@ local function punch(player, char, root)
 		Util.Sound(Config.Sounds.Slash, root, { Pitch = 0.5, Volume = 1.3 }) -- whiff (until SentinelSwing is uploaded)
 	end
 	Fx:FireAllClients("Smash", { Char = char, Position = fist.Position, Dir = root.CFrame.LookVector, Hit = hit or wallAt ~= nil })
+end
+
+-- Ground Slam: fists overhead, then down into the floor. Everything within
+-- Radius studs gets it: Wolverine takes 1.75x a punch and is thrown clear,
+-- nearby walls blow out, and the floor cracks open (drawn by each client and
+-- healed after Config.WallRegen, like the walls).
+local function slam(player, char, root)
+	local cfg = Config.Sentinel.Slam
+	VFX.Anim(char, "Slam")
+	Status.Apply(player, "Slowed", cfg.WindUp + 0.8)
+	if Config.UploadedSounds.SentinelSwing ~= 0 then
+		Util.Sound(Config.Sounds.SentinelSwing, root, { Volume = 2, Pitch = 0.75, Range = 220 })
+	end
+	task.wait(cfg.WindUp)
+	if not (char.Parent and Util.IsAlive(char)) or player:GetAttribute("Role") ~= "Sentinel" then
+		return
+	end
+	local center = floorBelow(root.Position + root.CFrame.LookVector * 3, { char })
+	Fx:FireAllClients("Slam", { Char = char, Position = center, Radius = cfg.Radius })
+	smashSound(root, 0.7, 3)
+	Util.SoundAt(Config.Sounds.Break, center, { Volume = 2.4, Pitch = 0.55, Range = 300 })
+	VFX.Shockwave(center + Vector3.new(0, 0.2, 0), cfg.Radius, Color3.fromRGB(255, 200, 120))
+	VFX.Dust(center, Color3.fromRGB(150, 146, 140), 40)
+	Util.Burst(root, Util.SparkProps, 40, 2)
+	Fx:FireAllClients("Shake", { Position = center, Intensity = 2, Radius = 130 })
+	Combat.SmashInBox(CFrame.new(center + Vector3.new(0, 5, 0)), Vector3.new(18, 10, 18), center, 90)
+	local w, wChar, wRoot = wolverineParts()
+	if wRoot then
+		local off = wRoot.Position - center
+		if Vector3.new(off.X, 0, off.Z).Magnitude <= cfg.Radius and math.abs(off.Y) < 14 then
+			if Combat.BreakShield(w) then
+				Fx:FireAllClients("Shake", { Position = wRoot.Position, Intensity = 0.5, Radius = 40 })
+			else
+				Wolverine.Damage(cfg.Damage * power(player), player)
+				stunWolverine(cfg.Stun)
+				local dir = Util.Flat(off)
+				if dir.Magnitude < 0.1 then
+					dir = root.CFrame.LookVector
+				end
+				Fx:FireClient(w, "Knock", { Velocity = Util.Flat(dir) * cfg.Knockback + Vector3.new(0, 45, 0) })
+				Util.Burst(wRoot, Util.SparkProps, 30, 1.5)
+				Fx:FireAllClients("HitStop", { Attacker = char, Victim = wChar, Duration = 0.18 })
+				grantIFrames(w, wChar)
+			end
+		end
+	end
+	task.wait(0.6) -- down in the crater a moment
 end
 
 -- aim updates streamed from the firing client while the beam is live
@@ -762,6 +814,8 @@ function Sentinel.Handle(player, ability, arg)
 		perform(player, ability, laser, player, char, root, arg)
 	elseif ability == "Pulse" then
 		perform(player, ability, pulse, player, char, root)
+	elseif ability == "Slam" then
+		perform(player, ability, slam, player, char, root)
 	end
 end
 

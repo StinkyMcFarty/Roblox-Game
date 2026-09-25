@@ -1363,4 +1363,168 @@ function SlashFX.PulseBlast(position, radius)
 	SlashFX.HitFlash(position, GOLD, 2.6)
 end
 
+---------------------------------------------------------------------------
+-- Sentinel Ground Slam: the floor cracks open, slabs heave up, rocks fly,
+-- then it all knits back together (like the walls, after Config.WallRegen)
+---------------------------------------------------------------------------
+
+local slamFolder = nil
+local function slamPart(props)
+	if not (slamFolder and slamFolder.Parent) then
+		slamFolder = Instance.new("Folder")
+		slamFolder.Name = "SlamFX"
+		slamFolder.Parent = workspace
+	end
+	local p = Instance.new("Part")
+	p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch, p.CastShadow = true, false, false, false, false
+	p.TopSurface, p.BottomSurface = Enum.SurfaceType.Smooth, Enum.SurfaceType.Smooth
+	for k, v in props do
+		p[k] = v
+	end
+	p.Parent = slamFolder
+	return p
+end
+
+function SlashFX.GroundSlam(position, radius)
+	if not position then
+		return
+	end
+	radius = radius or 30
+	-- what the floor is made of, so the broken slabs match it
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	local ignore = {}
+	if slamFolder then
+		table.insert(ignore, slamFolder)
+	end
+	for _, plr in Players:GetPlayers() do
+		if plr.Character then
+			table.insert(ignore, plr.Character)
+		end
+	end
+	params.FilterDescendantsInstances = ignore
+	local hit = workspace:Raycast(position + Vector3.new(0, 3, 0), Vector3.new(0, -8, 0), params)
+	local floorY = hit and hit.Position.Y or position.Y
+	local mat = hit and hit.Instance.Material or Enum.Material.Concrete
+	local col = hit and hit.Instance.Color or Color3.fromRGB(70, 70, 74)
+	local c = Vector3.new(position.X, floorY, position.Z)
+	local healAt = Config.WallRegen or 10
+	local pieces = {}
+
+	-- flash, and shock rings racing across the floor
+	starFlare(c + Vector3.new(0, 2, 0), Color3.fromRGB(255, 200, 120), 3, 0.5)
+	local ribbons, rings = {}, {}
+	for i = 1, 3 do
+		local r = takeRibbon(40, i == 1 and WHITE or Color3.fromRGB(255, 190, 110), 5)
+		table.insert(ribbons, r)
+		rings[i] = { R = r, Delay = (i - 1) * 0.07 }
+	end
+	run(ribbons, function(t)
+		if t > 0.8 then
+			return false
+		end
+		for _, rg in rings do
+			local q = math.clamp((t - rg.Delay) / 0.55, 0, 1)
+			if q > 0 and q < 1 then
+				setRing(rg.R, c + Vector3.new(0, 0.15, 0), Vector3.new(0, 1, 0), 2 + radius * outQuad(q), 0.8 * (1 - q), q)
+			else
+				hideRibbon(rg.R)
+			end
+		end
+		return true
+	end)
+
+	-- the crater and its white-hot heart
+	local crater = slamPart({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.1, 10, 10), Material = Enum.Material.Slate, Color = col:Lerp(Color3.new(0, 0, 0), 0.65) })
+	crater.CFrame = CFrame.new(c + Vector3.new(0, 0.04, 0)) * CFrame.Angles(0, 0, math.rad(90))
+	local glow = slamPart({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.1, 6, 6), Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 150, 60) })
+	glow.CFrame = CFrame.new(c + Vector3.new(0, 0.06, 0)) * CFrame.Angles(0, 0, math.rad(90))
+	TweenService:Create(glow, TweenInfo.new(1.6), { Transparency = 1, Size = Vector3.new(0.1, 3, 3) }):Play()
+	table.insert(pieces, crater)
+
+	-- jagged cracks running out from the crater, glowing then cooling
+	for k = 1, 10 do
+		local a = k / 10 * math.pi * 2 + (math.random() - 0.5) * 0.5
+		local p0 = c + Vector3.new(math.cos(a), 0, math.sin(a)) * 3.5
+		local reach = radius * (0.35 + math.random() * 0.25)
+		local len = 0
+		while len < reach do
+			a += (math.random() - 0.5) * 0.9
+			local seg = 1.8 + math.random() * 2.2
+			local p1 = p0 + Vector3.new(math.cos(a), 0, math.sin(a)) * seg
+			local width = 0.45 * (1 - len / reach) + 0.08
+			local mid = (p0 + p1) / 2 + Vector3.new(0, 0.05, 0)
+			local cf = CFrame.lookAt(mid, mid + (p1 - p0))
+			local crack = slamPart({ Size = Vector3.new(width, 0.06, seg + 0.1), Material = Enum.Material.Slate, Color = Color3.fromRGB(18, 16, 15), CFrame = cf })
+			local lava = slamPart({ Size = Vector3.new(width * 0.45, 0.07, seg + 0.1), Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 120, 40), CFrame = cf })
+			TweenService:Create(lava, TweenInfo.new(1.2 + math.random() * 0.8), { Transparency = 1, Color = Color3.fromRGB(120, 20, 0) }):Play()
+			table.insert(pieces, crack)
+			p0 = p1
+			len += seg
+		end
+	end
+
+	-- slabs of floor heaving up round the crater
+	for k = 1, 12 do
+		local a = k / 12 * math.pi * 2 + math.random() * 0.4
+		local d = 4.5 + math.random() * 4
+		local size = Vector3.new(2.5 + math.random() * 2.5, 0.7, 2 + math.random() * 2)
+		local base = CFrame.new(c + Vector3.new(math.cos(a) * d, -0.25, math.sin(a) * d)) * CFrame.Angles(0, -a, 0)
+		local slab = slamPart({ Size = size, Material = mat, Color = col:Lerp(Color3.new(0, 0, 0), 0.15), CFrame = base, CanCollide = false })
+		local tilt = math.rad(15 + math.random() * 25)
+		local up = base * CFrame.new(0, 0.5 + math.random() * 0.9, 0) * CFrame.Angles(0, 0, -tilt)
+		TweenService:Create(slab, TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { CFrame = up }):Play()
+		slab:SetAttribute("Home", true)
+		table.insert(pieces, slab)
+		task.delay(healAt, function()
+			if slab.Parent then
+				TweenService:Create(slab, TweenInfo.new(0.8, Enum.EasingStyle.Quad), { CFrame = base, Transparency = 1 }):Play()
+			end
+		end)
+	end
+
+	-- rocks flung up and out
+	local rocks = {}
+	for k = 1, 16 do
+		local s = 0.4 + math.random() * 0.8
+		local rock = slamPart({ Size = Vector3.new(s, s * 0.8, s * 1.1), Material = mat, Color = col })
+		local a = math.random() * math.pi * 2
+		rocks[k] = { P = rock, V = Vector3.new(math.cos(a) * (8 + math.random() * 16), 18 + math.random() * 22, math.sin(a) * (8 + math.random() * 16)), Spin = Vector3.new(math.random() * 8, math.random() * 8, math.random() * 8) }
+	end
+	local t0 = os.clock()
+	local conn
+	conn = RunService.RenderStepped:Connect(function()
+		local t = os.clock() - t0
+		if t > 1.6 then
+			conn:Disconnect()
+			for _, r in rocks do
+				r.P:Destroy()
+			end
+			return
+		end
+		for _, r in rocks do
+			local p = c + r.V * t + Vector3.new(0, -60 * t * t / 2, 0)
+			if p.Y < c.Y then
+				p = Vector3.new(p.X, c.Y + 0.2, p.Z)
+			end
+			r.P.CFrame = CFrame.new(p) * CFrame.Angles(r.Spin.X * t, r.Spin.Y * t, r.Spin.Z * t)
+			r.P.Transparency = math.clamp((t - 1.1) / 0.5, 0, 1)
+		end
+	end)
+
+	-- the floor heals: cracks and crater fade, the slabs sink back (above)
+	task.delay(healAt, function()
+		for _, p in pieces do
+			if p.Parent and not p:GetAttribute("Home") then
+				TweenService:Create(p, TweenInfo.new(0.8), { Transparency = 1 }):Play()
+			end
+		end
+		task.wait(0.9)
+		for _, p in pieces do
+			p:Destroy()
+		end
+		glow:Destroy()
+	end)
+end
+
 return SlashFX
