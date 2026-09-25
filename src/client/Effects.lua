@@ -117,7 +117,46 @@ function Effects.Hurt()
 	Effects.Shake(1)
 end
 
+-- Pounce leap: hold the launch velocity for `hold` seconds, then cancel `lift`
+-- of gravity until he lands (or maxTime passes, or something knocks him).
+local activeLeap = nil
+function Effects.CancelLeap()
+	if activeLeap then
+		activeLeap:Destroy()
+		activeLeap = nil
+	end
+end
+
+function Effects.Leap(root, velocity, hold, lift, maxTime)
+	Effects.CancelLeap()
+	Effects.Impulse(root, velocity, hold)
+	local hum = root.Parent and root.Parent:FindFirstChildOfClass("Humanoid")
+	local att = Instance.new("Attachment")
+	att.Parent = root
+	local force = Instance.new("VectorForce")
+	force.Attachment0 = att
+	force.RelativeTo = Enum.ActuatorRelativeTo.World
+	force.ApplyAtCenterOfMass = true
+	force.Force = Vector3.new(0, root.AssemblyMass * workspace.Gravity * (lift or 0), 0)
+	force.Parent = att
+	activeLeap = att
+	local t0 = os.clock()
+	local conn
+	conn = RunService.Heartbeat:Connect(function()
+		local t = os.clock() - t0
+		local landed = t > hold + 0.05 and hum and hum.FloorMaterial ~= Enum.Material.Air
+		if activeLeap ~= att or not att.Parent or t > (maxTime or 1.2) or landed then
+			conn:Disconnect()
+			att:Destroy()
+			if activeLeap == att then
+				activeLeap = nil
+			end
+		end
+	end)
+end
+
 function Effects.Knock(velocity, tumble, spin, duration)
+	Effects.CancelLeap()
 	local char = player.Character
 	local root = char and char:FindFirstChild("HumanoidRootPart")
 	local hum = char and char:FindFirstChildOfClass("Humanoid")

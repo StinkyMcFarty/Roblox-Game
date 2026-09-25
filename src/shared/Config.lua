@@ -61,7 +61,10 @@ Config.Abilities = {
 	-- A slash that lands locks his claws: slash, pounce and impale all wait
 	-- HitLock seconds after hitting a survivor, SentinelHitLock after a Sentinel.
 	Slash = { Cooldown = 0.55, Range = 8, Width = 8, HitLock = 3, SentinelHitLock = 1 },
-	Pounce = { Cooldown = 15, Forward = 78, Up = 52, GrabRadius = 7, Window = 1.2 },
+	-- Pounce: a low, flat dive. Launch speed is held for 0.22s, then Lift cancels
+	-- that share of gravity until he lands: ~3.5 studs high (under the 11-stud
+	-- doorways) but ~0.9s in the air, so it covers the same ~72 studs as before.
+	Pounce = { Cooldown = 15, Forward = 78, Up = 10, Lift = 0.81, GrabRadius = 7, Window = 1.2 },
 	Stab = { Cooldown = 15, Range = 10, Width = 8, Lunge = 60 },
 	Sniff = { Cooldown = 25, Duration = 5 }, -- only 5s of tracking so he can't wallhack all round
 }

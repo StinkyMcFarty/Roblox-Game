@@ -104,7 +104,10 @@ Config.Abilities = {
 	-- A slash that lands locks his claws: slash, pounce and impale all wait
 	-- HitLock seconds after hitting a survivor, SentinelHitLock after a Sentinel.
 	Slash = { Cooldown = 0.55, Range = 8, Width = 8, HitLock = 3, SentinelHitLock = 1 },
-	Pounce = { Cooldown = 15, Forward = 78, Up = 52, GrabRadius = 7, Window = 1.2 },
+	-- Pounce: a low, flat dive. Launch speed is held for 0.22s, then Lift cancels
+	-- that share of gravity until he lands: ~3.5 studs high (under the 11-stud
+	-- doorways) but ~0.9s in the air, so it covers the same ~72 studs as before.
+	Pounce = { Cooldown = 15, Forward = 78, Up = 10, Lift = 0.81, GrabRadius = 7, Window = 1.2 },
 	Stab = { Cooldown = 15, Range = 10, Width = 8, Lunge = 60 },
 	Sniff = { Cooldown = 25, Duration = 5 }, -- only 5s of tracking so he can't wallhack all round
 }
@@ -12652,7 +12655,7 @@ local function activate(name)
 
 	local look = Vector3.new(root.CFrame.LookVector.X, 0, root.CFrame.LookVector.Z).Unit
 	if name == "Pounce" then
-		Effects.Impulse(root, look * A.Pounce.Forward + Vector3.new(0, A.Pounce.Up, 0), 0.22)
+		Effects.Leap(root, look * A.Pounce.Forward + Vector3.new(0, A.Pounce.Up, 0), 0.22, A.Pounce.Lift, A.Pounce.Window)
 		Effects.Shake(0.3)
 	elseif name == "Stab" then
 		Effects.Impulse(root, look * A.Stab.Lunge * 0.6 + Vector3.new(0, 2, 0), 0.12)
@@ -13444,7 +13447,46 @@ function Effects.Hurt()
 	Effects.Shake(1)
 end
 
+-- Pounce leap: hold the launch velocity for `hold` seconds, then cancel `lift`
+-- of gravity until he lands (or maxTime passes, or something knocks him).
+local activeLeap = nil
+function Effects.CancelLeap()
+	if activeLeap then
+		activeLeap:Destroy()
+		activeLeap = nil
+	end
+end
+
+function Effects.Leap(root, velocity, hold, lift, maxTime)
+	Effects.CancelLeap()
+	Effects.Impulse(root, velocity, hold)
+	local hum = root.Parent and root.Parent:FindFirstChildOfClass("Humanoid")
+	local att = Instance.new("Attachment")
+	att.Parent = root
+	local force = Instance.new("VectorForce")
+	force.Attachment0 = att
+	force.RelativeTo = Enum.ActuatorRelativeTo.World
+	force.ApplyAtCenterOfMass = true
+	force.Force = Vector3.new(0, root.AssemblyMass * workspace.Gravity * (lift or 0), 0)
+	force.Parent = att
+	activeLeap = att
+	local t0 = os.clock()
+	local conn
+	conn = RunService.Heartbeat:Connect(function()
+		local t = os.clock() - t0
+		local landed = t > hold + 0.05 and hum and hum.FloorMaterial ~= Enum.Material.Air
+		if activeLeap ~= att or not att.Parent or t > (maxTime or 1.2) or landed then
+			conn:Disconnect()
+			att:Destroy()
+			if activeLeap == att then
+				activeLeap = nil
+			end
+		end
+	end)
+end
+
 function Effects.Knock(velocity, tumble, spin, duration)
+	Effects.CancelLeap()
 	local char = player.Character
 	local root = char and char:FindFirstChild("HumanoidRootPart")
 	local hum = char and char:FindFirstChildOfClass("Humanoid")
