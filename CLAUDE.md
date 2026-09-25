@@ -31,6 +31,11 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
   for 3s on a survivor, 1s on a Sentinel (`lockClaws` in `Wolverine.lua`, client via Fx `ClawLock`).
 - I-frames: an M1 just breaks them; pounce/impale break them, miss, and still go on cooldown.
   Wolverine gets 2s of i-frames when a Sentinel punch lands.
+- Rage (`Config.Rage`, `updateRage` in `Wolverine.lua`): below 40% HP, at most twice a round (once
+  per dip), 15s of red aura, slashes 1.35x faster, hits count 1.3x (`Combat.Hit` amount; Hits/Armor
+  can be fractional), other cooldowns x0.75. Client reads the `Rage` attribute for its timers.
+- Sniff is on R (also the death-ray resist mash). The release cutscene is timed by
+  `Config.IntroLength` / `Config.Intro`.
 - Pounce is a scripted dive arc (`Effects.Leap`): Height 7.6, AirTime 0.92, Forward 78 (~72 studs).
 - Running does not break walls; M1, pounce, impale and Sentinel punches do. Wall cores carry a
   `Surface` attribute (`Facility.lua`) that picks the clash effect (`Combat.StoneClash` etc).

@@ -135,8 +135,13 @@ local function activate(name)
 		Interface.Announce("Get on all fours to pounce (hold C)", Color3.fromRGB(255, 140, 30), 1.2)
 		return
 	end
-	readyAt[name] = os.clock() + entry.Cooldown
-	Interface.StartCooldown(name, entry.Cooldown)
+	-- enraged (Config.Rage): slashes come faster, everything else cools down quicker
+	local cooldown = entry.Cooldown
+	if player:GetAttribute("Rage") and player:GetAttribute("Role") == "Wolverine" then
+		cooldown *= name == "Slash" and 1 / Config.Rage.AttackSpeed or Config.Rage.Cooldown
+	end
+	readyAt[name] = os.clock() + cooldown
+	Interface.StartCooldown(name, cooldown)
 
 	-- play our own animation instantly (the server's copy is de-duplicated)
 	local predict = PREDICT[name]
@@ -151,7 +156,7 @@ local function activate(name)
 		-- draw our own claw crescents on the strike frame (the server's copy is skipped)
 		local side = slashSide == 1 and "R" or "L"
 		lastPredictedSlash = os.clock()
-		task.delay(0.12, function()
+		task.delay(player:GetAttribute("Rage") and 0.12 / Config.Rage.AttackSpeed or 0.12, function()
 			if char.Parent and hum.Health > 0 then
 				SlashFX.Arc(char, side)
 			end
@@ -362,6 +367,14 @@ player.CharacterAdded:Connect(function(char)
 	task.wait(1)
 	if char:FindFirstChild("Torso") and not char:FindFirstChild("UpperTorso") and game:GetService("RunService"):IsStudio() then
 		Interface.Announce("R6 avatar detected: set Game Settings > Avatar > Avatar Type to R15 for full animations", Color3.fromRGB(255, 170, 60), 8)
+	end
+end)
+
+player:GetAttributeChangedSignal("Rage"):Connect(function()
+	local on = player:GetAttribute("Rage") == true and player:GetAttribute("Role") == "Wolverine"
+	Effects.SetRage(on)
+	if on then
+		Interface.Announce(("RAGE! %ds: faster slashes, harder hits, quicker cooldowns"):format(Config.Rage.Duration), Color3.fromRGB(255, 60, 40), 3)
 	end
 end)
 

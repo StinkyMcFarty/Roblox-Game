@@ -57,6 +57,12 @@ Config.Wolverine = {
 -- speed over Time seconds (stop running and it resets).
 Config.SprintRamp = { Delay = 0.9, Time = 2.2 }
 
+-- Rage: when he drops below Threshold health he snaps (at most MaxPerGame
+-- times, once per dip below the line): a red aura for Duration seconds,
+-- slashes AttackSpeed x faster, every hit counts Damage x (survivor wounds,
+-- Sentinel armour), and every other cooldown x Cooldown.
+Config.Rage = { Threshold = 0.4, Duration = 15, MaxPerGame = 2, AttackSpeed = 1.35, Damage = 1.3, Cooldown = 0.75 }
+
 Config.Abilities = {
 	-- A slash that lands locks his claws: slash, pounce and impale all wait
 	-- HitLock seconds after hitting a survivor, SentinelHitLock after a Sentinel.

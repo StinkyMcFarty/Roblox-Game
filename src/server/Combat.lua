@@ -530,8 +530,10 @@ function Combat.Hit(victim, ignoreImmunity)
 	if not Util.IsAlive(victim.Character) then
 		return nil
 	end
+	-- every hit comes from Wolverine; enraged, each one counts for more
+	local amount = (Round.Wolverine and Round.Wolverine:GetAttribute("Rage")) and Config.Rage.Damage or 1
 	if victim:GetAttribute("Role") == "Sentinel" then
-		local armor = (victim:GetAttribute("Armor") or 1) - 1
+		local armor = (victim:GetAttribute("Armor") or 1) - amount
 		victim:SetAttribute("Armor", armor)
 		if armor <= 0 and Combat.OnSuitDestroyed then
 			-- the suit blows apart and the pilot is thrown clear (as a normal hit)
@@ -539,9 +541,9 @@ function Combat.Hit(victim, ignoreImmunity)
 		end
 		return "hit"
 	end
-	local hits = (victim:GetAttribute("Hits") or 0) + 1
+	local hits = (victim:GetAttribute("Hits") or 0) + amount
 	victim:SetAttribute("Hits", hits)
-	return hits >= Config.HitsToKill and "kill" or "hit"
+	return hits >= Config.HitsToKill - 1e-6 and "kill" or "hit"
 end
 
 -- His claws tearing through someone (every hit on a survivor, and the kill).

@@ -86,6 +86,17 @@ local tint = Instance.new("ColorCorrectionEffect")
 tint.Name = "LocalTint"
 tint.Parent = Lighting
 
+-- Rage: his view runs hot red while it lasts
+function Effects.SetRage(on)
+	if on then
+		TweenService:Create(tint, TweenInfo.new(0.4), { TintColor = Color3.fromRGB(255, 175, 165), Contrast = 0.22, Saturation = 0.15 }):Play()
+		Effects.Shake(0.6)
+	else
+		TweenService:Create(tint, TweenInfo.new(1), { Saturation = 0 }):Play()
+		Effects.SetHunterVision(player:GetAttribute("Role") == "Wolverine")
+	end
+end
+
 function Effects.SetHunterVision(on)
 	TweenService:Create(tint, TweenInfo.new(1), {
 		TintColor = on and Color3.fromRGB(255, 225, 220) or Color3.new(1, 1, 1),

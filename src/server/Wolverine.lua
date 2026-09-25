@@ -29,6 +29,17 @@ local STEEL = Color3.fromRGB(210, 214, 222)
 local cooldowns = {}
 local lastDamaged = 0
 local combo = 0
+local rage = { Count = 0, Armed = true, Until = 0 } -- this round's rage (Config.Rage)
+local updateRage
+
+-- How much faster his cooldowns run right now: slashes by AttackSpeed, the
+-- rest by Cooldown, while enraged.
+local function rageScale(player, ability)
+	if not player:GetAttribute("Rage") then
+		return 1
+	end
+	return ability == "Slash" and 1 / Config.Rage.AttackSpeed or Config.Rage.Cooldown
+end
 local clawGlow = Color3.fromRGB(210, 230, 255)
 local clawSkin = nil
 
@@ -599,9 +610,11 @@ function Wolverine.Transform(player, spawnCFrame)
 		return
 	end
 	player:SetAttribute("Role", "Wolverine")
+	player:SetAttribute("Rage", false)
 	cooldowns[player] = {}
 	combo = 0
 	lastDamaged = 0
+	rage = { Count = 0, Armed = true, Until = 0 }
 	char:PivotTo(spawnCFrame)
 
 	local function valid()
@@ -659,6 +672,7 @@ local function lockClaws(player, seconds)
 	if not cd then
 		return
 	end
+	seconds *= rageScale(player, "Lock")
 	local ready = os.clock() + seconds - 0.1 -- same latency allowance as Handle
 	for _, name in CLAW_ATTACKS do
 		cd[name] = math.max(cd[name] or 0, ready)
@@ -672,7 +686,7 @@ local function slash(player, char, root)
 	local side = combo == 1 and "R" or "L"
 	VFX.Anim(char, side == "R" and "SlashR" or "SlashL")
 	-- land the hit on the strike frame of the animation (wind-up first)
-	task.delay(0.12, function()
+	task.delay(0.12 * rageScale(player, "Slash"), function()
 		if not (char.Parent and Util.IsAlive(char)) then
 			return
 		end
@@ -930,7 +944,7 @@ function Wolverine.Handle(player, ability, arg)
 	if ability == "Pounce" and not Movement.IsFeral(player) then
 		return -- he can only pounce out of an all-fours sprint
 	end
-	cd[ability] = os.clock() + cfg.Cooldown - 0.1 -- small latency allowance
+	cd[ability] = os.clock() + cfg.Cooldown * rageScale(player, ability) - 0.1 -- small latency allowance
 
 	if ability == "Slash" then
 		slash(player, char, root)
@@ -1024,6 +1038,89 @@ end
 -- or impales his way through them.)
 ---------------------------------------------------------------------------
 
+-- Rage (Config.Rage): a red aura everyone can see, fire licking off him, a
+-- red glow and his outline flaring red, for Duration seconds.
+local RAGE_RED = Color3.fromRGB(255, 30, 20)
+local function rageAura(char, on)
+	local torso = Util.Torso(char)
+	local menace = char:FindFirstChild("Menace")
+	if menace then
+		menace.FillColor = on and RAGE_RED or Color3.fromRGB(170, 0, 0)
+		menace.FillTransparency = on and 0.7 or 1
+		menace.OutlineColor = on and RAGE_RED or Color3.fromRGB(170, 0, 0)
+		menace.OutlineTransparency = on and 0 or 0.35
+	end
+	for _, d in char:GetDescendants() do
+		if d.Name == "RageAura" then
+			d:Destroy()
+		end
+	end
+	if not (on and torso) then
+		return
+	end
+	local fire = Instance.new("ParticleEmitter")
+	fire.Name = "RageAura"
+	fire.Texture = "rbxasset://textures/particles/fire_main.dds"
+	fire.Color = ColorSequence.new(Color3.fromRGB(255, 70, 30), Color3.fromRGB(120, 0, 0))
+	fire.LightEmission = 1
+	fire.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 2.6), NumberSequenceKeypoint.new(1, 0.4) })
+	fire.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.35), NumberSequenceKeypoint.new(1, 1) })
+	fire.Lifetime = NumberRange.new(0.45, 0.8)
+	fire.Rate = 70
+	fire.Speed = NumberRange.new(2, 5)
+	fire.SpreadAngle = Vector2.new(35, 35)
+	fire.Acceleration = Vector3.new(0, 9, 0)
+	fire.RotSpeed = NumberRange.new(-90, 90)
+	fire.Rotation = NumberRange.new(0, 360)
+	fire.EmissionDirection = Enum.NormalId.Top
+	fire.Shape = Enum.ParticleEmitterShape.Box
+	fire.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+	fire.Parent = torso
+	local embers = fire:Clone()
+	embers.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	embers.Color = ColorSequence.new(Color3.fromRGB(255, 120, 60))
+	embers.Size = NumberSequence.new(0.35, 0)
+	embers.Lifetime = NumberRange.new(0.6, 1.1)
+	embers.Rate = 25
+	embers.Speed = NumberRange.new(4, 9)
+	embers.Parent = torso
+	local light = Instance.new("PointLight")
+	light.Name = "RageAura"
+	light.Color = RAGE_RED
+	light.Brightness = 3
+	light.Range = 16
+	light.Parent = torso
+end
+
+-- He snaps when he drops below the threshold: at most MaxPerGame times a
+-- round, and only once per dip (he has to get back above the line first).
+updateRage = function(player, char, hum)
+	local cfg = Config.Rage
+	local now = os.clock()
+	if player:GetAttribute("Rage") and now >= rage.Until then
+		player:SetAttribute("Rage", false)
+		rageAura(char, false)
+		Util.FireClient(Fx, player, "Announce", { Text = "THE RAGE FADES", Color = Color3.fromRGB(200, 120, 120), Duration = 2 })
+	end
+	if hum.Health / hum.MaxHealth >= cfg.Threshold then
+		rage.Armed = true
+	elseif rage.Armed and rage.Count < cfg.MaxPerGame and not player:GetAttribute("Rage") then
+		rage.Armed = false
+		rage.Count += 1
+		rage.Until = now + cfg.Duration
+		player:SetAttribute("Rage", true)
+		player:SetAttribute("RageEnds", workspace:GetServerTimeNow() + cfg.Duration)
+		rageAura(char, true)
+		local root = Util.Root(char)
+		if root then
+			Util.Sound(Config.Sounds.Roar, root, { Volume = 2.6, Pitch = 0.85, Range = 400 })
+			VFX.Shockwave(root.Position - Vector3.new(0, 2.8, 0), 22, RAGE_RED)
+			Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 1, Radius = 90 })
+		end
+		Fx:FireAllClients("Announce", { Text = "WOLVERINE IS ENRAGED!", Color = RAGE_RED, Duration = 3 })
+	end
+end
+
 RunService.Heartbeat:Connect(function(dt)
 	local player = Round.Wolverine
 	if not (player and Round.Active) then
@@ -1035,6 +1132,7 @@ RunService.Heartbeat:Connect(function(dt)
 		return
 	end
 
+	updateRage(player, char, hum)
 	if os.clock() - lastDamaged > Config.Wolverine.HealDelay and hum.Health < hum.MaxHealth then
 		hum.Health = math.min(hum.MaxHealth, hum.Health + Config.Wolverine.HealPerSecond * dt)
 	end
