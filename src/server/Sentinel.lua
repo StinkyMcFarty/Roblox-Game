@@ -217,6 +217,11 @@ end
 -- Suit up / power down
 ---------------------------------------------------------------------------
 
+-- The suit each pilot is in right now. A suit's power-down timer only ends
+-- that suit: after one is destroyed and they climb into the other dock, the
+-- old timer mustn't cut the new suit short.
+local currentSuit = setmetatable({}, { __mode = "k" })
+
 function Sentinel.Become(player)
 	local char = player.Character
 	local hum, root = Util.Humanoid(char), Util.Root(char)
@@ -243,8 +248,10 @@ function Sentinel.Become(player)
 	announce(player.DisplayName .. " suited up as a SENTINEL! Stay together to link up.", GLOW)
 	Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 0.6, Radius = 80 })
 
+	local suit = {}
+	currentSuit[player] = suit
 	task.delay(Config.Sentinel.Duration, function()
-		if player:GetAttribute("Role") == "Sentinel" and player.Character == char and Util.IsAlive(char) then
+		if currentSuit[player] == suit and player:GetAttribute("Role") == "Sentinel" and player.Character == char and Util.IsAlive(char) then
 			Sentinel.PowerDown(player)
 		end
 	end)
@@ -253,6 +260,7 @@ end
 -- The pilot steps out of the suit. If Wolverine tore it apart (destroyed) they
 -- come out one hit from death; if its core just ran out, at full health.
 function Sentinel.PowerDown(player, destroyed)
+	currentSuit[player] = nil
 	local char = player.Character
 	if not char then
 		return
