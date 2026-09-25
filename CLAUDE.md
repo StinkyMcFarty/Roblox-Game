@@ -59,9 +59,10 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
 - Running does not break walls; M1, pounce, impale and Sentinel punches do. Wall cores carry a
   `Surface` attribute (`Facility.lua`) that picks the clash effect (`Combat.StoneClash` etc).
 - Sentinels: linked (within 30 studs of each other) hit at 1.25x, apart 0.6x, a lone suit 1x.
-  Pursuit thrusters (`Config.Sentinel.Pursuit`, `Movement.lua`): once Wolverine is 70+ studs
-  away a suit gets +14 speed until it's back within 30 studs. Death ray: 32.4 DPS, range 260,
-  x1.5 (390) while he's 70+ studs from that suit.
+  Pursuit thrusters (`Config.Sentinel.Pursuit`, `Movement.lua`): once Wolverine hasn't hit a
+  suit for 2.5s (`HitGrace`; `Combat.Hit` refreshes the `PursuitHold` status) it gets +14 speed,
+  cut the moment he hits it again. Death ray: 32.4 DPS, range 260, x1.5 (390) while he's
+  `Laser.FarAt` (70)+ studs from that suit.
   Inhibitor Blast (`Config.Sentinel.Pulse`): radius 30, shatters his i-frames, and during its
   stun a punch grants i-frames only every 2nd hit (`pulseStun` in `Sentinel.lua`).
 - Sentinel walk/run: `SENTINEL LOCOMOTION` block in `Anims.lua` (`heavyLeg` stride model,

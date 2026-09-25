@@ -225,6 +225,7 @@ function Sentinel.Become(player)
 	end
 	player:SetAttribute("Role", "Sentinel")
 	player:SetAttribute("Armor", Config.Sentinel.Armor)
+	Status.Apply(player, "PursuitHold", Config.Sentinel.Pursuit.HitGrace) -- thrusters come online shortly
 	char:SetAttribute("Invisible", nil) -- no invisible suits
 	player:SetAttribute("SuitEnds", workspace:GetServerTimeNow() + Config.Sentinel.Duration)
 	cooldowns[player] = {}
@@ -610,9 +611,9 @@ local function laser(player, char, root, aim)
 		end
 		local ignore = { char }
 		local _, wChar, wRoot = wolverineParts()
-		-- he's run off (as far as the pursuit thrusters kick in): the beam reaches further
+		-- he's run off: the beam reaches further
 		local range = cfg.Range
-		if wRoot and (wRoot.Position - root.Position).Magnitude > Config.Sentinel.Pursuit.Start then
+		if wRoot and (wRoot.Position - root.Position).Magnitude > cfg.FarAt then
 			range *= cfg.FarRangeMult
 		end
 		local from, remaining = origin, range

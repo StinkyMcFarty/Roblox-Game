@@ -546,6 +546,9 @@ function Combat.Hit(victim, ignoreImmunity)
 	-- every hit comes from Wolverine; enraged, each one counts for more
 	local amount = (Round.Wolverine and Round.Wolverine:GetAttribute("Rage")) and Config.Rage.Damage or 1
 	if victim:GetAttribute("Role") == "Sentinel" then
+		-- he's on this suit: its pursuit thrusters cut out until he's gone
+		-- Config.Sentinel.Pursuit.HitGrace seconds without hitting it (Movement)
+		Status.Apply(victim, "PursuitHold", Config.Sentinel.Pursuit.HitGrace)
 		local armor = (victim:GetAttribute("Armor") or 1) - amount
 		victim:SetAttribute("Armor", armor)
 		if armor <= 0 and Combat.OnSuitDestroyed then

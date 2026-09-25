@@ -97,14 +97,15 @@ RunService.Heartbeat:Connect(function(dt)
 				end
 			elseif role == "Sentinel" then
 				local c = Config.Sentinel.Pursuit
-				local wolf = Round.Wolverine and Util.Root(Round.Wolverine.Character)
-				local d = wolf and Round.Released and (wolf.Position - root.Position).Magnitude
-				if not d or d < c.Stop then
-					s.Chasing = false
-				elseif d > c.Start then
-					s.Chasing = true
+				-- thrusters: on once Wolverine has gone c.HitGrace seconds without
+				-- hitting this suit (Combat.Hit refreshes "PursuitHold"), off the
+				-- moment he hits it again
+				s.Chasing = Round.Released and Round.Wolverine ~= nil and not Status.Has(player, "PursuitHold")
+				if s.Chasing then
+					s.Surge = math.min(1, (s.Surge or 0) + dt / c.Ramp)
+				else
+					s.Surge = 0
 				end
-				s.Surge = math.clamp((s.Surge or 0) + (s.Chasing and dt or -dt) / c.Ramp, 0, 1)
 				speed = Config.Sentinel.WalkSpeed + c.Bonus * s.Surge
 				local pursuing = s.Surge > 0.5
 				if pursuing ~= s.PursuitOn then

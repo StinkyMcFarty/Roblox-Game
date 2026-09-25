@@ -93,11 +93,11 @@ Config.Sentinel = {
 	LinkedMultiplier = 1.25,
 	SoloMultiplier = 0.6, -- two suits but far apart; a lone suit hits at 1x
 	WalkSpeed = 18,
-	-- Pursuit thrusters: once Wolverine gets Start studs away the suits surge
-	-- (+Bonus speed, ramping in over Ramp seconds) and keep it until they're
-	-- back within Stop studs, so he can't just run off and heal. 18 + 14 = 32
+	-- Pursuit thrusters: once Wolverine has gone HitGrace seconds without
+	-- hitting a suit it surges (+Bonus speed, ramping in over Ramp seconds)
+	-- until he hits it again, so he can't just run off and heal. 18 + 14 = 32
 	-- beats his sprint (~24) and matches his all-fours top speed.
-	Pursuit = { Start = 70, Stop = 30, Bonus = 14, Ramp = 1 },
+	Pursuit = { HitGrace = 2.5, Bonus = 14, Ramp = 1 },
 	Scale = 1.8, -- same size as the docked suits in the Hangar
 	Punch = { Cooldown = 0.9, Damage = 40, Range = 9, Stun = 0.6, Knockback = 70 },
 	-- Ground Slam (right mouse): both fists overhead, then down into the floor.
@@ -107,8 +107,8 @@ Config.Sentinel = {
 	-- Laser burns through walls and flashes Wolverine's adamantium skeleton
 	-- Death ray: charge, then a 3s aimable beam that pushes him back; the suit
 	-- is sluggish for 3s after firing.
-	-- FarRangeMult: range x1.5 while he's Pursuit.Start+ studs from that suit.
-	Laser = { Cooldown = 12, Charge = 0.6, Duration = 3, DPS = 32.4, Range = 260, FarRangeMult = 1.5,
+	-- FarRangeMult: range x1.5 while he's FarAt+ studs from that suit.
+	Laser = { Cooldown = 12, Charge = 0.6, Duration = 3, DPS = 32.4, Range = 260, FarRangeMult = 1.5, FarAt = 70,
 		Slow = 1.5, WallsBurned = 8, Push = 22, CloseRange = 18, CloseMult = 3.2,
 		-- Wolverine mashing F while beamed: Presses/sec for full resist; past
 		-- Threshold he braces and walks into the beam at Walk x speed
