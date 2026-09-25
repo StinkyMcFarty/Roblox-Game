@@ -404,7 +404,20 @@ end
 -- Sentinel laser
 ---------------------------------------------------------------------------
 
-local LASER_RED = Color3.fromRGB(255, 50, 40)
+-- The death ray's colours, inside out. Change these to recolour the whole
+-- effect (charge-up, beam, lightning, impact).
+local BEAM = {
+	Core = WHITE,
+	Inner = Color3.fromRGB(90, 225, 255), -- electric cyan
+	Glow = Color3.fromRGB(255, 40, 200), -- magenta
+	Halo = Color3.fromRGB(150, 30, 255), -- purple
+	Deep = Color3.fromRGB(70, 0, 150), -- violet haze
+	Coil = Color3.fromRGB(255, 110, 235),
+	Bolt = Color3.fromRGB(150, 240, 255),
+	Spark = Color3.fromRGB(255, 190, 90),
+	Light = Color3.fromRGB(210, 60, 255),
+}
+local LASER_RED = BEAM.Glow
 local function starFlare(pos, color, size, life)
 	local cam = workspace.CurrentCamera
 	if not cam then
@@ -541,12 +554,11 @@ end
 -- molten impact with shock rings, sparks and a scorch mark.
 local beams = {}
 
-local LASER_HOT = Color3.fromRGB(255, 80, 55)
-local LASER_DEEP = Color3.fromRGB(150, 0, 20)
 local BOLT_N = 20
 local PULSES = 5
 local PULSE_SPEED = 240 -- studs/s the energy slugs race down the beam
-local SPARKS = 20
+local SPARKS = 28
+local CORONA = 10 -- jagged spikes blasting out of the impact
 
 -- the server sends the beam's full length when it hits nothing
 local laserCfg = Config.Sentinel.Laser
@@ -569,15 +581,17 @@ local function buildBeam(char)
 	local COIL_N = 32
 	local b = {
 		Core = takeRibbon(2, WHITE, 12),
-		Inner = takeRibbon(2, LASER_HOT, 7),
-		Glow = takeRibbon(2, LASER_RED, 5),
-		Halo = takeRibbon(2, Color3.fromRGB(200, 10, 30), 2.5),
+		Inner = takeRibbon(2, BEAM.Inner, 5),
+		Glow = takeRibbon(2, BEAM.Glow, 4),
+		Halo = takeRibbon(2, BEAM.Halo, 2.5),
 		-- two faint wide layers so the outer glow fades out instead of ending in a hard edge
-		Auras = { takeRibbon(2, LASER_DEEP, 1.5), takeRibbon(2, LASER_DEEP, 1.2) },
-		Coils = { takeRibbon(COIL_N, Color3.fromRGB(255, 90, 70), 6), takeRibbon(COIL_N, WHITE, 6) },
+		Auras = { takeRibbon(2, BEAM.Deep, 1.5), takeRibbon(2, BEAM.Deep, 1.2) },
+		Coils = { takeRibbon(COIL_N, BEAM.Coil, 6), takeRibbon(COIL_N, BEAM.Inner, 6) },
 		Muzzle = takeRibbon(24, WHITE, 6),
-		Muzzle2 = takeRibbon(24, LASER_RED, 5),
-		ImpactRings = { takeRibbon(24, WHITE, 6), takeRibbon(24, LASER_RED, 5) },
+		Muzzle2 = takeRibbon(24, BEAM.Inner, 5),
+		ImpactRings = { takeRibbon(24, WHITE, 7), takeRibbon(24, BEAM.Inner, 6), takeRibbon(24, BEAM.Glow, 5) },
+		Corona = {},
+		ImpactFlare = {},
 		Bolts = {},
 		Pulses = {},
 		Flare = {},
@@ -587,49 +601,60 @@ local function buildBeam(char)
 		LastUpdate = os.clock(),
 		Ending = nil,
 	}
-	b.Ribbons = { b.Core, b.Inner, b.Glow, b.Halo, b.Auras[1], b.Auras[2], b.Coils[1], b.Coils[2], b.Muzzle, b.Muzzle2, b.ImpactRings[1], b.ImpactRings[2] }
+	b.Ribbons = { b.Core, b.Inner, b.Glow, b.Halo, b.Auras[1], b.Auras[2], b.Coils[1], b.Coils[2], b.Muzzle, b.Muzzle2, b.ImpactRings[1], b.ImpactRings[2], b.ImpactRings[3] }
 	for i = 1, 3 do
-		local r = takeRibbon(BOLT_N, i == 1 and WHITE or Color3.fromRGB(255, 110, 90), 7)
+		local r = takeRibbon(BOLT_N, i == 1 and WHITE or BEAM.Bolt, 7)
 		table.insert(b.Ribbons, r)
 		b.Bolts[i] = { R = r, Next = 0, Offs = table.create(BOLT_N) }
 	end
 	for i = 1, PULSES do
-		local r = takeRibbon(5, WHITE, 9)
+		local r = takeRibbon(5, BEAM.Bolt, 6)
 		table.insert(b.Ribbons, r)
 		b.Pulses[i] = { R = r, Phase = (i - 1) / PULSES }
 	end
 	for i = 1, 4 do
-		local r = takeRibbon(5, i <= 2 and WHITE or LASER_RED, i <= 2 and 8 or 5)
+		local r = takeRibbon(5, i <= 2 and WHITE or BEAM.Inner, i <= 2 and 8 or 5)
 		table.insert(b.Ribbons, r)
 		b.Flare[i] = { R = r, A = (i - 1) * math.pi / 4 + (i <= 2 and 0 or math.pi / 8), L = i <= 2 and 9 or 5, W = i <= 2 and 0.5 or 0.3 }
 	end
 	for i = 1, SPARKS do
-		local r = takeRibbon(5, i % 3 == 0 and WHITE or Color3.fromRGB(255, 170, 60), 6)
+		local r = takeRibbon(5, i % 3 == 0 and WHITE or BEAM.Spark, 6)
 		table.insert(b.Ribbons, r)
 		b.Sparks[i] = { R = r, T = -math.random() * 0.35 }
+	end
+	for i = 1, CORONA do
+		local r = takeRibbon(5, i % 2 == 0 and WHITE or (i % 3 == 0 and BEAM.Glow or BEAM.Inner), 8)
+		table.insert(b.Ribbons, r)
+		b.Corona[i] = { R = r, Next = 0 }
+	end
+	for i = 1, 4 do
+		local r = takeRibbon(5, i <= 2 and WHITE or BEAM.Glow, i <= 2 and 10 or 6)
+		table.insert(b.Ribbons, r)
+		b.ImpactFlare[i] = { R = r, A = (i - 1) * math.pi / 4 + 0.4, L = i <= 2 and 16 or 9, W = i <= 2 and 0.7 or 0.4 }
 	end
 	local holder = Instance.new("Part")
 	holder.Anchored, holder.CanCollide, holder.CanQuery, holder.CanTouch, holder.Transparency = true, false, false, false, 1
 	holder.Size = Vector3.one * 0.2
 	holder.Parent = workspace
 	local light = Instance.new("PointLight")
-	light.Color = LASER_RED
+	light.Color = BEAM.Light
 	light.Brightness = 7
 	light.Range = 40
 	light.Parent = holder
 	b.Holder, b.Light = holder, light
 	-- white-hot balls at the chest and the impact, each in a red heat shell
 	b.MuzzleOrb = glowBall(WHITE, Enum.Material.Neon)
-	b.MuzzleShell = glowBall(LASER_RED, Enum.Material.ForceField)
+	b.MuzzleShell = glowBall(BEAM.Glow, Enum.Material.ForceField)
 	b.ImpactOrb = glowBall(WHITE, Enum.Material.Neon)
-	b.ImpactShell = glowBall(LASER_RED, Enum.Material.ForceField)
+	b.ImpactShell = glowBall(BEAM.Inner, Enum.Material.ForceField)
+	b.ImpactHaze = glowBall(BEAM.Glow, Enum.Material.ForceField)
 	local impactLight = Instance.new("PointLight")
-	impactLight.Color = Color3.fromRGB(255, 90, 50)
-	impactLight.Brightness = 8
-	impactLight.Range = 24
+	impactLight.Color = BEAM.Light
+	impactLight.Brightness = 12
+	impactLight.Range = 34
 	impactLight.Parent = b.ImpactOrb
 	b.ImpactLight = impactLight
-	b.Parts = { holder, b.MuzzleOrb, b.MuzzleShell, b.ImpactOrb, b.ImpactShell }
+	b.Parts = { holder, b.MuzzleOrb, b.MuzzleShell, b.ImpactOrb, b.ImpactShell, b.ImpactHaze }
 	return b
 end
 
@@ -643,7 +668,7 @@ function SlashFX.BeamUpdate(char, from, to, hit, burns)
 		b.From, b.To = from, to
 		b.TargetFrom, b.TargetTo = from, to
 		beams[char] = b
-		starFlare(from, LASER_RED, 2.2, 0.6)
+		starFlare(from, BEAM.Inner, 2.2, 0.6)
 		local cam = workspace.CurrentCamera
 		if _G.WolverineShake and cam then
 			local d = (cam.CFrame.Position - from).Magnitude
@@ -686,9 +711,9 @@ function SlashFX.BeamUpdate(char, from, to, hit, burns)
 			local punch = 1 + math.max(0, 1 - t / 0.2) * 1.2
 			local wp = w * punch
 			local pts = { from2, to2 }
-			setRibbon(b.Core, pts, { 0.85 * wp, 0.7 * wp }, 0)
-			setRibbon(b.Inner, pts, { 2.0 * wp, 1.6 * wp }, 0.1)
-			setRibbon(b.Glow, pts, { 4.2 * wp, 3.4 * wp }, 0.35)
+			setRibbon(b.Core, pts, { 0.6 * wp, 0.5 * wp }, 0)
+			setRibbon(b.Inner, pts, { 1.8 * wp, 1.4 * wp }, 0.2)
+			setRibbon(b.Glow, pts, { 4.2 * wp, 3.4 * wp }, 0.45)
 			setRibbon(b.Halo, pts, { 7 * wp, 5.6 * wp }, 0.65)
 			setRibbon(b.Auras[1], pts, { 10 * wp, 8 * wp }, 0.84)
 			setRibbon(b.Auras[2], pts, { 13.5 * wp, 11 * wp }, 0.92)
@@ -754,38 +779,74 @@ function SlashFX.BeamUpdate(char, from, to, hit, burns)
 			b.MuzzleOrb.Position = from2
 			b.MuzzleShell.Size = Vector3.one * orb * 2.2
 			b.MuzzleShell.Position = from2
-			-- impact: molten ball, shock rings, sparks (nothing if it hits thin air)
+			-- impact: a blinding core in a cyan/magenta fireball, shock rings
+			-- slamming outward, a jagged corona, a huge flare and a spark spray
+			-- (none of it if the beam ends in thin air)
 			local open = openEnded(len)
+			local hitAt = to2 - dir * 0.4
 			for ri, ring in b.ImpactRings do
-				local q = (t / 0.24 + ri * 0.5) % 1
+				local q = (t / 0.2 + ri / #b.ImpactRings) % 1
 				if open then
 					hideRibbon(ring)
 				else
-					setRing(ring, to2 - dir * 0.3, dir, 0.8 + 5 * outQuad(q), 0.35 * (1 - q) * w, q)
+					setRing(ring, to2 - dir * 0.3, dir, 1 + 8 * outQuad(q), 0.5 * (1 - q) * w, q * 0.9)
 				end
 			end
-			local imp = open and 0 or (2.2 + math.random() * 0.8) * w
+			local throb = 1 + 0.25 * math.sin(t * 55) + (math.random() - 0.5) * 0.3
+			local imp = open and 0 or 3 * throb * w
 			b.ImpactOrb.Size = Vector3.one * math.max(0.05, imp)
-			b.ImpactOrb.Position = to2 - dir * 0.4
-			b.ImpactOrb.Transparency = open and 1 or 0
+			b.ImpactOrb.Position = hitAt
 			b.ImpactShell.Size = Vector3.one * math.max(0.05, imp * 2)
-			b.ImpactShell.Position = to2 - dir * 0.4
-			b.ImpactShell.Transparency = open and 1 or 0
+			b.ImpactShell.Position = hitAt
+			b.ImpactHaze.Size = Vector3.one * math.max(0.05, imp * 3.4)
+			b.ImpactHaze.Position = hitAt
+			for _, part in { b.ImpactOrb, b.ImpactShell, b.ImpactHaze } do
+				part.Transparency = open and 1 or 0
+			end
 			b.ImpactLight.Enabled = not open
-			b.ImpactLight.Brightness = 8 * fade
+			b.ImpactLight.Brightness = 12 * fade * throb
+			if cam then
+				local cf = cam.CFrame
+				local p = hitAt + (cf.Position - hitAt).Unit * 1.2
+				for i, sp in b.ImpactFlare do
+					if open then
+						hideRibbon(sp.R)
+					else
+						local a = sp.A + t * (i <= 2 and -0.6 or 0.9)
+						local d = cf.RightVector * math.cos(a) + cf.UpVector * math.sin(a)
+						local l = sp.L * (0.8 + math.random() * 0.4) * w / 2
+						setNeedle(sp.R, p - d * l, p + d * l, sp.W * w, 0)
+					end
+				end
+				-- corona: spikes stabbing out of the hit, re-drawn many times a second
+				for _, sp in b.Corona do
+					if open then
+						hideRibbon(sp.R)
+					else
+						if now >= sp.Next then
+							sp.Next = now + 0.03 + math.random() * 0.05
+							sp.A = math.random() * math.pi * 2
+							sp.L = 2.5 + math.random() * 5
+						end
+						local d = cf.RightVector * math.cos(sp.A) + cf.UpVector * math.sin(sp.A)
+						local r0 = 1.2 * w
+						setNeedle(sp.R, p + d * r0, p + d * (r0 + sp.L * w), 0.45 * w, 0.05)
+					end
+				end
+			end
 			for _, sp in b.Sparks do
 				sp.T += 1 / 60
 				local q = sp.T / 0.35
 				if q >= 1 and not b.Ending and not open then
 					sp.T = 0
-					sp.D = (-dir + Vector3.new(math.random() - 0.5, math.random() * 0.9, math.random() - 0.5) * 1.9).Unit
-					sp.Speed = 18 + math.random() * 26
+					sp.D = (-dir + Vector3.new(math.random() - 0.5, math.random() * 0.9, math.random() - 0.5) * 2.2).Unit
+					sp.Speed = 24 + math.random() * 36
 					sp.Origin = to2
 					q = 0
 				end
 				if q > 0 and q < 1 and sp.D then
 					local p0 = sp.Origin + sp.D * sp.Speed * 0.35 * q + Vector3.new(0, -8 * q * q, 0)
-					setNeedle(sp.R, p0, p0 + sp.D * 1.4, 0.12, q)
+					setNeedle(sp.R, p0, p0 + sp.D * 1.8, 0.14, q)
 				else
 					hideRibbon(sp.R)
 				end
@@ -796,9 +857,11 @@ function SlashFX.BeamUpdate(char, from, to, hit, burns)
 			-- a low rumble for anyone near either end
 			if cam and _G.WolverineShake and now - (b.LastRumble or 0) > 0.1 then
 				b.LastRumble = now
-				local d = math.min((cam.CFrame.Position - from2).Magnitude, open and math.huge or (cam.CFrame.Position - to2).Magnitude)
-				if d < 45 then
-					_G.WolverineShake(0.12 * (1 - d / 45) * fade)
+				local dFrom = (cam.CFrame.Position - from2).Magnitude
+				local dTo = open and math.huge or (cam.CFrame.Position - to2).Magnitude
+				local rumble = math.max(0.12 * (1 - dFrom / 45), 0.28 * (1 - dTo / 60))
+				if rumble > 0 then
+					_G.WolverineShake(rumble * fade)
 				end
 			end
 			return true
@@ -808,11 +871,11 @@ function SlashFX.BeamUpdate(char, from, to, hit, burns)
 	b.LastUpdate = os.clock()
 	b.Ending = nil
 	for _, p in burns or {} do
-		starFlare(p, Color3.fromRGB(255, 150, 60), 1.4, 0.5)
+		starFlare(p, BEAM.Spark, 1.8, 0.5)
 	end
 	if hit and os.clock() - (b.LastHitFlash or 0) > 0.3 then
 		b.LastHitFlash = os.clock()
-		SlashFX.HitFlash(to, LASER_RED, 1.5)
+		SlashFX.HitFlash(to, BEAM.Glow, 2.2)
 	end
 	local dir = (to - from)
 	if dir.Magnitude > 0.1 and not openEnded(dir.Magnitude) and os.clock() - (b.LastScorch or 0) > 0.25 then
@@ -822,11 +885,11 @@ function SlashFX.BeamUpdate(char, from, to, hit, burns)
 		scorch.Shape = Enum.PartType.Cylinder
 		scorch.Anchored, scorch.CanCollide, scorch.CanQuery, scorch.CanTouch, scorch.CastShadow = true, false, false, false, false
 		scorch.Material = Enum.Material.Neon
-		scorch.Color = Color3.fromRGB(255, 120, 40)
-		scorch.Size = Vector3.new(0.06, 3.2, 3.2)
+		scorch.Color = BEAM.Inner
+		scorch.Size = Vector3.new(0.06, 4.5, 4.5)
 		scorch.CFrame = CFrame.lookAt(to - dir * 0.05, to - dir) * CFrame.Angles(0, math.rad(90), 0)
 		scorch.Parent = workspace
-		TweenService:Create(scorch, TweenInfo.new(2.6), { Color = Color3.fromRGB(30, 20, 18), Transparency = 1, Size = Vector3.new(0.06, 2, 2) }):Play()
+		TweenService:Create(scorch, TweenInfo.new(2.6), { Color = Color3.fromRGB(30, 20, 18), Transparency = 1, Size = Vector3.new(0.06, 2.8, 2.8) }):Play()
 		task.delay(2.7, function()
 			scorch:Destroy()
 		end)
@@ -837,7 +900,7 @@ function SlashFX.BeamEnd(char)
 	local b = beams[char]
 	if b and not b.Ending then
 		b.Ending = os.clock()
-		starFlare(b.To, Color3.fromRGB(255, 160, 80), 1.6, 0.5)
+		starFlare(b.To, BEAM.Inner, 2.2, 0.55)
 	end
 end
 
