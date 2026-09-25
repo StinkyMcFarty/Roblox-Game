@@ -2718,9 +2718,17 @@ local function publishMinimap(map)
 	end
 	local rooms = {}
 	for _, rm in ROOMS do
-		table.insert(rooms, { rm.Label, rm.x0, rm.z0, rm.x1, rm.z1 })
+		table.insert(rooms, { rm.Label, rm.x0, rm.z0, rm.x1, rm.z1, rm.Id })
 	end
-	ReplicatedStorage:SetAttribute("Minimap", HttpService:JSONEncode({ Rooms = rooms, Walls = walls, Bounds = { -162, -142, 162, 142 } }))
+	-- where the Sentinel suits are docked (drawn as two Sentinel heads)
+	local pod = map:FindFirstChild("SentinelPod")
+	local podAt = pod and pod:GetPivot().Position
+	ReplicatedStorage:SetAttribute("Minimap", HttpService:JSONEncode({
+		Rooms = rooms,
+		Walls = walls,
+		Bounds = { -162, -142, 162, 142 },
+		Pod = podAt and { math.floor(podAt.X + 0.5), math.floor(podAt.Z + 0.5) } or nil,
+	}))
 end
 
 -- Built once, then cloned each round (so shredded walls come back instantly).
