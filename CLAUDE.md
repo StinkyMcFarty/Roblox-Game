@@ -45,7 +45,7 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
   (`Movement.MaxOut`). Death ray colours live in the `BEAM` table in `SlashFX.lua`.
 - Client Highlights/adornments are parented in the workspace, not `CurrentCamera` (suspected cause
   of Sniff ghosts not drawing live; ghosts now go in a local `ScentGhosts` folder).
-- Minimap (`src/client/Minimap.lua`, top left, M/tap to enlarge): draws rooms + floor-standing
+- Minimap (`src/client/Minimap.lua`, top left; M shows/hides it, tap/click enlarges): draws rooms + floor-standing
   wall pieces published by `publishMinimap` in `Facility.lua` (ReplicatedStorage attribute
   `Minimap`, JSON). It shows only the local player - never other players or Wolverine.
 - Terminal ambience (`src/client/TerminalSounds.lua`): beeps now; the hum needs

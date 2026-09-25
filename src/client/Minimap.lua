@@ -1,6 +1,7 @@
 -- A small north-up map of the facility (top left) with a dot for you that
 -- moves and turns as you do. It shows ONLY you: no other players, no
--- Wolverine. M (or tapping it) toggles a bigger view with room names.
+-- Wolverine. M turns it on and off; tapping/clicking it toggles a bigger view
+-- with room names.
 -- The layout comes from the server (Facility publishMinimap).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -23,6 +24,7 @@ gui.Parent = player:WaitForChild("PlayerGui")
 
 local frame, dot, arrow, bounds, scale, labels
 local big = false
+local shown = true -- M toggles
 local uiScale
 
 local function build(data)
@@ -142,12 +144,8 @@ ReplicatedStorage:GetAttributeChangedSignal("Minimap"):Connect(load)
 load()
 
 UserInputService.InputBegan:Connect(function(input, gp)
-	if not gp and input.KeyCode == Enum.KeyCode.M and frame then
-		big = not big
-		uiScale.Scale = big and BIG or 1
-		for _, t in labels do
-			t.Visible = big
-		end
+	if not gp and input.KeyCode == Enum.KeyCode.M then
+		shown = not shown
 	end
 end)
 
@@ -155,7 +153,7 @@ RunService.RenderStepped:Connect(function()
 	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 	local p = root and root.Position
 	-- only in the facility (not the lobby) and only during a round
-	local inside = frame ~= nil and p ~= nil and workspace:FindFirstChild("Map") ~= nil
+	local inside = shown and frame ~= nil and p ~= nil and workspace:FindFirstChild("Map") ~= nil
 		and p.X > bounds[1] and p.X < bounds[3] and p.Z > bounds[2] and p.Z < bounds[4] and p.Y < 60
 		and player:GetAttribute("Role") ~= "Lobby"
 	gui.Enabled = inside
