@@ -471,6 +471,6 @@ Fx.OnClientEvent:Connect(function(kind, data)
 	elseif kind == "DailyReward" then
 		Daily.ShowReward(data.Amount, data.Streak)
 	elseif kind == "Coins" then
-		Interface.KillFeed(("+%d coins  (%s)"):format(data.Amount, data.Reason))
+		Interface.KillFeed(("+%d %s  (%s)"):format(data.Amount, Config.CoinName, data.Reason))
 	end
 end)

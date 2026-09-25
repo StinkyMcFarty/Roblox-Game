@@ -3,6 +3,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Skins = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Skins"))
 local UIKit = require(script.Parent:WaitForChild("UIKit"))
 local ShopRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Shop")
@@ -95,7 +96,7 @@ local message = new("TextLabel", {
 	Font = Enum.Font.GothamBold,
 	TextScaled = true,
 	TextColor3 = Color3.fromRGB(190, 190, 200),
-	Text = "Earn coins by surviving, rebooting terminals, kills and daily challenges.",
+	Text = "Earn " .. Config.CoinName .. " by surviving, rebooting terminals, kills and daily challenges.",
 	ZIndex = 31,
 }, w)
 
@@ -112,7 +113,8 @@ end
 
 local function coins()
 	local ls = player:FindFirstChild("leaderstats")
-	return (ls and ls:FindFirstChild("Coins")) and ls.Coins.Value or 0
+	local v = ls and ls:FindFirstChild(Config.CoinName)
+	return v and v.Value or 0
 end
 
 local function refresh()
@@ -311,7 +313,7 @@ player:GetAttributeChangedSignal("OwnedClaws"):Connect(refresh)
 player:GetAttributeChangedSignal("Claw"):Connect(refresh)
 task.spawn(function()
 	local ls = player:WaitForChild("leaderstats", 30)
-	local c = ls and ls:WaitForChild("Coins", 30)
+	local c = ls and ls:WaitForChild(Config.CoinName, 30)
 	if c then
 		local last = c.Value
 		c.Changed:Connect(function(v)

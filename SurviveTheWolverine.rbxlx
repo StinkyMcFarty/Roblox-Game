@@ -150,15 +150,18 @@ Config.GuaranteedWolverineProductId = 3714579231
 -- priced 250 Robux, then paste its ID here.
 Config.DoubleChanceGamepassId = 1995650487
 
+-- What the in-game currency is called on screen (saves still store it as Coins).
+Config.CoinName = "Berserker Coins"
+
 -- Coin packs (Store button). For each pack create a Developer Product in the
 -- Creator Dashboard (Monetization > Developer Products) at the Robux price
 -- below, then paste its ID into ProductId. Bigger packs give a bonus.
 -- Roughly: a match pays 50 (died) to 150 (survived), more for kills and takedowns;
 -- claws cost 400-2200, suits 2000-6000.
 Config.CoinPacks = {
-	{ Id = "Handful", Name = "Handful of Coins", Coins = 500, Robux = 49, Bonus = "", ProductId = 3714579257 },
-	{ Id = "Pouch", Name = "Pouch of Coins", Coins = 1200, Robux = 99, Bonus = "+20% BONUS", ProductId = 3714579267 },
-	{ Id = "Crate", Name = "Crate of Coins", Coins = 3000, Robux = 199, Bonus = "+50% BONUS", ProductId = 3714579287 },
+	{ Id = "Handful", Name = "Handful of Berserker Coins", Coins = 500, Robux = 49, Bonus = "", ProductId = 3714579257 },
+	{ Id = "Pouch", Name = "Pouch of Berserker Coins", Coins = 1200, Robux = 99, Bonus = "+20% BONUS", ProductId = 3714579267 },
+	{ Id = "Crate", Name = "Crate of Berserker Coins", Coins = 3000, Robux = 199, Bonus = "+50% BONUS", ProductId = 3714579287 },
 	{ Id = "Vault", Name = "Weapon X Vault", Coins = 7000, Robux = 399, Bonus = "+75% BONUS", ProductId = 3714579305 },
 }
 
@@ -223,6 +226,9 @@ Config.UploadedSounds = {
 	PounceLeap = 92649317075292, -- pounce launch
 	Scream = 94756257053291, -- kill scream after ripping someone in half
 	Step = 101289698791450, StepMetal = 112150969278482, StepHeavy = 114217739046080, -- footsteps (4 takes per file; see Anims.lua)
+	StepWolverine = 0, -- Wolverine's heavy adamantium footfalls (4 takes)
+	ClawDig = 0, -- his claws biting into the floor on all fours (4 concrete + 3 steel takes)
+	ClawStone = 0, -- his claws clashing into concrete walls
 }
 Config.Sounds.Snarl = Config.Sounds.Snarl or ""
 for name, id in Config.UploadedSounds do
@@ -939,6 +945,40 @@ function Combat.IsMetal(part)
 	return METAL[part.Material] == true
 end
 
+local STONE = {
+	[Enum.Material.Concrete] = true,
+	[Enum.Material.Plaster] = true,
+	[Enum.Material.Brick] = true,
+	[Enum.Material.Cobblestone] = true,
+	[Enum.Material.Rock] = true,
+	[Enum.Material.Slate] = true,
+	[Enum.Material.Granite] = true,
+	[Enum.Material.Marble] = true,
+	[Enum.Material.Pavement] = true,
+	[Enum.Material.Limestone] = true,
+	[Enum.Material.Sandstone] = true,
+	[Enum.Material.Basalt] = true,
+	[Enum.Material.Asphalt] = true,
+	[Enum.Material.CeramicTiles] = true,
+}
+-- What his claws meet: "Metal", "Stone" or nil (glass, wood, plastic...).
+-- Facility wall cores carry a Surface attribute, so a painted wall counts as
+-- stone whatever it's made of.
+function Combat.Surface(part)
+	return part:GetAttribute("Surface") or (METAL[part.Material] and "Metal") or (STONE[part.Material] and "Stone") or nil
+end
+
+-- The point on a part's box nearest `from`: where the claws bite in.
+local function nearestPoint(part, from)
+	local rel = part.CFrame:PointToObjectSpace(from)
+	local h = part.Size / 2
+	return part.CFrame:PointToWorldSpace(Vector3.new(
+		math.clamp(rel.X, -h.X, h.X),
+		math.clamp(rel.Y, -h.Y, h.Y),
+		math.clamp(rel.Z, -h.Z, h.Z)
+	))
+end
+
 -- Claws on metal: a spray of molten sparks off the point of contact, an
 -- orange flash and a steel screech. dir = which way the sparks fly.
 function Combat.MetalSparks(position, dir)
@@ -966,6 +1006,63 @@ function Combat.MetalSparks(position, dir)
 	Debris:AddItem(anchor, 2.5)
 end
 
+-- Claws on concrete: steel clashing into stone, with a tiny puff of dust, a
+-- few chips of grit and a couple of pale sparks off the point of contact.
+-- dir = out of the wall (toward him); color = the wall's, to tint the dust.
+function Combat.StoneClash(position, dir, color)
+	local anchor = Instance.new("Part")
+	anchor.Anchored, anchor.CanCollide, anchor.CanQuery, anchor.CanTouch = true, false, false, false
+	anchor.Transparency = 1
+	anchor.Size = Vector3.one * 0.2
+	dir = (dir and dir.Magnitude > 0.01) and dir.Unit or Vector3.yAxis
+	anchor.CFrame = CFrame.lookAt(position, position + dir)
+	anchor.Parent = debrisFolder()
+	local dust = (color or Color3.fromRGB(180, 178, 172)):Lerp(Color3.fromRGB(200, 196, 188), 0.55)
+	Util.Burst(anchor, {
+		Texture = "rbxasset://textures/particles/smoke_main.dds",
+		Color = ColorSequence.new(dust),
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.35), NumberSequenceKeypoint.new(1, 1.6) }),
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.45), NumberSequenceKeypoint.new(1, 1) }),
+		Lifetime = NumberRange.new(0.45, 0.8),
+		Speed = NumberRange.new(2, 6),
+		SpreadAngle = Vector2.new(40, 40),
+		EmissionDirection = Enum.NormalId.Front,
+		Acceleration = Vector3.new(0, -1.5, 0),
+		Drag = 4,
+		Rotation = NumberRange.new(0, 360),
+		RotSpeed = NumberRange.new(-90, 90),
+	}, 7, 1.2)
+	Util.Burst(anchor, {
+		Texture = "rbxasset://textures/particles/smoke_main.dds",
+		Color = ColorSequence.new(dust:Lerp(Color3.fromRGB(50, 50, 50), 0.45)),
+		Size = NumberSequence.new(0.12),
+		Lifetime = NumberRange.new(0.3, 0.55),
+		Speed = NumberRange.new(9, 17),
+		SpreadAngle = Vector2.new(45, 45),
+		EmissionDirection = Enum.NormalId.Front,
+		Acceleration = Vector3.new(0, -70, 0),
+	}, 9, 1)
+	Util.Burst(anchor, {
+		Texture = "rbxasset://textures/particles/sparkles_main.dds",
+		Color = ColorSequence.new(Color3.fromRGB(255, 245, 220), Color3.fromRGB(255, 170, 70)),
+		LightEmission = 1,
+		Size = NumberSequence.new(0.14, 0),
+		Lifetime = NumberRange.new(0.1, 0.2),
+		Speed = NumberRange.new(14, 26),
+		SpreadAngle = Vector2.new(50, 50),
+		EmissionDirection = Enum.NormalId.Front,
+		Acceleration = Vector3.new(0, -50, 0),
+	}, 3, 0.6)
+	if Config.UploadedSounds.ClawStone ~= 0 then
+		Util.SoundAt(Config.Sounds.ClawStone, position, { Volume = 1.5, Pitch = 0.94 + math.random() * 0.12, Range = 180 })
+	else
+		-- stand-in until ClawStone.ogg is uploaded: a sharp crack and a clipped steel tick
+		Util.SoundAt(Config.Sounds.Break, position, { Volume = 1.2, Pitch = 1.3 + math.random() * 0.15, Range = 180 })
+		Util.SoundAt(Config.Sounds.Slash, position, { Volume = 0.5, Pitch = 1.45, Range = 140 })
+	end
+	Debris:AddItem(anchor, 2)
+end
+
 -- Breaks every breakable map part inside a box. Returns how many broke.
 function Combat.BreakInBox(cframe, size, origin, force)
 	local map = Round.Map
@@ -976,25 +1073,61 @@ function Combat.BreakInBox(cframe, size, origin, force)
 	params.FilterType = Enum.RaycastFilterType.Include
 	params.FilterDescendantsInstances = { map }
 	local n = 0
-	local metalAt = nil
+	local metalAt, stone = nil, nil
 	for _, p in workspace:GetPartBoundsInBox(cframe, size, params) do
-		local metal = METAL[p.Material] and p.Position
+		local surface = Combat.Surface(p)
+		local position, color = p.Position, p.Color
+		local contact = surface == "Stone" and not stone and nearestPoint(p, origin)
 		if Combat.BreakPart(p, origin, force or 40) then
 			n += 1
-			metalAt = metalAt or metal
+			if surface == "Metal" then
+				metalAt = metalAt or position
+			elseif contact then
+				stone = { At = contact, Color = color }
+			end
 		end
 	end
 	if metalAt then
 		-- sparks off the face nearest him, flying back past the claws
 		local toward = Util.Flat(origin - metalAt)
 		Combat.MetalSparks(metalAt:Lerp(origin, 0.25) + Vector3.new(0, 0.5, 0), toward)
+	elseif stone then
+		Combat.StoneClash(stone.At, Util.Flat(origin - stone.At), stone.Color)
 	end
 	if n > 0 then
-		VFX.Dust(cframe.Position, Color3.fromRGB(190, 185, 180), 8 + n * 3)
+		if not stone or metalAt then
+			VFX.Dust(cframe.Position, Color3.fromRGB(190, 185, 180), 8 + n * 3)
+			Util.SoundAt(Config.Sounds.Slash, cframe.Position, { Volume = 1, Pitch = 0.7, Range = 180 })
+		end
 		Util.SoundAt(Config.Sounds.Break, cframe.Position, { Volume = 1.6, Pitch = 0.55 + math.random() * 0.2, Range = 260 })
-		Util.SoundAt(Config.Sounds.Slash, cframe.Position, { Volume = 1, Pitch = 0.7, Range = 180 })
 	end
 	return n
+end
+
+-- A slash into something it can't tear through (the facility's outer shell,
+-- consoles, docked suits) still lands on it: sparks off steel, a clash and a
+-- puff of dust off concrete.
+local wallRay = RaycastParams.new()
+wallRay.FilterType = Enum.RaycastFilterType.Include
+function Combat.ClawWall(root, range)
+	local map = Round.Map
+	if not map then
+		return
+	end
+	wallRay.FilterDescendantsInstances = { map }
+	for _, yaw in { 0, 0.45, -0.45 } do
+		local dir = (root.CFrame * CFrame.Angles(0, yaw, 0)).LookVector
+		local hit = workspace:Raycast(root.Position + Vector3.new(0, 0.6, 0), dir * range, wallRay)
+		if hit and math.abs(hit.Normal.Y) < 0.5 then
+			local surface = Combat.Surface(hit.Instance)
+			if surface == "Metal" then
+				Combat.MetalSparks(hit.Position + hit.Normal * 0.3, hit.Normal)
+			elseif surface == "Stone" then
+				Combat.StoneClash(hit.Position + hit.Normal * 0.1, hit.Normal, hit.Instance.Color)
+			end
+			return
+		end
+	end
 end
 
 ---------------------------------------------------------------------------
@@ -3272,6 +3405,8 @@ local function wallRun(parent, ax, az, bx, bz, H, styleName, openings, opts)
 				end
 				for _, sp in spans do
 					local core = P(model, Vector3.new(T, sp[2] - sp[1], w), at((sp[1] + sp[2]) / 2), st.Core, vary(st.Upper, 0.03))
+					-- claws clash on painted walls like concrete (see Combat.Surface)
+					core:SetAttribute("Surface", st.Core == M.Metal and "Metal" or "Stone")
 					if not opts.Solid then
 						breakable(core)
 					end
@@ -5404,7 +5539,7 @@ task.spawn(function()
 		local skin = Skins.List[id]
 		for _, d in lobby:GetDescendants() do
 			if d.Name == "PlaqueText" and d.Text == id and skin then
-				d.Text = skin.Name .. (skin.Price > 0 and ("   " .. skin.Price .. " COINS") or "   FREE")
+				d.Text = skin.Name .. (skin.Price > 0 and ("\n" .. skin.Price .. " " .. Config.CoinName:upper()) or "   FREE")
 			end
 		end
 	end
@@ -5504,7 +5639,7 @@ local blockyDescription -- defined below; used by the lobby respawn handler
 local function onPlayerAdded(player)
 	local ls = Instance.new("Folder")
 	ls.Name = "leaderstats"
-	for _, name in { "Coins", "Wins", "Kills" } do
+	for _, name in { Config.CoinName, "Wins", "Kills" } do
 		local v = Instance.new("IntValue")
 		v.Name = name
 		v.Parent = ls
@@ -7839,7 +7974,7 @@ function MapBuilder.BuildLobby()
 		make("SpotLight", cap, { Face = Enum.NormalId.Bottom, Range = 10, Angle = 70, Brightness = 3, Color = item.Glow:Lerp(Color3.new(1, 1, 1), 0.6) })
 		Costumes.ClawDisplay(lobby, base * CFrame.new(0, 4.35, 0) * CFrame.Angles(0, math.rad(90 + 18), math.rad(6)), item)
 		local plaque = block(lobby, Vector3.new(3.2, 0.9, 0.1), base * CFrame.new(0, 2.2, -1.75) * CFrame.Angles(math.rad(12), 0, 0), M.Metal, rgb(22, 22, 26))
-		surfaceText(plaque, Enum.NormalId.Front, { Text = item.Name .. (item.Price > 0 and ("  " .. item.Price .. " COINS") or "  FREE"), TextColor3 = item.Glow, Font = Enum.Font.GothamBold })
+		surfaceText(plaque, Enum.NormalId.Front, { Text = item.Name .. (item.Price > 0 and ("\n" .. item.Price .. " " .. Config.CoinName:upper()) or "  FREE"), TextColor3 = item.Glow, Font = Enum.Font.GothamBold })
 	end
 
 	-- BRIEFING TABLE: holographic mini-map of the arena --------------------
@@ -8312,7 +8447,7 @@ local function publish(player)
 	player:SetAttribute("LoginStreak", d.Streak)
 	player:SetAttribute("Challenges", HttpService:JSONEncode(d.Daily))
 	local ls = player:FindFirstChild("leaderstats")
-	local coins = ls and ls:FindFirstChild("Coins")
+	local coins = ls and ls:FindFirstChild(Config.CoinName)
 	if coins then
 		coins.Value = d.Coins
 	end
@@ -8506,7 +8641,7 @@ function PlayerData.BuyClaw(player, id)
 		return false, "Already owned"
 	end
 	if d.Coins < claw.Price then
-		return false, "Not enough coins"
+		return false, "Not enough " .. Config.CoinName
 	end
 	d.Coins -= claw.Price
 	d.OwnedClaws[id] = true
@@ -8535,7 +8670,7 @@ function PlayerData.Buy(player, id)
 		return false, "Already owned"
 	end
 	if d.Coins < skin.Price then
-		return false, "Not enough coins"
+		return false, "Not enough " .. Config.CoinName
 	end
 	d.Coins -= skin.Price
 	d.Owned[id] = true
@@ -8710,7 +8845,7 @@ MarketplaceService.ProcessReceipt = function(receipt)
 	publish(player)
 	if pack then
 		fx(player, "Coins", { Amount = pack.Coins, Reason = pack.Name })
-		fx(player, "Announce", { Text = ("+%d COINS — thanks for the support!"):format(pack.Coins), Color = Color3.fromRGB(255, 205, 30), Duration = 3 })
+		fx(player, "Announce", { Text = ("+%d %s — thanks for the support!"):format(pack.Coins, Config.CoinName:upper()), Color = Color3.fromRGB(255, 205, 30), Duration = 3 })
 	else
 		PlayerData.PublishChances()
 		fx(player, "Announce", { Text = "You WILL be Wolverine next round.", Color = Color3.fromRGB(255, 205, 30), Duration = 4 })
@@ -10476,7 +10611,9 @@ local function slash(player, char, root)
 		Util.Sound(Config.Sounds.Slash, root, { Pitch = 0.96 + math.random() * 0.1, Volume = 1.3 })
 		local cfg = Config.Abilities.Slash
 		local cf = root.CFrame * CFrame.new(0, 0, -cfg.Range / 2)
-		Combat.BreakInBox(cf, Vector3.new(cfg.Width, 9, cfg.Range), root.Position, 35)
+		if Combat.BreakInBox(cf, Vector3.new(cfg.Width, 9, cfg.Range), root.Position, 35) == 0 then
+			Combat.ClawWall(root, cfg.Range)
+		end
 		local target = Combat.FindTargets(cf, Vector3.new(cfg.Width, 8, cfg.Range + 1))[1]
 		if target then
 			Combat.Resolve(player, target.Player)
@@ -11390,10 +11527,22 @@ end
 -- Footsteps: custom multi-take files (tools/generate_sfx.py). Each file holds
 -- several takes back to back; a random one (never the same twice running) is
 -- played through PlaybackRegion. Surfaces: tile, steel grating, Sentinel stomp.
+-- Wolverine layers his own on top: the weight of an adamantium skeleton, and
+-- on all fours his claws biting into the floor (ClawDig.ogg holds 4 concrete
+-- takes, then 3 steel ones). Range = roll-off min/max distance.
 local STEP_LAYOUT = {
 	Step = { Slot = 0.5, Takes = 4 },
 	StepMetal = { Slot = 0.5, Takes = 4 },
-	StepHeavy = { Slot = 0.8, Takes = 3 },
+	StepHeavy = { Slot = 0.8, Takes = 3, Range = { 10, 170 } },
+	StepWolverine = { Slot = 0.6, Takes = 4, Range = { 8, 140 } },
+	ClawDig = { Slot = 0.4, Takes = 4, Range = { 5, 95 } },
+	ClawDigMetal = { Slot = 0.4, Takes = 3, First = 4, File = "ClawDig", Range = { 5, 95 } },
+}
+-- Until Wolverine's files are uploaded, a stand-in plays whole instead.
+local STAND_IN = {
+	StepWolverine = { Id = Config.Sounds.Land, Pitch = 0.55, Volume = 0.9 },
+	ClawDig = { Id = Config.Sounds.Slash, Pitch = 0.62, Volume = 0.35 },
+	ClawDigMetal = { Id = Config.Sounds.Slash, Pitch = 0.9, Volume = 0.3 },
 }
 local CUSTOM_STEPS = Config.Sounds.Step ~= ""
 local METAL_FLOORS = {
@@ -11404,9 +11553,16 @@ local METAL_FLOORS = {
 }
 
 local function footstep(st, root, kind, volume, pitch)
-	local id = Config.Sounds[kind]
 	local layout = STEP_LAYOUT[kind]
-	if kind == "StepHeavy" and id == Config.Sounds.StepMetal then
+	local range = layout.Range or { 5, 85 }
+	local file = layout.File or kind
+	local id = Config.Sounds[file]
+	local standIn = STAND_IN[kind]
+	if standIn and (Config.UploadedSounds[file] or 0) == 0 then
+		id, layout = standIn.Id, nil
+		volume *= standIn.Volume
+		pitch *= standIn.Pitch
+	elseif kind == "StepHeavy" and id == Config.Sounds.StepMetal then
 		layout = STEP_LAYOUT.StepMetal -- heavy file not uploaded yet: pitched-down grate
 	end
 	st.Steps = st.Steps or {}
@@ -11417,10 +11573,10 @@ local function footstep(st, root, kind, volume, pitch)
 			local snd = Instance.new("Sound")
 			snd.Name = kind
 			snd.SoundId = id
-			snd.PlaybackRegionsEnabled = true
+			snd.PlaybackRegionsEnabled = layout ~= nil
 			snd.RollOffMode = Enum.RollOffMode.InverseTapered
-			snd.RollOffMinDistance = kind == "StepHeavy" and 10 or 5
-			snd.RollOffMaxDistance = kind == "StepHeavy" and 170 or 85
+			snd.RollOffMinDistance = range[1]
+			snd.RollOffMaxDistance = range[2]
 			snd.Parent = root
 			pool[i] = snd
 		end
@@ -11431,13 +11587,16 @@ local function footstep(st, root, kind, volume, pitch)
 	if snd.Parent ~= root then
 		snd.Parent = root
 	end
-	local take = math.random(0, layout.Takes - 2)
-	if take >= pool.Last then
-		take += 1
+	local from = 0
+	if layout then
+		local take = math.random(0, layout.Takes - 2)
+		if take >= pool.Last then
+			take += 1
+		end
+		pool.Last = take
+		from = ((layout.First or 0) + take) * layout.Slot
+		snd.PlaybackRegion = NumberRange.new(from, from + layout.Slot - 0.02)
 	end
-	pool.Last = take
-	local from = take * layout.Slot
-	snd.PlaybackRegion = NumberRange.new(from, from + layout.Slot - 0.02)
 	snd.Volume = volume * (0.88 + math.random() * 0.12)
 	snd.PlaybackSpeed = pitch * (0.95 + math.random() * 0.1)
 	snd.TimePosition = from
@@ -11445,7 +11604,15 @@ local function footstep(st, root, kind, volume, pitch)
 end
 
 local TAU = math.pi * 2
-local PAW_HITS = { 0.25, 0.6, 0.25 + math.pi, 0.6 + math.pi }
+-- Gallop footfalls: the loop phase at which each paw strikes (matched to
+-- gallopPose). The hind feet land together at the start of the stride, the
+-- clawed front paws half a stride later.
+local PAW_HITS = {
+	{ Phase = 0.1, Front = false },
+	{ Phase = 0.45, Front = false },
+	{ Phase = 0.25 + math.pi, Front = true },
+	{ Phase = 0.6 + math.pi, Front = true },
+}
 
 local Anims = {}
 print("[Anims] animation engine running")
@@ -11762,19 +11929,37 @@ local function sentinelIdle(t)
 	}
 end
 
--- Wolverine on all fours: a smooth bounding lope. The spine stretches as
--- the front paws reach and bunches as the back legs drive; the head stays
--- level and locked forward while the body flows underneath it.
+-- Wolverine on all fours: a bounding gallop. The spine stretches as the
+-- front paws reach and bunches as the back legs drive; the head stays level
+-- and locked forward while the body flows underneath it. The hind legs drive
+-- back short and hard, kick up high behind him as they leave the floor and
+-- stay folded up through the swing until they reach under his belly to land.
+local HIND_LIFT_OFF = 4.366 -- where hindWave bottoms out (the foot leaves the floor)
+local HIND_SWING = 3.834 -- phase the foot then spends in the air
+local function hindLift(x) -- 0 on the floor, up to 1 tucked high mid-swing
+	local u = ((x - HIND_LIFT_OFF) % TAU) / HIND_SWING
+	return u < 1 and math.sin(math.pi * u ^ 0.8) or 0
+end
+
 local function gallopPose(p)
 	local function wave(x) -- smoother than a plain sine: fuller reach, quick recovery
 		return math.sin(x) + 0.22 * math.sin(2 * x)
 	end
+	local function hindWave(x) -- the other way round: a quick drive, a long swing
+		return math.sin(x) - 0.22 * math.sin(2 * x)
+	end
+	local function hindHip(b) -- reaches under his belly, kicks out long behind
+		return 76 + b * 48 + math.min(0, b) * 12
+	end
 	local front = wave(p)
 	local front2 = wave(p + 0.35)
-	local back = wave(p + math.pi)
-	local back2 = wave(p + math.pi + 0.35)
+	local back = hindWave(p + math.pi)
+	local back2 = hindWave(p + math.pi + 0.35)
+	local lift = hindLift(p + math.pi)
+	local lift2 = hindLift(p + math.pi + 0.35)
 	local spine = math.sin(p + math.pi * 0.5) -- + = stretched, - = bunched
-	local pitch = -76 + spine * 5
+	local buck = math.max(0, math.sin(p - 0.35)) ^ 2 -- rear tips up as the hind legs push off
+	local pitch = -76 + spine * 5 - buck * 6
 	local bounce = (1 - math.cos(p * 2)) * 0.14
 	return {
 		Root = CFrame.new(0, -0.62 + bounce, 0) * CFrame.Angles(rad(pitch), rad(math.sin(p) * 3), rad(math.sin(p) * 3)),
@@ -11786,12 +11971,12 @@ local function gallopPose(p)
 		LElbow = CFrame.Angles(rad(14 + 48 * math.max(0, -front2)), 0, 0),
 		RWrist = CFrame.Angles(rad(-30 - 25 * math.max(0, front)), 0, 0),
 		LWrist = CFrame.Angles(rad(-30 - 25 * math.max(0, front2)), 0, 0),
-		RHip = CFrame.Angles(rad(80 + back * 46), 0, rad(4)),
-		LHip = CFrame.Angles(rad(80 + back2 * 46), 0, rad(-4)),
-		RKnee = CFrame.Angles(rad(-(34 + 70 * math.max(0, back))), 0, 0),
-		LKnee = CFrame.Angles(rad(-(34 + 70 * math.max(0, back2))), 0, 0),
-		RAnkle = CFrame.Angles(rad(20 * back), 0, 0),
-		LAnkle = CFrame.Angles(rad(20 * back2), 0, 0),
+		RHip = CFrame.Angles(rad(hindHip(back)), 0, rad(4)),
+		LHip = CFrame.Angles(rad(hindHip(back2)), 0, rad(-4)),
+		RKnee = CFrame.Angles(rad(-(30 + 50 * math.max(0, back) + 78 * lift)), 0, 0),
+		LKnee = CFrame.Angles(rad(-(30 + 50 * math.max(0, back2) + 78 * lift2)), 0, 0),
+		RAnkle = CFrame.Angles(rad(18 * back - 35 * lift), 0, 0), -- toes point as the foot kicks up
+		LAnkle = CFrame.Angles(rad(18 * back2 - 35 * lift2), 0, 0),
 	}
 end
 
@@ -11969,9 +12154,21 @@ step:Connect(function(a, b)
 			end
 		end
 		if galloping and st.LoopBlend > 0.5 then
-			for i, off in PAW_HITS do
-				if math.floor((prevPhase - off) / TAU) ~= math.floor((st.Phase - off) / TAU) then
-					pawStep(st, root, i > 2 and 0.85 or 1.08)
+			if not airborne then
+				local metalFloor = METAL_FLOORS[hum.FloorMaterial]
+				for _, hit in PAW_HITS do
+					local off = hit.Phase
+					if math.floor((prevPhase - off) / TAU) ~= math.floor((st.Phase - off) / TAU) then
+						if hit.Front then
+							-- his claws are out: they bite into the floor with every stride
+							pawStep(st, root, 1.08)
+							footstep(st, root, metalFloor and "ClawDigMetal" or "ClawDig", 0.5, 1)
+						else
+							-- hind feet: the full weight of an adamantium skeleton
+							pawStep(st, root, 0.85)
+							footstep(st, root, "StepWolverine", 0.5, 1.1)
+						end
+					end
 				end
 			end
 		elseif CUSTOM_STEPS and speed > 1.5 and hum.FloorMaterial ~= Enum.Material.Air and not airborne then
@@ -11980,7 +12177,7 @@ step:Connect(function(a, b)
 			if role == "Sentinel" then
 				vol, pitch = 0.55, Config.Sounds.StepHeavy == Config.Sounds.StepMetal and 0.6 or 1
 			elseif role == "Wolverine" then
-				vol, pitch = 0.42, 0.86 -- heavier boots
+				vol, pitch = 0.36, 0.8 -- the boot on the floor; StepWolverine below carries his weight
 			elseif speed > 18 then
 				vol = 0.36
 			end
@@ -12000,6 +12197,10 @@ step:Connect(function(a, b)
 			end
 			if stepped then
 				footstep(st, root, kind, vol, pitch)
+				if role == "Wolverine" then
+					-- adamantium skeleton: every footfall lands far heavier than a survivor's
+					footstep(st, root, "StepWolverine", st.Loop == "Hunt" and loop == "Hunt" and 0.85 or 0.65, 1)
+				end
 			end
 		end
 
@@ -12592,7 +12793,7 @@ Fx.OnClientEvent:Connect(function(kind, data)
 	elseif kind == "DailyReward" then
 		Daily.ShowReward(data.Amount, data.Streak)
 	elseif kind == "Coins" then
-		Interface.KillFeed(("+%d coins  (%s)"):format(data.Amount, data.Reason))
+		Interface.KillFeed(("+%d %s  (%s)"):format(data.Amount, Config.CoinName, data.Reason))
 	end
 end)
 ]]></string>
@@ -14991,6 +15192,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Skins = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Skins"))
 local UIKit = require(script.Parent:WaitForChild("UIKit"))
 local ShopRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Shop")
@@ -15083,7 +15285,7 @@ local message = new("TextLabel", {
 	Font = Enum.Font.GothamBold,
 	TextScaled = true,
 	TextColor3 = Color3.fromRGB(190, 190, 200),
-	Text = "Earn coins by surviving, rebooting terminals, kills and daily challenges.",
+	Text = "Earn " .. Config.CoinName .. " by surviving, rebooting terminals, kills and daily challenges.",
 	ZIndex = 31,
 }, w)
 
@@ -15100,7 +15302,8 @@ end
 
 local function coins()
 	local ls = player:FindFirstChild("leaderstats")
-	return (ls and ls:FindFirstChild("Coins")) and ls.Coins.Value or 0
+	local v = ls and ls:FindFirstChild(Config.CoinName)
+	return v and v.Value or 0
 end
 
 local function refresh()
@@ -15299,7 +15502,7 @@ player:GetAttributeChangedSignal("OwnedClaws"):Connect(refresh)
 player:GetAttributeChangedSignal("Claw"):Connect(refresh)
 task.spawn(function()
 	local ls = player:WaitForChild("leaderstats", 30)
-	local c = ls and ls:WaitForChild("Coins", 30)
+	local c = ls and ls:WaitForChild(Config.CoinName, 30)
 	if c then
 		local last = c.Value
 		c.Changed:Connect(function(v)
@@ -16326,7 +16529,7 @@ end
 -- Store window: four coin packs
 ---------------------------------------------------------------------------
 
-local window = UIKit.Window(gui, "COIN STORE", UDim2.fromOffset(720, 400), K.Yellow)
+local window = UIKit.Window(gui, Config.CoinName:gsub("s$", ""):upper() .. " STORE", UDim2.fromOffset(720, 400), K.Yellow)
 local w = window.Frame
 
 local row = new("Frame", { Position = UDim2.fromOffset(20, 72), Size = UDim2.new(1, -40, 0, 270), BackgroundTransparency = 1, ZIndex = 31 }, w)
@@ -16340,7 +16543,7 @@ local message = new("TextLabel", {
 	Font = Enum.Font.GothamBold,
 	TextScaled = true,
 	TextColor3 = Color3.fromRGB(190, 190, 200),
-	Text = "Coins buy suits and claws in the Armory. Bigger packs give bonus coins.",
+	Text = Config.CoinName .. " buy suits and claws in the Armory. Bigger packs give a bonus.",
 	ZIndex = 31,
 }, w)
 
@@ -16399,10 +16602,12 @@ for i, pack in Config.CoinPacks do
 	new("UIStroke", { Thickness = 2 }, amount)
 	new("TextLabel", {
 		Position = UDim2.fromOffset(8, 152),
-		Size = UDim2.new(1, -16, 0, 18),
+		Size = UDim2.new(1, -16, 0, 32),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBold,
 		TextScaled = true,
+		TextWrapped = true,
+		TextYAlignment = Enum.TextYAlignment.Top,
 		TextColor3 = Color3.fromRGB(210, 205, 190),
 		Text = pack.Name,
 		ZIndex = 33,
@@ -16445,7 +16650,7 @@ MarketplaceService.PromptProductPurchaseFinished:Connect(function(userId, produc
 	end
 	for _, pack in Config.CoinPacks do
 		if pack.ProductId == productId then
-			message.Text = ("+%s coins! Spend them in the Armory."):format(commas(pack.Coins))
+			message.Text = ("+%s %s! Spend them in the Armory."):format(commas(pack.Coins), Config.CoinName)
 			message.TextColor3 = K.Green
 		end
 	end

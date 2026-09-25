@@ -666,7 +666,9 @@ local function slash(player, char, root)
 		Util.Sound(Config.Sounds.Slash, root, { Pitch = 0.96 + math.random() * 0.1, Volume = 1.3 })
 		local cfg = Config.Abilities.Slash
 		local cf = root.CFrame * CFrame.new(0, 0, -cfg.Range / 2)
-		Combat.BreakInBox(cf, Vector3.new(cfg.Width, 9, cfg.Range), root.Position, 35)
+		if Combat.BreakInBox(cf, Vector3.new(cfg.Width, 9, cfg.Range), root.Position, 35) == 0 then
+			Combat.ClawWall(root, cfg.Range)
+		end
 		local target = Combat.FindTargets(cf, Vector3.new(cfg.Width, 8, cfg.Range + 1))[1]
 		if target then
 			Combat.Resolve(player, target.Player)

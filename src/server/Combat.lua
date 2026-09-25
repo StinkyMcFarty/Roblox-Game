@@ -171,6 +171,40 @@ function Combat.IsMetal(part)
 	return METAL[part.Material] == true
 end
 
+local STONE = {
+	[Enum.Material.Concrete] = true,
+	[Enum.Material.Plaster] = true,
+	[Enum.Material.Brick] = true,
+	[Enum.Material.Cobblestone] = true,
+	[Enum.Material.Rock] = true,
+	[Enum.Material.Slate] = true,
+	[Enum.Material.Granite] = true,
+	[Enum.Material.Marble] = true,
+	[Enum.Material.Pavement] = true,
+	[Enum.Material.Limestone] = true,
+	[Enum.Material.Sandstone] = true,
+	[Enum.Material.Basalt] = true,
+	[Enum.Material.Asphalt] = true,
+	[Enum.Material.CeramicTiles] = true,
+}
+-- What his claws meet: "Metal", "Stone" or nil (glass, wood, plastic...).
+-- Facility wall cores carry a Surface attribute, so a painted wall counts as
+-- stone whatever it's made of.
+function Combat.Surface(part)
+	return part:GetAttribute("Surface") or (METAL[part.Material] and "Metal") or (STONE[part.Material] and "Stone") or nil
+end
+
+-- The point on a part's box nearest `from`: where the claws bite in.
+local function nearestPoint(part, from)
+	local rel = part.CFrame:PointToObjectSpace(from)
+	local h = part.Size / 2
+	return part.CFrame:PointToWorldSpace(Vector3.new(
+		math.clamp(rel.X, -h.X, h.X),
+		math.clamp(rel.Y, -h.Y, h.Y),
+		math.clamp(rel.Z, -h.Z, h.Z)
+	))
+end
+
 -- Claws on metal: a spray of molten sparks off the point of contact, an
 -- orange flash and a steel screech. dir = which way the sparks fly.
 function Combat.MetalSparks(position, dir)
@@ -198,6 +232,63 @@ function Combat.MetalSparks(position, dir)
 	Debris:AddItem(anchor, 2.5)
 end
 
+-- Claws on concrete: steel clashing into stone, with a tiny puff of dust, a
+-- few chips of grit and a couple of pale sparks off the point of contact.
+-- dir = out of the wall (toward him); color = the wall's, to tint the dust.
+function Combat.StoneClash(position, dir, color)
+	local anchor = Instance.new("Part")
+	anchor.Anchored, anchor.CanCollide, anchor.CanQuery, anchor.CanTouch = true, false, false, false
+	anchor.Transparency = 1
+	anchor.Size = Vector3.one * 0.2
+	dir = (dir and dir.Magnitude > 0.01) and dir.Unit or Vector3.yAxis
+	anchor.CFrame = CFrame.lookAt(position, position + dir)
+	anchor.Parent = debrisFolder()
+	local dust = (color or Color3.fromRGB(180, 178, 172)):Lerp(Color3.fromRGB(200, 196, 188), 0.55)
+	Util.Burst(anchor, {
+		Texture = "rbxasset://textures/particles/smoke_main.dds",
+		Color = ColorSequence.new(dust),
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.35), NumberSequenceKeypoint.new(1, 1.6) }),
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.45), NumberSequenceKeypoint.new(1, 1) }),
+		Lifetime = NumberRange.new(0.45, 0.8),
+		Speed = NumberRange.new(2, 6),
+		SpreadAngle = Vector2.new(40, 40),
+		EmissionDirection = Enum.NormalId.Front,
+		Acceleration = Vector3.new(0, -1.5, 0),
+		Drag = 4,
+		Rotation = NumberRange.new(0, 360),
+		RotSpeed = NumberRange.new(-90, 90),
+	}, 7, 1.2)
+	Util.Burst(anchor, {
+		Texture = "rbxasset://textures/particles/smoke_main.dds",
+		Color = ColorSequence.new(dust:Lerp(Color3.fromRGB(50, 50, 50), 0.45)),
+		Size = NumberSequence.new(0.12),
+		Lifetime = NumberRange.new(0.3, 0.55),
+		Speed = NumberRange.new(9, 17),
+		SpreadAngle = Vector2.new(45, 45),
+		EmissionDirection = Enum.NormalId.Front,
+		Acceleration = Vector3.new(0, -70, 0),
+	}, 9, 1)
+	Util.Burst(anchor, {
+		Texture = "rbxasset://textures/particles/sparkles_main.dds",
+		Color = ColorSequence.new(Color3.fromRGB(255, 245, 220), Color3.fromRGB(255, 170, 70)),
+		LightEmission = 1,
+		Size = NumberSequence.new(0.14, 0),
+		Lifetime = NumberRange.new(0.1, 0.2),
+		Speed = NumberRange.new(14, 26),
+		SpreadAngle = Vector2.new(50, 50),
+		EmissionDirection = Enum.NormalId.Front,
+		Acceleration = Vector3.new(0, -50, 0),
+	}, 3, 0.6)
+	if Config.UploadedSounds.ClawStone ~= 0 then
+		Util.SoundAt(Config.Sounds.ClawStone, position, { Volume = 1.5, Pitch = 0.94 + math.random() * 0.12, Range = 180 })
+	else
+		-- stand-in until ClawStone.ogg is uploaded: a sharp crack and a clipped steel tick
+		Util.SoundAt(Config.Sounds.Break, position, { Volume = 1.2, Pitch = 1.3 + math.random() * 0.15, Range = 180 })
+		Util.SoundAt(Config.Sounds.Slash, position, { Volume = 0.5, Pitch = 1.45, Range = 140 })
+	end
+	Debris:AddItem(anchor, 2)
+end
+
 -- Breaks every breakable map part inside a box. Returns how many broke.
 function Combat.BreakInBox(cframe, size, origin, force)
 	local map = Round.Map
@@ -208,25 +299,61 @@ function Combat.BreakInBox(cframe, size, origin, force)
 	params.FilterType = Enum.RaycastFilterType.Include
 	params.FilterDescendantsInstances = { map }
 	local n = 0
-	local metalAt = nil
+	local metalAt, stone = nil, nil
 	for _, p in workspace:GetPartBoundsInBox(cframe, size, params) do
-		local metal = METAL[p.Material] and p.Position
+		local surface = Combat.Surface(p)
+		local position, color = p.Position, p.Color
+		local contact = surface == "Stone" and not stone and nearestPoint(p, origin)
 		if Combat.BreakPart(p, origin, force or 40) then
 			n += 1
-			metalAt = metalAt or metal
+			if surface == "Metal" then
+				metalAt = metalAt or position
+			elseif contact then
+				stone = { At = contact, Color = color }
+			end
 		end
 	end
 	if metalAt then
 		-- sparks off the face nearest him, flying back past the claws
 		local toward = Util.Flat(origin - metalAt)
 		Combat.MetalSparks(metalAt:Lerp(origin, 0.25) + Vector3.new(0, 0.5, 0), toward)
+	elseif stone then
+		Combat.StoneClash(stone.At, Util.Flat(origin - stone.At), stone.Color)
 	end
 	if n > 0 then
-		VFX.Dust(cframe.Position, Color3.fromRGB(190, 185, 180), 8 + n * 3)
+		if not stone or metalAt then
+			VFX.Dust(cframe.Position, Color3.fromRGB(190, 185, 180), 8 + n * 3)
+			Util.SoundAt(Config.Sounds.Slash, cframe.Position, { Volume = 1, Pitch = 0.7, Range = 180 })
+		end
 		Util.SoundAt(Config.Sounds.Break, cframe.Position, { Volume = 1.6, Pitch = 0.55 + math.random() * 0.2, Range = 260 })
-		Util.SoundAt(Config.Sounds.Slash, cframe.Position, { Volume = 1, Pitch = 0.7, Range = 180 })
 	end
 	return n
+end
+
+-- A slash into something it can't tear through (the facility's outer shell,
+-- consoles, docked suits) still lands on it: sparks off steel, a clash and a
+-- puff of dust off concrete.
+local wallRay = RaycastParams.new()
+wallRay.FilterType = Enum.RaycastFilterType.Include
+function Combat.ClawWall(root, range)
+	local map = Round.Map
+	if not map then
+		return
+	end
+	wallRay.FilterDescendantsInstances = { map }
+	for _, yaw in { 0, 0.45, -0.45 } do
+		local dir = (root.CFrame * CFrame.Angles(0, yaw, 0)).LookVector
+		local hit = workspace:Raycast(root.Position + Vector3.new(0, 0.6, 0), dir * range, wallRay)
+		if hit and math.abs(hit.Normal.Y) < 0.5 then
+			local surface = Combat.Surface(hit.Instance)
+			if surface == "Metal" then
+				Combat.MetalSparks(hit.Position + hit.Normal * 0.3, hit.Normal)
+			elseif surface == "Stone" then
+				Combat.StoneClash(hit.Position + hit.Normal * 0.1, hit.Normal, hit.Instance.Color)
+			end
+			return
+		end
+	end
 end
 
 ---------------------------------------------------------------------------

@@ -43,7 +43,7 @@ task.spawn(function()
 		local skin = Skins.List[id]
 		for _, d in lobby:GetDescendants() do
 			if d.Name == "PlaqueText" and d.Text == id and skin then
-				d.Text = skin.Name .. (skin.Price > 0 and ("   " .. skin.Price .. " COINS") or "   FREE")
+				d.Text = skin.Name .. (skin.Price > 0 and ("\n" .. skin.Price .. " " .. Config.CoinName:upper()) or "   FREE")
 			end
 		end
 	end
@@ -143,7 +143,7 @@ local blockyDescription -- defined below; used by the lobby respawn handler
 local function onPlayerAdded(player)
 	local ls = Instance.new("Folder")
 	ls.Name = "leaderstats"
-	for _, name in { "Coins", "Wins", "Kills" } do
+	for _, name in { Config.CoinName, "Wins", "Kills" } do
 		local v = Instance.new("IntValue")
 		v.Name = name
 		v.Parent = ls

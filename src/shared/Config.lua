@@ -107,15 +107,18 @@ Config.GuaranteedWolverineProductId = 3714579231
 -- priced 250 Robux, then paste its ID here.
 Config.DoubleChanceGamepassId = 1995650487
 
+-- What the in-game currency is called on screen (saves still store it as Coins).
+Config.CoinName = "Berserker Coins"
+
 -- Coin packs (Store button). For each pack create a Developer Product in the
 -- Creator Dashboard (Monetization > Developer Products) at the Robux price
 -- below, then paste its ID into ProductId. Bigger packs give a bonus.
 -- Roughly: a match pays 50 (died) to 150 (survived), more for kills and takedowns;
 -- claws cost 400-2200, suits 2000-6000.
 Config.CoinPacks = {
-	{ Id = "Handful", Name = "Handful of Coins", Coins = 500, Robux = 49, Bonus = "", ProductId = 3714579257 },
-	{ Id = "Pouch", Name = "Pouch of Coins", Coins = 1200, Robux = 99, Bonus = "+20% BONUS", ProductId = 3714579267 },
-	{ Id = "Crate", Name = "Crate of Coins", Coins = 3000, Robux = 199, Bonus = "+50% BONUS", ProductId = 3714579287 },
+	{ Id = "Handful", Name = "Handful of Berserker Coins", Coins = 500, Robux = 49, Bonus = "", ProductId = 3714579257 },
+	{ Id = "Pouch", Name = "Pouch of Berserker Coins", Coins = 1200, Robux = 99, Bonus = "+20% BONUS", ProductId = 3714579267 },
+	{ Id = "Crate", Name = "Crate of Berserker Coins", Coins = 3000, Robux = 199, Bonus = "+50% BONUS", ProductId = 3714579287 },
 	{ Id = "Vault", Name = "Weapon X Vault", Coins = 7000, Robux = 399, Bonus = "+75% BONUS", ProductId = 3714579305 },
 }
 
@@ -180,6 +183,9 @@ Config.UploadedSounds = {
 	PounceLeap = 92649317075292, -- pounce launch
 	Scream = 94756257053291, -- kill scream after ripping someone in half
 	Step = 101289698791450, StepMetal = 112150969278482, StepHeavy = 114217739046080, -- footsteps (4 takes per file; see Anims.lua)
+	StepWolverine = 0, -- Wolverine's heavy adamantium footfalls (4 takes)
+	ClawDig = 0, -- his claws biting into the floor on all fours (4 concrete + 3 steel takes)
+	ClawStone = 0, -- his claws clashing into concrete walls
 }
 Config.Sounds.Snarl = Config.Sounds.Snarl or ""
 for name, id in Config.UploadedSounds do

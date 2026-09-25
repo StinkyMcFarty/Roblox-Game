@@ -1,10 +1,13 @@
 """Synthesises original sound effects for the game (no samples, no copyrighted audio).
 
-Run:  python3 tools/generate_sfx.py
+Run:  python3 tools/generate_sfx.py            (every sound)
+      python3 tools/generate_sfx.py Name ...   (only these, e.g. ClawStone)
 Output: assets/sfx/*.ogg  (upload in Studio: Asset Manager > Bulk Import, then paste
         the IDs into Config.UploadedSounds in src/shared/Config.lua)
 """
 import os
+import sys
+import zlib
 
 import numpy as np
 import soundfile as sf
@@ -551,6 +554,104 @@ def step_heavy():
     return takes(step_heavy_take, 3, HEAVY_SLOT)
 
 
+WOLF_SLOT = 0.6
+DIG_SLOT = 0.4
+DIG_STONE_TAKES = 4  # ClawDig.ogg: 4 concrete takes, then 3 steel-floor takes
+DIG_METAL_TAKES = 3
+
+
+def step_wolverine_take(k):
+    """Wolverine's footfall: a heavy man with an adamantium skeleton. A deep sub
+    thud as the weight lands, a dull steel 'thunk' from the bones (choked by the
+    flesh around them), a hard heel crack and floor grit crunching under him."""
+    t = t_axis(0.45)
+    sub = np.sin(2 * np.pi * rng.uniform(55, 65) * t * (1 - 0.3 * t)) * np.exp(-t / 0.11)
+    body = lowpass(noise(0.1), 900) * env(0.1, 0.001, 0.035)
+    heel = bandpass(noise(0.025), 900, 4200) * env(0.025, 0.0003, 0.007)
+    bones = ring([rng.uniform(150, 175), rng.uniform(360, 400), rng.uniform(610, 660), rng.uniform(930, 990), rng.uniform(1480, 1560)],
+                 0.3, rng.uniform(0.045, 0.06))
+    bones = lowpass(bones, 1800) * env(0.3, 0.001, 0.12)
+    grit = mix(*[pad(bandpass(noise(0.006), 2000, 7000) * env(0.006, 0.0002, 0.0015) * rng.uniform(0.1, 0.3),
+                     rng.uniform(0.004, 0.1)) for _ in range(8)])
+    toe = mix(lowpass(noise(0.05), 900) * env(0.05, 0.001, 0.015) * 0.5,
+              bandpass(noise(0.015), 1200, 4000) * env(0.015, 0.0004, 0.005) * 0.35)
+    x = mix(sub * 1.5, body * 1.3, heel * 0.9, bones * 0.9, grit, pad(toe, rng.uniform(0.055, 0.075)))
+    x = np.tanh(x * 1.8)  # driven hard: the harmonics carry the weight on small speakers
+    x[-int(SR * 0.08):] *= np.linspace(1, 0, int(SR * 0.08))  # no click where the sub is cut
+    return reverb(highpass(x, 30, 2), 0.35, 0.14)
+
+
+def claw_dig_take(k):
+    """Three claws stabbing into the floor as he bounds on all fours: on concrete
+    a dry chip and a gritty grind, on steel a bright ring and a short screech."""
+    metal = k >= DIG_STONE_TAKES
+    parts = []
+    gap = rng.uniform(0.006, 0.011)
+    for j in range(3):
+        tip = highpass(noise(0.004), 3000) * env(0.004, 0.0002, 0.001)
+        if metal:
+            tick = ring([rng.uniform(2600, 3000) * (1 + j * 0.07), rng.uniform(4300, 4800), rng.uniform(6600, 7300), rng.uniform(9000, 9800)],
+                        0.2, rng.uniform(0.03, 0.045)) * 0.5
+        else:
+            tick = mix(ring([rng.uniform(2300, 2700) * (1 + j * 0.06), rng.uniform(3900, 4400), rng.uniform(6000, 6600)], 0.05, 0.008) * 0.35,
+                       bandpass(noise(0.02), 700, 3500) * env(0.02, 0.0003, 0.006) * 0.6)
+        parts.append(pad(mix(tip * 1.2, tick), j * gap + rng.uniform(0, 0.002)))
+    # the blades raking back through the surface
+    dur = rng.uniform(0.08, 0.11)
+    if metal:
+        drag = sweep_band(noise(dur), rng.uniform(5500, 6500), rng.uniform(2600, 3200), 0.18, 12) * env(dur, 0.004, dur * 0.6) * 0.55
+    else:
+        n = int(SR * dur)
+        grain = (rng.random(n) < 0.08) * rng.normal(0, 1, n) * 3  # gritty crackle
+        drag = (sweep_band(noise(dur), 4200, 1600, 0.6, 12) * 0.6 + bandpass(grain, 1000, 6000)) * env(dur, 0.006, dur * 0.55) * 0.5
+    parts.append(pad(drag, 0.012))
+    # the paw's weight pressing down
+    t = t_axis(0.08)
+    parts.append(np.sin(2 * np.pi * (140 - 400 * t) * t) * env(0.08, 0.001, 0.02) * 0.4)
+    if not metal:
+        parts.append(mix(*[pad(bandpass(noise(0.005), 1500, 6000) * env(0.005, 0.0002, 0.0012) * rng.uniform(0.1, 0.3),
+                               rng.uniform(0.03, 0.16)) for _ in range(6)]))
+    return reverb(highpass(mix(*parts), 80, 2), 0.2, 0.1)
+
+
+def step_wolverine():
+    return takes(step_wolverine_take, 4, WOLF_SLOT)
+
+
+def claw_dig():
+    return takes(claw_dig_take, DIG_STONE_TAKES + DIG_METAL_TAKES, DIG_SLOT)
+
+
+def claw_stone():
+    """Adamantium claws slamming into concrete: a hard bright clash (three blades,
+    the steel ring choked short by the stone), the wall cracking, a gritty rake as
+    the blades bite in, then chips of concrete skittering down."""
+    parts = []
+    for j in range(3):
+        crack = highpass(noise(0.006), 2500) * env(0.006, 0.0002, 0.0015)
+        steel = ring([2380 * (1 + j * 0.05), 3910, 5570, 7340, 9150], 0.25, 0.05) * env(0.25, 0.0003, 0.1)
+        parts.append(pad(mix(crack * 1.4, steel * 0.45 * (1 - j * 0.15)), j * 0.007))
+    # the stone giving way: a dry crack and crunch
+    parts.append(bandpass(noise(0.035), 600, 4500) * env(0.035, 0.0005, 0.01) * 1.1)
+    parts.append(mix(*[pad(bandpass(noise(0.012), 900, 5000) * env(0.012, 0.0003, 0.004) * rng.uniform(0.3, 0.7),
+                           rng.uniform(0.004, 0.055)) for _ in range(6)]))
+    # the weight behind the blow
+    t = t_axis(0.18)
+    parts.append(np.sin(2 * np.pi * (120 - 260 * t) * t) * env(0.18, 0.001, 0.05) * 0.9)
+    parts.append(lowpass(noise(0.08), 800) * env(0.08, 0.001, 0.02) * 0.5)
+    # the blades raking a little way down the wall
+    dur = 0.16
+    n = int(SR * dur)
+    grain = (rng.random(n) < 0.06) * rng.normal(0, 1, n) * 3
+    rake = (sweep_band(noise(dur), 3800, 1500, 0.5, 16) * 0.5 + bandpass(grain, 900, 6000)) * env(dur, 0.01, 0.08) * 0.4
+    parts.append(pad(rake, 0.025))
+    # concrete chips and dust pattering down, thinning out
+    parts.append(mix(*[pad(bandpass(noise(0.006), 1200, 6500) * env(0.006, 0.0002, 0.0015) * rng.uniform(0.06, 0.25),
+                           0.06 + min(0.45, rng.exponential(0.12))) for _ in range(22)]))
+    x = np.tanh(mix(*parts) * 1.4)
+    return finish(reverb(highpass(x, 50, 2), 0.32, 0.14), 0.8, 0.05)
+
+
 def pounce_hit():
     """Pounce strike: two claw sets punch in (crisp double 'shk-shk') over a tight thump."""
     parts = []
@@ -666,12 +767,24 @@ SOUNDS = {
     "Sniff": sniff, "Laser": laser, "Punch": punch, "Terminal": terminal,
     "UIHover": ui_hover, "UIClick": ui_click, "Paw": paw, "PounceHit": pounce_hit, "Impale": impale, "DeathRay": death_ray, "Chase": chase,
     "PounceLeap": pounce_leap, "Scream": scream, "Step": step, "StepMetal": step_metal, "StepHeavy": step_heavy,
+    "StepWolverine": step_wolverine, "ClawDig": claw_dig, "ClawStone": claw_stone,
 }
 
 
 def main():
+    # Name sounds to write only those (e.g. `python3 tools/generate_sfx.py ClawStone`)
+    # so the files already uploaded stay untouched. Each sound gets its own seed,
+    # so it comes out the same whichever others are written with it.
+    global rng
+    only = set(sys.argv[1:])
+    unknown = only - set(SOUNDS)
+    if unknown:
+        sys.exit("unknown sound(s): " + ", ".join(sorted(unknown)))
     os.makedirs(OUT, exist_ok=True)
     for name, fn in SOUNDS.items():
+        if only and name not in only:
+            continue
+        rng = np.random.default_rng(zlib.crc32(name.encode()))
         x = fn()
         path = os.path.join(OUT, name + ".ogg")
         sf.write(path, x, SR, format="OGG", subtype="VORBIS")

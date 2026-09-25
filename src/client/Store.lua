@@ -30,7 +30,7 @@ end
 -- Store window: four coin packs
 ---------------------------------------------------------------------------
 
-local window = UIKit.Window(gui, "COIN STORE", UDim2.fromOffset(720, 400), K.Yellow)
+local window = UIKit.Window(gui, Config.CoinName:gsub("s$", ""):upper() .. " STORE", UDim2.fromOffset(720, 400), K.Yellow)
 local w = window.Frame
 
 local row = new("Frame", { Position = UDim2.fromOffset(20, 72), Size = UDim2.new(1, -40, 0, 270), BackgroundTransparency = 1, ZIndex = 31 }, w)
@@ -44,7 +44,7 @@ local message = new("TextLabel", {
 	Font = Enum.Font.GothamBold,
 	TextScaled = true,
 	TextColor3 = Color3.fromRGB(190, 190, 200),
-	Text = "Coins buy suits and claws in the Armory. Bigger packs give bonus coins.",
+	Text = Config.CoinName .. " buy suits and claws in the Armory. Bigger packs give a bonus.",
 	ZIndex = 31,
 }, w)
 
@@ -103,10 +103,12 @@ for i, pack in Config.CoinPacks do
 	new("UIStroke", { Thickness = 2 }, amount)
 	new("TextLabel", {
 		Position = UDim2.fromOffset(8, 152),
-		Size = UDim2.new(1, -16, 0, 18),
+		Size = UDim2.new(1, -16, 0, 32),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBold,
 		TextScaled = true,
+		TextWrapped = true,
+		TextYAlignment = Enum.TextYAlignment.Top,
 		TextColor3 = Color3.fromRGB(210, 205, 190),
 		Text = pack.Name,
 		ZIndex = 33,
@@ -149,7 +151,7 @@ MarketplaceService.PromptProductPurchaseFinished:Connect(function(userId, produc
 	end
 	for _, pack in Config.CoinPacks do
 		if pack.ProductId == productId then
-			message.Text = ("+%s coins! Spend them in the Armory."):format(commas(pack.Coins))
+			message.Text = ("+%s %s! Spend them in the Armory."):format(commas(pack.Coins), Config.CoinName)
 			message.TextColor3 = K.Green
 		end
 	end

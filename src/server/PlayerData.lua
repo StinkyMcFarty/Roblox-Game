@@ -60,7 +60,7 @@ local function publish(player)
 	player:SetAttribute("LoginStreak", d.Streak)
 	player:SetAttribute("Challenges", HttpService:JSONEncode(d.Daily))
 	local ls = player:FindFirstChild("leaderstats")
-	local coins = ls and ls:FindFirstChild("Coins")
+	local coins = ls and ls:FindFirstChild(Config.CoinName)
 	if coins then
 		coins.Value = d.Coins
 	end
@@ -254,7 +254,7 @@ function PlayerData.BuyClaw(player, id)
 		return false, "Already owned"
 	end
 	if d.Coins < claw.Price then
-		return false, "Not enough coins"
+		return false, "Not enough " .. Config.CoinName
 	end
 	d.Coins -= claw.Price
 	d.OwnedClaws[id] = true
@@ -283,7 +283,7 @@ function PlayerData.Buy(player, id)
 		return false, "Already owned"
 	end
 	if d.Coins < skin.Price then
-		return false, "Not enough coins"
+		return false, "Not enough " .. Config.CoinName
 	end
 	d.Coins -= skin.Price
 	d.Owned[id] = true
@@ -458,7 +458,7 @@ MarketplaceService.ProcessReceipt = function(receipt)
 	publish(player)
 	if pack then
 		fx(player, "Coins", { Amount = pack.Coins, Reason = pack.Name })
-		fx(player, "Announce", { Text = ("+%d COINS — thanks for the support!"):format(pack.Coins), Color = Color3.fromRGB(255, 205, 30), Duration = 3 })
+		fx(player, "Announce", { Text = ("+%d %s — thanks for the support!"):format(pack.Coins, Config.CoinName:upper()), Color = Color3.fromRGB(255, 205, 30), Duration = 3 })
 	else
 		PlayerData.PublishChances()
 		fx(player, "Announce", { Text = "You WILL be Wolverine next round.", Color = Color3.fromRGB(255, 205, 30), Duration = 4 })

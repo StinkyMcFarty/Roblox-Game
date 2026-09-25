@@ -809,6 +809,8 @@ local function wallRun(parent, ax, az, bx, bz, H, styleName, openings, opts)
 				end
 				for _, sp in spans do
 					local core = P(model, Vector3.new(T, sp[2] - sp[1], w), at((sp[1] + sp[2]) / 2), st.Core, vary(st.Upper, 0.03))
+					-- claws clash on painted walls like concrete (see Combat.Surface)
+					core:SetAttribute("Surface", st.Core == M.Metal and "Metal" or "Stone")
 					if not opts.Solid then
 						breakable(core)
 					end

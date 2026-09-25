@@ -38,10 +38,22 @@ end
 -- Footsteps: custom multi-take files (tools/generate_sfx.py). Each file holds
 -- several takes back to back; a random one (never the same twice running) is
 -- played through PlaybackRegion. Surfaces: tile, steel grating, Sentinel stomp.
+-- Wolverine layers his own on top: the weight of an adamantium skeleton, and
+-- on all fours his claws biting into the floor (ClawDig.ogg holds 4 concrete
+-- takes, then 3 steel ones). Range = roll-off min/max distance.
 local STEP_LAYOUT = {
 	Step = { Slot = 0.5, Takes = 4 },
 	StepMetal = { Slot = 0.5, Takes = 4 },
-	StepHeavy = { Slot = 0.8, Takes = 3 },
+	StepHeavy = { Slot = 0.8, Takes = 3, Range = { 10, 170 } },
+	StepWolverine = { Slot = 0.6, Takes = 4, Range = { 8, 140 } },
+	ClawDig = { Slot = 0.4, Takes = 4, Range = { 5, 95 } },
+	ClawDigMetal = { Slot = 0.4, Takes = 3, First = 4, File = "ClawDig", Range = { 5, 95 } },
+}
+-- Until Wolverine's files are uploaded, a stand-in plays whole instead.
+local STAND_IN = {
+	StepWolverine = { Id = Config.Sounds.Land, Pitch = 0.55, Volume = 0.9 },
+	ClawDig = { Id = Config.Sounds.Slash, Pitch = 0.62, Volume = 0.35 },
+	ClawDigMetal = { Id = Config.Sounds.Slash, Pitch = 0.9, Volume = 0.3 },
 }
 local CUSTOM_STEPS = Config.Sounds.Step ~= ""
 local METAL_FLOORS = {
@@ -52,9 +64,16 @@ local METAL_FLOORS = {
 }
 
 local function footstep(st, root, kind, volume, pitch)
-	local id = Config.Sounds[kind]
 	local layout = STEP_LAYOUT[kind]
-	if kind == "StepHeavy" and id == Config.Sounds.StepMetal then
+	local range = layout.Range or { 5, 85 }
+	local file = layout.File or kind
+	local id = Config.Sounds[file]
+	local standIn = STAND_IN[kind]
+	if standIn and (Config.UploadedSounds[file] or 0) == 0 then
+		id, layout = standIn.Id, nil
+		volume *= standIn.Volume
+		pitch *= standIn.Pitch
+	elseif kind == "StepHeavy" and id == Config.Sounds.StepMetal then
 		layout = STEP_LAYOUT.StepMetal -- heavy file not uploaded yet: pitched-down grate
 	end
 	st.Steps = st.Steps or {}
@@ -65,10 +84,10 @@ local function footstep(st, root, kind, volume, pitch)
 			local snd = Instance.new("Sound")
 			snd.Name = kind
 			snd.SoundId = id
-			snd.PlaybackRegionsEnabled = true
+			snd.PlaybackRegionsEnabled = layout ~= nil
 			snd.RollOffMode = Enum.RollOffMode.InverseTapered
-			snd.RollOffMinDistance = kind == "StepHeavy" and 10 or 5
-			snd.RollOffMaxDistance = kind == "StepHeavy" and 170 or 85
+			snd.RollOffMinDistance = range[1]
+			snd.RollOffMaxDistance = range[2]
 			snd.Parent = root
 			pool[i] = snd
 		end
@@ -79,13 +98,16 @@ local function footstep(st, root, kind, volume, pitch)
 	if snd.Parent ~= root then
 		snd.Parent = root
 	end
-	local take = math.random(0, layout.Takes - 2)
-	if take >= pool.Last then
-		take += 1
+	local from = 0
+	if layout then
+		local take = math.random(0, layout.Takes - 2)
+		if take >= pool.Last then
+			take += 1
+		end
+		pool.Last = take
+		from = ((layout.First or 0) + take) * layout.Slot
+		snd.PlaybackRegion = NumberRange.new(from, from + layout.Slot - 0.02)
 	end
-	pool.Last = take
-	local from = take * layout.Slot
-	snd.PlaybackRegion = NumberRange.new(from, from + layout.Slot - 0.02)
 	snd.Volume = volume * (0.88 + math.random() * 0.12)
 	snd.PlaybackSpeed = pitch * (0.95 + math.random() * 0.1)
 	snd.TimePosition = from
@@ -93,7 +115,15 @@ local function footstep(st, root, kind, volume, pitch)
 end
 
 local TAU = math.pi * 2
-local PAW_HITS = { 0.25, 0.6, 0.25 + math.pi, 0.6 + math.pi }
+-- Gallop footfalls: the loop phase at which each paw strikes (matched to
+-- gallopPose). The hind feet land together at the start of the stride, the
+-- clawed front paws half a stride later.
+local PAW_HITS = {
+	{ Phase = 0.1, Front = false },
+	{ Phase = 0.45, Front = false },
+	{ Phase = 0.25 + math.pi, Front = true },
+	{ Phase = 0.6 + math.pi, Front = true },
+}
 
 local Anims = {}
 print("[Anims] animation engine running")
@@ -410,19 +440,37 @@ local function sentinelIdle(t)
 	}
 end
 
--- Wolverine on all fours: a smooth bounding lope. The spine stretches as
--- the front paws reach and bunches as the back legs drive; the head stays
--- level and locked forward while the body flows underneath it.
+-- Wolverine on all fours: a bounding gallop. The spine stretches as the
+-- front paws reach and bunches as the back legs drive; the head stays level
+-- and locked forward while the body flows underneath it. The hind legs drive
+-- back short and hard, kick up high behind him as they leave the floor and
+-- stay folded up through the swing until they reach under his belly to land.
+local HIND_LIFT_OFF = 4.366 -- where hindWave bottoms out (the foot leaves the floor)
+local HIND_SWING = 3.834 -- phase the foot then spends in the air
+local function hindLift(x) -- 0 on the floor, up to 1 tucked high mid-swing
+	local u = ((x - HIND_LIFT_OFF) % TAU) / HIND_SWING
+	return u < 1 and math.sin(math.pi * u ^ 0.8) or 0
+end
+
 local function gallopPose(p)
 	local function wave(x) -- smoother than a plain sine: fuller reach, quick recovery
 		return math.sin(x) + 0.22 * math.sin(2 * x)
 	end
+	local function hindWave(x) -- the other way round: a quick drive, a long swing
+		return math.sin(x) - 0.22 * math.sin(2 * x)
+	end
+	local function hindHip(b) -- reaches under his belly, kicks out long behind
+		return 76 + b * 48 + math.min(0, b) * 12
+	end
 	local front = wave(p)
 	local front2 = wave(p + 0.35)
-	local back = wave(p + math.pi)
-	local back2 = wave(p + math.pi + 0.35)
+	local back = hindWave(p + math.pi)
+	local back2 = hindWave(p + math.pi + 0.35)
+	local lift = hindLift(p + math.pi)
+	local lift2 = hindLift(p + math.pi + 0.35)
 	local spine = math.sin(p + math.pi * 0.5) -- + = stretched, - = bunched
-	local pitch = -76 + spine * 5
+	local buck = math.max(0, math.sin(p - 0.35)) ^ 2 -- rear tips up as the hind legs push off
+	local pitch = -76 + spine * 5 - buck * 6
 	local bounce = (1 - math.cos(p * 2)) * 0.14
 	return {
 		Root = CFrame.new(0, -0.62 + bounce, 0) * CFrame.Angles(rad(pitch), rad(math.sin(p) * 3), rad(math.sin(p) * 3)),
@@ -434,12 +482,12 @@ local function gallopPose(p)
 		LElbow = CFrame.Angles(rad(14 + 48 * math.max(0, -front2)), 0, 0),
 		RWrist = CFrame.Angles(rad(-30 - 25 * math.max(0, front)), 0, 0),
 		LWrist = CFrame.Angles(rad(-30 - 25 * math.max(0, front2)), 0, 0),
-		RHip = CFrame.Angles(rad(80 + back * 46), 0, rad(4)),
-		LHip = CFrame.Angles(rad(80 + back2 * 46), 0, rad(-4)),
-		RKnee = CFrame.Angles(rad(-(34 + 70 * math.max(0, back))), 0, 0),
-		LKnee = CFrame.Angles(rad(-(34 + 70 * math.max(0, back2))), 0, 0),
-		RAnkle = CFrame.Angles(rad(20 * back), 0, 0),
-		LAnkle = CFrame.Angles(rad(20 * back2), 0, 0),
+		RHip = CFrame.Angles(rad(hindHip(back)), 0, rad(4)),
+		LHip = CFrame.Angles(rad(hindHip(back2)), 0, rad(-4)),
+		RKnee = CFrame.Angles(rad(-(30 + 50 * math.max(0, back) + 78 * lift)), 0, 0),
+		LKnee = CFrame.Angles(rad(-(30 + 50 * math.max(0, back2) + 78 * lift2)), 0, 0),
+		RAnkle = CFrame.Angles(rad(18 * back - 35 * lift), 0, 0), -- toes point as the foot kicks up
+		LAnkle = CFrame.Angles(rad(18 * back2 - 35 * lift2), 0, 0),
 	}
 end
 
@@ -617,9 +665,21 @@ step:Connect(function(a, b)
 			end
 		end
 		if galloping and st.LoopBlend > 0.5 then
-			for i, off in PAW_HITS do
-				if math.floor((prevPhase - off) / TAU) ~= math.floor((st.Phase - off) / TAU) then
-					pawStep(st, root, i > 2 and 0.85 or 1.08)
+			if not airborne then
+				local metalFloor = METAL_FLOORS[hum.FloorMaterial]
+				for _, hit in PAW_HITS do
+					local off = hit.Phase
+					if math.floor((prevPhase - off) / TAU) ~= math.floor((st.Phase - off) / TAU) then
+						if hit.Front then
+							-- his claws are out: they bite into the floor with every stride
+							pawStep(st, root, 1.08)
+							footstep(st, root, metalFloor and "ClawDigMetal" or "ClawDig", 0.5, 1)
+						else
+							-- hind feet: the full weight of an adamantium skeleton
+							pawStep(st, root, 0.85)
+							footstep(st, root, "StepWolverine", 0.5, 1.1)
+						end
+					end
 				end
 			end
 		elseif CUSTOM_STEPS and speed > 1.5 and hum.FloorMaterial ~= Enum.Material.Air and not airborne then
@@ -628,7 +688,7 @@ step:Connect(function(a, b)
 			if role == "Sentinel" then
 				vol, pitch = 0.55, Config.Sounds.StepHeavy == Config.Sounds.StepMetal and 0.6 or 1
 			elseif role == "Wolverine" then
-				vol, pitch = 0.42, 0.86 -- heavier boots
+				vol, pitch = 0.36, 0.8 -- the boot on the floor; StepWolverine below carries his weight
 			elseif speed > 18 then
 				vol = 0.36
 			end
@@ -648,6 +708,10 @@ step:Connect(function(a, b)
 			end
 			if stepped then
 				footstep(st, root, kind, vol, pitch)
+				if role == "Wolverine" then
+					-- adamantium skeleton: every footfall lands far heavier than a survivor's
+					footstep(st, root, "StepWolverine", st.Loop == "Hunt" and loop == "Hunt" and 0.85 or 0.65, 1)
+				end
 			end
 		end
 

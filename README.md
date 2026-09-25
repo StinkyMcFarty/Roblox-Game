@@ -17,7 +17,7 @@ The whole game is written as code. The map, Wolverine's look, the claws, the "an
 |---|---|
 | **Server size: 7** (1 Wolverine + 6 survivors) | Creator Dashboard → your experience → Places → the place → Server Size |
 | **Avatar type: R15** | Studio → Game Settings → Avatar (the gore and all-fours run are built for R15) |
-| **Saving coins/skins in Studio** | Game Settings → Security → *Enable Studio Access to API Services* |
+| **Saving Berserker Coins/skins in Studio** | Game Settings → Security → *Enable Studio Access to API Services* |
 | **80 Robux "Be Wolverine" pass** | Create a Developer Product (80 R$), then paste its ID into `Config.GuaranteedWolverineProductId` in `src/shared/Config.lua` |
 | **Sounds** | Paste Creator Store sound IDs into `Config.Sounds` (Roar, Heartbeat, Fart, Sniff are empty by default) |
 
@@ -55,6 +55,9 @@ Anything left at `0` uses a built-in Roblox sound instead. Roblox may ask you to
 Also upload `DeathRay.ogg`, `Chase.ogg` (chase music), `Heartbeat.ogg` and `Fart.ogg`, then paste their IDs.
 Footsteps: upload `Step.ogg` (tile), `StepMetal.ogg` (grating) and `StepHeavy.ogg` (Sentinel stomp) and paste their IDs as `Step`, `StepMetal`, `StepHeavy`. Until `Step` is set, walking keeps the default Roblox run sound.
 Also upload `PounceLeap.ogg` (pounce launch) as `PounceLeap`, `Scream.ogg` (kill scream) as `Scream`, and the remade `Roar.ogg` (replace the old `Roar` ID).
+Wolverine's adamantium body: upload `StepWolverine.ogg` (his heavy footfalls), `ClawDig.ogg` (claws biting into the floor on all fours) and `ClawStone.ogg` (claws clashing into concrete) and paste their IDs as `StepWolverine`, `ClawDig`, `ClawStone`. Until then, pitched built-in sounds stand in.
+
+To remake only some sounds, name them: `python3 tools/generate_sfx.py ClawStone ClawDig` (the others stay untouched).
 
 **Upload at least `Slash.ogg` and `Roar.ogg`.** Without them, M1 uses Roblox's old sword sound and the roar is a pitched-down placeholder.
 
@@ -100,7 +103,7 @@ Also upload `PounceLeap.ogg` (pounce launch) as `PounceLeap`, `Scream.ogg` (kill
   - The last suit standing hits at full (1x) power.
   - 4 Wolverine hits rip a suit in half.
 
-**Progression:** coins for surviving, kills, terminals and playing matches.
+**Progression:** Berserker Coins for surviving, kills, terminals and playing matches.
 
 - **Suits** (saved): Logan (free), Comic Wolverine (1000), Weapon X (2000), Old Man Logan (3000).
 - **Claws** (saved): Adamantium (free), Bone (400), Gold (900), Blood-Soaked (1100, drips), Obsidian (1400), Cosmic (2200, glows).
@@ -171,16 +174,20 @@ src/shared/   Config, Skins, Util
 - **Kill scream** after every rip-in-half. **Molten sparks** fly when his claws tear through metal or hit a Sentinel.
 
 ### Store & AFK
-- **STORE** (lobby dock): four coin packs — 500 coins (R$49), 1,200 (R$99, +20%), 3,000 (R$199, +50%), 7,000 (R$399, +75%).
+- **STORE** (lobby dock): four packs of Berserker Coins — 500 (R$49), 1,200 (R$99, +20%), 3,000 (R$199, +50%), 7,000 (R$399, +75%).
   Create a Developer Product for each at that price (Creator Dashboard > your experience > Monetization > Developer Products)
   and paste the IDs into `Config.CoinPacks` (`ProductId`). Purchases are recorded in the player's save so they're never granted twice.
 - **AFK** (lobby dock): toggles sitting out. AFK players aren't put in matches, don't count toward the player minimum and have 0% Wolverine chance.
   Idling ~2 minutes turns it on automatically.
 - **Death-ray push-through**: when a Sentinel's beam is on Wolverine, mash **F** (tap Sniff on mobile) to fight it; fill the meter past halfway and he braces and walks slowly into the beam.
 - **Speeds**: Wolverine's upright run is 15% slower than a survivor sprint; on all fours he's 15% faster.
+- **Gallop**: on all fours his hind legs drive back hard, kick up high behind him and stay tucked through the swing.
+- **Adamantium weight**: his footsteps land far heavier than a survivor's; on all fours you hear his claws dig into the floor (concrete grinds, steel rings).
+- **Claws vs surfaces**: metal walls and Sentinels throw molten sparks; concrete and painted walls clash like steel on stone with a small puff of dust. This includes walls he can't tear through, like the outer shell.
+- **Currency**: coins are called **Berserker Coins** on screen (`Config.CoinName`). Saves still store them as `Coins`, so nobody loses theirs.
 
-### Match coins
-| | Coins |
+### Match Berserker Coins
+| | Berserker Coins |
 |---|---|
 | Survive the match (scientist or Sentinel) | 150 |
 | Get ripped in half | 50 |
