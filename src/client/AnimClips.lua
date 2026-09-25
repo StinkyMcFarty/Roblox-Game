@@ -515,8 +515,10 @@ Clips.Laser = {
 }
 
 -- Death ray: brace and wind the core up, then lean into the beam and hold it
+-- (walking while firing: the legs stride, the upper body stays locked on)
 Clips.DeathRay = {
 	Hold = true,
+	LegsWhenMoving = true,
 	Keys = {
 		{ T = 0, Pose = REST },
 		{ T = 0.3, Ease = "Out", Pose = { Waist = { -14, 0, 0 }, Neck = { -10, 0, 0 }, RShoulder = { -40, 0, 30 }, LShoulder = { -40, 0, -30 }, RElbow = { 70, 0, 0 }, LElbow = { 70, 0, 0 }, Root = { 0, 0, 0, 0, -0.5, 0.2 }, RHip = { 30, 0, 8 }, LHip = { -10, 0, -8 }, RKnee = { -40, 0, 0 }, LKnee = { -25, 0, 0 } } },
@@ -529,6 +531,7 @@ Clips.DeathRay = {
 -- Inhibitor Blast charge: crouch, fists pulled in to the core, trembling with power
 Clips.PulseCharge = {
 	Hold = true,
+	LegsWhenMoving = true,
 	Tremble = true,
 	Keys = {
 		{ T = 0, Pose = REST },

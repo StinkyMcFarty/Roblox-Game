@@ -9,6 +9,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Clips = require(script.Parent:WaitForChild("AnimClips"))
+local LEG_KEYS = { Root = true, RHip = true, LHip = true, RKnee = true, LKnee = true, RAnkle = true, LAnkle = true }
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 
 -- All-fours footfalls: heavy padded thumps with a claw click, on the stride.
@@ -780,6 +781,10 @@ step:Connect(function(a, b)
 			end
 		end
 
+		-- clips marked LegsWhenMoving (the death ray, the blast charge) keep the
+		-- upper body in the clip but hand the legs to the walk when it moves
+		local legsFree = clip ~= nil and clip.Def.LegsWhenMoving and st.LoopBlend > 0.25
+
 		local breathPose = breath(st.BreathPhase, breathAmp)
 		local layered = st.LoopBlend > 0 or st.IdleBlend > 0 or st.Clip ~= nil
 		st.Springs = st.Springs or {}
@@ -796,6 +801,9 @@ step:Connect(function(a, b)
 					target = target:Lerp(lp, st.LoopBlend)
 				end
 				local cp = clipPose and clipPose[key]
+				if cp and legsFree and LEG_KEYS[key] then
+					cp = nil
+				end
 				if cp then
 					target = target:Lerp(cp, clipWeight)
 				end
