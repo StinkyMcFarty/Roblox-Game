@@ -232,6 +232,88 @@ async function build(sceneName) {
 const built = [];
 for (const s of scenes) built.push(await build(s));
 
+// compose=1: every scene in one shot (a thumbnail). place = "x,y,z,yaw,scale;..."
+// per scene, cam / look = "x,y,z", fov. Neon glows through a bloom pass.
+if (q.get('compose')) {
+  const { EffectComposer } = await import('three/addons/postprocessing/EffectComposer.js');
+  const { RenderPass } = await import('three/addons/postprocessing/RenderPass.js');
+  const { UnrealBloomPass } = await import('three/addons/postprocessing/UnrealBloomPass.js');
+  const { OutputPass } = await import('three/addons/postprocessing/OutputPass.js');
+  renderer.setScissorTest(false);
+  renderer.setSize(W, H);
+  const scene = new THREE.Scene();
+  const bgc = document.createElement('canvas'); bgc.width = 16; bgc.height = 256;
+  const bctx = bgc.getContext('2d');
+  const grad = bctx.createLinearGradient(0, 0, 0, 256);
+  grad.addColorStop(0, q.get('bgTop') || '#07080c'); grad.addColorStop(0.62, q.get('bgMid') || '#1b1d26'); grad.addColorStop(1, '#0b0c10');
+  bctx.fillStyle = grad; bctx.fillRect(0, 0, 16, 256);
+  const bgTex = new THREE.CanvasTexture(bgc); bgTex.colorSpace = THREE.SRGBColorSpace;
+  scene.background = bgTex;
+  scene.environment = envTex;
+  scene.fog = new THREE.Fog(0x0c0d12, 40, 110);
+  const place = (q.get('place') || '').split(';').map((p) => p.split(',').map(Number));
+  built.forEach((g, i) => {
+    const [x = 0, y = 0, z = 0, yaw = 0, sc = 1] = place[i] || [];
+    const box = new THREE.Box3().setFromObject(g);
+    const holder = new THREE.Group();
+    g.position.y -= box.min.y; // feet on the floor
+    holder.add(g);
+    holder.scale.setScalar(sc);
+    holder.rotation.y = yaw * Math.PI / 180;
+    holder.position.set(x, y, z);
+    holder.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    scene.add(holder);
+  });
+  // backdrop=1: a facility wall behind them (steel panels, a hazard band,
+  // a row of caged lamps)
+  if (q.get('backdrop')) {
+    const wc = document.createElement('canvas'); wc.width = 4096; wc.height = 1024;
+    const w = wc.getContext('2d');
+    w.fillStyle = '#15161b'; w.fillRect(0, 0, 4096, 1024);
+    for (let x = 0; x < 4096; x += 160) {
+      w.fillStyle = x % 320 ? '#1a1b21' : '#17181e'; w.fillRect(x, 0, 156, 1024);
+      w.fillStyle = '#0b0c0f'; w.fillRect(x + 156, 0, 4, 1024);
+      for (const y of [120, 520, 900]) { w.fillStyle = '#2a2b32'; w.beginPath(); w.arc(x + 20, y, 6, 0, 7); w.arc(x + 136, y, 6, 0, 7); w.fill(); }
+    }
+    w.save(); w.beginPath(); w.rect(0, 800, 4096, 90); w.clip();
+    for (let x = -200; x < 4300; x += 80) { w.fillStyle = (x / 80) % 2 ? '#d8a818' : '#111'; w.beginPath(); w.moveTo(x, 890); w.lineTo(x + 40, 890); w.lineTo(x + 130, 800); w.lineTo(x + 90, 800); w.fill(); }
+    w.restore();
+    for (let x = 200; x < 4096; x += 480) {
+      const g = w.createRadialGradient(x, 330, 4, x, 330, 150);
+      g.addColorStop(0, 'rgba(255,214,140,0.95)'); g.addColorStop(0.12, 'rgba(255,190,110,0.5)'); g.addColorStop(1, 'rgba(255,170,90,0)');
+      w.fillStyle = g; w.fillRect(x - 160, 170, 320, 320);
+      w.fillStyle = '#fff2d8'; w.fillRect(x - 26, 318, 52, 24);
+    }
+    const wt = new THREE.CanvasTexture(wc); wt.colorSpace = THREE.SRGBColorSpace; wt.anisotropy = 8;
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(120, 30), new THREE.MeshBasicMaterial({ map: wt, fog: true }));
+    wall.position.set(0, 15, +(q.get('wallZ') || 22)); wall.rotation.y = Math.PI; scene.add(wall);
+  }
+  // a dark steel floor with a sheen
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: 0x0e0f13, roughness: 0.85, metalness: 0.2, envMap: envTex, envMapIntensity: 0.2 }));
+  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+  // floor grid lines
+  scene.add(new THREE.HemisphereLight(0xb8c4ff, 0x201a18, 0.55));
+  const key = new THREE.DirectionalLight(0xfff0dc, +(q.get('key') || 2.6)); key.position.set(-14, 22, -18); key.castShadow = true;
+  key.shadow.mapSize.set(4096, 4096); Object.assign(key.shadow.camera, { left: -30, right: 30, top: 30, bottom: -10, far: 120 }); key.shadow.bias = -0.0004;
+  scene.add(key);
+  const rimY = new THREE.DirectionalLight(0xffc830, 2.4); rimY.position.set(8, 16, 30); scene.add(rimY);
+  const rimR = new THREE.DirectionalLight(0xff3020, 1.6); rimR.position.set(-20, 6, 18); scene.add(rimR);
+  for (const extra of (q.get('lights') || '').split(';').filter(Boolean)) {
+    const [x, y, z, hex, pow, range] = extra.split(',');
+    const l = new THREE.PointLight(new THREE.Color('#' + hex), +pow, +range, 2); l.position.set(+x, +y, +z); scene.add(l);
+  }
+  const cam = new THREE.PerspectiveCamera(+(q.get('fov') || 35), W / H, 0.1, 300);
+  cam.position.set(...(q.get('cam') || '0,6,-30').split(',').map(Number));
+  cam.lookAt(new THREE.Vector3(...(q.get('look') || '0,5,0').split(',').map(Number)));
+  const composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, cam));
+  composer.addPass(new UnrealBloomPass(new THREE.Vector2(W, H), +(q.get('bloom') || 0.4), 0.5, +(q.get('bloomAt') || 0.97)));
+  composer.addPass(new OutputPass());
+  composer.render();
+  document.title = 'done';
+  throw new Error('composed'); // stop here
+}
+
 for (let si = 0; si < scenes.length; si++) {
   for (let vi = 0; vi < views.length; vi++) {
     const scene = new THREE.Scene();

@@ -6,7 +6,7 @@ const { chromium } = require('playwright-core');
   const browser = await chromium.launch({ executablePath: process.env.CHROME || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
   const page = await browser.newPage({ viewport: { width: +w, height: +h }, deviceScaleFactor: 1 });
   page.on('console', (m) => { if (m.type() === 'error') console.log('console:', m.text()); });
-  page.on('pageerror', (e) => console.log('pageerror:', e.message));
+  page.on('pageerror', (e) => { if (e.message !== 'composed') console.log('pageerror:', e.message); });
   await page.goto('http://localhost:8765/tools/preview/render.html?' + query);
   await page.waitForFunction(() => document.title === 'done', null, { timeout: 120000 });
   await page.locator('canvas').screenshot({ path: out });
