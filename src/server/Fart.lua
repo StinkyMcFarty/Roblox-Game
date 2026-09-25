@@ -1,5 +1,7 @@
 -- Survivor counter to Wolverine's Sniff: a green gas cloud out the back.
 -- For a while afterwards the Sniff tracker points at the cloud, not you.
+-- The G key is the survivor's power: the fart (plain or Turbo Fart), or, with
+-- the Dodge upgrade equipped instead, a split-second dodge (Fart.Dodge).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Debris = game:GetService("Debris")
 
@@ -17,12 +19,16 @@ local Fx = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Fx")
 local Fart = {}
 
 local lastUsed = {} -- [Player] = os.clock()
+local lastDodge = {} -- [Player] = os.clock()
 local clouds = {} -- [Player] = { Position, Time }
 
 function Fart.Use(player)
 	local cfg = Config.Fart
 	if not Round.Survivors[player] or player:GetAttribute("Role") ~= "Survivor" then
 		return
+	end
+	if PlayerData.Power(player) == "Dodge" then
+		return -- G is their dodge instead
 	end
 	if os.clock() - (lastUsed[player] or -math.huge) < cfg.Cooldown - 0.5 then
 		return
@@ -38,7 +44,7 @@ function Fart.Use(player)
 	-- (sprinting or not, even out of stamina) also gives a speed burst and a
 	-- trail of gas streaming out behind
 	Movement.MaxOut(player)
-	if PlayerData.HasUpgrade(player, "TurboFart") then
+	if PlayerData.Power(player) == "TurboFart" then
 		local up = Config.Upgrades.TurboFart
 		Status.Apply(player, "FartBoost", up.Duration)
 		Fart.Trail(char, up.Duration, up.TrailTime)
@@ -186,8 +192,36 @@ function Fart.Trail(char, duration, fade)
 	end
 end
 
+-- Dodge upgrade: pressed just as he strikes, a split second of i-frames. His
+-- attack lands on nothing (Combat.BreakShield sees "Dodging"), and it's on
+-- cooldown whether it dodged anything or not.
+function Fart.Dodge(player)
+	local up = Config.Upgrades.Dodge
+	if not Round.Survivors[player] or player:GetAttribute("Role") ~= "Survivor" then
+		return
+	end
+	if PlayerData.Power(player) ~= "Dodge" or Hiding.IsHidden(player) then
+		return
+	end
+	if os.clock() - (lastDodge[player] or -math.huge) < up.Cooldown - 0.5 then
+		return
+	end
+	local char = player.Character
+	local root = Util.Root(char)
+	if not (root and Util.IsAlive(char)) then
+		return
+	end
+	lastDodge[player] = os.clock()
+	Status.Apply(player, "Immune", up.Window)
+	Status.Apply(player, "Dodging", up.Window)
+	VFX.Anim(char, "Dodge")
+	Util.Sound(Config.Sounds.Whoosh, root, { Volume = 1.2, Pitch = 1.3, Range = 60 })
+	Fx:FireAllClients("Dodge", { Char = char, Duration = up.Window })
+end
+
 function Fart.Reset(player)
 	lastUsed[player] = nil
+	lastDodge[player] = nil
 	clouds[player] = nil
 end
 

@@ -519,6 +519,22 @@ Clips.Fart = {
 	},
 }
 
+-- Dodge (upgrade): a snap sway out of the way, ducking and leaning off to
+-- the side with the arms tucked up, then back upright.
+local SWAY = {
+	Root = { -10, 20, 22, -0.9, -0.7, 0 }, Waist = { -8, 10, 10 }, Neck = { 6, -18, -12 },
+	RShoulder = { 60, 0, 30 }, LShoulder = { 40, 0, -50 }, RElbow = { 80, 0, 0 }, LElbow = { 55, 0, 0 },
+	RHip = { 10, 0, 20 }, LHip = { 30, 0, -14 }, RKnee = { -20, 0, 0 }, LKnee = { -50, 0, 0 },
+}
+Clips.Dodge = {
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.08, Ease = "Out", Pose = SWAY },
+		{ T = 0.38, Pose = SWAY },
+		{ T = 0.6, Ease = "InOut", Pose = REST },
+	},
+}
+
 ---------------------------------------------------------------------------
 -- Sentinel
 ---------------------------------------------------------------------------

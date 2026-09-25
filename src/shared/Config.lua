@@ -119,7 +119,8 @@ Config.Sentinel = {
 }
 
 -- Survivor upgrades (bought once with coins, kept forever; client/Upgrades).
--- Order sets the order in the Upgrades window.
+-- They're powers on the G key: a survivor equips ONE (PlayerData "Power"),
+-- none = the plain fart. Order sets the order in the Upgrades window.
 Config.Upgrades = {
 	TurboFart = {
 		Order = 1,
@@ -130,6 +131,15 @@ Config.Upgrades = {
 		Boost = 8, -- extra walk speed during the burst
 		Duration = 2.5, -- seconds of burst
 		TrailTime = 2, -- the gas trail fades after this long
+	},
+	Dodge = {
+		Order = 2,
+		Name = "Dodge",
+		Icon = "🌀",
+		Price = 300,
+		Desc = "Replaces your fart. Press G just as he strikes: for a split second nothing can touch you and his attack misses.",
+		Window = 0.5, -- seconds of i-frames after pressing
+		Cooldown = 30,
 	},
 }
 

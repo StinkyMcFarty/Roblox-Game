@@ -211,6 +211,8 @@ Ability.OnServerEvent:Connect(function(player, name, arg)
 		Movement.SetInput(player, "Sprint", arg == true)
 	elseif name == "Fart" then
 		Fart.Use(player)
+	elseif name == "Dodge" then
+		Fart.Dodge(player)
 	elseif name == "Unhide" then
 		Hiding.Leave(player)
 	elseif name == "TerminalResult" then
@@ -244,6 +246,8 @@ ShopRemote.OnServerInvoke = function(player, action, id)
 		return PlayerData.EquipSentinel(player, id)
 	elseif action == "BuyUpgrade" then
 		return PlayerData.BuyUpgrade(player, id)
+	elseif action == "EquipUpgrade" then
+		return PlayerData.EquipUpgrade(player, id)
 	end
 	return false, "Bad request"
 end

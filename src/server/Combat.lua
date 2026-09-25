@@ -498,18 +498,30 @@ function Combat.PullOut(victim)
 end
 
 -- Hitting someone on i-frames doesn't hurt them, but it shatters the i-frames.
+-- A survivor mid-Dodge (upgrade) slips it instead: the attack whiffs.
 function Combat.BreakShield(victim)
 	if not Status.Has(victim, "Immune") then
 		return false
 	end
+	local dodged = Status.Has(victim, "Dodging")
 	Status.Clear(victim, "Immune")
+	Status.Clear(victim, "Dodging")
 	local char = victim.Character
 	local glow = char and char:FindFirstChild("IFrameGlow")
 	if glow then
 		glow:Destroy()
 	end
 	local torso = Util.Torso(char)
-	if torso then
+	if dodged then
+		if torso then
+			Util.Sound(Config.Sounds.Whoosh, torso, { Volume = 1.6, Pitch = 0.9, Range = 90 })
+		end
+		Fx:FireAllClients("Dodged", { Char = char })
+		Util.FireClient(Fx, victim, "Announce", { Text = "DODGED!", Color = Color3.fromRGB(120, 230, 255), Duration = 1.2 })
+		if Round.Wolverine then
+			Util.FireClient(Fx, Round.Wolverine, "Announce", { Text = victim.Name .. " dodged you", Color = Color3.fromRGB(120, 230, 255), Duration = 1.2 })
+		end
+	elseif torso then
 		VFX.Impact(torso.Position, Color3.fromRGB(160, 220, 255), 0.8, char)
 		Util.Sound(Config.Sounds.Slash, torso, { Volume = 1.2, Pitch = 1.6 })
 	end

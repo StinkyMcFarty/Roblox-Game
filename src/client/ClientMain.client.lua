@@ -52,6 +52,16 @@ local ROLE_KIT = {
 	},
 }
 
+-- The G key is the survivor's power slot: with the Dodge upgrade equipped
+-- it dodges instead of farting (Config.Upgrades, PlayerData "Power").
+local DODGE = Config.Upgrades.Dodge
+local DODGE_KIT = {
+	{ Name = "Dodge", Label = "Dodge", Desc = "Press as he strikes: his attack misses", Icon = DODGE.Icon, KeyText = "G", Key = Enum.KeyCode.G, Cooldown = DODGE.Cooldown, Color = Color3.fromRGB(110, 225, 255) },
+}
+local TURBO_KIT = {
+	{ Name = "Fart", Label = "Turbo Fart", Desc = "Gas cloud + a burst of speed", Icon = "💨", KeyText = "G", Key = Enum.KeyCode.G, Cooldown = Config.Fart.Cooldown, Color = Color3.fromRGB(150, 210, 50) },
+}
+
 local ROLE_HOLDS = {
 	Wolverine = {
 		{ Name = "SprintHold", Label = "Sprint", Desc = "Run into walls to tear through", Icon = "💨", KeyText = "SHIFT", Attr = "Sprinting", Color = YELLOW },
@@ -84,7 +94,7 @@ local HINTS = {
 local readyAt = {}
 local slashSide = 0
 local lastPredictedSlash = -1
-local PREDICT = { Pounce = "Pounce", Stab = "Impale", Sniff = "Sniff", Punch = "Punch", Laser = "DeathRay", Pulse = "PulseCharge", Fart = "Fart", Slam = "Slam" }
+local PREDICT = { Pounce = "Pounce", Stab = "Impale", Sniff = "Sniff", Punch = "Punch", Laser = "DeathRay", Pulse = "PulseCharge", Fart = "Fart", Slam = "Slam", Dodge = "Dodge" }
 local currentKit = {}
 
 local function kitEntry(name)
@@ -203,12 +213,22 @@ local function holdAction(actionName, remoteName, keys, title)
 	ContextActionService:SetTitle(actionName, title)
 end
 
-local function applyRole(role)
+local function applyRole(role, quiet)
 	unbindAll()
 	currentKit = ROLE_KIT[role] or {}
+	local hint = HINTS[role] or ""
+	if role == "Survivor" then
+		local power = player:GetAttribute("Power")
+		if power == "Dodge" then
+			currentKit = DODGE_KIT
+			hint = hint:gsub("G: fart %(hides your scent%)", "G: dodge (time it as he strikes)")
+		elseif power == "TurboFart" then
+			currentKit = TURBO_KIT
+		end
+	end
 	local title = ROLE_TITLE[role]
 	Interface.SetAbilities(currentKit, ROLE_HOLDS[role], title and title[1], title and title[2])
-	Interface.SetHint(HINTS[role] or "")
+	Interface.SetHint(hint)
 
 	for i, a in currentKit do
 		ContextActionService:BindAction("Ability_" .. a.Name, function(_, state)
@@ -230,6 +250,9 @@ local function applyRole(role)
 	end)
 	Effects.SetHunterVision(role == "Wolverine")
 
+	if quiet then
+		return
+	end
 	if role == "Wolverine" then
 		Interface.RoleBanner("YOU ARE WOLVERINE", "Hunt them down. Every kill buys you more time.", Color3.fromRGB(255, 205, 30))
 	elseif role == "Survivor" then
@@ -392,6 +415,11 @@ end)
 player:GetAttributeChangedSignal("Role"):Connect(function()
 	applyRole(player:GetAttribute("Role"))
 end)
+player:GetAttributeChangedSignal("Power"):Connect(function()
+	if player:GetAttribute("Role") == "Survivor" then
+		applyRole("Survivor", true) -- swapped power mid-round: G changes with it
+	end
+end)
 applyRole(player:GetAttribute("Role"))
 
 ---------------------------------------------------------------------------
@@ -484,6 +512,10 @@ Fx.OnClientEvent:Connect(function(kind, data)
 		Effects.ShakeAt(data.Position, data.Intensity, data.Radius)
 	elseif kind == "Roar" then
 		Effects.Roar(data.Position)
+	elseif kind == "Dodge" then
+		SlashFX.Dodge(data.Char, data.Duration)
+	elseif kind == "Dodged" then
+		SlashFX.Dodged(data.Char)
 	elseif kind == "RageRoar" then
 		SlashFX.RageBurst(data.Char)
 		Effects.RageRoar(data.Char)

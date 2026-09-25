@@ -67,6 +67,7 @@ local function publish(player)
 		table.insert(ups, id)
 	end
 	player:SetAttribute("Upgrades", table.concat(ups, ","))
+	player:SetAttribute("Power", d.Power)
 	player:SetAttribute("GuaranteedTokens", d.Tokens)
 	player:SetAttribute("LoginStreak", d.Streak)
 	player:SetAttribute("Challenges", HttpService:JSONEncode(d.Daily))
@@ -114,6 +115,7 @@ function PlayerData.Save(player)
 				end
 				return list
 			end)(),
+			Power = d.Power,
 			Tokens = d.Tokens,
 			LastLogin = d.LastLogin,
 			LastClaim = d.LastClaim,
@@ -151,6 +153,7 @@ function PlayerData.Load(player)
 		OwnedSentinels = { [Skins.DefaultSentinel] = true },
 		SentinelSkin = Skins.DefaultSentinel,
 		Upgrades = {}, -- [id] = true, survivor upgrades (Config.Upgrades)
+		Power = "", -- the one upgrade equipped on G ("" = the plain fart)
 		Tokens = 0,
 		LastLogin = "",
 		LastClaim = 0, -- os.time() of the last daily login reward
@@ -198,6 +201,13 @@ function PlayerData.Load(player)
 				if Config.Upgrades[id] then
 					data.Upgrades[id] = true
 				end
+			end
+			if type(saved.Power) == "string" then
+				if data.Upgrades[saved.Power] then
+					data.Power = saved.Power
+				end
+			elseif data.Upgrades.TurboFart then
+				data.Power = "TurboFart" -- bought before powers had to be picked
 			end
 			data.Tokens = tonumber(saved.Tokens) or 0
 			if type(saved.Receipts) == "table" then
@@ -349,6 +359,29 @@ function PlayerData.HasUpgrade(player, id)
 	return d ~= nil and d.Upgrades[id] == true
 end
 
+-- The upgrade this survivor has equipped on G ("" = none, the plain fart).
+function PlayerData.Power(player)
+	local d = cache[player]
+	return d and d.Power or ""
+end
+
+-- Equip an owned upgrade as the G power (only one at a time); equipping the
+-- one already on unequips it.
+function PlayerData.EquipUpgrade(player, id)
+	local d = cache[player]
+	if not (d and d.Upgrades[id]) then
+		return false, "You don't own that"
+	end
+	if d.Power == id then
+		d.Power = ""
+		publish(player)
+		return true, Config.Upgrades[id].Name .. " off: G is a plain fart"
+	end
+	d.Power = id
+	publish(player)
+	return true, Config.Upgrades[id].Name .. " equipped on G"
+end
+
 function PlayerData.BuyUpgrade(player, id)
 	local d, up = cache[player], Config.Upgrades[id]
 	if not (d and up) then
@@ -362,9 +395,10 @@ function PlayerData.BuyUpgrade(player, id)
 	end
 	d.Coins -= up.Price
 	d.Upgrades[id] = true
+	d.Power = id -- a new power goes straight on G
 	publish(player)
 	task.spawn(PlayerData.Save, player)
-	return true, "Unlocked " .. up.Name .. "!"
+	return true, "Unlocked " .. up.Name .. "! Equipped on G"
 end
 
 function PlayerData.EquipClaw(player, id)

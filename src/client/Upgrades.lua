@@ -1,6 +1,8 @@
 -- Survivor upgrades window (lobby dock "UPGRADES"): one card per upgrade in
 -- Config.Upgrades with what it does, its price and a buy button. Bought
--- upgrades are kept forever (PlayerData, attribute "Upgrades").
+-- upgrades are kept forever (PlayerData, attribute "Upgrades"). They're
+-- powers on G and only one is on at a time (attribute "Power"): an owned
+-- card's button equips it, or takes it off again (back to the plain fart).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -39,7 +41,7 @@ local message = new("TextLabel", {
 	Font = Enum.Font.GothamBold,
 	TextScaled = true,
 	TextColor3 = Color3.fromRGB(190, 190, 200),
-	Text = "Upgrades are yours for good once bought.",
+	Text = "Pick ONE power for G. Bought upgrades are yours for good.",
 	ZIndex = 31,
 }, w)
 
@@ -100,10 +102,12 @@ for id, up in Config.Upgrades do
 		ZIndex = 32,
 	})
 	button.Activated:Connect(function()
+		local ok, msg
 		if owned(id) then
-			return
+			ok, msg = ShopRemote:InvokeServer("EquipUpgrade", id)
+		else
+			ok, msg = ShopRemote:InvokeServer("BuyUpgrade", id)
 		end
-		local ok, msg = ShopRemote:InvokeServer("BuyUpgrade", id)
 		message.Text = msg or (ok and "Unlocked!" or "Couldn't buy that")
 		message.TextColor3 = ok and GREEN or Color3.fromRGB(255, 110, 100)
 	end)
@@ -112,9 +116,12 @@ end
 
 local function refresh()
 	for id, c in cards do
-		if owned(id) then
-			c.Label.Text = "OWNED"
+		if owned(id) and player:GetAttribute("Power") == id then
+			c.Label.Text = "EQUIPPED"
 			UIKit.Recolor(c.Button, GREEN)
+		elseif owned(id) then
+			c.Label.Text = "EQUIP"
+			UIKit.Recolor(c.Button, Color3.fromRGB(90, 170, 255))
 		else
 			c.Label.Text = ("BUY  %d"):format(c.Price)
 			UIKit.Recolor(c.Button, K.Yellow)
@@ -122,12 +129,13 @@ local function refresh()
 	end
 end
 player:GetAttributeChangedSignal("Upgrades"):Connect(refresh)
+player:GetAttributeChangedSignal("Power"):Connect(refresh)
 refresh()
 
 local openButton = Shop.DockButton("UPGRADES", "⬆️", GREEN, 7)
 openButton.Activated:Connect(function()
 	refresh()
-	message.Text = "Upgrades are yours for good once bought."
+	message.Text = "Pick ONE power for G. Bought upgrades are yours for good."
 	message.TextColor3 = Color3.fromRGB(190, 190, 200)
 	window.Toggle()
 end)

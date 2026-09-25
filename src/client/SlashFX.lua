@@ -1853,6 +1853,82 @@ function SlashFX.PounceLand(position)
 	end)
 end
 
+-- Dodge (upgrade): cyan afterimages peel off the survivor, with speed lines.
+local DODGE_BLUE = Color3.fromRGB(110, 225, 255)
+local function afterimage(char, drift, life)
+	for _, part in char:GetChildren() do
+		if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" and part.Transparency < 0.9 then
+			local ok, g = pcall(part.Clone, part)
+			if not (ok and g) then
+				g = Instance.new("Part")
+				g.Size = part.Size
+			end
+			g:ClearAllChildren()
+			g.Name = "DodgeGhost"
+			g.Anchored, g.CanCollide, g.CanQuery, g.CanTouch = true, false, false, false
+			g.CastShadow = false
+			g.Material = Enum.Material.Neon
+			g.Color = DODGE_BLUE
+			g.Transparency = 0.55
+			if g:IsA("MeshPart") then
+				g.TextureID = ""
+			end
+			g.CFrame = part.CFrame
+			g.Parent = workspace
+			TweenService:Create(g, TweenInfo.new(life, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				Transparency = 1,
+				CFrame = part.CFrame + drift,
+			}):Play()
+			task.delay(life + 0.05, function()
+				g:Destroy()
+			end)
+		end
+	end
+end
+
+function SlashFX.Dodge(char, duration)
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	if not root then
+		return
+	end
+	local back = -root.CFrame.LookVector * 0.6 + root.CFrame.RightVector * 1.2
+	afterimage(char, back * 2, 0.35)
+	task.delay(0.1, function()
+		if char.Parent then
+			afterimage(char, back * 1.5, 0.3)
+		end
+	end)
+	local ribbons, lines = {}, {}
+	for i = 1, 6 do
+		local r = takeRibbon(5, i % 2 == 0 and WHITE or DODGE_BLUE, 3)
+		table.insert(ribbons, r)
+		lines[i] = { R = r, Off = Vector3.new(0, -2 + i * 0.7, 0) + root.CFrame.LookVector * (math.random() - 0.5), L = 2 + math.random() * 2 }
+	end
+	local origin, dir = root.Position, root.CFrame.RightVector
+	local LIFE = math.min(duration or 0.4, 0.4)
+	run(ribbons, function(t)
+		local k = t / LIFE
+		if k >= 1 then
+			return false
+		end
+		for _, l in lines do
+			local p0 = origin + l.Off + dir * (0.5 + 3 * outQuad(k))
+			setNeedle(l.R, p0, p0 + dir * l.L * (1 - k), 0.08 * (1 - k), 0.2 + 0.8 * k)
+		end
+		return true
+	end)
+end
+
+-- The dodge paid off: his attack cut through an afterimage.
+function SlashFX.Dodged(char)
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	if not root then
+		return
+	end
+	afterimage(char, Vector3.new(0, 0.5, 0), 0.5)
+	starFlare(root.Position + Vector3.new(0, 0.5, 0), DODGE_BLUE, 1.3, 0.35)
+end
+
 -- Rage roar: blood-red shock rings rolling out across the floor, a red star
 -- bursting from his chest and embers ripped up around him.
 function SlashFX.RageBurst(char)

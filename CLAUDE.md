@@ -68,8 +68,12 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
 - Terminal ambience (`src/client/TerminalSounds.lua`): beeps now; the hum needs
   `assets/sfx/TerminalHum.ogg` uploaded and its ID in `Config.UploadedSounds.TerminalHum`.
 - Survivor upgrades (`Config.Upgrades`, `PlayerData.BuyUpgrade`/`HasUpgrade`, saved as `Upgrades`,
-  UI `src/client/Upgrades.lua` on the lobby dock). Turbo Fart (300): a sprinting fart also gives
-  `FartBoost` (+8 speed, 2.5s) and a gas trail that fades after 2s (`Fart.Trail`).
+  UI `src/client/Upgrades.lua` on the lobby dock). They're powers on G and only ONE is equipped
+  (`PlayerData.Power`/`EquipUpgrade`, saved + attribute `Power`, "" = plain fart; buying equips).
+  Turbo Fart (300): every fart also gives `FartBoost` (+8 speed, 2.5s) and a gas trail that fades
+  after 2s (`Fart.Trail`). Dodge (300): replaces the fart; G gives 0.5s of i-frames (`Fart.Dodge`,
+  statuses `Immune` + `Dodging`), 30s cooldown; a hit in that window whiffs (`Combat.BreakShield`
+  fires Fx `Dodged`). Client swaps the G kit entry by `Power` (`DODGE_KIT`/`TURBO_KIT`).
 - Sentinel suit skins: palettes in `Costumes.SentinelSkins`, shop data in `Skins.Sentinels`
   (Armory SENTINEL tab, `PlayerData.BuySentinel`/`EquipSentinel`, saved `OwnedSentinels`/
   `SentinelSkin`). Verity (3000): black/yellow suit with the grin (`Costumes.Smiley`) on its face;
