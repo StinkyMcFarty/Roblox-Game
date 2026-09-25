@@ -3,6 +3,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local ContextActionService = game:GetService("ContextActionService")
+local StarterGui = game:GetService("StarterGui")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Interface = require(script.Parent:WaitForChild("Interface"))
@@ -441,6 +442,29 @@ player:GetAttributeChangedSignal("Power"):Connect(function()
 	end
 end)
 applyRole(player:GetAttribute("Role"))
+
+-- No resetting in a round (Roblox greys out Reset in the Esc menu); allowed
+-- again in the lobby or once you're dead and spectating.
+local IN_ROUND = { Survivor = true, Wolverine = true, Sentinel = true }
+local resetSync = 0
+local function syncReset()
+	resetSync += 1
+	local mine = resetSync
+	local allowed = not IN_ROUND[player:GetAttribute("Role") or ""]
+	task.spawn(function()
+		for _ = 1, 30 do -- SetCore errors until the core scripts have loaded
+			if mine ~= resetSync then
+				return -- the role changed again: a newer call is in charge
+			end
+			if pcall(StarterGui.SetCore, StarterGui, "ResetButtonCallback", allowed) then
+				return
+			end
+			task.wait(0.5)
+		end
+	end)
+end
+player:GetAttributeChangedSignal("Role"):Connect(syncReset)
+syncReset()
 
 ---------------------------------------------------------------------------
 -- Server effects

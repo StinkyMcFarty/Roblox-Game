@@ -111,6 +111,8 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
   pinned paperwork (staff memo = survivors, Subject X file = Wolverine, blueprint pilot card =
   Sentinels), key caps, sticky notes. Numbers come from `Config`; update the copy when controls
   or mechanics change.
+- No resetting in a round: ClientMain `syncReset` sets `ResetButtonCallback` false while the
+  role is Survivor/Wolverine/Sentinel (true in the lobby or dead).
 - Currency is shown as "Berserker Coins" (`Config.CoinName`); saves still use the key `Coins`.
 - Lighting (`MapBuilder.SetupLighting`): gentle grade (contrast 0.15, saturation 0.08), bloom
   0.55/40/1.35 (client arena zone matches), low blue-grey ambient so lamps shape the rooms.
