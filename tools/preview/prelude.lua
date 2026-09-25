@@ -12,6 +12,28 @@ function __iter(t)
   return function() i = i + 1; local k = keys[i]; if k ~= nil then return k, t[k] end end
 end
 
+table.clone = table.clone or function(t) local c = {} for k, v in pairs(t) do c[k] = v end return c end
+table.find = table.find or function(t, v) for i, x in ipairs(t) do if x == v then return i end end end
+table.freeze = table.freeze or function(t) return t end
+math.clamp = math.clamp or function(x, a, b) return math.max(a, math.min(b, x)) end
+math.round = math.round or function(x) return math.floor(x + 0.5) end
+math.sign = math.sign or function(x) return x > 0 and 1 or x < 0 and -1 or 0 end
+math.noise = math.noise or function() return 0 end
+math.atan2 = math.atan2 or function(y, x) return math.atan(y, x) end
+math.pow = math.pow or function(a, b) return a ^ b end
+unpack = unpack or table.unpack
+loadstring = loadstring or load
+string.split = string.split or function(s, sep)
+  local out, i = {}, 1
+  sep = sep or ","
+  while true do
+    local a, b = string.find(s, sep, i, true)
+    if not a then out[#out + 1] = s:sub(i) break end
+    out[#out + 1] = s:sub(i, a - 1); i = b + 1
+  end
+  return out
+end
+
 -- Vector3 ------------------------------------------------------------
 Vector3 = {}
 local V = {}

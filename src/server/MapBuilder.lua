@@ -1520,7 +1520,7 @@ local function boardText(parent, props)
 end
 
 -- A printed sheet: its own column of lines (UIListLayout, top to bottom)
-local function boardSheet(parent, cf, size, paper)
+local function boardSheet(parent, size, cf, paper)
 	local p = block(parent, size, cf, M.SmoothPlastic, paper, { CanCollide = false })
 	local bg = boardGui(p, paper)
 	-- a little yellowing towards the bottom edge
