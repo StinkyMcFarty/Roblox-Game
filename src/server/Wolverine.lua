@@ -651,6 +651,21 @@ end
 -- Abilities
 ---------------------------------------------------------------------------
 
+-- A slash that lands locks his claws for a moment: slash, pounce and impale
+-- all go on cooldown (never shortening one that's already longer).
+local CLAW_ATTACKS = { "Slash", "Pounce", "Stab" }
+local function lockClaws(player, seconds)
+	local cd = cooldowns[player]
+	if not cd then
+		return
+	end
+	local ready = os.clock() + seconds - 0.1 -- same latency allowance as Handle
+	for _, name in CLAW_ATTACKS do
+		cd[name] = math.max(cd[name] or 0, ready)
+	end
+	Util.FireClient(Fx, player, "ClawLock", { Seconds = seconds, Abilities = CLAW_ATTACKS })
+end
+
 local function slash(player, char, root)
 	swingTrails(0.38)
 	combo = combo % 2 + 1
@@ -670,7 +685,10 @@ local function slash(player, char, root)
 		end
 		local target = Combat.FindTargets(cf, Vector3.new(cfg.Width, 8, cfg.Range + 1))[1]
 		if target then
-			Combat.Resolve(player, target.Player)
+			local sentinel = target.Player:GetAttribute("Role") == "Sentinel"
+			if Combat.Resolve(player, target.Player) then
+				lockClaws(player, sentinel and cfg.SentinelHitLock or cfg.HitLock)
+			end
 		end
 	end)
 end

@@ -72,8 +72,8 @@ To remake only some sounds, name them: `python3 tools/generate_sfx.py ClawStone 
 | M1 / tap | Claw slash (tears through walls) |
 | Shift | Sprint (running doesn't break walls: claw, pounce or impale through them) |
 | C / Ctrl | Run on all fours (fastest, uses stamina) |
-| Q | Pounce: leap, pin a survivor and claw at them |
-| E | Impale: stab both claws in and lift them |
+| Q | Pounce: leap, pin a survivor and claw at them (15s cooldown) |
+| E | Impale: stab both claws in and lift them (15s cooldown) |
 | F | Sniff: see every survivor through walls for **5s** (25s cooldown) |
 
 - It takes **3 hits to kill** a survivor. The 3rd hit, from any attack, triggers the finisher: he lifts them and **rips them in half**.
@@ -167,6 +167,7 @@ src/shared/   Config, Skins, Util
 
 ### Recent rules
 - **Pounce** only works while Wolverine is running on all fours (hold C / Ctrl).
+- **Claw hits lock his claws**: when an M1 slash lands on a survivor, slash, pounce and impale all go on a 3s cooldown. After landing on a Sentinel it's 1s. A cooldown that's already longer is kept (`Config.Abilities.Slash.HitLock` / `SentinelHitLock`).
 - **Fart gas**: if Wolverine runs into a fresh cloud (first 4s, within 7 studs) he's gassed for 2s: no attacks, 40% speed, covering his nose and coughing.
 - **Sniff** shows a red outline (through walls) on every survivor, hiding spot and gas decoy, live-tracked for 5s — no distances. A decoy looks exactly like a person.
 - **Death ray** shoves Wolverine back harder and more constantly the closer he is (up to 3.2x within 18 studs).

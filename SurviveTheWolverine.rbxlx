@@ -101,9 +101,11 @@ Config.Wolverine = {
 Config.SprintRamp = { Delay = 0.9, Time = 2.2 }
 
 Config.Abilities = {
-	Slash = { Cooldown = 0.55, Range = 8, Width = 8 },
-	Pounce = { Cooldown = 9, Forward = 78, Up = 52, GrabRadius = 7, Window = 1.2 },
-	Stab = { Cooldown = 6, Range = 10, Width = 8, Lunge = 60 },
+	-- A slash that lands locks his claws: slash, pounce and impale all wait
+	-- HitLock seconds after hitting a survivor, SentinelHitLock after a Sentinel.
+	Slash = { Cooldown = 0.55, Range = 8, Width = 8, HitLock = 3, SentinelHitLock = 1 },
+	Pounce = { Cooldown = 15, Forward = 78, Up = 52, GrabRadius = 7, Window = 1.2 },
+	Stab = { Cooldown = 15, Range = 10, Width = 8, Lunge = 60 },
 	Sniff = { Cooldown = 25, Duration = 5 }, -- only 5s of tracking so he can't wallhack all round
 }
 
@@ -10707,6 +10709,21 @@ end
 -- Abilities
 ---------------------------------------------------------------------------
 
+-- A slash that lands locks his claws for a moment: slash, pounce and impale
+-- all go on cooldown (never shortening one that's already longer).
+local CLAW_ATTACKS = { "Slash", "Pounce", "Stab" }
+local function lockClaws(player, seconds)
+	local cd = cooldowns[player]
+	if not cd then
+		return
+	end
+	local ready = os.clock() + seconds - 0.1 -- same latency allowance as Handle
+	for _, name in CLAW_ATTACKS do
+		cd[name] = math.max(cd[name] or 0, ready)
+	end
+	Util.FireClient(Fx, player, "ClawLock", { Seconds = seconds, Abilities = CLAW_ATTACKS })
+end
+
 local function slash(player, char, root)
 	swingTrails(0.38)
 	combo = combo % 2 + 1
@@ -10726,7 +10743,10 @@ local function slash(player, char, root)
 		end
 		local target = Combat.FindTargets(cf, Vector3.new(cfg.Width, 8, cfg.Range + 1))[1]
 		if target then
-			Combat.Resolve(player, target.Player)
+			local sentinel = target.Player:GetAttribute("Role") == "Sentinel"
+			if Combat.Resolve(player, target.Player) then
+				lockClaws(player, sentinel and cfg.SentinelHitLock or cfg.HitLock)
+			end
 		end
 	end)
 end
@@ -12875,6 +12895,15 @@ Fx.OnClientEvent:Connect(function(kind, data)
 	elseif kind == "Grabbed" then
 		Interface.Flash(Color3.fromRGB(160, 0, 0), 0.4, 0.6)
 		Effects.Shake(0.8)
+	elseif kind == "ClawLock" then
+		-- his slash landed: these attacks wait (unless already cooling down longer)
+		local seconds = tonumber(data.Seconds) or 0
+		for _, name in data.Abilities or {} do
+			if (readyAt[name] or 0) < os.clock() + seconds then
+				readyAt[name] = os.clock() + seconds
+				Interface.StartCooldown(name, seconds)
+			end
+		end
 	elseif kind == "HitConfirm" then
 		Effects.Shake(0.25)
 	elseif kind == "Gore" then

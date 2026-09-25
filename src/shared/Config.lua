@@ -58,9 +58,11 @@ Config.Wolverine = {
 Config.SprintRamp = { Delay = 0.9, Time = 2.2 }
 
 Config.Abilities = {
-	Slash = { Cooldown = 0.55, Range = 8, Width = 8 },
-	Pounce = { Cooldown = 9, Forward = 78, Up = 52, GrabRadius = 7, Window = 1.2 },
-	Stab = { Cooldown = 6, Range = 10, Width = 8, Lunge = 60 },
+	-- A slash that lands locks his claws: slash, pounce and impale all wait
+	-- HitLock seconds after hitting a survivor, SentinelHitLock after a Sentinel.
+	Slash = { Cooldown = 0.55, Range = 8, Width = 8, HitLock = 3, SentinelHitLock = 1 },
+	Pounce = { Cooldown = 15, Forward = 78, Up = 52, GrabRadius = 7, Window = 1.2 },
+	Stab = { Cooldown = 15, Range = 10, Width = 8, Lunge = 60 },
 	Sniff = { Cooldown = 25, Duration = 5 }, -- only 5s of tracking so he can't wallhack all round
 }
 

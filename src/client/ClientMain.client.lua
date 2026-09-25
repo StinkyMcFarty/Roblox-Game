@@ -445,6 +445,15 @@ Fx.OnClientEvent:Connect(function(kind, data)
 	elseif kind == "Grabbed" then
 		Interface.Flash(Color3.fromRGB(160, 0, 0), 0.4, 0.6)
 		Effects.Shake(0.8)
+	elseif kind == "ClawLock" then
+		-- his slash landed: these attacks wait (unless already cooling down longer)
+		local seconds = tonumber(data.Seconds) or 0
+		for _, name in data.Abilities or {} do
+			if (readyAt[name] or 0) < os.clock() + seconds then
+				readyAt[name] = os.clock() + seconds
+				Interface.StartCooldown(name, seconds)
+			end
+		end
 	elseif kind == "HitConfirm" then
 		Effects.Shake(0.25)
 	elseif kind == "Gore" then
