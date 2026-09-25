@@ -107,6 +107,11 @@ function Minigame.Start(term, challenge, onDone)
 	local conns = {}
 	local finished = false
 	local state = { Body = body }
+	-- no jumping while you work the console (Space is a minigame key)
+	local jumpHum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+	if jumpHum then
+		jumpHum:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
+	end
 	local function finish(ok, cancelled)
 		if finished then
 			return
@@ -114,6 +119,9 @@ function Minigame.Start(term, challenge, onDone)
 		finished = true
 		for _, c in conns do
 			c:Disconnect()
+		end
+		if jumpHum and jumpHum.Parent then
+			jumpHum:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
 		end
 		if not cancelled then
 			beep(ok and 1.4 or 0.5, ok and 0.6 or 0.9)
