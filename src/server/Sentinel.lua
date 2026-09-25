@@ -600,7 +600,7 @@ local function laser(player, char, root, aim)
 				Wolverine.RevealSkeleton()
 			end
 			Round.Wolverine:SetAttribute("BeamedAt", workspace:GetServerTimeNow())
-			-- he can fight it: mashing F braces him and he forces his way up the beam
+			-- he can fight it: mashing R (Sniff) braces him and he forces his way up the beam
 			local resist = Wolverine.ResistLevel()
 			local nowBracing = resist >= cfg.Resist.Threshold
 			if nowBracing then

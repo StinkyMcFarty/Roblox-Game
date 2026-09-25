@@ -38,7 +38,7 @@ local ROLE_KIT = {
 		{ Name = "Slash", Label = "Claw Slash", Desc = "Shreds survivors and walls", Icon = "🩸", KeyText = "M1", Key = Enum.KeyCode.ButtonR2, Cooldown = A.Slash.Cooldown, Click = true, Color = RED },
 		{ Name = "Pounce", Label = "Pounce", Desc = "From all fours: leap, pin them, claw away", Icon = "🐾", KeyText = "Q", Key = Enum.KeyCode.Q, Cooldown = A.Pounce.Cooldown, Color = Color3.fromRGB(255, 140, 30) },
 		{ Name = "Stab", Label = "Impale", Desc = "Both claws in. Lift them up", Icon = "🗡️", KeyText = "E", Key = Enum.KeyCode.E, Cooldown = A.Stab.Cooldown, Color = Color3.fromRGB(200, 205, 220) },
-		{ Name = "Sniff", Label = "Sniff", Desc = "Sense everyone for " .. A.Sniff.Duration .. "s", Icon = "👃", KeyText = "F", Key = Enum.KeyCode.F, Cooldown = A.Sniff.Cooldown, Color = Color3.fromRGB(200, 60, 255) },
+		{ Name = "Sniff", Label = "Sniff", Desc = "Sense everyone for " .. A.Sniff.Duration .. "s", Icon = "👃", KeyText = "R", Key = Enum.KeyCode.R, Cooldown = A.Sniff.Cooldown, Color = Color3.fromRGB(200, 60, 255) },
 	},
 	Survivor = {
 		{ Name = "Fart", Label = "Fart", Desc = "Gas cloud throws off his Sniff", Icon = "💨", KeyText = "G", Key = Enum.KeyCode.G, Cooldown = Config.Fart.Cooldown, Color = Color3.fromRGB(150, 210, 50) },
@@ -117,7 +117,7 @@ local function activate(name)
 	if player:GetAttribute("Role") == "Wolverine" and not ReplicatedStorage:GetAttribute("Released") then
 		return
 	end
-	-- under a Sentinel death ray, F (Sniff) is mashed to force through it
+	-- under a Sentinel death ray, R (Sniff) is mashed to force through it
 	if name == "Sniff" and workspace:GetServerTimeNow() - (player:GetAttribute("BeamedAt") or 0) < 0.4 then
 		Ability:FireServer("Resist")
 		Effects.ResistPress()

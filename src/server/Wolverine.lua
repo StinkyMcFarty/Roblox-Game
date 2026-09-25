@@ -587,7 +587,7 @@ tankIntro = function(player, char, spawnCFrame, valid)
 	if valid() then
 		roar(char)
 	end
-	task.wait(1.6)
+	task.wait(math.max(0.3, Config.IntroLength - cfg.Roar)) -- free him right as he's released
 	if root.Parent then
 		root.Anchored = false
 	end
@@ -900,7 +900,7 @@ function Wolverine.Handle(player, ability, arg)
 		return
 	end
 	if ability == "Resist" then
-		-- mashing F under a death ray (see Wolverine.ResistLevel)
+		-- mashing R under a death ray (see Wolverine.ResistLevel)
 		local now = os.clock()
 		if now - (resistPresses[#resistPresses] or 0) >= 0.045 then
 			table.insert(resistPresses, now)

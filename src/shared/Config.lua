@@ -13,12 +13,12 @@ Config.KillTimeBonus = 15 -- Wolverine gets this much extra time per kill
 Config.EndScreenTime = 6
 
 -- Wolverine intro (he is locked in the Weapon X tank room)
-Config.IntroLength = 8 -- seconds before he is released
-Config.ClawPopTime = 2.5 -- SNIKT (maps without the Weapon X tank)
-Config.RoarTime = 3.8
+Config.IntroLength = 4 -- seconds before he is released (was 8: the cutscene now runs at double pace)
+Config.ClawPopTime = 1.25 -- SNIKT (maps without the Weapon X tank)
+Config.RoarTime = 1.9
 -- Weapon X tank breakout (seconds from spawn): eyes open, glass bursts,
 -- arms cross (claws pop 0.62s later in an X), roar.
-Config.Intro = { Wake = 1.6, Burst = 2.9, Cross = 3.8, Roar = 5.3 }
+Config.Intro = { Wake = 0.8, Burst = 1.45, Cross = 1.9, Roar = 2.65 }
 
 -- Damage ----------------------------------------------------------------
 Config.HitsToKill = 3 -- the 3rd hit always rips the survivor in half
@@ -107,7 +107,7 @@ Config.Sentinel = {
 
 -- Survivor fart: masks your scent from Wolverine's Sniff
 Config.Fart = {
-	Cooldown = 45, MaskTime = 20, CloudTime = 20,
+	Cooldown = 45, MaskTime = 10, CloudTime = 10, -- the cloud (and its Sniff decoy) lasts 10s
 	-- Wolverine caught in the fresh cloud: can't attack and staggers slowly
 	GasRadius = 7, GasWindow = 4, GasTime = 2, GasSlow = 0.4,
 }

@@ -227,7 +227,7 @@ function Effects.Impulse(root, velocity, duration)
 end
 
 ---------------------------------------------------------------------------
--- Death-ray resist prompt (Wolverine): "MASH F" with a fill meter
+-- Death-ray resist prompt (Wolverine): "MASH R" with a fill meter
 ---------------------------------------------------------------------------
 
 local resistPresses = {}
@@ -296,7 +296,7 @@ RunService.RenderStepped:Connect(function()
 	resistFill.Size = UDim2.fromScale(level, 1)
 	local bracing = level >= Config.Sentinel.Laser.Resist.Threshold
 	resistFill.BackgroundColor3 = bracing and Color3.fromRGB(255, 220, 90) or Color3.fromRGB(255, 120, 40)
-	local key = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled and "TAP SNIFF" or "MASH F"
+	local key = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled and "TAP SNIFF" or "MASH R"
 	resistText.Text = bracing and "PUSHING THROUGH — KEEP MASHING!" or (key .. " TO PUSH THROUGH THE BEAM")
 end)
 
