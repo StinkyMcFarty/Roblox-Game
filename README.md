@@ -77,7 +77,7 @@ To remake only some sounds, name them: `python3 tools/generate_sfx.py ClawStone 
 | F | Sniff: see every survivor through walls for **5s** (25s cooldown) |
 
 - It takes **3 hits to kill** a survivor. The 3rd hit, from any attack, triggers the finisher: he lifts them and **rips them in half**.
-- A **Sentinel suit takes 6 hits** to destroy; the 6th blows it apart and the scientist inside is thrown out alive.
+- A **Sentinel suit takes 6 hits** to destroy; the 6th blows it apart and the scientist inside is thrown out alive but one hit from death. If the suit runs out of time instead, they step out at full health.
 - Hits 1 and 2 **throw** the survivor, who tumbles through the air with a trail. They get **2s of i-frames** (a visible white shimmer) and an adrenaline boost. Wolverine gets a short recovery, so there are no infinite combos.
 - The HUD shows animated ability cards (bottom-right) with keys, cooldown sweeps and "ready" flashes.
 - Crisp VFX: three razor-thin claw crescents on every M1, spark flecks, and an X-shaped star flare with a needle burst and a white body flash on hit. The client draws these every frame.

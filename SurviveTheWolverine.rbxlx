@@ -9330,7 +9330,9 @@ function Sentinel.Become(player)
 	end)
 end
 
-function Sentinel.PowerDown(player)
+-- The pilot steps out of the suit. If Wolverine tore it apart (destroyed) they
+-- come out one hit from death; if its core just ran out, at full health.
+function Sentinel.PowerDown(player, destroyed)
 	local char = player.Character
 	if not char then
 		return
@@ -9355,11 +9357,17 @@ function Sentinel.PowerDown(player)
 			end
 		end
 	end
+	local hits = destroyed and Config.HitsToKill - 1 or 0
+	player:SetAttribute("Hits", hits)
 	local hum = Util.Humanoid(char)
 	if hum then
-		hum.Health = hum.MaxHealth * math.max(0.05, 1 - (player:GetAttribute("Hits") or 0) / Config.HitsToKill)
+		hum.Health = hum.MaxHealth * math.max(0.05, 1 - hits / Config.HitsToKill)
 	end
-	Fx:FireClient(player, "Announce", { Text = "Suit powered down. RUN.", Color = Color3.fromRGB(255, 80, 80), Duration = 2.5 })
+	Fx:FireClient(player, "Announce", {
+		Text = destroyed and "SUIT DESTROYED. One more hit and you're dead. RUN." or "Suit powered down. Back to full health. RUN.",
+		Color = Color3.fromRGB(255, 80, 80),
+		Duration = 2.5,
+	})
 end
 
 -- Wolverine tears the last of the armour off: the suit bursts apart and the
@@ -9371,14 +9379,14 @@ function Combat.OnSuitDestroyed(player)
 		return
 	end
 	local pos = root.Position
-	Sentinel.PowerDown(player)
+	Sentinel.PowerDown(player, true)
 	Util.Burst(root, Util.SparkProps, 80, 2.5)
 	VFX.Impact(pos, GLOW, 2.2, char)
 	VFX.Shockwave(pos - Vector3.new(0, 2.5, 0), 18)
 	Util.SoundAt(Config.Sounds.Break, pos, { Volume = 2.2, Pitch = 0.5, Range = 300 })
 	Util.SoundAt(Config.Sounds.Punch, pos, { Volume = 2, Pitch = 0.6, Range = 300 })
 	Fx:FireAllClients("Shake", { Position = pos, Intensity = 1.2, Radius = 90 })
-	announce(player.DisplayName .. "'s SENTINEL was torn apart! They're out of the suit.", Color3.fromRGB(255, 80, 80))
+	announce(player.DisplayName .. "'s SENTINEL was torn apart! They're out of the suit, one hit from death.", Color3.fromRGB(255, 80, 80))
 	if Round.Wolverine then
 		PlayerData.AddCoins(Round.Wolverine, Skins.Rewards.SentinelKill, "Tore apart a Sentinel")
 	end
