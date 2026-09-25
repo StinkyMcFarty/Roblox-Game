@@ -738,6 +738,51 @@ def claw_stone():
     return finish(reverb(highpass(x, 50, 2), 0.32, 0.14), 0.8, 0.05)
 
 
+HUM_LOOP = 8.0  # TerminalHum: seconds in the seamless loop
+
+
+def terminal_hum():
+    """A Sentinel console idling: mains hum and transformer buzz, a cooling fan,
+    and bursts of data chatter, chirps and relay clicks. An 8s seamless loop
+    (every steady tone fits a whole number of cycles; the tail is crossfaded
+    into the head) played on each terminal to players close by."""
+    L, X = HUM_LOOP, 0.8
+    t = t_axis(L + X)
+    wobble = 1 + 0.08 * np.sin(2 * np.pi * 0.25 * t)
+    hum = (np.sin(2 * np.pi * 60 * t) * 0.5 + np.sin(2 * np.pi * 120 * t) * 0.35
+           + np.sin(2 * np.pi * 180 * t) * 0.12 + np.sin(2 * np.pi * 240 * t) * 0.06) * wobble
+    buzz = lowpass(signal.sawtooth(2 * np.pi * 120 * t), 900) * 0.12
+    fan = bandpass(noise(L + X), 250, 1400) * (0.55 + 0.25 * np.sin(2 * np.pi * 0.5 * t)) * 0.35
+    whine = np.sin(2 * np.pi * 7400 * t) * 0.012
+    parts = [hum * 0.55, buzz, fan, whine]
+    # data chatter: runs of quick square-ish bleeps
+    for start in (0.6, 2.9, 5.2, 6.9):
+        at = start + rng.uniform(-0.15, 0.15)
+        for k in range(int(rng.integers(6, 12))):
+            d = rng.uniform(0.025, 0.05)
+            f = rng.choice([1320, 1760, 2093, 2637, 3136])
+            tt = t_axis(d)
+            b = np.tanh(np.sin(2 * np.pi * f * tt) * 3) * env(d, 0.002, d * 0.6) * 0.09
+            parts.append(pad(b, at))
+            at += d + rng.uniform(0.005, 0.03)
+    # a couple of rising two-tone chirps
+    for at in (1.8, 4.4):
+        tt = t_axis(0.22)
+        f = 900 + 900 * (tt / 0.22)
+        c = np.sin(2 * np.pi * np.cumsum(f) / SR) * env(0.22, 0.004, 0.08) * 0.12
+        parts.append(pad(mix(c, pad(c * 0.8, 0.11)), at))
+    # relay clicks
+    for at in (3.6, 7.4):
+        parts.append(pad(highpass(noise(0.01), 2500) * env(0.01, 0.0003, 0.002) * 0.5, at))
+    x = mix(*parts)[: len(t)]
+    x = reverb(x, 0.25, 0.15)[: len(t)]
+    n, nx = int(SR * L), int(SR * X)
+    out = x[:n].copy()
+    fade = np.linspace(0, 1, nx)
+    out[:nx] = out[:nx] * fade + x[n:n + nx] * (1 - fade)
+    return finish(out, 0.7, 0)
+
+
 def pounce_hit():
     """Pounce strike: two claw sets punch in (crisp double 'shk-shk') over a tight thump."""
     parts = []
@@ -854,7 +899,7 @@ SOUNDS = {
     "UIHover": ui_hover, "UIClick": ui_click, "Paw": paw, "PounceHit": pounce_hit, "Impale": impale, "DeathRay": death_ray, "Chase": chase,
     "PounceLeap": pounce_leap, "Scream": scream, "Step": step, "StepMetal": step_metal, "StepHeavy": step_heavy,
     "StepWolverine": step_wolverine, "ClawDig": claw_dig, "ClawStone": claw_stone, "ClawFlesh": claw_flesh,
-    "SentinelSwing": sentinel_swing, "SentinelSmash": sentinel_smash,
+    "SentinelSwing": sentinel_swing, "SentinelSmash": sentinel_smash, "TerminalHum": terminal_hum,
 }
 
 
