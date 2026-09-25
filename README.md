@@ -167,7 +167,7 @@ src/shared/   Config, Skins, Util
 ```
 
 ### Recent rules
-- **Pounce** only works while Wolverine is running on all fours (hold C / Ctrl). It's a low, flat dive that rises about 3.5 studs, so it stays under the doorways, and covers the same ~72 studs as the old high leap (`Config.Abilities.Pounce.Up` / `Lift`).
+- **Pounce** only works while Wolverine is running on all fours (hold C / Ctrl). It's a dive that peaks about 5.5 studs up, so it stays under the 11-stud doorways, and covers the same ~72 studs as the old high leap. If it catches nobody, it ends in a landing crouch the moment he touches down (`Config.Abilities.Pounce.Height` / `AirTime`).
 - **Claw hits lock his claws**: when an M1 slash lands on a survivor, slash, pounce and impale all go on a 3s cooldown. After landing on a Sentinel it's 1s. A cooldown that's already longer is kept (`Config.Abilities.Slash.HitLock` / `SentinelHitLock`).
 - **I-frames** (the white shimmer after being hit) absorb one attack. Any claw attack that reaches someone with i-frames just breaks them: an M1 does nothing else and has no lockout, while a pounce or impale misses and still goes on its full cooldown.
 - **Fart gas**: if Wolverine runs into a fresh cloud (first 4s, within 7 studs) he's gassed for 2s: no attacks, 40% speed, covering his nose and coughing.

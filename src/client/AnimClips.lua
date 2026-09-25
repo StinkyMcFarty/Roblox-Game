@@ -56,6 +56,25 @@ Clips.Pounce = {
 	},
 }
 
+-- Whiffed pounce touching down: front paws slap the floor, the body sinks
+-- low to soak up the landing, then he rises back into his run.
+Clips.PounceLand = {
+	Keys = {
+		{ T = 0, Pose = DIVE },
+		{ T = 0.08, Ease = "Out", Pose = {
+			Root = { -66, 0, 0, 0, -0.95, 0 }, Waist = { -6, 0, 0 }, Neck = { 52, 0, 0 },
+			RShoulder = { 76, 0, 14 }, LShoulder = { 76, 0, -14 }, RElbow = { 40, 0, 0 }, LElbow = { 40, 0, 0 },
+			RHip = { 96, 0, 6 }, LHip = { 90, 0, -6 }, RKnee = { -112, 0, 0 }, LKnee = { -106, 0, 0 },
+		} },
+		{ T = 0.22, Pose = {
+			Root = { -64, 0, 0, 0, -0.85, 0 }, Waist = { -4, 0, 0 }, Neck = { 50, 0, 0 },
+			RShoulder = { 78, 0, 12 }, LShoulder = { 78, 0, -12 }, RElbow = { 30, 0, 0 }, LElbow = { 30, 0, 0 },
+			RHip = { 92, 0, 6 }, LHip = { 86, 0, -6 }, RKnee = { -104, 0, 0 }, LKnee = { -98, 0, 0 },
+		} },
+		{ T = 0.45, Ease = "InOut", Pose = REST },
+	},
+}
+
 -- Contact: both claws slam down into them, landing crouch
 Clips.PounceStrike = {
 	Keys = {

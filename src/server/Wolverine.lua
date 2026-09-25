@@ -735,8 +735,10 @@ local function pounce(player, char, root)
 		Util.Sound(Config.Sounds.Slash, root, { Pitch = 0.72, Volume = 1.2 })
 	end
 	-- The client applies the leap; the server watches for contact.
-	local untilTime = os.clock() + cfg.Window
+	local launched = os.clock()
+	local untilTime = launched + cfg.Window
 	local blocked = false
+	local stand = Util.Humanoid(char).HipHeight + root.Size.Y / 2
 	task.wait(0.12)
 	while os.clock() < untilTime and char.Parent and Util.IsAlive(char) do
 		Combat.BreakInBox(root.CFrame * CFrame.new(0, 0, -2.5), Vector3.new(6, 8, 5), root.Position, 55)
@@ -750,9 +752,13 @@ local function pounce(player, char, root)
 			return
 		end
 		task.wait()
+		if os.clock() - launched > 0.3 and root.AssemblyLinearVelocity.Y < 1
+			and root.Position.Y - groundY(root.Position, { char }) <= stand + 0.8 then
+			break -- touched down without catching anyone
+		end
 	end
 	-- whiffed: land hard
-	VFX.StopAnim(char, "Pounce")
+	VFX.Anim(char, "PounceLand")
 	Util.Sound(Config.Sounds.Land, root, { Volume = 1.6, Pitch = 0.8 })
 	VFX.Shockwave(Vector3.new(root.Position.X, groundY(root.Position, { char }) + 0.2, root.Position.Z), 9)
 end

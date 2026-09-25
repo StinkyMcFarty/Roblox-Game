@@ -104,10 +104,10 @@ Config.Abilities = {
 	-- A slash that lands locks his claws: slash, pounce and impale all wait
 	-- HitLock seconds after hitting a survivor, SentinelHitLock after a Sentinel.
 	Slash = { Cooldown = 0.55, Range = 8, Width = 8, HitLock = 3, SentinelHitLock = 1 },
-	-- Pounce: a low, flat dive. Launch speed is held for 0.22s, then Lift cancels
-	-- that share of gravity until he lands: ~3.5 studs high (under the 11-stud
-	-- doorways) but ~0.9s in the air, so it covers the same ~72 studs as before.
-	Pounce = { Cooldown = 15, Forward = 78, Up = 10, Lift = 0.81, GrabRadius = 7, Window = 1.2 },
+	-- Pounce: a scripted dive arc. Peaks Height studs up (he clears the 11-stud
+	-- doorways up to ~6) and lands after AirTime seconds at Forward studs/s:
+	-- ~72 studs, the same distance as the old high leap.
+	Pounce = { Cooldown = 15, Forward = 78, Height = 5.5, AirTime = 0.92, GrabRadius = 7, Window = 1.2 },
 	Stab = { Cooldown = 15, Range = 10, Width = 8, Lunge = 60 },
 	Sniff = { Cooldown = 25, Duration = 5 }, -- only 5s of tracking so he can't wallhack all round
 }
@@ -10826,8 +10826,10 @@ local function pounce(player, char, root)
 		Util.Sound(Config.Sounds.Slash, root, { Pitch = 0.72, Volume = 1.2 })
 	end
 	-- The client applies the leap; the server watches for contact.
-	local untilTime = os.clock() + cfg.Window
+	local launched = os.clock()
+	local untilTime = launched + cfg.Window
 	local blocked = false
+	local stand = Util.Humanoid(char).HipHeight + root.Size.Y / 2
 	task.wait(0.12)
 	while os.clock() < untilTime and char.Parent and Util.IsAlive(char) do
 		Combat.BreakInBox(root.CFrame * CFrame.new(0, 0, -2.5), Vector3.new(6, 8, 5), root.Position, 55)
@@ -10841,9 +10843,13 @@ local function pounce(player, char, root)
 			return
 		end
 		task.wait()
+		if os.clock() - launched > 0.3 and root.AssemblyLinearVelocity.Y < 1
+			and root.Position.Y - groundY(root.Position, { char }) <= stand + 0.8 then
+			break -- touched down without catching anyone
+		end
 	end
 	-- whiffed: land hard
-	VFX.StopAnim(char, "Pounce")
+	VFX.Anim(char, "PounceLand")
 	Util.Sound(Config.Sounds.Land, root, { Volume = 1.6, Pitch = 0.8 })
 	VFX.Shockwave(Vector3.new(root.Position.X, groundY(root.Position, { char }) + 0.2, root.Position.Z), 9)
 end
@@ -11237,6 +11243,25 @@ Clips.Pounce = {
 		} },
 		{ T = 0.24, Ease = "Out", Pose = DIVE },
 		{ T = 1.1, Ease = "Linear", Pose = DIVE },
+	},
+}
+
+-- Whiffed pounce touching down: front paws slap the floor, the body sinks
+-- low to soak up the landing, then he rises back into his run.
+Clips.PounceLand = {
+	Keys = {
+		{ T = 0, Pose = DIVE },
+		{ T = 0.08, Ease = "Out", Pose = {
+			Root = { -66, 0, 0, 0, -0.95, 0 }, Waist = { -6, 0, 0 }, Neck = { 52, 0, 0 },
+			RShoulder = { 76, 0, 14 }, LShoulder = { 76, 0, -14 }, RElbow = { 40, 0, 0 }, LElbow = { 40, 0, 0 },
+			RHip = { 96, 0, 6 }, LHip = { 90, 0, -6 }, RKnee = { -112, 0, 0 }, LKnee = { -106, 0, 0 },
+		} },
+		{ T = 0.22, Pose = {
+			Root = { -64, 0, 0, 0, -0.85, 0 }, Waist = { -4, 0, 0 }, Neck = { 50, 0, 0 },
+			RShoulder = { 78, 0, 12 }, LShoulder = { 78, 0, -12 }, RElbow = { 30, 0, 0 }, LElbow = { 30, 0, 0 },
+			RHip = { 92, 0, 6 }, LHip = { 86, 0, -6 }, RKnee = { -104, 0, 0 }, LKnee = { -98, 0, 0 },
+		} },
+		{ T = 0.45, Ease = "InOut", Pose = REST },
 	},
 }
 
@@ -12655,7 +12680,7 @@ local function activate(name)
 
 	local look = Vector3.new(root.CFrame.LookVector.X, 0, root.CFrame.LookVector.Z).Unit
 	if name == "Pounce" then
-		Effects.Leap(root, look * A.Pounce.Forward + Vector3.new(0, A.Pounce.Up, 0), 0.22, A.Pounce.Lift, A.Pounce.Window)
+		Effects.Leap(root, look * A.Pounce.Forward, A.Pounce.Height, A.Pounce.AirTime, A.Pounce.Window)
 		Effects.Shake(0.3)
 	elseif name == "Stab" then
 		Effects.Impulse(root, look * A.Stab.Lunge * 0.6 + Vector3.new(0, 2, 0), 0.12)
@@ -13447,8 +13472,11 @@ function Effects.Hurt()
 	Effects.Shake(1)
 end
 
--- Pounce leap: hold the launch velocity for `hold` seconds, then cancel `lift`
--- of gravity until he lands (or maxTime passes, or something knocks him).
+-- Pounce leap: the root is driven along a set arc (rise `height` studs, land
+-- after `airTime` seconds, moving at `horizontal`), so the Humanoid's own
+-- ground control can't drag it down early. It ends as soon as he's back at
+-- standing height over the floor, runs into a wall, maxTime passes, or
+-- something knocks him.
 local activeLeap = nil
 function Effects.CancelLeap()
 	if activeLeap then
@@ -13457,31 +13485,56 @@ function Effects.CancelLeap()
 	end
 end
 
-function Effects.Leap(root, velocity, hold, lift, maxTime)
+function Effects.Leap(root, horizontal, height, airTime, maxTime)
 	Effects.CancelLeap()
-	Effects.Impulse(root, velocity, hold)
-	local hum = root.Parent and root.Parent:FindFirstChildOfClass("Humanoid")
+	local char = root.Parent
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	local up = 4 * height / airTime -- a parabola that peaks at `height` halfway through
+	local fall = 8 * height / airTime ^ 2
+	local stand = (hum and hum.HipHeight or 2) + root.Size.Y / 2
 	local att = Instance.new("Attachment")
 	att.Parent = root
-	local force = Instance.new("VectorForce")
-	force.Attachment0 = att
-	force.RelativeTo = Enum.ActuatorRelativeTo.World
-	force.ApplyAtCenterOfMass = true
-	force.Force = Vector3.new(0, root.AssemblyMass * workspace.Gravity * (lift or 0), 0)
-	force.Parent = att
+	local lv = Instance.new("LinearVelocity")
+	lv.Attachment0 = att
+	lv.MaxForce = 1e6
+	lv.VelocityConstraintMode = Enum.VelocityConstraintMode.Vector
+	lv.RelativeTo = Enum.ActuatorRelativeTo.World
+	lv.VectorVelocity = horizontal + Vector3.new(0, up, 0)
+	lv.Parent = att
 	activeLeap = att
+	if hum then
+		hum:ChangeState(Enum.HumanoidStateType.Freefall)
+	end
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { char }
 	local t0 = os.clock()
 	local conn
 	conn = RunService.Heartbeat:Connect(function()
 		local t = os.clock() - t0
-		local landed = t > hold + 0.05 and hum and hum.FloorMaterial ~= Enum.Material.Air
-		if activeLeap ~= att or not att.Parent or t > (maxTime or 1.2) or landed then
+		local vy = up - fall * t
+		local done = activeLeap ~= att or not att.Parent or t > (maxTime or 1.2)
+		if not done and vy < 0 then
+			-- coming down: stop when the floor is right under his feet
+			done = workspace:Raycast(root.Position, Vector3.new(0, -(stand + 0.6), 0), params) ~= nil
+		end
+		if not done and t > 0.15 then
+			local v = root.AssemblyLinearVelocity
+			done = Vector3.new(v.X, 0, v.Z).Magnitude < horizontal.Magnitude * 0.3 -- hit a wall
+		end
+		if done then
 			conn:Disconnect()
 			att:Destroy()
 			if activeLeap == att then
 				activeLeap = nil
+				-- touch down still moving, but at running pace rather than dive speed
+				if horizontal.Magnitude > 0 then
+					root.AssemblyLinearVelocity = horizontal.Unit * math.min(horizontal.Magnitude, 30)
+				end
 			end
+			return
 		end
+		lv.VectorVelocity = horizontal + Vector3.new(0, vy, 0)
 	end)
 end
 

@@ -117,8 +117,11 @@ function Effects.Hurt()
 	Effects.Shake(1)
 end
 
--- Pounce leap: hold the launch velocity for `hold` seconds, then cancel `lift`
--- of gravity until he lands (or maxTime passes, or something knocks him).
+-- Pounce leap: the root is driven along a set arc (rise `height` studs, land
+-- after `airTime` seconds, moving at `horizontal`), so the Humanoid's own
+-- ground control can't drag it down early. It ends as soon as he's back at
+-- standing height over the floor, runs into a wall, maxTime passes, or
+-- something knocks him.
 local activeLeap = nil
 function Effects.CancelLeap()
 	if activeLeap then
@@ -127,31 +130,56 @@ function Effects.CancelLeap()
 	end
 end
 
-function Effects.Leap(root, velocity, hold, lift, maxTime)
+function Effects.Leap(root, horizontal, height, airTime, maxTime)
 	Effects.CancelLeap()
-	Effects.Impulse(root, velocity, hold)
-	local hum = root.Parent and root.Parent:FindFirstChildOfClass("Humanoid")
+	local char = root.Parent
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	local up = 4 * height / airTime -- a parabola that peaks at `height` halfway through
+	local fall = 8 * height / airTime ^ 2
+	local stand = (hum and hum.HipHeight or 2) + root.Size.Y / 2
 	local att = Instance.new("Attachment")
 	att.Parent = root
-	local force = Instance.new("VectorForce")
-	force.Attachment0 = att
-	force.RelativeTo = Enum.ActuatorRelativeTo.World
-	force.ApplyAtCenterOfMass = true
-	force.Force = Vector3.new(0, root.AssemblyMass * workspace.Gravity * (lift or 0), 0)
-	force.Parent = att
+	local lv = Instance.new("LinearVelocity")
+	lv.Attachment0 = att
+	lv.MaxForce = 1e6
+	lv.VelocityConstraintMode = Enum.VelocityConstraintMode.Vector
+	lv.RelativeTo = Enum.ActuatorRelativeTo.World
+	lv.VectorVelocity = horizontal + Vector3.new(0, up, 0)
+	lv.Parent = att
 	activeLeap = att
+	if hum then
+		hum:ChangeState(Enum.HumanoidStateType.Freefall)
+	end
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { char }
 	local t0 = os.clock()
 	local conn
 	conn = RunService.Heartbeat:Connect(function()
 		local t = os.clock() - t0
-		local landed = t > hold + 0.05 and hum and hum.FloorMaterial ~= Enum.Material.Air
-		if activeLeap ~= att or not att.Parent or t > (maxTime or 1.2) or landed then
+		local vy = up - fall * t
+		local done = activeLeap ~= att or not att.Parent or t > (maxTime or 1.2)
+		if not done and vy < 0 then
+			-- coming down: stop when the floor is right under his feet
+			done = workspace:Raycast(root.Position, Vector3.new(0, -(stand + 0.6), 0), params) ~= nil
+		end
+		if not done and t > 0.15 then
+			local v = root.AssemblyLinearVelocity
+			done = Vector3.new(v.X, 0, v.Z).Magnitude < horizontal.Magnitude * 0.3 -- hit a wall
+		end
+		if done then
 			conn:Disconnect()
 			att:Destroy()
 			if activeLeap == att then
 				activeLeap = nil
+				-- touch down still moving, but at running pace rather than dive speed
+				if horizontal.Magnitude > 0 then
+					root.AssemblyLinearVelocity = horizontal.Unit * math.min(horizontal.Magnitude, 30)
+				end
 			end
+			return
 		end
+		lv.VectorVelocity = horizontal + Vector3.new(0, vy, 0)
 	end)
 end
 

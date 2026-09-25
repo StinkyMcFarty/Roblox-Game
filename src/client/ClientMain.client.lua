@@ -154,7 +154,7 @@ local function activate(name)
 
 	local look = Vector3.new(root.CFrame.LookVector.X, 0, root.CFrame.LookVector.Z).Unit
 	if name == "Pounce" then
-		Effects.Leap(root, look * A.Pounce.Forward + Vector3.new(0, A.Pounce.Up, 0), 0.22, A.Pounce.Lift, A.Pounce.Window)
+		Effects.Leap(root, look * A.Pounce.Forward, A.Pounce.Height, A.Pounce.AirTime, A.Pounce.Window)
 		Effects.Shake(0.3)
 	elseif name == "Stab" then
 		Effects.Impulse(root, look * A.Stab.Lunge * 0.6 + Vector3.new(0, 2, 0), 0.12)
