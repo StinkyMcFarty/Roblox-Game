@@ -920,6 +920,24 @@ local function pounce(player, char, root)
 	Fx:FireAllClients("Shake", { Position = landAt, Intensity = 0.6, Radius = 50 })
 end
 
+-- Let a character go after a hold: unanchor, clear the freeze, and give
+-- their client control of their own body again (bots stay server-run).
+local impaling = {} -- [Wolverine] = { Player, Root } while an impale holds someone
+local function release(p, r)
+	if r and r.Parent and r.Anchored then
+		r.Anchored = false
+	end
+	if p then
+		Status.Clear(p, "Busy")
+		Status.Clear(p, "Frozen")
+		if r and r.Parent and not r.Anchored and p:IsA("Player") and not p:GetAttribute("IsBot") then
+			pcall(function()
+				r:SetNetworkOwner(p)
+			end)
+		end
+	end
+end
+
 -- Uppercut impale: drive the claws up through them and hoist them overhead.
 local function stab(player, char, root)
 	swingTrails(1.1)
@@ -967,6 +985,7 @@ local function stab(player, char, root)
 	end
 	root.Anchored = true
 	vRoot.Anchored = true
+	impaling[player] = { Player = victim, Root = vRoot }
 	local base = CFrame.lookAt(root.Position, root.Position + Util.Flat(vRoot.Position - root.Position))
 	local scale = Config.Wolverine.Scale
 	root.CFrame = base
@@ -1040,14 +1059,14 @@ local function stab(player, char, root)
 		VFX.Anim(char, "ImpaleKick")
 		VFX.StopAnim(vChar, "Impaled")
 		if vRoot.Parent then
+			-- a Sentinel is huge: set it down well clear so it can't land on him
 			TweenService:Create(vRoot, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-				CFrame = base * CFrame.new(0, sentinel and 2.2 or 1.2, sentinel and -3.4 or -2.6) * CFrame.Angles(0, math.pi, 0),
+				CFrame = base * CFrame.new(0, sentinel and 3 or 1.2, sentinel and -6.5 or -2.6) * CFrame.Angles(0, math.pi, 0),
 			}):Play()
 		end
 		task.wait(0.2)
-		if vRoot.Parent then
-			vRoot.Anchored = false
-		end
+		release(victim, vRoot)
+		release(player, root)
 		local kickAt = (base * CFrame.new(0, 0.8, -2.2)).Position
 		Fx:FireAllClients("KickImpact", { Position = kickAt, Dir = base.LookVector })
 		Util.Sound(Config.Sounds.Punch, root, { Volume = 2.2, Pitch = 0.75, Range = 220 })
@@ -1061,11 +1080,24 @@ local function stab(player, char, root)
 		if result == "hit" then
 			Combat.Wound(player, victim, { Force = 140, Up = 38, Dir = base.LookVector })
 		end
-		task.wait(0.2)
-		if root.Parent then
-			root.Anchored = false
-		end
 	end
+end
+
+-- The impale anchors both of them for the lift. Whatever happens in it
+-- (even an error), both are always let go afterwards: unanchored, unfrozen
+-- and handed back to their own client to move.
+local function safeStab(player, char, root)
+	local ok, err = xpcall(stab, debug.traceback, player, char, root)
+	if not ok then
+		warn("[Impale] " .. tostring(err))
+	end
+	local v = impaling[player]
+	impaling[player] = nil
+	if v then
+		release(v.Player, v.Root)
+	end
+	release(player, root)
+	VFX.StopAnim(char, nil)
 end
 
 local function sniff(player, root)
@@ -1143,7 +1175,7 @@ function Wolverine.Handle(player, ability, arg)
 	elseif ability == "Pounce" then
 		task.spawn(pounce, player, char, root)
 	elseif ability == "Stab" then
-		task.spawn(stab, player, char, root)
+		task.spawn(safeStab, player, char, root)
 	elseif ability == "Sniff" then
 		sniff(player, root)
 	end

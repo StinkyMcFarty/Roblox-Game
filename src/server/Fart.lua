@@ -34,12 +34,15 @@ function Fart.Use(player)
 	end
 	lastUsed[player] = os.clock()
 	VFX.Anim(char, "Fart")
-	-- fart mid-sprint: instantly at full speed; with Turbo Fart, a burst on
-	-- top and a trail of gas streaming out behind
-	if Movement.MaxOut(player) and PlayerData.HasUpgrade(player, "TurboFart") then
+	-- fart mid-sprint: instantly at full speed. With Turbo Fart, every fart
+	-- (sprinting or not, even out of stamina) also gives a speed burst and a
+	-- trail of gas streaming out behind
+	Movement.MaxOut(player)
+	if PlayerData.HasUpgrade(player, "TurboFart") then
 		local up = Config.Upgrades.TurboFart
 		Status.Apply(player, "FartBoost", up.Duration)
 		Fart.Trail(char, up.Duration, up.TrailTime)
+		Util.FireClient(Fx, player, "Announce", { Text = "TURBO FART!", Color = Color3.fromRGB(170, 230, 60), Duration = 1.2 })
 	end
 
 	local butt = char:FindFirstChild("LowerTorso") or char:FindFirstChild("Torso") or root
