@@ -285,6 +285,55 @@ local CROUCH = {
 	RHip = { 96, 0, 8 }, RKnee = { -118, 0, 0 }, RAnkle = { 22, 0, 0 },
 	LHip = { 30, 0, -10 }, LKnee = { -110, 0, 0 }, LAnkle = { 60, 0, 0 },
 }
+-- a kick at the glass from inside: knee up, boot driven into it (lands at
+-- 0.18s), then he floats back into the tensed pose
+Clips.TankKick = {
+	Hold = true,
+	Tremble = true,
+	Keys = {
+		{ T = 0, Pose = {
+			Root = { 0, 0, 0, 0, 0.1, 0 }, Neck = { 18, 0, 0 }, Waist = { 10, 0, 0 },
+			RShoulder = { 40, 0, 40 }, LShoulder = { 40, 0, -40 }, RElbow = { 104, 0, 0 }, LElbow = { 104, 0, 0 },
+			RHip = { 14, 0, 4 }, LHip = { 14, 0, -4 }, RKnee = { -30, 0, 0 }, LKnee = { -30, 0, 0 },
+		} },
+		{ T = 0.1, Ease = "Out", Pose = {
+			Root = { 10, 0, 0, 0, 0.1, 0.2 }, Neck = { 6, 0, 0 }, Waist = { 14, 0, 0 },
+			RShoulder = { -20, 0, 50 }, LShoulder = { -20, 0, -50 }, RElbow = { 80, 0, 0 }, LElbow = { 80, 0, 0 },
+			RHip = { 100, 0, 4 }, RKnee = { -115, 0, 0 }, LHip = { -8, 0, -4 }, LKnee = { -20, 0, 0 },
+		} },
+		{ T = 0.18, Ease = "In", Pose = {
+			Root = { 16, 0, 0, 0, 0.1, 0.35 }, Neck = { 2, 0, 0 }, Waist = { 16, 0, 0 },
+			RShoulder = { -30, 0, 55 }, LShoulder = { -30, 0, -55 }, RElbow = { 70, 0, 0 }, LElbow = { 70, 0, 0 },
+			RHip = { 90, 0, 4 }, RKnee = { -6, 0, 0 }, LHip = { -10, 0, -4 }, LKnee = { -22, 0, 0 },
+		} },
+		{ T = 0.6, Ease = "InOut", Pose = {
+			Root = { 0, 0, 0, 0, 0.1, 0 }, Neck = { 18, 0, 0 }, Waist = { 10, 0, 0 },
+			RShoulder = { 40, 0, 40 }, LShoulder = { 40, 0, -40 }, RElbow = { 104, 0, 0 }, LElbow = { 104, 0, 0 },
+			RHip = { 14, 0, 4 }, LHip = { 14, 0, -4 }, RKnee = { -30, 0, 0 }, LKnee = { -30, 0, 0 },
+		} },
+	},
+}
+
+-- the flying kick out through the glass, then the three-point landing
+Clips.KickOut = {
+	Hold = true,
+	Keys = {
+		{ T = 0, Pose = FLOAT },
+		{ T = 0.08, Ease = "Out", Pose = {
+			Root = { 18, 0, 0, 0, 0, 0.4 }, Waist = { 14, 0, 0 }, Neck = { 4, 0, 0 },
+			RShoulder = { -30, 0, 60 }, LShoulder = { -30, 0, -60 }, RElbow = { 60, 0, 0 }, LElbow = { 60, 0, 0 },
+			RHip = { 95, 0, 4 }, RKnee = { -4, 0, 0 }, LHip = { -20, 0, -4 }, LKnee = { -70, 0, 0 },
+		} },
+		{ T = 0.22, Pose = {
+			Root = { 14, 0, 0, 0, 0, 0.3 }, Waist = { 10, 0, 0 }, Neck = { 6, 0, 0 },
+			RShoulder = { -26, 0, 58 }, LShoulder = { -26, 0, -58 }, RElbow = { 60, 0, 0 }, LElbow = { 60, 0, 0 },
+			RHip = { 90, 0, 4 }, RKnee = { -8, 0, 0 }, LHip = { -18, 0, -4 }, LKnee = { -72, 0, 0 },
+		} },
+		{ T = 0.42, Ease = "In", Pose = CROUCH },
+		{ T = 0.52, Ease = "Out", Pose = CROUCH },
+	},
+}
+
 Clips.BurstOut = {
 	Hold = true,
 	Keys = {

@@ -31,6 +31,7 @@ local lastDamaged = 0
 local combo = 0
 local rage = { Count = 0, Armed = true, Until = 0 } -- this round's rage (Config.Rage)
 local updateRage
+local crackGlass
 
 -- How much faster his cooldowns run right now: slashes by AttackSpeed, the
 -- rest by Cooldown, while enraged.
@@ -428,6 +429,72 @@ end
 local GLASS = Color3.fromRGB(190, 230, 235)
 local FLUID = Color3.fromRGB(70, 220, 205)
 
+-- A kick lands on the tank glass: cracks star out from where his boot hit
+-- (more of them, further, on the second kick), and on the second kick the
+-- fluid starts spurting through. Everything goes into `list` to clear later.
+crackGlass = function(glass, dir, strength, list)
+	local c = glass.CFrame.Position
+	local radius, height = glass.Size.Y / 2, glass.Size.X
+	local up = Vector3.new(0, 1, 0)
+	local side = dir:Cross(up).Unit
+	local hit = c + dir * (radius + 0.04) + up * (-height * 0.2 + strength * 0.5) + side * (strength - 1.5) * 0.8 -- where his boot lands
+	local folder = (Round.Map and Round.Map:FindFirstChild("Debris")) or workspace
+	local function line(a, b, w)
+		local mid = (a + b) / 2
+		local p = Instance.new("Part")
+		p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch, p.CastShadow = true, false, false, false, false
+		p.Material = Enum.Material.Glass
+		p.Color = Color3.fromRGB(235, 250, 255)
+		p.Transparency = 0.15
+		p.Size = Vector3.new(w, w, (b - a).Magnitude + 0.05)
+		p.CFrame = CFrame.lookAt(mid, b)
+		p.Parent = folder
+		table.insert(list, p)
+	end
+	for k = 1, 5 + strength * 4 do
+		local a = math.random() * math.pi * 2
+		local p0 = hit
+		local reach = (1.4 + math.random() * 1.6) * (0.8 + strength * 0.6)
+		local len = 0
+		while len < reach do
+			a += (math.random() - 0.5) * 0.8
+			local seg = 0.5 + math.random() * 0.7
+			local p1 = p0 + (side * math.cos(a) + up * math.sin(a)) * seg
+			line(p0, p1, 0.06 * (1 - len / reach) + 0.02)
+			p0 = p1
+			len += seg
+		end
+	end
+	-- the ring of shattered glass round the impact
+	for k = 1, 8 do
+		local a1, a2 = k / 8 * math.pi * 2, (k + 1) / 8 * math.pi * 2
+		local r = 0.35 * strength
+		line(hit + (side * math.cos(a1) + up * math.sin(a1)) * r, hit + (side * math.cos(a2) + up * math.sin(a2)) * r, 0.05)
+	end
+	if strength >= 2 then
+		-- the fluid starts spurting through the cracks
+		local spout = Instance.new("Part")
+		spout.Anchored, spout.CanCollide, spout.CanQuery, spout.Transparency = true, false, false, 1
+		spout.Size = Vector3.one * 0.5
+		spout.CFrame = CFrame.lookAt(hit, hit + dir)
+		spout.Parent = folder
+		table.insert(list, spout)
+		local jet = Instance.new("ParticleEmitter")
+		jet.Texture = "rbxasset://textures/particles/smoke_main.dds"
+		jet.Color = ColorSequence.new(Color3.fromRGB(190, 255, 245), FLUID)
+		jet.LightEmission = 0.3
+		jet.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.25), NumberSequenceKeypoint.new(1, 0.9) })
+		jet.Transparency = NumberSequence.new(0.35, 1)
+		jet.Lifetime = NumberRange.new(0.5, 0.8)
+		jet.Rate = 90
+		jet.Speed = NumberRange.new(10, 16)
+		jet.SpreadAngle = Vector2.new(9, 9)
+		jet.Acceleration = Vector3.new(0, -55, 0)
+		jet.EmissionDirection = Enum.NormalId.Front
+		jet.Parent = spout
+	end
+end
+
 local function shatterTank(glass, liquid, dir)
 	local c = glass.CFrame.Position
 	local radius, height = glass.Size.Y / 2, glass.Size.X
@@ -435,12 +502,13 @@ local function shatterTank(glass, liquid, dir)
 	glass.CanCollide = false
 	glass.CanQuery = false
 	local folder = (Round.Map and Round.Map:FindFirstChild("Debris")) or workspace
-	for k = 1, 46 do
+	for k = 1, 90 do
 		local a = math.random() * math.pi * 2
 		local y = (math.random() - 0.5) * height * 0.9
 		local p = c + Vector3.new(math.cos(a) * radius, y, math.sin(a) * radius)
 		local shard = Instance.new("WedgePart")
-		shard.Size = Vector3.new(0.08, 0.5 + math.random() * 1.6, 0.4 + math.random() * 1.2)
+		local big = k <= 10 -- a few big panes among the splinters
+		shard.Size = big and Vector3.new(0.1, 2 + math.random() * 2, 1.5 + math.random() * 1.5) or Vector3.new(0.08, 0.3 + math.random() * 1.4, 0.3 + math.random() * 1)
 		shard.CFrame = CFrame.new(p) * CFrame.Angles(math.random() * 6, math.random() * 6, math.random() * 6)
 		shard.Material = Enum.Material.Glass
 		shard.Color = GLASS
@@ -455,8 +523,65 @@ local function shatterTank(glass, liquid, dir)
 		out = out.Magnitude > 0.01 and out.Unit or dir
 		shard.AssemblyLinearVelocity = (out * 0.5 + dir * (0.6 + math.random() * 0.6)).Unit * (30 + math.random() * 35) + Vector3.new(0, 8 + math.random() * 14, 0)
 		shard.AssemblyAngularVelocity = Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5) * 30
-		Debris:AddItem(shard, 3 + math.random() * 1.5)
+		Debris:AddItem(shard, 5 + math.random() * 2)
 	end
+	-- the fluid gushes out in a torrent, arcing down to the floor
+	local floorY0 = c.Y - height / 2
+	local gush = Instance.new("Part")
+	gush.Anchored, gush.CanCollide, gush.CanQuery, gush.Transparency = true, false, false, 1
+	gush.Size = Vector3.new(radius * 1.6, height * 0.5, 0.5)
+	gush.CFrame = CFrame.lookAt(c + dir * radius - Vector3.new(0, height * 0.15, 0), c + dir * (radius + 1) - Vector3.new(0, height * 0.15, 0))
+	gush.Parent = folder
+	local torrent = Instance.new("ParticleEmitter")
+	torrent.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	torrent.Color = ColorSequence.new(Color3.fromRGB(200, 255, 248), FLUID)
+	torrent.LightEmission = 0.35
+	torrent.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.4), NumberSequenceKeypoint.new(1, 3.4) })
+	torrent.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(0.7, 0.5), NumberSequenceKeypoint.new(1, 1) })
+	torrent.Lifetime = NumberRange.new(0.6, 1)
+	torrent.Rate = 260
+	torrent.Speed = NumberRange.new(14, 24)
+	torrent.SpreadAngle = Vector2.new(25, 10)
+	torrent.Acceleration = Vector3.new(0, -70, 0)
+	torrent.EmissionDirection = Enum.NormalId.Front
+	torrent.Shape = Enum.ParticleEmitterShape.Box
+	torrent.Parent = gush
+	local droplets = torrent:Clone()
+	droplets.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	droplets.Size = NumberSequence.new(0.35, 0.1)
+	droplets.Rate = 160
+	droplets.Speed = NumberRange.new(18, 34)
+	droplets.SpreadAngle = Vector2.new(45, 30)
+	droplets.LightEmission = 0.8
+	droplets.Parent = gush
+	task.delay(1.1, function()
+		torrent.Rate = 70 -- the gush eases to a pour
+		droplets.Rate = 30
+	end)
+	task.delay(2.2, function()
+		torrent.Enabled = false
+		droplets.Enabled = false
+	end)
+	Debris:AddItem(gush, 4)
+	-- and spreads across the floor in a sheet, then slowly drains away
+	local puddle = Instance.new("Part")
+	puddle.Shape = Enum.PartType.Cylinder
+	puddle.Anchored, puddle.CanCollide, puddle.CanQuery, puddle.CanTouch, puddle.CastShadow = true, false, false, false, false
+	puddle.Material = Enum.Material.Glass
+	puddle.Color = FLUID
+	puddle.Transparency = 0.45
+	puddle.Reflectance = 0.35
+	puddle.Size = Vector3.new(0.06, radius * 2, radius * 2)
+	puddle.CFrame = CFrame.new(c.X, floorY0 + 0.05, c.Z) * CFrame.Angles(0, 0, math.rad(90))
+	puddle.Parent = folder
+	local spread = CFrame.new(c.X + dir.X * 7, floorY0 + 0.05, c.Z + dir.Z * 7) * CFrame.Angles(0, 0, math.rad(90))
+	TweenService:Create(puddle, TweenInfo.new(1.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = Vector3.new(0.06, 30, 30), CFrame = spread }):Play()
+	task.delay(4, function()
+		if puddle.Parent then
+			TweenService:Create(puddle, TweenInfo.new(8), { Transparency = 1, Size = Vector3.new(0.06, 34, 34) }):Play()
+		end
+	end)
+	Debris:AddItem(puddle, 12.5)
 	-- the fluid bursts out and drains
 	local anchor = Instance.new("Part")
 	anchor.Anchored, anchor.CanCollide, anchor.CanQuery, anchor.Transparency = true, false, false, 1
@@ -479,7 +604,7 @@ local function shatterTank(glass, liquid, dir)
 	Debris:AddItem(anchor, 3)
 	if liquid then
 		local bottom = liquid.CFrame.Position.Y - liquid.Size.X / 2
-		TweenService:Create(liquid, TweenInfo.new(0.9, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+		TweenService:Create(liquid, TweenInfo.new(1.8, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
 			Size = Vector3.new(0.2, liquid.Size.Y, liquid.Size.Z),
 			CFrame = CFrame.new(liquid.CFrame.Position.X, bottom + 0.1, liquid.CFrame.Position.Z) * CFrame.Angles(0, 0, math.rad(90)),
 		}):Play()
@@ -539,22 +664,35 @@ tankIntro = function(player, char, spawnCFrame, valid)
 		end
 	end
 	Util.SoundAt(Config.Sounds.Snarl ~= "" and Config.Sounds.Snarl or Config.Sounds.Impact, tc, { Volume = 2, Pitch = 0.8, Range = 200 })
-	for k = 1, 2 do
-		task.wait((cfg.Burst - cfg.Wake) / 3)
+	-- two kicks at the glass: it cracks, then starts spurting
+	local cracks = {}
+	for k, at in cfg.Kicks do
+		task.wait(math.max(0, at - 0.18 - (os.clock() - t0)))
 		if not valid() then break end
-		Util.SoundAt(Config.Sounds.Impact, tc, { Volume = 2.4, Pitch = 0.55 + k * 0.1, Range = 300 })
-		Fx:FireAllClients("Shake", { Position = tc, Intensity = 0.5 + k * 0.2, Radius = 80 })
+		VFX.Anim(char, "TankKick")
+		task.wait(0.18) -- the boot connects
+		if not valid() then break end
+		crackGlass(glass, dir, k, cracks)
+		Util.SoundAt(Config.Sounds.Impact, tc, { Volume = 2.6, Pitch = 0.5 + k * 0.1, Range = 300 })
+		Util.SoundAt(Config.Sounds.Break, tc, { Volume = 1.2 + k * 0.4, Pitch = 1.6, Range = 260 }) -- the glass cracking
+		Fx:FireAllClients("Shake", { Position = tc, Intensity = 0.6 + k * 0.25, Radius = 80 })
 		glass.Transparency = math.max(0.45, glass.Transparency - 0.1) -- stress fogs the glass
 	end
-	task.wait((cfg.Burst - cfg.Wake) / 3)
+	task.wait(math.max(0, cfg.Burst - (os.clock() - t0)))
 	if not valid() then
+		for _, c in cracks do
+			c:Destroy()
+		end
 		root.Anchored = false
 		return
 	end
 
-	-- BREAKOUT
+	-- BREAKOUT: a flying kick through the glass
+	for _, c in cracks do
+		c:Destroy()
+	end
 	shatterTank(glass, liquid, dir)
-	VFX.Anim(char, "BurstOut")
+	VFX.Anim(char, "KickOut")
 	local from = char:GetPivot()
 	local to = spawnCFrame
 	local flight = 0.42

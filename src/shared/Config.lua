@@ -13,12 +13,14 @@ Config.KillTimeBonus = 15 -- Wolverine gets this much extra time per kill
 Config.EndScreenTime = 6
 
 -- Wolverine intro (he is locked in the Weapon X tank room)
-Config.IntroLength = 4 -- seconds before he is released (was 8: the cutscene now runs at double pace)
+Config.IntroLength = 5.5 -- seconds before he is released
 Config.ClawPopTime = 1.25 -- SNIKT (maps without the Weapon X tank)
 Config.RoarTime = 1.9
--- Weapon X tank breakout (seconds from spawn): eyes open, glass bursts,
--- arms cross (claws pop 0.62s later in an X), roar.
-Config.Intro = { Wake = 0.8, Burst = 1.45, Cross = 1.9, Roar = 2.65 }
+-- Weapon X tank breakout (seconds from spawn): he drifts in the fluid, his
+-- eyes snap open, two kicks crack the glass (water starts spurting), a third
+-- kick shatters it and he flies out, arms cross (claws pop 0.62s later in
+-- an X), roar. Most of the time is in the tank; it's quick once he's out.
+Config.Intro = { Wake = 1.4, Kicks = { 2.25, 3.05 }, Burst = 3.85, Cross = 4.45, Roar = 5.1 }
 
 -- Damage ----------------------------------------------------------------
 Config.HitsToKill = 3 -- the 3rd hit always rips the survivor in half
