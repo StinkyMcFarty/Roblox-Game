@@ -189,11 +189,32 @@ function Effects.Leap(root, horizontal, height, airTime, maxTime)
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	params.FilterDescendantsInstances = { char }
+	-- breakable walls (and the chunks flying off them) don't stop the dive:
+	-- just ahead of him they're made passable on this client, which runs his
+	-- body, and the server smashes them as he goes through (the pounce's
+	-- BreakInBox), so he keeps his speed. Unbreakable walls still stop him.
+	local passed = {}
+	local overlap = OverlapParams.new()
+	overlap.FilterType = Enum.RaycastFilterType.Exclude
+	overlap.FilterDescendantsInstances = { char }
+	local flat = Vector3.new(horizontal.X, 0, horizontal.Z)
+	local dir = flat.Magnitude > 0.01 and flat.Unit or root.CFrame.LookVector
+	local function clearAhead()
+		local cf = CFrame.lookAt(root.Position, root.Position + dir) * CFrame.new(0, 0, -3.5)
+		for _, p in workspace:GetPartBoundsInBox(cf, Vector3.new(7, 9, 7), overlap) do
+			if p.CanCollide and not passed[p] and (p:GetAttribute("Breakable") or (p.Parent and p.Parent.Name == "Debris")) then
+				passed[p] = true
+				p.CanCollide = false
+			end
+		end
+	end
+	clearAhead()
 	local t0 = os.clock()
 	local conn
 	conn = RunService.Heartbeat:Connect(function()
 		local t = os.clock() - t0
 		local vy = up - fall * t
+		clearAhead()
 		local done = activeLeap ~= att or not att.Parent or t > (maxTime or 1.2)
 		if not done and vy < 0 then
 			-- coming down: stop when the floor is right under his feet
@@ -206,6 +227,14 @@ function Effects.Leap(root, horizontal, height, airTime, maxTime)
 		if done then
 			conn:Disconnect()
 			att:Destroy()
+			task.delay(0.6, function()
+				-- anything he passed that the server didn't smash is solid again
+				for p in passed do
+					if p.Parent and not p:GetAttribute("Broken") then
+						p.CanCollide = true
+					end
+				end
+			end)
 			if activeLeap == att then
 				activeLeap = nil
 				-- touch down still moving, but at running pace rather than dive speed

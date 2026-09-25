@@ -56,6 +56,9 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
   both claws (`ImpaleHeavy`) and shocks him for `Config.Wolverine.ImpaleShock` (7%) of his health;
   Sentinels spark (`Electric` Fx) when impaled or torn apart.
 - Pounce is a scripted dive arc (`Effects.Leap`): Height 7.6, AirTime 0.92, Forward 78 (~72 studs).
+  It keeps full speed through breakable walls: `clearAhead` makes `Breakable` parts (and
+  `Debris` chunks) just ahead non-colliding on his client while the server's pounce loop smashes
+  them; unbroken ones are solid again 0.6s after the leap.
 - Running does not break walls; M1, pounce, impale and Sentinel punches do. Wall cores carry a
   `Surface` attribute (`Facility.lua`) that picks the clash effect (`Combat.StoneClash` etc).
 - Sentinels: linked (within 30 studs of each other) hit at 1.25x, apart 0.6x, a lone suit 1x.
