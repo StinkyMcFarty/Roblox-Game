@@ -136,10 +136,21 @@ Config.Upgrades = {
 		Order = 2,
 		Name = "Dodge",
 		Icon = "🌀",
-		Price = 300,
-		Desc = "Replaces your fart. Press G just as he strikes: for a split second nothing can touch you and his attack misses.",
+		Price = 500,
+		Desc = "Replaces your fart. Press G just as he strikes: his attack misses, and you get a burst of speed to get away.",
 		Window = 0.5, -- seconds of i-frames after pressing
 		Cooldown = 30,
+		SpeedBoost = 1.25, -- landing a dodge: x speed for BoostTime seconds
+		BoostTime = 3,
+	},
+	Invisible = {
+		Order = 3,
+		Name = "Invisibility",
+		Icon = "👻",
+		Price = 500,
+		Desc = "Replaces your fart. Vanish completely for 8 seconds. He can't see you, but he can still smell you. A hit knocks you visible.",
+		Duration = 8,
+		Cooldown = 40,
 	},
 }
 

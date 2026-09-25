@@ -17,7 +17,7 @@ local K = UIKit.Colors
 local GREEN = Color3.fromRGB(150, 210, 50)
 
 local gui = new("ScreenGui", { Name = "Upgrades", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling }, player:WaitForChild("PlayerGui"))
-local window = UIKit.Window(gui, "SURVIVOR UPGRADES", UDim2.fromOffset(560, 340), GREEN)
+local window = UIKit.Window(gui, "SURVIVOR UPGRADES", UDim2.fromOffset(560, 446), GREEN)
 local w = window.Frame
 
 local list = new("ScrollingFrame", {

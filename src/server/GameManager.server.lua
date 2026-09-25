@@ -213,6 +213,8 @@ Ability.OnServerEvent:Connect(function(player, name, arg)
 		Fart.Use(player)
 	elseif name == "Dodge" then
 		Fart.Dodge(player)
+	elseif name == "Vanish" then
+		Fart.Vanish(player)
 	elseif name == "Unhide" then
 		Hiding.Leave(player)
 	elseif name == "TerminalResult" then

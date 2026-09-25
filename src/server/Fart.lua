@@ -20,6 +20,8 @@ local Fart = {}
 
 local lastUsed = {} -- [Player] = os.clock()
 local lastDodge = {} -- [Player] = os.clock()
+local lastVanish = {} -- [Player] = os.clock()
+local vanishToken = {} -- [Player] = the current vanish (a newer one outlives an older timer)
 local clouds = {} -- [Player] = { Position, Time }
 
 function Fart.Use(player)
@@ -27,8 +29,9 @@ function Fart.Use(player)
 	if not Round.Survivors[player] or player:GetAttribute("Role") ~= "Survivor" then
 		return
 	end
-	if PlayerData.Power(player) == "Dodge" then
-		return -- G is their dodge instead
+	local power = PlayerData.Power(player)
+	if power == "Dodge" or power == "Invisible" then
+		return -- G is their other power instead
 	end
 	if os.clock() - (lastUsed[player] or -math.huge) < cfg.Cooldown - 0.5 then
 		return
@@ -219,9 +222,49 @@ function Fart.Dodge(player)
 	Fx:FireAllClients("Dodge", { Char = char, Duration = up.Window })
 end
 
+-- Invisibility upgrade: gone for Duration seconds. Every other client hides
+-- the character (client/Vanish.lua reads the "Invisible" attribute); the
+-- Sniff scent list still includes them, so Wolverine can smell them. A hit
+-- ends it early (Combat.Hit), so does suiting up (Sentinel.Become).
+function Fart.Vanish(player)
+	local up = Config.Upgrades.Invisible
+	if not Round.Survivors[player] or player:GetAttribute("Role") ~= "Survivor" then
+		return
+	end
+	if PlayerData.Power(player) ~= "Invisible" then
+		return
+	end
+	if os.clock() - (lastVanish[player] or -math.huge) < up.Cooldown - 0.5 then
+		return
+	end
+	local char = player.Character
+	local root = Util.Root(char)
+	if not (root and Util.IsAlive(char)) then
+		return
+	end
+	lastVanish[player] = os.clock()
+	local token = {}
+	vanishToken[player] = token
+	char:SetAttribute("Invisible", true)
+	Util.Sound(Config.Sounds.Whoosh, root, { Volume = 1, Pitch = 0.7, Range = 40 })
+	Fx:FireAllClients("Vanish", { Char = char, On = true, Duration = up.Duration })
+	task.delay(up.Duration, function()
+		if vanishToken[player] ~= token then
+			return
+		end
+		vanishToken[player] = nil
+		if char.Parent and char:GetAttribute("Invisible") then
+			char:SetAttribute("Invisible", nil)
+			Fx:FireAllClients("Vanish", { Char = char, On = false })
+		end
+	end)
+end
+
 function Fart.Reset(player)
 	lastUsed[player] = nil
 	lastDodge[player] = nil
+	lastVanish[player] = nil
+	vanishToken[player] = nil
 	clouds[player] = nil
 end
 

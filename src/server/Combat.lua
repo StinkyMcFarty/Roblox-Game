@@ -517,6 +517,7 @@ function Combat.BreakShield(victim)
 			Util.Sound(Config.Sounds.Whoosh, torso, { Volume = 1.6, Pitch = 0.9, Range = 90 })
 		end
 		Fx:FireAllClients("Dodged", { Char = char })
+		Status.Apply(victim, "DodgeBoost", Config.Upgrades.Dodge.BoostTime) -- and away
 		Util.FireClient(Fx, victim, "Announce", { Text = "DODGED!", Color = Color3.fromRGB(120, 230, 255), Duration = 1.2 })
 		if Round.Wolverine then
 			Util.FireClient(Fx, Round.Wolverine, "Announce", { Text = victim.Name .. " dodged you", Color = Color3.fromRGB(120, 230, 255), Duration = 1.2 })
@@ -555,6 +556,10 @@ function Combat.Hit(victim, ignoreImmunity)
 	end
 	local hits = (victim:GetAttribute("Hits") or 0) + amount
 	victim:SetAttribute("Hits", hits)
+	if victim.Character and victim.Character:GetAttribute("Invisible") then
+		victim.Character:SetAttribute("Invisible", nil) -- the hit knocks them visible
+		Fx:FireAllClients("Vanish", { Char = victim.Character, On = false })
+	end
 	return hits >= Config.HitsToKill - 1e-6 and "kill" or "hit"
 end
 

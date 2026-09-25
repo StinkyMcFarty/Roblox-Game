@@ -1907,7 +1907,7 @@ function MapBuilder.BuildLobby()
 	heading(memoCol, "SUBJECT X IS LOOSE.")
 	keyRow(memoCol, 4, "SHIFT", "RUN. He is faster. Break his line of sight.", TYPE)
 	keyRow(memoCol, 5, "E", "HIDE in anything that glows white.", TYPE)
-	keyRow(memoCol, 6, "G", "FART to throw off his Sniff. Or buy Turbo Fart / Dodge.", TYPE)
+	keyRow(memoCol, 6, "G", "FART to hide your scent. Or: Turbo Fart, Dodge, Invisibility.", TYPE)
 	keyRow(memoCol, 7, "M", "MAP. Only you are on it.", TYPE)
 	keyRow(memoCol, 8, "3x", "REBOOT the 3 consoles, then suit up in the Hangar.", TYPE)
 	boardText(memo, {

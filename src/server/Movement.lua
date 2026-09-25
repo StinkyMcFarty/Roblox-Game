@@ -133,6 +133,9 @@ RunService.Heartbeat:Connect(function(dt)
 			if Status.Has(player, "FartBoost") then
 				speed += Config.Upgrades.TurboFart.Boost -- Turbo Fart burst
 			end
+			if Status.Has(player, "DodgeBoost") then
+				speed *= Config.Upgrades.Dodge.SpeedBoost -- landed a dodge: away!
+			end
 			if Status.Has(player, "Bracing") then
 				speed *= Config.Sentinel.Laser.Resist.Walk -- forcing his way up the death ray
 			elseif Status.Has(player, "Slowed") then

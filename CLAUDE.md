@@ -89,7 +89,11 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
   Turbo Fart (300): every fart also gives `FartBoost` (+8 speed, 2.5s) and a gas trail that fades
   after 2s (`Fart.Trail`). Dodge (300): replaces the fart; G gives 0.5s of i-frames (`Fart.Dodge`,
   statuses `Immune` + `Dodging`), 30s cooldown; a hit in that window whiffs (`Combat.BreakShield`
-  fires Fx `Dodged`). Client swaps the G kit entry by `Power` (`DODGE_KIT`/`TURBO_KIT`).
+  fires Fx `Dodged`) and a landed dodge gives `DodgeBoost` (x1.25 speed, 3s). Invisibility (500):
+  replaces the fart, 8s gone, 40s cooldown (`Fart.Vanish`, character attribute `Invisible`;
+  `src/client/Vanish.lua` hides them on every other client and shows the owner a ghost outline;
+  Sniff still finds them; a hit or suiting up ends it). Dodge also costs 500. Client swaps the G
+  kit entry by `Power` (`DODGE_KIT`/`VANISH_KIT`/`TURBO_KIT`).
 - Wolverine suits (`Costumes.lua`): everyone is a blocky R15 (`blockyDescription`). Shared sculpt
   helpers `shoulders` (rolls + deltoid caps), `physique` (pecs, abs, traps), `pointFlap` (comic
   cuff/boot points). Comic and Weapon X no longer use a Shirt texture (the top is 3D); body

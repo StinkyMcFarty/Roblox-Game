@@ -225,6 +225,7 @@ function Sentinel.Become(player)
 	end
 	player:SetAttribute("Role", "Sentinel")
 	player:SetAttribute("Armor", Config.Sentinel.Armor)
+	char:SetAttribute("Invisible", nil) -- no invisible suits
 	player:SetAttribute("SuitEnds", workspace:GetServerTimeNow() + Config.Sentinel.Duration)
 	cooldowns[player] = {}
 

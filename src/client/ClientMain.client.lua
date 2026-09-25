@@ -17,6 +17,7 @@ require(script.Parent:WaitForChild("SentinelTracker"))
 require(script.Parent:WaitForChild("TerminalSounds"))
 require(script.Parent:WaitForChild("Minimap"))
 require(script.Parent:WaitForChild("Upgrades"))
+require(script.Parent:WaitForChild("Vanish"))
 local Anims = require(script.Parent:WaitForChild("Anims"))
 local SlashFX = require(script.Parent:WaitForChild("SlashFX"))
 local Minigame = require(script.Parent:WaitForChild("Minigame"))
@@ -57,6 +58,10 @@ local ROLE_KIT = {
 local DODGE = Config.Upgrades.Dodge
 local DODGE_KIT = {
 	{ Name = "Dodge", Label = "Dodge", Desc = "Press as he strikes: his attack misses", Icon = DODGE.Icon, KeyText = "G", Key = Enum.KeyCode.G, Cooldown = DODGE.Cooldown, Color = Color3.fromRGB(110, 225, 255) },
+}
+local VANISH = Config.Upgrades.Invisible
+local VANISH_KIT = {
+	{ Name = "Vanish", Label = "Invisibility", Desc = "Gone for " .. VANISH.Duration .. "s. He can still smell you", Icon = VANISH.Icon, KeyText = "G", Key = Enum.KeyCode.G, Cooldown = VANISH.Cooldown, Color = Color3.fromRGB(170, 200, 255) },
 }
 local TURBO_KIT = {
 	{ Name = "Fart", Label = "Turbo Fart", Desc = "Gas cloud + a burst of speed", Icon = "💨", KeyText = "G", Key = Enum.KeyCode.G, Cooldown = Config.Fart.Cooldown, Color = Color3.fromRGB(150, 210, 50) },
@@ -224,6 +229,9 @@ local function applyRole(role, quiet)
 		if power == "Dodge" then
 			currentKit = DODGE_KIT
 			hint = hint:gsub("G: fart %(hides your scent%)", "G: dodge (time it as he strikes)")
+		elseif power == "Invisible" then
+			currentKit = VANISH_KIT
+			hint = hint:gsub("G: fart %(hides your scent%)", "G: go invisible (he can still smell you)")
 		elseif power == "TurboFart" then
 			currentKit = TURBO_KIT
 		end
@@ -527,6 +535,18 @@ Fx.OnClientEvent:Connect(function(kind, data)
 		SlashFX.Dodge(data.Char, data.Duration)
 	elseif kind == "Dodged" then
 		SlashFX.Dodged(data.Char)
+	elseif kind == "Vanish" then
+		-- a shimmer where they vanish (or reappear)
+		if typeof(data.Char) == "Instance" then
+			SlashFX.Dodged(data.Char)
+			if data.Char == player.Character then
+				if data.On then
+					Interface.Announce("INVISIBLE — HE CAN STILL SMELL YOU", Color3.fromRGB(170, 200, 255), 2)
+				else
+					Interface.Announce("YOU'RE VISIBLE AGAIN", Color3.fromRGB(255, 200, 120), 1.2)
+				end
+			end
+		end
 	elseif kind == "RageRoar" then
 		SlashFX.RageBurst(data.Char)
 		Effects.RageRoar(data.Char)
