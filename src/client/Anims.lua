@@ -404,24 +404,51 @@ local function prowlPose(s, c)
 	}
 end
 
--- Sentinel walking: a heavy mech stomp. Stiff armoured torso, arms held out
--- by the pauldrons, short hydraulic strides and a hard drop on each footfall.
+-- Sentinel walking: tons of armour on every step. A slow stride; the body
+-- drops and the knee buckles as each foot slams down (plant), the weight
+-- rolls onto the planted leg, the torso counter-twists and the arms swing
+-- heavily a beat behind the legs.
 local function stompPose(s, c)
+	local plant = math.abs(s) ^ 4 -- a foot hitting the deck
+	local right = s > 0 and plant or 0
+	local left = s < 0 and plant or 0
+	local sa = s * 0.825 - c * 0.565 -- sin(phase - 0.6): the arms lag the legs
+	return {
+		Root = CFrame.new(0, math.abs(c) * 0.16 - 0.2 - plant * 0.24, 0) * CFrame.Angles(rad(-8 + plant * 3), rad(4 * s), rad(5 * s)),
+		Waist = CFrame.Angles(rad(-3), rad(-7 * s), rad(-2 * s)),
+		Neck = CFrame.Angles(rad(4 + plant * 4), rad(4 * s), rad(-3 * s)),
+		RShoulder = CFrame.Angles(rad(6 - 20 * sa), 0, rad(16)),
+		LShoulder = CFrame.Angles(rad(6 + 20 * sa), 0, rad(-16)),
+		RElbow = CFrame.Angles(rad(22 + 12 * math.max(0, -sa)), 0, 0),
+		LElbow = CFrame.Angles(rad(22 + 12 * math.max(0, sa)), 0, 0),
+		RHip = CFrame.Angles(rad(30 * s + 8), 0, rad(6)),
+		LHip = CFrame.Angles(rad(-30 * s + 8), 0, rad(-6)),
+		RKnee = CFrame.Angles(rad(-(14 + 46 * math.max(0, -s) + 14 * right)), 0, 0),
+		LKnee = CFrame.Angles(rad(-(14 + 46 * math.max(0, s) + 14 * left)), 0, 0),
+		RAnkle = CFrame.Angles(rad(-6 * s + 4), 0, 0),
+		LAnkle = CFrame.Angles(rad(6 * s + 4), 0, 0),
+	}
+end
+
+-- Sentinel running (fast: pursuit thrusters): heavy but fast. It leans into
+-- the charge, long pounding strides with the knees driving high, arms
+-- pumping hard, and a hard drop through the body on every footfall.
+local function chargePose(s, c)
 	local plant = math.abs(s) ^ 4
 	return {
-		Root = CFrame.new(0, math.abs(c) * 0.1 - 0.12 - plant * 0.12, 0) * CFrame.Angles(rad(-6), rad(3 * s), rad(3 * s)),
-		Waist = CFrame.Angles(rad(-2), rad(-5 * s), 0),
-		Neck = CFrame.Angles(rad(4 + plant * 3), rad(3 * s), 0),
-		RShoulder = CFrame.Angles(rad(4 - 14 * s), 0, rad(14)),
-		LShoulder = CFrame.Angles(rad(4 + 14 * s), 0, rad(-14)),
-		RElbow = CFrame.Angles(rad(18 + 8 * math.max(0, -s)), 0, 0),
-		LElbow = CFrame.Angles(rad(18 + 8 * math.max(0, s)), 0, 0),
-		RHip = CFrame.Angles(rad(26 * s + 6), 0, rad(4)),
-		LHip = CFrame.Angles(rad(-26 * s + 6), 0, rad(-4)),
-		RKnee = CFrame.Angles(rad(-(10 + 38 * math.max(0, -s))), 0, 0),
-		LKnee = CFrame.Angles(rad(-(10 + 38 * math.max(0, s))), 0, 0),
-		RAnkle = CFrame.Angles(rad(-8 * s + 4), 0, 0),
-		LAnkle = CFrame.Angles(rad(8 * s + 4), 0, 0),
+		Root = CFrame.new(0, math.abs(c) * 0.32 - 0.36 - plant * 0.26, 0) * CFrame.Angles(rad(-22 + plant * 4), rad(8 * s), rad(4 * s)),
+		Waist = CFrame.Angles(rad(-6), rad(-14 * s), 0),
+		Neck = CFrame.Angles(rad(18), rad(6 * s), 0),
+		RShoulder = CFrame.Angles(rad(14 - 55 * s), 0, rad(18)),
+		LShoulder = CFrame.Angles(rad(14 + 55 * s), 0, rad(-18)),
+		RElbow = CFrame.Angles(rad(80 + 15 * s), 0, 0),
+		LElbow = CFrame.Angles(rad(80 - 15 * s), 0, 0),
+		RHip = CFrame.Angles(rad(58 * s + 16), 0, rad(4)),
+		LHip = CFrame.Angles(rad(-58 * s + 16), 0, rad(-4)),
+		RKnee = CFrame.Angles(rad(-(20 + 90 * math.max(0, -s))), 0, 0),
+		LKnee = CFrame.Angles(rad(-(20 + 90 * math.max(0, s))), 0, 0),
+		RAnkle = CFrame.Angles(rad(-20 * s), 0, 0),
+		LAnkle = CFrame.Angles(rad(20 * s), 0, 0),
 	}
 end
 
@@ -638,12 +665,12 @@ step:Connect(function(a, b)
 		if not root.Anchored then
 			if attr(char, "Feral") and speed > 4 then
 				loop = "Gallop"
+			elseif role == "Sentinel" and not airborne and speed > 1.5 then
+				loop = speed > 23 and "Charge" or "Stomp" -- a Sentinel never uses the survivor run
 			elseif attr(char, "Sprinting") and speed > 8 and not airborne then
 				loop = role == "Wolverine" and "Hunt" or "Flee"
 			elseif role == "Wolverine" and speed > 1.5 and not airborne then
 				loop = "Prowl"
-			elseif role == "Sentinel" and speed > 1.5 and not airborne then
-				loop = "Stomp"
 			end
 		end
 		if loop then
@@ -651,7 +678,7 @@ step:Connect(function(a, b)
 		end
 		st.LoopBlend = math.clamp(st.LoopBlend + (loop and dt * 7 or -dt * 7), 0, 1)
 		local prevPhase = st.Phase
-		st.Phase += dt * math.max(speed, (st.Loop == "Prowl" or st.Loop == "Stomp") and 6 or 10) * (st.Loop == "Gallop" and 0.36 or st.Loop == "Prowl" and 0.55 or st.Loop == "Stomp" and 0.42 or 0.5)
+		st.Phase += dt * math.max(speed, (st.Loop == "Prowl" or st.Loop == "Stomp") and 6 or 10) * (st.Loop == "Gallop" and 0.36 or st.Loop == "Prowl" and 0.55 or st.Loop == "Stomp" and 0.36 or st.Loop == "Charge" and 0.3 or 0.5)
 
 		-- all-fours footfalls (and custom footsteps) replace the normal running sound
 		local running = root:FindFirstChild("Running")
@@ -687,7 +714,7 @@ step:Connect(function(a, b)
 			local kind = role == "Sentinel" and "StepHeavy" or (METAL_FLOORS[hum.FloorMaterial] and "StepMetal" or "Step")
 			local vol, pitch = 0.26, 1
 			if role == "Sentinel" then
-				vol, pitch = 0.55, Config.Sounds.StepHeavy == Config.Sounds.StepMetal and 0.6 or 1
+				vol, pitch = st.Loop == "Charge" and 0.8 or 0.6, (Config.Sounds.StepHeavy == Config.Sounds.StepMetal and 0.6 or 1) * (st.Loop == "Charge" and 0.92 or 1)
 			elseif role == "Wolverine" then
 				vol, pitch = 0.36, 0.8 -- the boot on the floor; StepWolverine below carries his weight
 			elseif speed > 18 then
@@ -709,6 +736,14 @@ step:Connect(function(a, b)
 			end
 			if stepped then
 				footstep(st, root, kind, vol, pitch)
+				if role == "Sentinel" and _G.WolverineShake then
+					-- the deck shakes under a Sentinel's footfall (harder at a run)
+					local d = (workspace.CurrentCamera.CFrame.Position - root.Position).Magnitude
+					local amt = (st.Loop == "Charge" and 0.3 or 0.16) * math.clamp(1 - d / 45, 0, 1)
+					if amt > 0.02 then
+						_G.WolverineShake(amt)
+					end
+				end
 				if role == "Wolverine" then
 					-- adamantium skeleton: every footfall lands far heavier than a survivor's
 					footstep(st, root, "StepWolverine", st.Loop == "Hunt" and loop == "Hunt" and 0.85 or 0.65, 1)
@@ -739,6 +774,8 @@ step:Connect(function(a, b)
 				pose = prowlPose(s, c)
 			elseif st.Loop == "Stomp" then
 				pose = stompPose(s, c)
+			elseif st.Loop == "Charge" then
+				pose = chargePose(s, c)
 			else
 				local look = 0
 				if now > st.NextLook and wolverineNear(root) then
