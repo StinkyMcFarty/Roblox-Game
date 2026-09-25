@@ -183,9 +183,9 @@ Config.UploadedSounds = {
 	PounceLeap = 92649317075292, -- pounce launch
 	Scream = 94756257053291, -- kill scream after ripping someone in half
 	Step = 101289698791450, StepMetal = 112150969278482, StepHeavy = 114217739046080, -- footsteps (4 takes per file; see Anims.lua)
-	StepWolverine = 0, -- Wolverine's heavy adamantium footfalls (4 takes)
-	ClawDig = 0, -- his claws biting into the floor on all fours (4 concrete + 3 steel takes)
-	ClawStone = 0, -- his claws clashing into concrete walls
+	StepWolverine = 103555591209626, -- Wolverine's heavy adamantium footfalls (4 takes)
+	ClawDig = 81900803629932, -- his claws biting into the floor on all fours (4 concrete + 3 steel takes)
+	ClawStone = 79213537781413, -- his claws clashing into concrete walls
 }
 Config.Sounds.Snarl = Config.Sounds.Snarl or ""
 for name, id in Config.UploadedSounds do
