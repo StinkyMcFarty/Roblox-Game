@@ -215,6 +215,7 @@ async function build(sceneName) {
       });
     }
     const obj = new THREE.Mesh(geo, material);
+    obj.userData.part = { name: p.name, cls: p.class };
     obj.castShadow = p.tr < 0.5; obj.receiveShadow = true;
     obj.matrixAutoUpdate = false;
     obj.matrix.copy(cfMatrix(p.cf));
@@ -289,14 +290,14 @@ if (q.get('compose')) {
     wall.position.set(0, 15, +(q.get('wallZ') || 22)); wall.rotation.y = Math.PI; scene.add(wall);
   }
   // a dark steel floor with a sheen
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: 0x0e0f13, roughness: 0.85, metalness: 0.2, envMap: envTex, envMapIntensity: 0.2 }));
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: new THREE.Color(q.get('floor') || '#0e0f13'), roughness: 0.97, metalness: 0.0, envMap: envTex, envMapIntensity: 0.1 }));
   floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
   // floor grid lines
   scene.add(new THREE.HemisphereLight(0xb8c4ff, 0x201a18, 0.55));
   const key = new THREE.DirectionalLight(0xfff0dc, +(q.get('key') || 2.6)); key.position.set(-14, 22, -18); key.castShadow = true;
   key.shadow.mapSize.set(4096, 4096); Object.assign(key.shadow.camera, { left: -30, right: 30, top: 30, bottom: -10, far: 120 }); key.shadow.bias = -0.0004;
   scene.add(key);
-  const rimY = new THREE.DirectionalLight(0xffc830, 2.4); rimY.position.set(8, 16, 30); scene.add(rimY);
+  const rimY = new THREE.DirectionalLight(0xffc830, +(q.get('rim') || 2.4)); rimY.position.set(8, 16, 30); scene.add(rimY);
   const rimR = new THREE.DirectionalLight(0xff3020, 1.6); rimR.position.set(-20, 6, 18); scene.add(rimR);
   for (const extra of (q.get('lights') || '').split(';').filter(Boolean)) {
     const [x, y, z, hex, pow, range] = extra.split(',');
@@ -305,6 +306,13 @@ if (q.get('compose')) {
   const cam = new THREE.PerspectiveCamera(+(q.get('fov') || 35), W / H, 0.1, 300);
   cam.position.set(...(q.get('cam') || '0,6,-30').split(',').map(Number));
   cam.lookAt(new THREE.Vector3(...(q.get('look') || '0,5,0').split(',').map(Number)));
+  cam.rotateZ((+(q.get('roll') || 0)) * Math.PI / 180);
+  cam.updateMatrixWorld();
+  scene.updateMatrixWorld(true);
+  if (q.get('fx') === 'battle') {
+    const { battleFx } = await import('./battle.js');
+    battleFx(THREE, scene, cam, built, q);
+  }
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, cam));
   composer.addPass(new UnrealBloomPass(new THREE.Vector2(W, H), +(q.get('bloom') || 0.4), 0.5, +(q.get('bloomAt') || 0.97)));

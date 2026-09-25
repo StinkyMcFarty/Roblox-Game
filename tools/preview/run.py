@@ -98,6 +98,24 @@ POSES = {
     LeftUpperArm = {165, 0, -28}, LeftLowerArm = {40, 0, 0},
     RightUpperLeg = {0, 0, 14}, LeftUpperLeg = {0, 0, -14}, RightFoot = {0, 0, -14}, LeftFoot = {0, 0, 14},
   },
+  -- airborne dive: body pitched at the target, right claws sweeping down
+  -- across, left arm flung back, legs trailing
+  leap = {
+    LowerTorso = {-30, 0, 6}, UpperTorso = {-8, 14, 0}, Head = {28, -6, 0},
+    LeftUpperArm = {100, 0, -34}, LeftLowerArm = {6, 0, 0}, LeftHand = {-5, 10, 0},
+    RightUpperArm = {128, 0, 62}, RightLowerArm = {62, 0, 0}, RightHand = {-10, 80, 0},
+    RightUpperLeg = {-35, 0, 10}, RightLowerLeg = {-60, 0, 0}, RightFoot = {-20, 0, 0},
+    LeftUpperLeg = {55, 0, -10}, LeftLowerLeg = {-100, 0, 0}, LeftFoot = {-10, 0, 0},
+  },
+  -- braced: right forearm up to take the blow, left fist cocked back
+  -- charging, leaning away from the hit
+  block = {
+    LowerTorso = {6, -10, 0}, UpperTorso = {8, -12, 0}, Head = {-6, 18, 0},
+    RightUpperArm = {62, 0, 44}, RightLowerArm = {48, 0, 0},
+    LeftUpperArm = {165, 0, -34}, LeftLowerArm = {48, 0, 0},
+    RightUpperLeg = {28, 0, 10}, RightLowerLeg = {-34, 0, 0}, RightFoot = {8, 0, 0},
+    LeftUpperLeg = {-26, 0, -14}, LeftLowerLeg = {-14, 0, 0}, LeftFoot = {10, 0, 0},
+  },
   stance = {
     LowerTorso = {-6, 12, 0, 0, -0.55, 0}, UpperTorso = {-8, 6, 0}, Head = {12, -12, 0},
     RightUpperArm = {40, 0, 52}, RightLowerArm = {30, 0, 0}, RightHand = {-10, 75, 0},
