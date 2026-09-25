@@ -23,6 +23,7 @@
 -- Surface detail (stencils, hazard stripes, grilles, screens) is drawn with
 -- SurfaceGuis, so no image uploads are needed.
 local CollectionService = game:GetService("CollectionService")
+local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
@@ -2692,6 +2693,36 @@ local function build()
 	return map
 end
 
+-- The minimap's picture of the facility (client/Minimap): room rectangles and
+-- every floor-standing wall piece, flattened to 2D. Published once as JSON so
+-- players see the whole map even if distant parts haven't streamed in. Door
+-- gaps show up naturally: the pieces above doorways don't reach the floor
+-- (the wall under a window does, so windows read as wall, not a way through).
+local function publishMinimap(map)
+	local walls = {}
+	local structure = map:FindFirstChild("Structure")
+	for _, d in structure and structure:GetDescendants() or {} do
+		if d:IsA("BasePart") and d.Transparency < 0.5 and d.Size.Y >= 2.5 and d.Position.Y - d.Size.Y / 2 <= F + 1.5 then
+			local cf, sz = d.CFrame, d.Size
+			local along, len, thick = cf.LookVector, sz.Z, sz.X
+			if sz.X > sz.Z then
+				along, len, thick = cf.RightVector, sz.X, sz.Z
+			end
+			if thick <= 3 and len >= 1 and math.abs(along.Y) < 0.2 then
+				local r = function(v)
+					return math.floor(v * 10 + 0.5) / 10
+				end
+				table.insert(walls, { r(cf.Position.X), r(cf.Position.Z), r(len), r(math.deg(math.atan2(along.Z, along.X))) })
+			end
+		end
+	end
+	local rooms = {}
+	for _, rm in ROOMS do
+		table.insert(rooms, { rm.Label, rm.x0, rm.z0, rm.x1, rm.z1 })
+	end
+	ReplicatedStorage:SetAttribute("Minimap", HttpService:JSONEncode({ Rooms = rooms, Walls = walls, Bounds = { -162, -142, 162, 142 } }))
+end
+
 -- Built once, then cloned each round (so shredded walls come back instantly).
 local template = nil
 function Facility.Build()
@@ -2708,6 +2739,7 @@ function Facility.Build()
 			end
 		end
 		print(("[Facility] built: %d parts, %d lights"):format(count, template:GetAttribute("Lights") or 0))
+		publishMinimap(template)
 	end
 	local map = template:Clone()
 	-- this round's three consoles: random spots in different wings, each with
