@@ -1865,22 +1865,24 @@ function MapBuilder.BuildLobby()
 		surfaceText(plaque, Enum.NormalId.Front, { Text = item.Name .. (item.Price > 0 and ("\n" .. item.Price .. " " .. Config.CoinName:upper()) or "  FREE"), TextColor3 = item.Glow, Font = Enum.Font.GothamBold })
 	end
 
-	-- SENTINEL BAY (south-west corner): every Sentinel suit on a lit plinth,
-	-- with its name and price (bought in the Armory's SENTINEL tab) ---------
-	local bayTitle = block(lobby, Vector3.new(22, 2.6, 0.2), CFrame.new(-42, Y + 23.5, hz - 2.3) * CFrame.Angles(0, math.pi, 0), M.SmoothPlastic, rgb(18, 16, 22))
-	surfaceText(bayTitle, Enum.NormalId.Back, { Text = "SENTINEL SUITS", Font = Enum.Font.LuckiestGuy, TextColor3 = rgb(205, 150, 255) })
+	-- SENTINEL BAY (west wall, north end): every Sentinel suit on a lit
+	-- plinth facing into the room, with its name and price (bought in the
+	-- Armory's SENTINEL tab) --------------------------------------------
+	local bayTitle = block(lobby, Vector3.new(0.2, 2.6, 24), CFrame.new(-hx + 2.1, Y + 22.5, -29), M.SmoothPlastic, rgb(18, 16, 22))
+	surfaceText(bayTitle, Enum.NormalId.Right, { Text = "SENTINEL SUITS", Font = Enum.Font.LuckiestGuy, TextColor3 = rgb(205, 150, 255) })
 	for i, id in Skins.SentinelOrder do
 		local item = Skins.Sentinels[id]
-		local x = -50 + (i - 1) * 13
-		local base = CFrame.new(x, Y, hz - 9)
-		block(lobby, Vector3.new(1.2, 10, 10), base * CFrame.new(0, 0.6, 0) * CFrame.Angles(0, 0, math.rad(90)), M.Marble, rgb(34, 32, 40), { Shape = Enum.PartType.Cylinder })
-		block(lobby, Vector3.new(0.25, 10.4, 10.4), base * CFrame.new(0, 1.1, 0) * CFrame.Angles(0, 0, math.rad(90)), M.Neon, item.Swatch, { Shape = Enum.PartType.Cylinder })
-		Costumes.SentinelStatue(lobby, base * CFrame.new(0, 1.25, 0), Config.Sentinel.Scale, id)
-		local lamp = block(lobby, Vector3.new(1.6, 1, 1.6), CFrame.new(x, Y + H - 2, hz - 13), M.Metal, C.DarkMetal)
+		local z = -36 + (i - 1) * 14
+		local px = -hx + 7.5
+		local faceIn = CFrame.Angles(0, math.rad(-90), 0) -- facing +X, into the room
+		block(lobby, Vector3.new(1.2, 10, 10), CFrame.new(px, Y + 0.6, z) * CFrame.Angles(0, 0, math.rad(90)), M.Marble, rgb(34, 32, 40), { Shape = Enum.PartType.Cylinder })
+		block(lobby, Vector3.new(0.25, 10.4, 10.4), CFrame.new(px, Y + 1.1, z) * CFrame.Angles(0, 0, math.rad(90)), M.Neon, item.Swatch, { Shape = Enum.PartType.Cylinder })
+		Costumes.SentinelStatue(lobby, CFrame.new(px, Y + 1.25, z) * faceIn, Config.Sentinel.Scale, id)
+		local lamp = block(lobby, Vector3.new(1.6, 1, 1.6), CFrame.new(px + 4, Y + H - 2, z), M.Metal, C.DarkMetal)
 		make("SpotLight", lamp, { Face = Enum.NormalId.Bottom, Range = 34, Angle = 45, Brightness = 5, Color = item.Swatch:Lerp(Color3.new(1, 1, 1), 0.6), Shadows = true })
-		local plaque = block(lobby, Vector3.new(7, 2.2, 0.3), CFrame.new(x, Y + 1.9, hz - 15.5) * CFrame.Angles(math.rad(-25), 0, 0), M.Metal, rgb(24, 24, 28))
-		surfaceText(plaque, Enum.NormalId.Back, { Text = item.Name .. (item.Price > 0 and ("\n" .. item.Price .. " " .. Config.CoinName:upper()) or "   FREE"), TextColor3 = item.Swatch, Font = Enum.Font.GothamBlack })
-		block(lobby, Vector3.new(0.4, 1.4, 0.4), CFrame.new(x, Y + 0.7, hz - 15.5), M.Metal, C.DarkMetal)
+		local plaque = block(lobby, Vector3.new(7, 2.2, 0.3), CFrame.new(px + 6.8, Y + 1.9, z) * faceIn * CFrame.Angles(math.rad(25), 0, 0), M.Metal, rgb(24, 24, 28))
+		surfaceText(plaque, Enum.NormalId.Front, { Text = item.Name .. (item.Price > 0 and ("\n" .. item.Price .. " " .. Config.CoinName:upper()) or "\nFREE"), TextColor3 = item.Swatch, Font = Enum.Font.GothamBlack })
+		block(lobby, Vector3.new(0.4, 1.4, 0.4), CFrame.new(px + 6.8, Y + 0.7, z), M.Metal, C.DarkMetal)
 	end
 
 	-- BRIEFING TABLE: holographic mini-map of the arena --------------------
@@ -2003,8 +2005,8 @@ function MapBuilder.BuildLobby()
 		end
 	end
 
-	-- LEADERBOARD (west wall, north) -------------------------------------
-	local lb = block(lobby, Vector3.new(0.4, 12, 18), CFrame.new(-hx + 2.9, Y + 9, -26), M.SmoothPlastic, rgb(14, 14, 18))
+	-- LEADERBOARD (west wall, south end) ---------------------------------
+	local lb = block(lobby, Vector3.new(0.4, 11, 14), CFrame.new(-hx + 2.9, Y + 9, 36.5), M.SmoothPlastic, rgb(14, 14, 18)) -- south of the bookcase (the north end is the Sentinel bay)
 	local lbGui = make("SurfaceGui", lb, { Name = "Leaderboard", Face = Enum.NormalId.Right, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 36, LightInfluence = 0 })
 	local lbBg = make("Frame", lbGui, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = rgb(16, 14, 18), BorderSizePixel = 0 })
 	make("UIStroke", lbBg, { Color = rgb(200, 30, 30), Thickness = 8, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
