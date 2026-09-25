@@ -129,8 +129,9 @@ local function activate(name)
 	if player:GetAttribute("Role") == "Wolverine" and not ReplicatedStorage:GetAttribute("Released") then
 		return
 	end
-	-- under a Sentinel death ray, R (Sniff) is mashed to force through it
-	if name == "Sniff" and workspace:GetServerTimeNow() - (player:GetAttribute("BeamedAt") or 0) < 0.4 then
+	-- under a Sentinel death ray F is mashed to force through it (see the
+	-- "Resist" action); with no keyboard, the Sniff button does it instead
+	if name == "Sniff" and not UserInputService.KeyboardEnabled and workspace:GetServerTimeNow() - (player:GetAttribute("BeamedAt") or 0) < 0.4 then
 		Ability:FireServer("Resist")
 		Effects.ResistPress()
 		return
@@ -198,6 +199,7 @@ local function unbindAll()
 		ContextActionService:UnbindAction("Ability_" .. a.Name)
 	end
 	ContextActionService:UnbindAction("Feral")
+	ContextActionService:UnbindAction("Resist")
 	currentKit = {}
 end
 
@@ -242,6 +244,15 @@ local function applyRole(role, quiet)
 	end
 	if role == "Wolverine" then
 		holdAction("Feral", "Feral", { Enum.KeyCode.C, Enum.KeyCode.LeftControl, Enum.KeyCode.ButtonL2 }, "Feral")
+		-- mash F under a Sentinel death ray to force through it
+		ContextActionService:BindAction("Resist", function(_, state)
+			if state == Enum.UserInputState.Begin and workspace:GetServerTimeNow() - (player:GetAttribute("BeamedAt") or 0) < 0.4 then
+				Ability:FireServer("Resist")
+				Effects.ResistPress()
+				return Enum.ContextActionResult.Sink
+			end
+			return Enum.ContextActionResult.Pass
+		end, false, Enum.KeyCode.F)
 		ContextActionService:SetPosition("Feral", UDim2.new(1, -210, 1, -130))
 	end
 

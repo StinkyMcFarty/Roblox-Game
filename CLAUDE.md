@@ -47,7 +47,8 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
   It opens with a roar (`Config.Rage.RoarTime` 1.5s, clip `RageRoar`, Fx `RageRoar`): frozen and
   untouchable (`roarUntil`), then the Duration starts. While raging `Anims.lua` adds `rageHunch`
   and heavier breathing with exhale puffs (`rageExhale`).
-- Sniff is on R (also the death-ray resist mash). The release cutscene (5.5s) is timed by
+- Sniff is on R. The death-ray resist mash is F (`Resist` action in ClientMain; with no keyboard
+  the Sniff button does it). The release cutscene (5.5s) is timed by
   `Config.IntroLength` / `Config.Intro`: float, wake, two kicks crack the tank (`crackGlass`),
   a flying kick shatters it (`shatterTank`: shards, torrent, spreading puddle).
 - Impale (`stab` in `Wolverine.lua`): claws burst out their back (`SlashFX.ImpaleBurst`); a

@@ -1140,7 +1140,7 @@ function Wolverine.Handle(player, ability, arg)
 		return
 	end
 	if ability == "Resist" then
-		-- mashing R under a death ray (see Wolverine.ResistLevel)
+		-- mashing F under a death ray (see Wolverine.ResistLevel)
 		local now = os.clock()
 		if now - (resistPresses[#resistPresses] or 0) >= 0.045 then
 			table.insert(resistPresses, now)
