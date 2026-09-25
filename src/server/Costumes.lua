@@ -1014,8 +1014,11 @@ local function bladesOn(owner, hand, claw, extended, set)
 			-- bright honed edge along the inside curve
 			local edge = Costumes.Gear(owner, root, "Claw", Vector3.new(t * 0.7, sg.Len + 0.02, 0.035), edgeColor, M.SmoothPlastic,
 				center * CFrame.new(0, 0, -w / 2 - 0.012), { Reflectance = math.min(1, claw.Reflectance + 0.35), Transparency = extended and 0 or 1 }, "Claws")
-			-- bevel line on both flats
+			-- bevel line on both flats (the Verity faces cover the flats instead)
 			for sx = -1, 1, 2 do
+				if claw.Verity then
+					break
+				end
 				local bevel = Costumes.Gear(owner, root, "Claw", Vector3.new(0.012, sg.Len, w * 0.06), spineColor, M.SmoothPlastic,
 					center * CFrame.new(sx * t / 2, 0, w * 0.12), { Transparency = extended and 0 or 1 }, "Claws")
 				table.insert(set.Parts, bevel)
@@ -1209,8 +1212,46 @@ function Costumes.DressScientist(char)
 	end
 end
 
--- The Verity grin: a yellow smiley with black eyes and a wide mouth of white
--- teeth, drawn on one face of `part` with frames (no image uploads).
+-- The Verity grin, drawn with frames (no image uploads) into a square
+-- `cell`: two black eyes and a big open smile, a D shape (flat along the
+-- top, round along the bottom) with a dark outline. `teeth` adds the tooth
+-- lines (only readable on the bigger faces).
+local INK_DARK = rgb(20, 10, 10)
+local function drawGrin(cell, outline, teeth)
+	local function f(props, parent)
+		local fr = Instance.new("Frame")
+		fr.BorderSizePixel = 0
+		for k, v in props do
+			fr[k] = v
+		end
+		fr.Parent = parent
+		return fr
+	end
+	local function round(fr)
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(0.5, 0)
+		c.Parent = fr
+	end
+	for _, x in { 0.34, 0.66 } do
+		round(f({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(x, 0.36), Size = UDim2.fromScale(0.12, 0.22), BackgroundColor3 = INK_DARK }, cell))
+	end
+	-- the smile: an ellipse centred on the top edge of a clipping box, so only
+	-- its bottom half shows
+	local clip = f({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.54), Size = UDim2.fromScale(0.66, 0.3), BackgroundTransparency = 1, ClipsDescendants = true }, cell)
+	local lip = f({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0), Size = UDim2.fromScale(1, 2), BackgroundColor3 = INK_DARK }, clip)
+	round(lip)
+	local inner = f({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, -outline * 2, 1, -outline * 2), BackgroundColor3 = rgb(250, 248, 240) }, lip)
+	round(inner)
+	f({ Position = UDim2.fromScale(0, 0), Size = UDim2.new(1, 0, 0, outline), BackgroundColor3 = INK_DARK, ZIndex = 3 }, clip) -- top lip
+	if teeth then
+		for i = 1, 5 do
+			f({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(i / 6, 0), Size = UDim2.new(0, math.max(1, outline * 0.6), 0.62, 0), BackgroundColor3 = INK_DARK, ZIndex = 3 }, clip)
+		end
+		f({ Position = UDim2.fromScale(0.08, 0.34), Size = UDim2.new(0.84, 0, 0, math.max(1, outline * 0.6)), BackgroundColor3 = INK_DARK, ZIndex = 3 }, clip)
+	end
+end
+
+-- The Verity grin as a badge: a yellow smiley filling one face of `part`.
 function Costumes.Smiley(part, face)
 	local sg = Instance.new("SurfaceGui")
 	sg.Name = "Verity"
@@ -1219,39 +1260,24 @@ function Costumes.Smiley(part, face)
 	sg.PixelsPerStud = 120
 	sg.LightInfluence = 0.4
 	sg.Parent = part
-	local function f(props, parent)
-		local fr = Instance.new("Frame")
-		fr.BorderSizePixel = 0
-		for k, v in props do
-			fr[k] = v
-		end
-		fr.Parent = parent or sg
-		return fr
-	end
-	local round = function(fr, r)
-		local c = Instance.new("UICorner")
-		c.CornerRadius = r or UDim.new(0.5, 0)
-		c.Parent = fr
-	end
-	local ball = f({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.94, 0.94), BackgroundColor3 = rgb(255, 205, 40) })
-	round(ball)
+	local ball = Instance.new("Frame")
+	ball.BorderSizePixel = 0
+	ball.AnchorPoint = Vector2.new(0.5, 0.5)
+	ball.Position = UDim2.fromScale(0.5, 0.5)
+	ball.Size = UDim2.fromScale(0.94, 0.94)
+	ball.BackgroundColor3 = rgb(255, 205, 40)
+	ball.Parent = sg
+	local sq = Instance.new("UIAspectRatioConstraint")
+	sq.AspectRatio = 1
+	sq.Parent = ball
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0.5, 0)
+	c.Parent = ball
 	local rim = Instance.new("UIStroke")
 	rim.Color = rgb(150, 100, 10)
 	rim.Thickness = 3
 	rim.Parent = ball
-	for _, x in { 0.33, 0.67 } do
-		round(f({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(x, 0.34), Size = UDim2.fromScale(0.13, 0.24), BackgroundColor3 = rgb(10, 8, 8) }, ball))
-	end
-	local mouth = f({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.66), Size = UDim2.fromScale(0.66, 0.2), BackgroundColor3 = rgb(250, 248, 240) }, ball)
-	round(mouth, UDim.new(0.45, 0))
-	local lips = Instance.new("UIStroke")
-	lips.Color = rgb(20, 10, 10)
-	lips.Thickness = 3
-	lips.Parent = mouth
-	f({ AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0.04, 0.5), Size = UDim2.new(0.92, 0, 0, 2), BackgroundColor3 = rgb(20, 10, 10) }, mouth)
-	for i = 1, 6 do
-		f({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(i / 7, 0.5), Size = UDim2.new(0, 2, 0.9, 0), BackgroundColor3 = rgb(20, 10, 10) }, mouth)
-	end
+	drawGrin(ball, 4, true)
 	return sg
 end
 
@@ -1264,14 +1290,15 @@ function Costumes.SmileyStrip(part, face, enabled)
 	sg.Name = "VerityFaces"
 	sg.Face = face
 	sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	sg.PixelsPerStud = 200
+	sg.PixelsPerStud = 240
 	sg.LightInfluence = 0.5
 	sg.Enabled = enabled == true
 	sg.Parent = part
 	local n = math.max(1, math.floor(part.Size.Y / (part.Size.Z * 1.1)))
 	for i = 1, n do
 		local cell = Instance.new("Frame")
-		cell.BackgroundTransparency = 1
+		cell.BorderSizePixel = 0
+		cell.BackgroundColor3 = rgb(255, 214, 60)
 		cell.AnchorPoint = Vector2.new(0.5, 0.5)
 		cell.Position = UDim2.fromScale(0.5, (i - 0.5) / n)
 		cell.Size = UDim2.fromScale(0.86, 0.86 / n)
@@ -1280,38 +1307,13 @@ function Costumes.SmileyStrip(part, face, enabled)
 		sq.AspectRatio = 1
 		sq.Parent = cell
 		local ring = Instance.new("UIStroke")
-		ring.Color = rgb(20, 10, 10)
+		ring.Color = INK_DARK
 		ring.Thickness = 2
 		ring.Parent = cell
 		local rc = Instance.new("UICorner")
 		rc.CornerRadius = UDim.new(0.5, 0)
 		rc.Parent = cell
-		for _, x in { 0.33, 0.67 } do
-			local eye = Instance.new("Frame")
-			eye.BorderSizePixel = 0
-			eye.BackgroundColor3 = rgb(15, 10, 10)
-			eye.AnchorPoint = Vector2.new(0.5, 0.5)
-			eye.Position = UDim2.fromScale(x, 0.36)
-			eye.Size = UDim2.fromScale(0.13, 0.24)
-			eye.Parent = cell
-			local ec = Instance.new("UICorner")
-			ec.CornerRadius = UDim.new(0.5, 0)
-			ec.Parent = eye
-		end
-		local mouth = Instance.new("Frame")
-		mouth.BorderSizePixel = 0
-		mouth.BackgroundColor3 = rgb(250, 248, 240)
-		mouth.AnchorPoint = Vector2.new(0.5, 0.5)
-		mouth.Position = UDim2.fromScale(0.5, 0.68)
-		mouth.Size = UDim2.fromScale(0.62, 0.2)
-		mouth.Parent = cell
-		local mc = Instance.new("UICorner")
-		mc.CornerRadius = UDim.new(0.45, 0)
-		mc.Parent = mouth
-		local lips = Instance.new("UIStroke")
-		lips.Color = rgb(20, 10, 10)
-		lips.Thickness = 1.5
-		lips.Parent = mouth
+		drawGrin(cell, 2, false)
 	end
 	return sg
 end

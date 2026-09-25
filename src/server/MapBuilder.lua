@@ -2057,7 +2057,8 @@ function MapBuilder.BuildLobby()
 		block(lobby, Vector3.new(3.4, 3.2, 3.4), base * CFrame.new(0, 1.6, 0), M.Marble, rgb(30, 30, 34))
 		block(lobby, Vector3.new(3.6, 0.25, 3.6), base * CFrame.new(0, 3.3, 0), M.Metal, rgb(70, 72, 78), { Reflectance = 0.2 })
 		block(lobby, Vector3.new(3.5, 0.15, 3.5), base * CFrame.new(0, 0.1, 0), M.Neon, item.Glow)
-		block(lobby, Vector3.new(3.2, 5.2, 3.2), base * CFrame.new(0, 6, 0), M.Glass, rgb(200, 225, 240), { Transparency = 0.85, Reflectance = 0.15 })
+		-- not M.Glass: Roblox won't draw SurfaceGuis (the Verity faces) behind Glass
+		block(lobby, Vector3.new(3.2, 5.2, 3.2), base * CFrame.new(0, 6, 0), M.SmoothPlastic, rgb(200, 225, 240), { Transparency = 0.88, Reflectance = 0.2 })
 		for _, cx in { -1.6, 1.6 } do
 			for _, czz in { -1.6, 1.6 } do
 				block(lobby, Vector3.new(0.14, 5.2, 0.14), base * CFrame.new(cx, 6, czz), M.Metal, rgb(50, 50, 56))

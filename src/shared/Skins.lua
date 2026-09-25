@@ -114,7 +114,7 @@ Skins.Claws = {
 	Verity = {
 		Name = "Verity Claws", Price = 3000, Description = "Smiley yellow, covered in grinning faces. Smile.",
 		Color = rgb(255, 205, 40), Material = Enum.Material.SmoothPlastic, Reflectance = 0.08, Glow = rgb(255, 215, 60),
-		EdgeColor = rgb(24, 18, 16), SpineColor = rgb(200, 20, 20), Sparkle = true, Verity = true,
+		EdgeColor = rgb(24, 18, 16), Sparkle = true, Verity = true,
 	},
 }
 

@@ -89,7 +89,8 @@ function paintNodes(ctx, nodes, pw, ph) {
   const sorted = nodes.map((n, i) => [n, i]).sort((a, b) => (a[0].z - b[0].z) || (a[1] - b[1]));
   for (const [n] of sorted) {
     if (!n.visible) continue;
-    const w = n.size[0] * pw + n.size[1], h = n.size[2] * ph + n.size[3];
+    let w = n.size[0] * pw + n.size[1], h = n.size[2] * ph + n.size[3];
+    if (n.aspect) { if (w / h > n.aspect) w = h * n.aspect; else h = w / n.aspect; }
     const x = n.pos[0] * pw + n.pos[1] - n.anchor[0] * w, y = n.pos[2] * ph + n.pos[3] - n.anchor[1] * h;
     ctx.save();
     ctx.translate(x + w / 2, y + h / 2);
@@ -119,6 +120,7 @@ function paintNodes(ctx, nodes, pw, ph) {
       ctx.fillText(n.text, w / 2, h / 2);
       ctx.globalAlpha = 1;
     }
+    if (n.clip) { ctx.beginPath(); ctx.rect(0, 0, w, h); ctx.clip(); }
     paintNodes(ctx, n.children, w, h);
     ctx.restore();
   }
@@ -343,8 +345,14 @@ for (let si = 0; si < scenes.length; si++) {
     const pitch = +(q.get('pitch') || 8) * Math.PI / 180;
     const dist = Math.max(sz.y, sz.x) * +(q.get('zoom') || 1.9);
     const cam = new THREE.PerspectiveCamera(32, W / H, 0.1, 100);
-    const look = new THREE.Vector3(c.x, c.y + +(q.get('dy') || 0), c.z);
-    cam.position.set(look.x - Math.sin(yaw) * dist * Math.cos(pitch), look.y + Math.sin(pitch) * dist, look.z - Math.cos(yaw) * dist * Math.cos(pitch));
+    let look = new THREE.Vector3(c.x, c.y + +(q.get('dy') || 0), c.z);
+    let dist2 = dist;
+    if (q.get('focus')) {
+      g.updateMatrixWorld(true);
+      g.traverse((o) => { if (o.userData.part && o.userData.part.name === q.get('focus')) look = o.getWorldPosition(new THREE.Vector3()); });
+      dist2 = +(q.get('fdist') || 4);
+    }
+    cam.position.set(look.x - Math.sin(yaw) * dist2 * Math.cos(pitch), look.y + Math.sin(pitch) * dist2, look.z - Math.cos(yaw) * dist2 * Math.cos(pitch));
     cam.lookAt(look);
     const x = vi * W, y = (scenes.length - 1 - si) * H;
     renderer.setViewport(x, y, W, H); renderer.setScissor(x, y, W, H);

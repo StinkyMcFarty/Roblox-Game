@@ -172,7 +172,7 @@ def gui_tree(o):
                 'anchor': [c.AnchorPoint.X, c.AnchorPoint.Y] if c.AnchorPoint else [0, 0],
                 'rot': c.Rotation or 0, 'bg': c3(c.BackgroundColor3) or [255, 255, 255],
                 'bgt': c.BackgroundTransparency if c.BackgroundTransparency is not None else 0,
-                'z': c.ZIndex or 1, 'visible': c.Visible is not False,
+                'z': c.ZIndex or 1, 'visible': c.Visible is not False, 'clip': c.ClipsDescendants is True,
             }
             for d in c.GetChildren(c).values():
                 if d.ClassName == 'UICorner':
@@ -182,6 +182,8 @@ def gui_tree(o):
                     node['stroke'] = {'t': d.Thickness or 1, 'c': c3(d.Color) or [0, 0, 0], 'tr': d.Transparency or 0, 'border': str(d.ApplyStrokeMode) == 'Border'}
                 elif d.ClassName == 'UIGradient':
                     node['gradient'] = True
+                elif d.ClassName == 'UIAspectRatioConstraint':
+                    node['aspect'] = d.AspectRatio or 1
             if cn in ('TextLabel', 'TextButton'):
                 node['text'] = c.Text or ''
                 node['tc'] = c3(c.TextColor3) or [0, 0, 0]
