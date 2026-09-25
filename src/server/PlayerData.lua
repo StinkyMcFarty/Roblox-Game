@@ -365,12 +365,22 @@ function PlayerData.Power(player)
 	return d and d.Power or ""
 end
 
+-- In a round as a survivor or a suit: powers can't be swapped (you'd get
+-- both the fart and the dodge, each on its own cooldown).
+local function inRound(player)
+	local role = player:GetAttribute("Role")
+	return role == "Survivor" or role == "Sentinel"
+end
+
 -- Equip an owned upgrade as the G power (only one at a time); equipping the
--- one already on unequips it.
+-- one already on unequips it. Lobby only.
 function PlayerData.EquipUpgrade(player, id)
 	local d = cache[player]
 	if not (d and d.Upgrades[id]) then
 		return false, "You don't own that"
+	end
+	if inRound(player) then
+		return false, "Change your power in the lobby"
 	end
 	if d.Power == id then
 		d.Power = ""
@@ -395,10 +405,13 @@ function PlayerData.BuyUpgrade(player, id)
 	end
 	d.Coins -= up.Price
 	d.Upgrades[id] = true
-	d.Power = id -- a new power goes straight on G
+	local equipped = not inRound(player)
+	if equipped then
+		d.Power = id -- a new power goes straight on G
+	end
 	publish(player)
 	task.spawn(PlayerData.Save, player)
-	return true, "Unlocked " .. up.Name .. "! Equipped on G"
+	return true, "Unlocked " .. up.Name .. (equipped and "! Equipped on G" or "! Equip it in the lobby")
 end
 
 function PlayerData.EquipClaw(player, id)

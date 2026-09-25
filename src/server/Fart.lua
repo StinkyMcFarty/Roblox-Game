@@ -200,7 +200,7 @@ function Fart.Dodge(player)
 	if not Round.Survivors[player] or player:GetAttribute("Role") ~= "Survivor" then
 		return
 	end
-	if PlayerData.Power(player) ~= "Dodge" or Hiding.IsHidden(player) then
+	if PlayerData.Power(player) ~= "Dodge" then
 		return
 	end
 	if os.clock() - (lastDodge[player] or -math.huge) < up.Cooldown - 0.5 then
