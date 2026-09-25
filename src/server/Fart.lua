@@ -9,6 +9,7 @@ local Round = require(script.Parent.Round)
 local Hiding = require(script.Parent.Hiding)
 local VFX = require(script.Parent.VFX)
 local Status = require(script.Parent.Status)
+local Movement = require(script.Parent.Movement)
 
 local Fx = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Fx")
 
@@ -32,6 +33,7 @@ function Fart.Use(player)
 	end
 	lastUsed[player] = os.clock()
 	VFX.Anim(char, "Fart")
+	Movement.MaxOut(player) -- fart mid-sprint: instantly at full speed
 
 	local butt = char:FindFirstChild("LowerTorso") or char:FindFirstChild("Torso") or root
 	local pos = butt.Position - root.CFrame.LookVector * 1.2 - Vector3.new(0, 0.4, 0)

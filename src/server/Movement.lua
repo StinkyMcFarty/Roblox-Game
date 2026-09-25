@@ -29,6 +29,16 @@ function Movement.SetInput(player, key, value)
 	end
 end
 
+-- Skip the sprint build-up: if they're sprinting right now, they're at top
+-- speed straight away (a fart mid-run shoots them forward).
+function Movement.MaxOut(player)
+	local s = getState(player)
+	if s.Sprint and not s.Exhausted then
+		local ramp = Config.SprintRamp
+		s.RunTime = math.max(s.RunTime or 0, ramp.Delay + ramp.Time)
+	end
+end
+
 function Movement.Reset(player)
 	states[player] = nil
 	player:SetAttribute("Feral", false)

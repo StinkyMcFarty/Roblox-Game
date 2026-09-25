@@ -398,7 +398,15 @@ local function scentGhost(big)
 	hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 	hl.Adornee = model
 	hl.Parent = model
-	model.Parent = workspace.CurrentCamera
+	-- a local folder in the workspace rather than the camera: Highlights and
+	-- adornments under the camera may not draw in the live game
+	local folder = workspace:FindFirstChild("ScentGhosts")
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = "ScentGhosts"
+		folder.Parent = workspace
+	end
+	model.Parent = folder
 	return { Model = model, Core = core }
 end
 

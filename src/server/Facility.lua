@@ -2732,10 +2732,11 @@ function Facility.Build()
 				kept += 1
 				term:SetAttribute("Challenge", challenges[kept])
 				local h = Instance.new("Highlight")
-				h.Name = "Finder"
-				h.FillTransparency = 1
-				h.OutlineColor = Color3.fromRGB(80, 255, 140)
-				h.OutlineTransparency = 0.55
+				h.Name = "Finder" -- the same soft white glow as the hiding spots (client/HideGlow)
+				h.FillColor = Color3.new(1, 1, 1)
+				h.FillTransparency = 0.85
+				h.OutlineColor = Color3.new(1, 1, 1)
+				h.OutlineTransparency = 0.25
 				h.DepthMode = Enum.HighlightDepthMode.Occluded
 				h.Parent = term
 			else
