@@ -34,6 +34,9 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
 - Rage (`Config.Rage`, `updateRage` in `Wolverine.lua`): below 40% HP, at most twice a round (once
   per dip), 15s of red aura, slashes 1.35x faster, hits count 1.3x (`Combat.Hit` amount; Hits/Armor
   can be fractional), other cooldowns x0.75. Client reads the `Rage` attribute for its timers.
+  It opens with a roar (`Config.Rage.RoarTime` 1.5s, clip `RageRoar`, Fx `RageRoar`): frozen and
+  untouchable (`roarUntil`), then the Duration starts. While raging `Anims.lua` adds `rageHunch`
+  and heavier breathing with exhale puffs (`rageExhale`).
 - Sniff is on R (also the death-ray resist mash). The release cutscene (5.5s) is timed by
   `Config.IntroLength` / `Config.Intro`: float, wake, two kicks crack the tank (`crackGlass`),
   a flying kick shatters it (`shatterTank`: shards, torrent, spreading puddle).
