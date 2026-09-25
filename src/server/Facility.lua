@@ -1808,7 +1808,33 @@ local function buildHangar(parent)
 	dummy.Name = "Dummy"
 	for _, x in { -16, 16 } do
 		local c = Vector3.new(x, F + 0.8, 118)
-		Costumes.SentinelStatue(dummy, CFrame.new(c), Config.Sentinel.Scale)
+		-- the suit hangs in its cradle, boots just clear of the deck, held by a
+		-- harness bar, shoulder clamps and cables from the gantry
+		local hang = 1.4
+		Costumes.SentinelStatue(dummy, CFrame.new(c + Vector3.new(0, hang, 0)), Config.Sentinel.Scale)
+		local sc = Config.Sentinel.Scale
+		local shoulderY = hang + (3.25 + 1.35) * sc
+		D(pod, Vector3.new(8.4, 0.9, 1.4), CFrame.new(c + Vector3.new(0, shoulderY + 1.6, 0.9)), M.Metal, rgb(58, 56, 54)) -- harness bar
+		for s = -1, 1, 2 do
+			-- clamp arms from the bar down onto each pauldron
+			D(pod, Vector3.new(0.7, 1.9, 0.7), CFrame.new(c + Vector3.new(s * 2.9, shoulderY + 0.7, 0.5)), M.Metal, rgb(70, 68, 64))
+			D(pod, Vector3.new(1.4, 0.5, 1.6), CFrame.new(c + Vector3.new(s * 2.9, shoulderY - 0.2, 0.2)), M.Metal, rgb(222, 170, 28))
+			-- hoist cables up to the gantry
+			cable(c + Vector3.new(s * 3.2, shoulderY + 2, 0.9), c + Vector3.new(s * 3.6, 22.4, 1.4), 0.5, 0.18, rgb(30, 30, 32))
+		end
+		-- the charging pad under its boots, and a light shining up at it
+		local pad = D(pod, Vector3.new(0.12, 6.5, 6.5), CFrame.new(c + Vector3.new(0, 0.1, -0.6)) * CFrame.Angles(0, 0, math.rad(90)), M.Neon, rgb(170, 70, 230), { Shape = Enum.PartType.Cylinder, Transparency = 0.45 })
+		local up = Instance.new("SpotLight")
+		up.Face = Enum.NormalId.Right -- the cylinder's axis points up
+		up.Angle = 50
+		up.Range = 26
+		up.Brightness = 2.2
+		up.Color = rgb(200, 150, 255)
+		up.Parent = pad
+		-- light strips up the back frame
+		for s = -1, 1, 2 do
+			D(pod, Vector3.new(0.3, 18, 0.2), CFrame.new(c + Vector3.new(s * 3.8, 11, 3.7)), M.Neon, rgb(170, 90, 255))
+		end
 		-- cradle: back frame, clamps, umbilicals, gantry
 		D(pod, Vector3.new(10, 22, 1.2), CFrame.new(c + Vector3.new(0, 11, 4.4)), M.Metal, rgb(46, 44, 42))
 		for _, cx in { -4.6, 4.6 } do
