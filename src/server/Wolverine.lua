@@ -815,6 +815,9 @@ local function stab(player, char, root)
 	local victim = target.Player
 	Combat.PullOut(victim)
 	local vChar, vRoot = target.Char, target.Root
+	-- a Sentinel is too heavy for one arm: both claws go in and he heaves it
+	-- overhead, and the suit fights back, shocking him through his claws
+	local sentinel = victim:GetAttribute("Role") == "Sentinel"
 	for _, p in { player, victim } do
 		Status.Apply(p, "Busy", 3.2)
 		Status.Apply(p, "Frozen", 3.2)
@@ -824,28 +827,60 @@ local function stab(player, char, root)
 	local base = CFrame.lookAt(root.Position, root.Position + Util.Flat(vRoot.Position - root.Position))
 	local scale = Config.Wolverine.Scale
 	root.CFrame = base
-	vRoot.CFrame = base * CFrame.new(0.8, 0.4, -2.2) * CFrame.Angles(0, math.pi, 0)
+	vRoot.CFrame = base * CFrame.new(sentinel and 0 or 0.8, 0.4, sentinel and -3.2 or -2.2) * CFrame.Angles(0, math.pi, 0)
 	VFX.Anim(vChar, "Impaled")
-	-- hoisted up onto the right claws as the uppercut lands
-	TweenService:Create(vRoot, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		CFrame = base * CFrame.new(1.05 * scale, 4.8 * scale, -0.35) * CFrame.Angles(0, math.pi, 0) * CFrame.Angles(math.rad(-22), 0, 0),
-	}):Play()
+	local held
+	if sentinel then
+		VFX.StopAnim(char, "Impale")
+		VFX.Anim(char, "ImpaleHeavy")
+		held = base * CFrame.new(0, 4.4 * scale + 1.6, -1.2) * CFrame.Angles(0, math.pi, 0) * CFrame.Angles(math.rad(-18), 0, 0)
+	else
+		-- hoisted up onto the right claws as the uppercut lands
+		held = base * CFrame.new(1.05 * scale, 4.8 * scale, -0.35) * CFrame.Angles(0, math.pi, 0) * CFrame.Angles(math.rad(-22), 0, 0)
+	end
+	TweenService:Create(vRoot, TweenInfo.new(sentinel and 0.3 or 0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { CFrame = held }):Play()
 	local torso = Util.Torso(vChar) or vRoot
 	Util.Sound(Config.Sounds.Impale, torso, { Volume = 2.2, Range = 220, Pitch = Config.UploadedSounds.Impale ~= 0 and 1 or 0.7 })
-	Util.Sound(Config.Sounds.Gore, torso, { Pitch = 0.8, Volume = 0.5 })
+	if sentinel then
+		Util.Sound(Config.Sounds.Punch, torso, { Volume = 2, Pitch = 0.5, Range = 220 }) -- adamantium through armour plate
+	else
+		Util.Sound(Config.Sounds.Gore, torso, { Pitch = 0.8, Volume = 0.5 })
+	end
 	task.delay(0.12, function()
 		Fx:FireAllClients("HitStop", { Attacker = char, Victim = vChar, Duration = 0.1 })
 		VFX.Impact(torso.Position, clawGlow, 1.3)
-		VFX.ExitSpray(vChar, Vector3.new(0, 1, 0))
-		Combat.Blood(torso, 60)
+		-- the claws punch out through their back
+		Fx:FireAllClients("ImpaleBurst", { Position = torso.Position, Dir = (base.LookVector * 0.35 + Vector3.new(0, 1, 0)).Unit, Color = clawGlow, Heavy = sentinel })
+		if sentinel then
+			Fx:FireAllClients("Electric", { Char = vChar, Duration = 1.4 })
+			Util.Burst(torso, Util.SparkProps, 60, 2)
+		else
+			VFX.ExitSpray(vChar, Vector3.new(0, 1, 0))
+			Combat.Blood(torso, 60)
+		end
 	end)
-	Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 0.9, Radius = 70 })
+	Fx:FireAllClients("Shake", { Position = root.Position, Intensity = sentinel and 1.3 or 0.9, Radius = 70 })
 	Util.FireClient(Fx, victim, "Grabbed", {})
 
-	-- held up there, bleeding
-	for _ = 1, 4 do
+	-- held up there, bleeding (or, a Sentinel, shocking him through his claws:
+	-- Config.Wolverine.ImpaleShock of his health over three zaps)
+	for k = 1, 4 do
 		task.wait(0.25)
-		if vChar.Parent then
+		if not vChar.Parent then
+			continue
+		end
+		if sentinel then
+			if k <= 3 then
+				local hum = Util.Humanoid(char)
+				if hum then
+					Wolverine.Damage(hum.MaxHealth * Config.Wolverine.ImpaleShock / 3, victim)
+				end
+				Fx:FireAllClients("Electrocute", { From = vChar, To = char, Duration = 0.3 })
+				Wolverine.RevealSkeleton()
+				Util.Sound(Config.Sounds.Laser, root, { Volume = 1.8, Pitch = 0.45 + math.random() * 0.15, Range = 160 })
+				Util.Burst(root, Util.SparkProps, 25, 1)
+			end
+		else
 			Combat.Blood(torso, 8)
 		end
 	end
@@ -856,22 +891,36 @@ local function stab(player, char, root)
 		VFX.StopAnim(vChar, "Impaled")
 		Combat.Execute(player, victim)
 	else
-		-- hurl them off the claws
-		VFX.Anim(char, "ImpaleThrow")
+		-- boot them off the claws: the claws rip down out of them, the knee
+		-- comes up and the kick sends them flying
+		VFX.StopAnim(char, sentinel and "ImpaleHeavy" or "Impale")
+		VFX.Anim(char, "ImpaleKick")
 		VFX.StopAnim(vChar, "Impaled")
-		task.wait(0.12)
+		if vRoot.Parent then
+			TweenService:Create(vRoot, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+				CFrame = base * CFrame.new(0, sentinel and 2.2 or 1.2, sentinel and -3.4 or -2.6) * CFrame.Angles(0, math.pi, 0),
+			}):Play()
+		end
+		task.wait(0.2)
 		if vRoot.Parent then
 			vRoot.Anchored = false
 		end
-		if root.Parent then
-			root.Anchored = false
-		end
+		local kickAt = (base * CFrame.new(0, 0.8, -2.2)).Position
+		Fx:FireAllClients("KickImpact", { Position = kickAt, Dir = base.LookVector })
+		Util.Sound(Config.Sounds.Punch, root, { Volume = 2.2, Pitch = 0.75, Range = 220 })
+		Util.Sound(Config.Sounds.Impact, root, { Volume = 1.8, Pitch = 0.8, Range = 220 })
+		Fx:FireAllClients("Shake", { Position = kickAt, Intensity = 1, Radius = 70 })
+		Fx:FireAllClients("HitStop", { Attacker = char, Victim = vChar, Duration = 0.08 })
 		for _, p in { player, victim } do
 			Status.Clear(p, "Busy")
 			Status.Clear(p, "Frozen")
 		end
 		if result == "hit" then
-			Combat.Wound(player, victim, { Force = 80, Up = 30, Dir = base.LookVector })
+			Combat.Wound(player, victim, { Force = 140, Up = 38, Dir = base.LookVector })
+		end
+		task.wait(0.2)
+		if root.Parent then
+			root.Anchored = false
 		end
 	end
 end

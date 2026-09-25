@@ -298,6 +298,7 @@ function Combat.OnSuitDestroyed(player)
 	end
 	local pos = root.Position
 	Sentinel.PowerDown(player, true)
+	Fx:FireAllClients("Electric", { Char = char, Duration = 1.6 }) -- the torn suit shorts out
 	Util.Burst(root, Util.SparkProps, 80, 2.5)
 	VFX.Impact(pos, GLOW, 2.2, char)
 	VFX.Shockwave(pos - Vector3.new(0, 2.5, 0), 18)

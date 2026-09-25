@@ -36,6 +36,10 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
   can be fractional), other cooldowns x0.75. Client reads the `Rage` attribute for its timers.
 - Sniff is on R (also the death-ray resist mash). The release cutscene is timed by
   `Config.IntroLength` / `Config.Intro`.
+- Impale (`stab` in `Wolverine.lua`): claws burst out their back (`SlashFX.ImpaleBurst`); a
+  survivor who lives is kicked off the blades (`ImpaleKick`). A Sentinel is heaved overhead on
+  both claws (`ImpaleHeavy`) and shocks him for `Config.Wolverine.ImpaleShock` (7%) of his health;
+  Sentinels spark (`Electric` Fx) when impaled or torn apart.
 - Pounce is a scripted dive arc (`Effects.Leap`): Height 7.6, AirTime 0.92, Forward 78 (~72 studs).
 - Running does not break walls; M1, pounce, impale and Sentinel punches do. Wall cores carry a
   `Surface` attribute (`Facility.lua`) that picks the clash effect (`Combat.StoneClash` etc).

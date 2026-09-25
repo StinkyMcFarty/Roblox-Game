@@ -455,6 +455,14 @@ Fx.OnClientEvent:Connect(function(kind, data)
 		SlashFX.BeamUpdate(data.Char, data.From, data.To, data.Hit, data.Burns)
 	elseif kind == "LaserEnd" then
 		SlashFX.BeamEnd(data.Char)
+	elseif kind == "ImpaleBurst" then
+		SlashFX.ImpaleBurst(data.Position, data.Dir, data.Color, data.Heavy)
+	elseif kind == "KickImpact" then
+		SlashFX.KickImpact(data.Position, data.Dir)
+	elseif kind == "Electric" then
+		SlashFX.Electric(data.Char, data.Duration)
+	elseif kind == "Electrocute" then
+		SlashFX.Electrocute(data.From, data.To, data.Duration)
 	elseif kind == "Slam" then
 		SlashFX.GroundSlam(data.Position, data.Radius)
 	elseif kind == "Smash" then

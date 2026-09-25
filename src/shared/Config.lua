@@ -50,6 +50,7 @@ Config.Wolverine = {
 	FeralSpeed = Config.Survivor.SprintSpeed * 1.15, -- running on all fours
 	FeralTopSpeed = Config.Survivor.TopSpeed * 1.15,
 	FeralStamina = 4.5,
+	ImpaleShock = 0.07, -- impaling a Sentinel shocks him through his claws for this much of his health
 	FeralRegen = 0.6,
 }
 

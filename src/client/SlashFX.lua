@@ -1527,4 +1527,204 @@ function SlashFX.GroundSlam(position, radius)
 	end)
 end
 
+---------------------------------------------------------------------------
+-- Impale: the claws punch out through their back
+---------------------------------------------------------------------------
+
+-- Three long blades of light burst out along `dir` from the victim's back
+-- (six for a Sentinel: both claws), a shock ring around the wound, a white
+-- flare, and a spray of glowing shards.
+function SlashFX.ImpaleBurst(position, dir, color, heavy)
+	if not (position and dir) then
+		return
+	end
+	color = color or DEFAULT_GLOW
+	local cam = workspace.CurrentCamera
+	starFlare(position + dir * 1.2, color, heavy and 2.4 or 1.8, 0.45)
+	local side = dir:Cross(Vector3.new(0, 0, 1))
+	side = side.Magnitude > 0.01 and side.Unit or Vector3.new(1, 0, 0)
+	local ribbons, blades, shards = {}, {}, {}
+	local sets = heavy and { -1.1, 1.1 } or { 0 }
+	for _, off in sets do
+		for k = -1, 1 do
+			local b = {
+				Glow = takeRibbon(5, color, 3),
+				Core = takeRibbon(5, WHITE, 8),
+				From = position + side * (off + k * 0.32),
+				L = (5.5 - math.abs(k) * 1.2) * (heavy and 1.3 or 1),
+			}
+			table.insert(ribbons, b.Glow)
+			table.insert(ribbons, b.Core)
+			table.insert(blades, b)
+		end
+	end
+	local ring = takeRibbon(24, color, 5)
+	local ring2 = takeRibbon(24, WHITE, 6)
+	table.insert(ribbons, ring)
+	table.insert(ribbons, ring2)
+	for i = 1, 14 do
+		local r = takeRibbon(5, i % 3 == 0 and WHITE or color, 5)
+		table.insert(ribbons, r)
+		local d = (dir + Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5) * 1.3).Unit
+		shards[i] = { R = r, D = d, Speed = 18 + math.random() * 22 }
+	end
+	local LIFE = 0.45
+	run(ribbons, function(t)
+		local k = t / LIFE
+		if k >= 1 or not cam then
+			return false
+		end
+		local grow = outExpo(clamp01(t / 0.06))
+		for _, b in blades do
+			local tip = b.From + dir * b.L * grow
+			local w = 0.32 * (1 - k)
+			setNeedle(b.Core, b.From - dir * 0.3, tip, w, k)
+			setNeedle(b.Glow, b.From - dir * 0.3, tip + dir * 0.4, w * 3.2, 0.3 + 0.7 * k)
+		end
+		setRing(ring, position + dir * 0.4, dir, 0.8 + 3.2 * outQuad(k), 0.3 * (1 - k), k)
+		setRing(ring2, position + dir * 0.6, dir, 0.5 + 2 * outQuad(k), 0.18 * (1 - k), k)
+		for _, s in shards do
+			local p0 = position + s.D * s.Speed * 0.4 * outQuad(k) + Vector3.new(0, -5 * k * k, 0)
+			setNeedle(s.R, p0, p0 + s.D * 1.2, 0.1 * (1 - k), k)
+		end
+		return true
+	end)
+end
+
+-- The kick that boots them off his claws: a flat shock ring off the sole of
+-- his boot, a burst of streaks and a white flare.
+function SlashFX.KickImpact(position, dir)
+	if not (position and dir) then
+		return
+	end
+	starFlare(position, WHITE, 1.6, 0.35)
+	local ribbons, streaks = {}, {}
+	local ring = takeRibbon(24, WHITE, 6)
+	local ring2 = takeRibbon(24, Color3.fromRGB(255, 200, 150), 4)
+	table.insert(ribbons, ring)
+	table.insert(ribbons, ring2)
+	for i = 1, 10 do
+		local r = takeRibbon(5, i % 2 == 0 and WHITE or Color3.fromRGB(255, 210, 170), 5)
+		table.insert(ribbons, r)
+		local d = (dir + Vector3.new(math.random() - 0.5, (math.random() - 0.3) * 0.8, math.random() - 0.5) * 0.7).Unit
+		streaks[i] = { R = r, D = d, L = 2 + math.random() * 2.5 }
+	end
+	local LIFE = 0.35
+	run(ribbons, function(t)
+		local k = t / LIFE
+		if k >= 1 then
+			return false
+		end
+		setRing(ring, position, dir, 0.6 + 3.5 * outQuad(k), 0.35 * (1 - k), k)
+		setRing(ring2, position + dir * 0.8, dir, 0.4 + 2.2 * outQuad(k), 0.22 * (1 - k), k)
+		for _, s in streaks do
+			local p0 = position + s.D * (1 + 9 * outQuad(k))
+			setNeedle(s.R, p0, p0 + s.D * s.L * (1 - k), 0.14 * (1 - k), k)
+		end
+		return true
+	end)
+end
+
+---------------------------------------------------------------------------
+-- Electricity: a Sentinel shorting out, and it shocking him through his claws
+---------------------------------------------------------------------------
+
+local ARC_BLUE = Color3.fromRGB(120, 220, 255)
+local function visibleParts(char)
+	local list = {}
+	for _, d in char:GetDescendants() do
+		if d:IsA("BasePart") and d.Transparency < 0.9 and d.Name ~= "HumanoidRootPart" then
+			table.insert(list, d)
+		end
+	end
+	return list
+end
+
+-- Arcs crackling over a character (jumping between random parts of it) and
+-- sparks spitting off it, for `duration` seconds.
+function SlashFX.Electric(char, duration)
+	if not (char and char.Parent) then
+		return
+	end
+	duration = duration or 1.2
+	local parts = visibleParts(char)
+	if #parts < 2 then
+		return
+	end
+	local ribbons, bolts = {}, {}
+	for i = 1, 6 do
+		local r = takeRibbon(8, i % 2 == 0 and WHITE or ARC_BLUE, 8)
+		table.insert(ribbons, r)
+		bolts[i] = { R = r, Next = 0 }
+	end
+	local nextSpark = 0
+	run(ribbons, function(t)
+		if t >= duration or not char.Parent then
+			return false
+		end
+		local now = os.clock()
+		for _, b in bolts do
+			if now >= b.Next then
+				b.Next = now + 0.04 + math.random() * 0.08
+				b.A = parts[math.random(#parts)]
+				b.B = parts[math.random(#parts)]
+				b.Show = math.random() < 0.7 and b.A ~= b.B
+			end
+			if b.Show and b.A.Parent and b.B.Parent and (b.A.Position - b.B.Position).Magnitude > 0.2 then
+				local fade = 1 - t / duration
+				setBolt(b.R, b.A.Position, b.B.Position, 1.2, 0.16 * fade + 0.04, 0)
+			else
+				hideRibbon(b.R)
+			end
+		end
+		if now >= nextSpark then
+			nextSpark = now + 0.12
+			local p = parts[math.random(#parts)]
+			if p.Parent then
+				sparks(p.Position, 1.2, ARC_BLUE, 5)
+			end
+		end
+		return true
+	end)
+end
+
+-- Arcs leaping from one character to another (the suit into his claws) and
+-- crawling over the one being shocked.
+function SlashFX.Electrocute(fromChar, toChar, duration)
+	if not (fromChar and toChar and fromChar.Parent and toChar.Parent) then
+		return
+	end
+	duration = duration or 0.3
+	local src, dst = visibleParts(fromChar), visibleParts(toChar)
+	local claws = toChar:FindFirstChild("Claws")
+	if claws then
+		local list = visibleParts(claws)
+		if #list > 0 then
+			dst = list
+		end
+	end
+	if #src == 0 or #dst == 0 then
+		return
+	end
+	local ribbons, bolts = {}, {}
+	for i = 1, 4 do
+		local r = takeRibbon(10, i % 2 == 0 and WHITE or ARC_BLUE, 9)
+		table.insert(ribbons, r)
+		bolts[i] = r
+	end
+	run(ribbons, function(t)
+		if t >= duration or not (fromChar.Parent and toChar.Parent) then
+			return false
+		end
+		for _, r in bolts do
+			local a, b = src[math.random(#src)], dst[math.random(#dst)]
+			if a.Parent and b.Parent and (a.Position - b.Position).Magnitude > 0.2 then
+				setBolt(r, a.Position, b.Position, 1.6, 0.22, 0)
+			end
+		end
+		return true
+	end)
+	SlashFX.Electric(toChar, duration + 0.2)
+end
+
 return SlashFX

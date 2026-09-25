@@ -117,6 +117,49 @@ Clips.Impale = {
 	},
 }
 
+-- A Sentinel is too heavy for one arm: both claws go in and he hoists the
+-- suit overhead, legs braced wide, straining under it.
+local HEAVE = {
+	Root = { 8, 0, 0, 0, -0.35, 0 }, Waist = { 14, 0, 0 }, Neck = { 30, 0, 0 },
+	RShoulder = { 168, 0, 12 }, RElbow = { 18, 0, 0 },
+	LShoulder = { 168, 0, -12 }, LElbow = { 18, 0, 0 },
+	RHip = { -10, 0, 16 }, LHip = { 14, 0, -16 }, RKnee = { -34, 0, 0 }, LKnee = { -38, 0, 0 },
+}
+Clips.ImpaleHeavy = {
+	Hold = true,
+	Tremble = true,
+	Keys = {
+		{ T = 0, Pose = LIFTED },
+		{ T = 0.2, Ease = "Out", Pose = HEAVE },
+		{ T = 1.5, Ease = "Linear", Pose = HEAVE },
+	},
+}
+
+-- Boot them off the claws: the arms rip back down out of them, he leans
+-- back, the right knee comes up to the chest and the leg drives out (the
+-- kick lands at ~0.22s), then he stamps back down.
+Clips.ImpaleKick = {
+	Keys = {
+		{ T = 0, Pose = LIFTED },
+		{ T = 0.12, Ease = "Out", Pose = {
+			Root = { 14, 0, 0, 0, 0, 0.3 }, Waist = { 12, 0, 0 }, Neck = { -6, 0, 0 },
+			RShoulder = { 40, 0, 30 }, RElbow = { 70, 0, 0 }, LShoulder = { 40, 0, -30 }, LElbow = { 70, 0, 0 },
+			RHip = { 105, 0, 4 }, RKnee = { -110, 0, 0 }, LHip = { -6, 0, 0 }, LKnee = { -20, 0, 0 },
+		} },
+		{ T = 0.22, Ease = "In", Pose = {
+			Root = { 22, 0, 0, 0, 0, 0.5 }, Waist = { 16, 0, 0 }, Neck = { -10, 0, 0 },
+			RShoulder = { -20, 0, 40 }, RElbow = { 50, 0, 0 }, LShoulder = { -20, 0, -40 }, LElbow = { 50, 0, 0 },
+			RHip = { 95, 0, 2 }, RKnee = { -4, 0, 0 }, LHip = { -12, 0, 0 }, LKnee = { -24, 0, 0 },
+		} },
+		{ T = 0.36, Pose = {
+			Root = { 20, 0, 0, 0, 0, 0.45 }, Waist = { 14, 0, 0 }, Neck = { -8, 0, 0 },
+			RShoulder = { -16, 0, 38 }, RElbow = { 55, 0, 0 }, LShoulder = { -16, 0, -38 }, LElbow = { 55, 0, 0 },
+			RHip = { 92, 0, 2 }, RKnee = { -6, 0, 0 }, LHip = { -12, 0, 0 }, LKnee = { -24, 0, 0 },
+		} },
+		{ T = 0.7, Ease = "InOut", Pose = REST },
+	},
+}
+
 -- Hurl them off the claws
 Clips.ImpaleThrow = {
 	Keys = {
