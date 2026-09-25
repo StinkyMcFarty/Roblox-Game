@@ -94,7 +94,9 @@ Config.Sentinel = {
 	-- Laser burns through walls and flashes Wolverine's adamantium skeleton
 	-- Death ray: charge, then a 3s aimable beam that pushes him back; the suit
 	-- is sluggish for 3s after firing.
-	Laser = { Cooldown = 12, Charge = 0.6, Duration = 3, DPS = 32.4, Range = 260, Slow = 1.5, WallsBurned = 8, Push = 22, CloseRange = 18, CloseMult = 3.2,
+	-- FarRangeMult: range x1.5 while he's Pursuit.Start+ studs from that suit.
+	Laser = { Cooldown = 12, Charge = 0.6, Duration = 3, DPS = 32.4, Range = 260, FarRangeMult = 1.5,
+		Slow = 1.5, WallsBurned = 8, Push = 22, CloseRange = 18, CloseMult = 3.2,
 		-- Wolverine mashing F while beamed: Presses/sec for full resist; past
 		-- Threshold he braces and walks into the beam at Walk x speed
 		Resist = { Presses = 7, Threshold = 0.5, Walk = 0.38 }, Recover = 3 },

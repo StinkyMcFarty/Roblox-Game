@@ -36,7 +36,8 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
   `Surface` attribute (`Facility.lua`) that picks the clash effect (`Combat.StoneClash` etc).
 - Sentinels: linked (within 30 studs of each other) hit at 1.25x, apart 0.6x, a lone suit 1x.
   Pursuit thrusters (`Config.Sentinel.Pursuit`, `Movement.lua`): once Wolverine is 70+ studs
-  away a suit gets +14 speed until it's back within 30 studs.
+  away a suit gets +14 speed until it's back within 30 studs. Death ray: 32.4 DPS, range 260,
+  x1.5 (390) while he's 70+ studs from that suit.
   Inhibitor Blast (`Config.Sentinel.Pulse`): radius 30, shatters his i-frames, and during its
   stun a punch grants i-frames only every 2nd hit (`pulseStun` in `Sentinel.lua`).
 - Survivors see a white glow on the 6 nearest hiding spots (`src/client/HideGlow.lua`); keep the

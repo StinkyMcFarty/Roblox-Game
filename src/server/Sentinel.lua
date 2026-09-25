@@ -547,10 +547,15 @@ local function laser(player, char, root, aim)
 			end
 		end
 		local ignore = { char }
-		local from, remaining = origin, cfg.Range
-		local endPos = origin + dir * cfg.Range
-		local burns = {}
 		local _, wChar, wRoot = wolverineParts()
+		-- he's run off (as far as the pursuit thrusters kick in): the beam reaches further
+		local range = cfg.Range
+		if wRoot and (wRoot.Position - root.Position).Magnitude > Config.Sentinel.Pursuit.Start then
+			range *= cfg.FarRangeMult
+		end
+		local from, remaining = origin, range
+		local endPos = origin + dir * range
+		local burns = {}
 		local hitW = false
 		while remaining > 0 do
 			params.FilterDescendantsInstances = ignore
