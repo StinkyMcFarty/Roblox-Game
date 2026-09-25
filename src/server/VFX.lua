@@ -53,9 +53,10 @@ function VFX.ClawArc(root, side, color)
 end
 
 -- X-shaped star flare, needle burst and a white body flash at a hit location.
--- `victim` (optional character) flashes white for a frame.
-function VFX.Impact(position, color, size, victim)
-	Fx:FireAllClients("HitFlash", { Position = position, Color = color, Size = size or 1, Victim = victim })
+-- `victim` (optional character) flashes white for a frame; `claw` adds three
+-- glowing claw gashes raked across the hit.
+function VFX.Impact(position, color, size, victim, claw)
+	Fx:FireAllClients("HitFlash", { Position = position, Color = color, Size = size or 1, Victim = victim, Claw = claw == true })
 end
 
 -- Red claw marks slashed across a victim for a moment.

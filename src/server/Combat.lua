@@ -585,7 +585,7 @@ function Combat.Wound(killer, victim, opts)
 	-- Crisp hit feedback
 	local torso = Util.Torso(char) or root
 	local kChar = killer and killer.Character
-	VFX.Impact(torso.Position, kChar and kChar:GetAttribute("ClawGlow") or Color3.fromRGB(255, 60, 50), 1, char)
+	VFX.Impact(torso.Position, kChar and kChar:GetAttribute("ClawGlow") or Color3.fromRGB(255, 60, 50), 1, char, true)
 	VFX.WoundMarks(char)
 	VFX.IFrames(char, Config.HitImmunity)
 	VFX.ThrowTrail(char, Config.Throw.Tumble + 0.3)

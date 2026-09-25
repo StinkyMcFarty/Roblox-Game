@@ -435,7 +435,7 @@ Fx.OnClientEvent:Connect(function(kind, data)
 	elseif kind == "Smash" then
 		SlashFX.Smash(data.Char, data.Position, data.Dir, data.Hit)
 	elseif kind == "HitFlash" then
-		SlashFX.HitFlash(data.Position, data.Color, data.Size, data.Victim)
+		SlashFX.HitFlash(data.Position, data.Color, data.Size, data.Victim, data.Claw)
 	elseif kind == "AnimStop" then
 		Anims.Stop(data.Char, data.Clip)
 	elseif kind == "Announce" then

@@ -5,6 +5,7 @@
 --                                            core and a white body flash on the victim
 -- Everything is built from beams (tapered, camera-facing ribbons) on attachments in
 -- Terrain, whose attachment positions are world-space. No image assets are needed.
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -149,6 +150,39 @@ local function outExpo(x)
 	return x >= 1 and 1 or 1 - 2 ^ (-10 * x)
 end
 
+-- a camera-facing star: two long white spikes crossing, needles bursting out
+local function starFlare(pos, color, size, life)
+	local cam = workspace.CurrentCamera
+	if not cam then
+		return
+	end
+	local ribbons, spikes = {}, {}
+	for i = 1, 8 do
+		local r = takeRibbon(5, i <= 2 and WHITE or color, i <= 2 and 6 or 3)
+		table.insert(ribbons, r)
+		spikes[i] = { R = r, A = (i <= 2 and (i * math.pi / 2 + 0.6) or math.random() * math.pi * 2), L = (i <= 2 and 5 or 1.5 + math.random() * 2) * size, W = (i <= 2 and 0.35 or 0.12) * size }
+	end
+	run(ribbons, function(t)
+		local k = t / life
+		if k >= 1 then
+			return false
+		end
+		local cf = cam.CFrame
+		local p = pos + (cf.Position - pos).Unit * 0.8
+		for i, sp in spikes do
+			local d = cf.RightVector * math.cos(sp.A) + cf.UpVector * math.sin(sp.A)
+			if i <= 2 then
+				local half = sp.L * (0.4 + 0.6 * outExpo(math.min(1, t / 0.05))) / 2
+				setNeedle(sp.R, p - d * half, p + d * half, sp.W * (1 - k), k < 0.4 and 0 or (k - 0.4) / 0.6)
+			else
+				local r0 = 0.3 * size + sp.L * outQuad(k)
+				setNeedle(sp.R, p + d * r0, p + d * (r0 + sp.L * (1 - k)), sp.W * (1 - k), k)
+			end
+		end
+		return true
+	end)
+end
+
 ---------------------------------------------------------------------------
 -- Claw crescents
 ---------------------------------------------------------------------------
@@ -219,27 +253,36 @@ function SlashFX.Arc(char, side, color)
 	local roll = math.rad(38 * dir)
 	local cr, sr = math.cos(roll), math.sin(roll)
 	local from, to = SWEEP * dir, -SWEEP * dir
-	local function arcPoint(center, a, rc)
+	local function arcPoint(center, a, rc, push)
 		local x, y = rc * math.sin(a), rc * math.cos(a) - rc * 0.55
-		local z = -(2.6 + 1.3 * math.cos(a)) * s
+		local z = -(2.6 + 1.3 * math.cos(a)) * s - (push or 0)
 		return center + rot:VectorToWorldSpace(Vector3.new(x * cr - y * sr, x * sr + y * cr, z))
 	end
 
+	-- three blades, each a white-hot edge in a coloured glow inside a wide faint
+	-- smear (the motion blur of the swing)
 	local claws, ribbons = {}, {}
 	for k = -1, 1 do
 		local c = {
-			Radius = (3.3 + k * 0.42) * s,
+			Radius = (3.3 + k * 0.45) * s,
 			Delay = (k + 1) * 0.011,
-			Width = (0.2 - math.abs(k) * 0.035) * s,
-			Glow = takeRibbon(ARC_N, color, 2.2),
-			Core = takeRibbon(ARC_N, WHITE, 5),
+			Width = (0.26 - math.abs(k) * 0.045) * s,
+			Smear = takeRibbon(ARC_N, color, 1.3),
+			Glow = takeRibbon(ARC_N, color, 2.6),
+			Core = takeRibbon(ARC_N, WHITE, 6),
 		}
 		table.insert(claws, c)
+		table.insert(ribbons, c.Smear)
 		table.insert(ribbons, c.Glow)
 		table.insert(ribbons, c.Core)
 	end
+	-- the slash wave: a crescent of cut air that flies on ahead of the claws
+	local wave = { Core = takeRibbon(ARC_N, WHITE, 5), Glow = takeRibbon(ARC_N, color, 2.2) }
+	table.insert(ribbons, wave.Core)
+	table.insert(ribbons, wave.Glow)
+	local WAVE_START, WAVE_LIFE = HEAD_TIME * 0.7, 0.22
 
-	local pts, coreW, glowW = table.create(ARC_N), table.create(ARC_N), table.create(ARC_N)
+	local pts, coreW, glowW, smearW = table.create(ARC_N), table.create(ARC_N), table.create(ARC_N), table.create(ARC_N)
 	local sparked = false
 	run(ribbons, function(t)
 		if not root.Parent then
@@ -251,6 +294,7 @@ function SlashFX.Arc(char, side, color)
 			local tt = t - c.Delay
 			if tt <= 0 then
 				alive = true
+				hideRibbon(c.Smear)
 				hideRibbon(c.Glow)
 				hideRibbon(c.Core)
 				continue
@@ -258,6 +302,7 @@ function SlashFX.Arc(char, side, color)
 			local head = outCubic(clamp01(tt / HEAD_TIME))
 			local tail = outQuad(clamp01((tt - TAIL_DELAY) / TAIL_TIME))
 			if tail >= 0.999 then
+				hideRibbon(c.Smear)
 				hideRibbon(c.Glow)
 				hideRibbon(c.Core)
 				continue
@@ -271,15 +316,43 @@ function SlashFX.Arc(char, side, color)
 				pts[i] = arcPoint(center, a, radius)
 				local w = c.Width * profile(u) * thin
 				coreW[i] = w
-				glowW[i] = w * 3.4
+				glowW[i] = w * 3.6
+				smearW[i] = w * 8
 			end
 			setRibbon(c.Core, pts, coreW, tail > 0.55 and (tail - 0.55) / 0.45 or 0)
-			setRibbon(c.Glow, pts, glowW, 0.4 + 0.6 * tail)
+			setRibbon(c.Glow, pts, glowW, 0.35 + 0.65 * tail)
+			setRibbon(c.Smear, pts, smearW, 0.78 + 0.22 * tail)
+		end
+		local q = (t - WAVE_START) / WAVE_LIFE
+		if q > 0 and q < 1 then
+			alive = true
+			local push = 12 * s * outQuad(q)
+			for i = 1, ARC_N do
+				local u = (i - 1) / (ARC_N - 1)
+				local a = from + (to - from) * u
+				pts[i] = arcPoint(center, a, 3.6 * s * (1 + 0.35 * q), push)
+				local w = 0.22 * s * math.sin(u * math.pi) ^ 0.6 * (1 - q)
+				coreW[i] = w
+				glowW[i] = w * 4
+			end
+			setRibbon(wave.Core, pts, coreW, q)
+			setRibbon(wave.Glow, pts, glowW, 0.45 + 0.55 * q)
+		else
+			hideRibbon(wave.Core)
+			hideRibbon(wave.Glow)
+			alive = alive or q <= 0
 		end
 		if not sparked and t > HEAD_TIME * 0.85 then
 			sparked = true
 			local p = arcPoint(center, from + (to - from) * 0.62, 3.1 * s)
-			sparks(p, s, color, 6)
+			sparks(p, s * 1.3, color, 12)
+			-- a glint on each blade tip as the swing finishes
+			for _, c in claws do
+				starFlare(arcPoint(center, to, c.Radius), color, 0.35 * s, 0.22)
+			end
+			if char == Players.LocalPlayer.Character and _G.WolverineShake then
+				_G.WolverineShake(0.12)
+			end
 		end
 		return alive
 	end)
@@ -309,7 +382,59 @@ local function flashBody(char)
 	end)
 end
 
-function SlashFX.HitFlash(position, color, size, victim)
+-- Three claw gashes raked across a hit: they rip open end to end in a blink,
+-- hang for a moment (white-hot edge, claw-coloured glow, a wide red bleed)
+-- and fade.
+local BLEED = Color3.fromRGB(200, 10, 20)
+local function clawRake(position, color, size)
+	local cam = workspace.CurrentCamera
+	local ribbons, gashes = {}, {}
+	local base = math.rad(-50 - math.random() * 25) * (math.random() < 0.5 and 1 or -1)
+	for k = -1, 1 do
+		local g = {
+			Off = k * 0.75 * size,
+			L = (5.2 - math.abs(k) * 1.1) * size,
+			Delay = (k + 1) * 0.012,
+			Bleed = takeRibbon(5, BLEED, 2),
+			Glow = takeRibbon(5, color, 3),
+			Core = takeRibbon(5, WHITE, 7),
+		}
+		table.insert(ribbons, g.Bleed)
+		table.insert(ribbons, g.Glow)
+		table.insert(ribbons, g.Core)
+		table.insert(gashes, g)
+	end
+	local LIFE = 0.5
+	run(ribbons, function(t)
+		if t >= LIFE then
+			return false
+		end
+		local cf = cam.CFrame
+		local p = position + (cf.Position - position).Unit * 1.8 * size
+		local d = cf.RightVector * math.cos(base) + cf.UpVector * math.sin(base)
+		local n = cf.RightVector * -math.sin(base) + cf.UpVector * math.cos(base)
+		for _, g in gashes do
+			local tt = t - g.Delay
+			if tt <= 0 then
+				hideRibbon(g.Bleed)
+				hideRibbon(g.Glow)
+				hideRibbon(g.Core)
+				continue
+			end
+			local open = outExpo(clamp01(tt / 0.06)) -- rips end to end
+			local fadeK = clamp01((tt - 0.12) / (LIFE - 0.12))
+			local a = p + n * g.Off - d * g.L / 2
+			local b = a + d * g.L * open
+			local w = 0.3 * size * (1 - fadeK * 0.6)
+			setNeedle(g.Core, a, b, w, fadeK)
+			setNeedle(g.Glow, a, b, w * 3.2, 0.3 + 0.7 * fadeK)
+			setNeedle(g.Bleed, a, b, w * 6, 0.55 + 0.45 * fadeK)
+		end
+		return true
+	end)
+end
+
+function SlashFX.HitFlash(position, color, size, victim, claw)
 	local cam = workspace.CurrentCamera
 	if not (cam and position) then
 		return
@@ -317,6 +442,10 @@ function SlashFX.HitFlash(position, color, size, victim)
 	color = color or DEFAULT_GLOW
 	size = size or 1
 	flashBody(victim)
+	if claw then
+		clawRake(position, color, size)
+		sparks(position, 1.4 * size, color, 10)
+	end
 
 	-- white-hot core + light
 	local core = Instance.new("Part")
@@ -418,37 +547,6 @@ local BEAM = {
 	Light = Color3.fromRGB(210, 60, 255),
 }
 local LASER_RED = BEAM.Glow
-local function starFlare(pos, color, size, life)
-	local cam = workspace.CurrentCamera
-	if not cam then
-		return
-	end
-	local ribbons, spikes = {}, {}
-	for i = 1, 8 do
-		local r = takeRibbon(5, i <= 2 and WHITE or color, i <= 2 and 6 or 3)
-		table.insert(ribbons, r)
-		spikes[i] = { R = r, A = (i <= 2 and (i * math.pi / 2 + 0.6) or math.random() * math.pi * 2), L = (i <= 2 and 5 or 1.5 + math.random() * 2) * size, W = (i <= 2 and 0.35 or 0.12) * size }
-	end
-	run(ribbons, function(t)
-		local k = t / life
-		if k >= 1 then
-			return false
-		end
-		local cf = cam.CFrame
-		local p = pos + (cf.Position - pos).Unit * 0.8
-		for i, sp in spikes do
-			local d = cf.RightVector * math.cos(sp.A) + cf.UpVector * math.sin(sp.A)
-			if i <= 2 then
-				local half = sp.L * (0.4 + 0.6 * outExpo(math.min(1, t / 0.05))) / 2
-				setNeedle(sp.R, p - d * half, p + d * half, sp.W * (1 - k), k < 0.4 and 0 or (k - 0.4) / 0.6)
-			else
-				local r0 = 0.3 * size + sp.L * outQuad(k)
-				setNeedle(sp.R, p + d * r0, p + d * (r0 + sp.L * (1 - k)), sp.W * (1 - k), k)
-			end
-		end
-		return true
-	end)
-end
 
 -- ring of ribbon segments facing `normal`
 local function setRing(r, center, normal, radius, width, transparency)
