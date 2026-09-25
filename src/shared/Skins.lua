@@ -109,12 +109,12 @@ Skins.Claws = {
 		Name = "Cosmic", Price = 2200, Description = "Forged in a dying star. Glows and sparkles.",
 		Color = rgb(120, 90, 255), Material = Enum.Material.Neon, Reflectance = 0, Glow = rgb(90, 220, 255), Sparkle = true,
 	},
-	-- Verity: jet black blades, a yellow cutting edge and a red spine, and a
-	-- grinning yellow smiley on each forearm (Costumes)
+	-- Verity: smiley-yellow blades with a black edge and red spine, covered in
+	-- little grins, and a grinning smiley badge on each forearm (Costumes)
 	Verity = {
-		Name = "Verity Claws", Price = 3000, Description = "Jet black, yellow edge. Something is grinning at you.",
-		Color = rgb(18, 16, 16), Material = Enum.Material.Metal, Reflectance = 0.3, Glow = rgb(255, 210, 40),
-		EdgeColor = rgb(255, 205, 40), SpineColor = rgb(200, 20, 20), Sparkle = true, Verity = true,
+		Name = "Verity Claws", Price = 3000, Description = "Smiley yellow, covered in grinning faces. Smile.",
+		Color = rgb(255, 205, 40), Material = Enum.Material.SmoothPlastic, Reflectance = 0.08, Glow = rgb(255, 215, 60),
+		EdgeColor = rgb(24, 18, 16), SpineColor = rgb(200, 20, 20), Sparkle = true, Verity = true,
 	},
 }
 

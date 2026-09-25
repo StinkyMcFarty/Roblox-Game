@@ -840,6 +840,10 @@ local function bladesOn(owner, hand, claw, extended, set)
 					center * CFrame.new(sx * t / 2, 0, w * 0.12), { Transparency = extended and 0 or 1 }, "Claws")
 				table.insert(set.Parts, bevel)
 			end
+			if claw.Verity then
+				Costumes.SmileyStrip(body, Enum.NormalId.Right, extended)
+				Costumes.SmileyStrip(body, Enum.NormalId.Left, extended)
+			end
 			table.insert(set.Parts, body)
 			table.insert(set.Parts, edge)
 			if k == 1 then
@@ -927,6 +931,11 @@ end
 function Costumes.PopClaws(set)
 	for _, p in set.Parts do
 		p.Transparency = 0
+		for _, sg in p:GetChildren() do
+			if sg:IsA("SurfaceGui") and sg.Name == "VerityFaces" then
+				sg.Enabled = true
+			end
+		end
 	end
 	local info = TweenInfo.new(0.13, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 	for _, r in set.Roots do
@@ -1062,6 +1071,67 @@ function Costumes.Smiley(part, face)
 	f({ AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0.04, 0.5), Size = UDim2.new(0.92, 0, 0, 2), BackgroundColor3 = rgb(20, 10, 10) }, mouth)
 	for i = 1, 6 do
 		f({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(i / 7, 0.5), Size = UDim2.new(0, 2, 0.9, 0), BackgroundColor3 = rgb(20, 10, 10) }, mouth)
+	end
+	return sg
+end
+
+-- A column of little grins running down one face of a long part (the
+-- Verity claws: yellow blades covered in faces). Drawn on a SurfaceGui, which
+-- still shows on a see-through part, so it starts disabled until the claws
+-- are out (PopClaws / the lobby statue turn it on).
+function Costumes.SmileyStrip(part, face, enabled)
+	local sg = Instance.new("SurfaceGui")
+	sg.Name = "VerityFaces"
+	sg.Face = face
+	sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	sg.PixelsPerStud = 200
+	sg.LightInfluence = 0.5
+	sg.Enabled = enabled == true
+	sg.Parent = part
+	local n = math.max(1, math.floor(part.Size.Y / (part.Size.Z * 1.1)))
+	for i = 1, n do
+		local cell = Instance.new("Frame")
+		cell.BackgroundTransparency = 1
+		cell.AnchorPoint = Vector2.new(0.5, 0.5)
+		cell.Position = UDim2.fromScale(0.5, (i - 0.5) / n)
+		cell.Size = UDim2.fromScale(0.86, 0.86 / n)
+		cell.Parent = sg
+		local sq = Instance.new("UIAspectRatioConstraint")
+		sq.AspectRatio = 1
+		sq.Parent = cell
+		local ring = Instance.new("UIStroke")
+		ring.Color = rgb(20, 10, 10)
+		ring.Thickness = 2
+		ring.Parent = cell
+		local rc = Instance.new("UICorner")
+		rc.CornerRadius = UDim.new(0.5, 0)
+		rc.Parent = cell
+		for _, x in { 0.33, 0.67 } do
+			local eye = Instance.new("Frame")
+			eye.BorderSizePixel = 0
+			eye.BackgroundColor3 = rgb(15, 10, 10)
+			eye.AnchorPoint = Vector2.new(0.5, 0.5)
+			eye.Position = UDim2.fromScale(x, 0.36)
+			eye.Size = UDim2.fromScale(0.13, 0.24)
+			eye.Parent = cell
+			local ec = Instance.new("UICorner")
+			ec.CornerRadius = UDim.new(0.5, 0)
+			ec.Parent = eye
+		end
+		local mouth = Instance.new("Frame")
+		mouth.BorderSizePixel = 0
+		mouth.BackgroundColor3 = rgb(250, 248, 240)
+		mouth.AnchorPoint = Vector2.new(0.5, 0.5)
+		mouth.Position = UDim2.fromScale(0.5, 0.68)
+		mouth.Size = UDim2.fromScale(0.62, 0.2)
+		mouth.Parent = cell
+		local mc = Instance.new("UICorner")
+		mc.CornerRadius = UDim.new(0.45, 0)
+		mc.Parent = mouth
+		local lips = Instance.new("UIStroke")
+		lips.Color = rgb(20, 10, 10)
+		lips.Thickness = 1.5
+		lips.Parent = mouth
 	end
 	return sg
 end

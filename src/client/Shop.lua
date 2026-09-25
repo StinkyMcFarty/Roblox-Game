@@ -401,6 +401,11 @@ local function statueClaws(model)
 		local id = p:GetAttribute("ClawSkin")
 		if id and p:IsA("BasePart") then
 			p.Transparency = (id == mine) and (p:GetAttribute("BaseT") or 0) or 1
+			for _, sg in p:GetChildren() do
+				if sg:IsA("SurfaceGui") then
+					sg.Enabled = id == mine -- Verity faces show even on hidden parts
+				end
+			end
 		end
 	end
 end

@@ -1599,9 +1599,15 @@ function MapBuilder.BuildLobby()
 		block(lobby, Vector3.new(420, 4, 420), CFrame.new(0, Y - 2.2, 0), M.Snow, C.Snow)
 	end
 	for _ = 1, 60 do
-		local a = rng:NextNumber() * math.pi * 2
-		local r = rng:NextNumber(80, 190)
-		tree(lobby, Vector3.new(math.cos(a) * r, groundY, math.sin(a) * r), rng:NextNumber(1.3, 2.2), true)
+		-- keep every tree (and its branches, up to 10x its scale wide) clear of the building
+		local x, z, s
+		repeat
+			local a = rng:NextNumber() * math.pi * 2
+			local r = rng:NextNumber(80, 190)
+			x, z, s = math.cos(a) * r, math.sin(a) * r, rng:NextNumber(1.3, 2.2)
+			local reach = 5 * s + 3
+		until math.abs(x) > hx + reach or math.abs(z) > hz + reach
+		tree(lobby, Vector3.new(x, groundY, z), s, true)
 	end
 	for i = 1, (hasTerrain and 0 or 10) do
 		local a = (i / 10) * math.pi * 2
@@ -1859,6 +1865,24 @@ function MapBuilder.BuildLobby()
 		surfaceText(plaque, Enum.NormalId.Front, { Text = item.Name .. (item.Price > 0 and ("\n" .. item.Price .. " " .. Config.CoinName:upper()) or "  FREE"), TextColor3 = item.Glow, Font = Enum.Font.GothamBold })
 	end
 
+	-- SENTINEL BAY (south-west corner): every Sentinel suit on a lit plinth,
+	-- with its name and price (bought in the Armory's SENTINEL tab) ---------
+	local bayTitle = block(lobby, Vector3.new(22, 2.6, 0.2), CFrame.new(-42, Y + 23.5, hz - 2.3) * CFrame.Angles(0, math.pi, 0), M.SmoothPlastic, rgb(18, 16, 22))
+	surfaceText(bayTitle, Enum.NormalId.Back, { Text = "SENTINEL SUITS", Font = Enum.Font.LuckiestGuy, TextColor3 = rgb(205, 150, 255) })
+	for i, id in Skins.SentinelOrder do
+		local item = Skins.Sentinels[id]
+		local x = -50 + (i - 1) * 13
+		local base = CFrame.new(x, Y, hz - 9)
+		block(lobby, Vector3.new(1.2, 10, 10), base * CFrame.new(0, 0.6, 0) * CFrame.Angles(0, 0, math.rad(90)), M.Marble, rgb(34, 32, 40), { Shape = Enum.PartType.Cylinder })
+		block(lobby, Vector3.new(0.25, 10.4, 10.4), base * CFrame.new(0, 1.1, 0) * CFrame.Angles(0, 0, math.rad(90)), M.Neon, item.Swatch, { Shape = Enum.PartType.Cylinder })
+		Costumes.SentinelStatue(lobby, base * CFrame.new(0, 1.25, 0), Config.Sentinel.Scale, id)
+		local lamp = block(lobby, Vector3.new(1.6, 1, 1.6), CFrame.new(x, Y + H - 2, hz - 13), M.Metal, C.DarkMetal)
+		make("SpotLight", lamp, { Face = Enum.NormalId.Bottom, Range = 34, Angle = 45, Brightness = 5, Color = item.Swatch:Lerp(Color3.new(1, 1, 1), 0.6), Shadows = true })
+		local plaque = block(lobby, Vector3.new(7, 2.2, 0.3), CFrame.new(x, Y + 1.9, hz - 15.5) * CFrame.Angles(math.rad(-25), 0, 0), M.Metal, rgb(24, 24, 28))
+		surfaceText(plaque, Enum.NormalId.Back, { Text = item.Name .. (item.Price > 0 and ("\n" .. item.Price .. " " .. Config.CoinName:upper()) or "   FREE"), TextColor3 = item.Swatch, Font = Enum.Font.GothamBlack })
+		block(lobby, Vector3.new(0.4, 1.4, 0.4), CFrame.new(x, Y + 0.7, hz - 15.5), M.Metal, C.DarkMetal)
+	end
+
 	-- BRIEFING TABLE: holographic mini-map of the arena --------------------
 	local bt = Vector3.new(-6, Y, -22)
 	block(lobby, Vector3.new(1.2, 3, 3), CFrame.new(bt + Vector3.new(0, 1.5, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, rgb(40, 42, 48), { Shape = Enum.PartType.Cylinder })
@@ -1913,8 +1937,9 @@ function MapBuilder.BuildLobby()
 	local lx = -hx + 14
 	block(lobby, Vector3.new(22, 0.08, 26), CFrame.new(lx, Y + 0.05, 8), M.Fabric, rgb(110, 20, 24))
 	block(lobby, Vector3.new(19, 0.1, 23), CFrame.new(lx, Y + 0.07, 8), M.Fabric, rgb(70, 12, 16))
-	couch(lobby, CFrame.new(lx + 2, Y, 18) * CFrame.Angles(0, math.pi, 0), rgb(60, 40, 30))
-	couch(lobby, CFrame.new(lx + 9, Y, 7) * CFrame.Angles(0, math.rad(-90), 0), rgb(60, 40, 30))
+	-- both sofas face the table and the fireplace (a couch's back is on its +Z)
+	couch(lobby, CFrame.new(lx + 2, Y, 18), rgb(60, 40, 30))
+	couch(lobby, CFrame.new(lx + 9, Y, 7) * CFrame.Angles(0, math.rad(90), 0), rgb(60, 40, 30))
 	block(lobby, Vector3.new(6, 0.5, 4), CFrame.new(lx + 1, Y + 1.9, 8), M.Wood, rgb(70, 45, 28))
 	for _, d in { Vector3.new(-2.6, 0, -1.6), Vector3.new(2.6, 0, -1.6), Vector3.new(-2.6, 0, 1.6), Vector3.new(2.6, 0, 1.6) } do
 		block(lobby, Vector3.new(0.4, 1.7, 0.4), CFrame.new(Vector3.new(lx + 1, Y + 0.85, 8) + d), M.Wood, rgb(50, 32, 20))
@@ -2003,25 +2028,28 @@ function MapBuilder.BuildLobby()
 	local lbLight = block(lobby, Vector3.new(0.3, 0.3, 18), CFrame.new(-hx + 3.3, Y + 15.4, -26), M.Neon, rgb(200, 30, 30))
 	light(lbLight, { Range = 10, Brightness = 1, Color = rgb(255, 60, 40) })
 
-	-- HANGING STATUS SCREEN (centre) --------------------------------------
-	local screen = block(lobby, Vector3.new(18, 7, 18), CFrame.new(0, Y + 17, 0), M.Metal, rgb(18, 18, 22))
+	-- STATUS TV: mounted on the chimney breast above the fireplace, facing
+	-- the sofas (GameManager writes StatusText / TimerText on "StatusScreen")
+	local tvX, tvY, tvZ = -hx + 3.6, Y + 18.2, 8
+	block(lobby, Vector3.new(0.35, 4.3, 6.8), CFrame.new(tvX + 0.18, tvY, tvZ), M.Metal, rgb(14, 14, 16)) -- bezel
+	local screen = block(lobby, Vector3.new(0.12, 3.9, 6.4), CFrame.new(tvX + 0.4, tvY, tvZ), M.SmoothPlastic, rgb(6, 6, 8))
 	screen.Name = "StatusScreen"
-	for _, x in { -6, 6 } do
-		block(lobby, Vector3.new(0.2, H - 20.5, 0.2), CFrame.new(x, Y + 20.5 + (H - 20.5) / 2, 0), M.Metal, rgb(30, 30, 30))
+	block(lobby, Vector3.new(0.4, 0.3, 1.2), CFrame.new(tvX + 0.2, tvY - 2.3, tvZ), M.Metal, rgb(20, 20, 22)) -- wall bracket
+	block(lobby, Vector3.new(0.05, 0.08, 0.08), CFrame.new(tvX + 0.37, tvY - 2.02, tvZ + 3), M.Neon, rgb(255, 40, 40)) -- power LED
+	make("SurfaceLight", screen, { Face = Enum.NormalId.Right, Range = 10, Angle = 90, Brightness = 0.7, Color = rgb(255, 120, 100) })
+	local g = make("SurfaceGui", screen, { Face = Enum.NormalId.Right, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 80, LightInfluence = 0 })
+	local bg = make("Frame", g, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0 })
+	make("UIGradient", bg, { Rotation = 90, Color = ColorSequence.new(rgb(36, 8, 10), rgb(6, 4, 6)) })
+	-- scanlines, for a bit of CRT grit
+	for k = 0, 11 do
+		make("Frame", bg, { Position = UDim2.fromScale(0, k / 12), Size = UDim2.new(1, 0, 0, 2), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.8, BorderSizePixel = 0 })
 	end
-	for _, face in { Enum.NormalId.Front, Enum.NormalId.Back, Enum.NormalId.Left, Enum.NormalId.Right } do
-		local g = make("SurfaceGui", screen, { Face = face, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 30, LightInfluence = 0 })
-		local bg = make("Frame", g, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0 })
-		make("UIGradient", bg, { Rotation = 90, Color = ColorSequence.new(rgb(40, 10, 12), rgb(8, 6, 8)) })
-		make("UIStroke", bg, { Color = rgb(200, 30, 30), Thickness = 6, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
-		make("TextLabel", bg, { Name = "StatusText", Position = UDim2.fromScale(0.05, 0.08), Size = UDim2.fromScale(0.9, 0.3), BackgroundTransparency = 1, Font = Enum.Font.GothamBlack, TextScaled = true, TextColor3 = rgb(230, 200, 200), Text = "" })
-		local t = make("TextLabel", bg, { Name = "TimerText", Position = UDim2.fromScale(0.05, 0.38), Size = UDim2.fromScale(0.9, 0.55), BackgroundTransparency = 1, Font = Enum.Font.LuckiestGuy, TextScaled = true, TextColor3 = rgb(255, 200, 30), Text = "" })
-		make("UIStroke", t, { Thickness = 5 })
-	end
-	block(lobby, Vector3.new(18.4, 0.3, 18.4), CFrame.new(0, Y + 13.4, 0), M.Neon, rgb(200, 30, 30))
+	make("TextLabel", bg, { Name = "StatusText", Position = UDim2.fromScale(0.05, 0.1), Size = UDim2.fromScale(0.9, 0.3), BackgroundTransparency = 1, Font = Enum.Font.GothamBlack, TextScaled = true, TextColor3 = rgb(235, 205, 205), Text = "" })
+	local t = make("TextLabel", bg, { Name = "TimerText", Position = UDim2.fromScale(0.05, 0.42), Size = UDim2.fromScale(0.9, 0.5), BackgroundTransparency = 1, Font = Enum.Font.LuckiestGuy, TextScaled = true, TextColor3 = rgb(255, 200, 30), Text = "" })
+	make("UIStroke", t, { Thickness = 4 })
 
 	-- Supply crates + barrels for detail
-	for i, p in { Vector3.new(-30, Y, -34), Vector3.new(22, Y, -36), Vector3.new(-38, Y, 34) } do
+	for i, p in { Vector3.new(-30, Y, -34), Vector3.new(22, Y, -36) } do
 		local yaw = rng:NextNumber() * 0.5
 		woodCrate(lobby, CFrame.new(p) * CFrame.Angles(0, yaw, 0), Vector3.new(5, 4, 4), false)
 		woodCrate(lobby, CFrame.new(p + Vector3.new(0.3, 4, 0.2)) * CFrame.Angles(0, yaw + 0.3, 0), Vector3.new(3, 3, 3), false)
