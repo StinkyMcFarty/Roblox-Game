@@ -349,24 +349,64 @@ function Effects.IntroCam(data)
 	local side = dir:Cross(Vector3.yAxis)
 	local start = os.clock()
 	local burst, release = data.Burst or 3, data.Release or 8
+	local SWING = 0.8 -- the flying kick (0.42s on the server) plus the landing
+	-- the camera's three marks: pushed in on the tank, then pulled back ahead
+	-- of the landing spot, then tight on the X
+	local tankEye = data.Tank + dir * 11 + side * 1
+	local landEye = data.Land + dir * 11 + side * 1.5 + Vector3.new(0, 0.6, 0)
+	-- keep the camera out of walls (the tank's own glass and fluid don't count)
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.RespectCanCollide = true
+	local ignore = {}
+	for _, name in { "TankGlass", "TankLiquid" } do
+		local part = workspace:FindFirstChild(name, true)
+		if part then
+			table.insert(ignore, part)
+		end
+	end
+	local focus = nil
 	cam.CameraType = Enum.CameraType.Scriptable
 	local conn
-	conn = RunService.RenderStepped:Connect(function()
+	conn = RunService.RenderStepped:Connect(function(dt)
 		local t = os.clock() - start
-		local cf
+		local char = player.Character
+		local root = char and char:FindFirstChild("HumanoidRootPart")
+		-- track him wherever he actually is (smoothed, so replication jitter
+		-- doesn't shake the shot); the tank until he's loaded in
+		local target = root and root.Position or data.Tank
+		focus = focus and focus:Lerp(target, 1 - math.exp(-dt * 16)) or target
+		local eye, look
 		if t < burst then
-			-- slow push in on the tank, low angle
+			-- slow push in on the tank, low angle, on him as he floats and kicks
 			local u = t / burst
-			local eye = data.Tank + dir * (15 - 4 * u) + side * (3 - 2 * u) + Vector3.new(0, -1 + u, 0)
-			cf = CFrame.lookAt(eye, data.Tank + Vector3.new(0, 1.5, 0))
+			eye = data.Tank + dir * (15 - 4 * u) + side * (3 - 2 * u) + Vector3.new(0, -1 + u, 0)
+			look = focus + Vector3.new(0, 0.3, 0)
+		elseif t < burst + SWING then
+			-- the flying kick: the camera swings back and out to the side ahead
+			-- of him, following him through the air to the landing
+			local u = (t - burst) / SWING
+			local e = 1 - (1 - u) ^ 2
+			local arc = math.sin(u * math.pi)
+			eye = tankEye:Lerp(landEye, e) + side * arc * 3 + Vector3.new(0, arc * 1.2, 0)
+			look = focus + Vector3.new(0, 0.3 + 1.1 * e, 0)
 		else
 			-- in front of the landing spot, tight on the X
-			local u = math.clamp((t - burst) / 1.2, 0, 1)
+			local u = math.clamp((t - burst - SWING) / 1.2, 0, 1)
 			local ease = 1 - (1 - u) ^ 3
-			local eye = data.Land + dir * (11 - 3.5 * ease) + side * (1.5 - 1.5 * ease) + Vector3.new(0, 0.6, 0)
-			cf = CFrame.lookAt(eye, data.Land + Vector3.new(0, 1.4 - 0.6 * ease, 0))
+			eye = data.Land + dir * (11 - 3.5 * ease) + side * (1.5 - 1.5 * ease) + Vector3.new(0, 0.6, 0)
+			look = focus + Vector3.new(0, 1.4 - 0.6 * ease, 0)
 		end
-		cam.CFrame = cf
+		if char then
+			ignore[#ignore + 1] = char
+			params.FilterDescendantsInstances = ignore
+			ignore[#ignore] = nil
+			local hit = workspace:Raycast(look, eye - look, params)
+			if hit then
+				eye = hit.Position + (look - eye).Unit * 0.6
+			end
+		end
+		cam.CFrame = CFrame.lookAt(eye, look)
 		if t > release - 0.6 or player:GetAttribute("Role") ~= "Wolverine" then
 			conn:Disconnect()
 			cam.CameraType = Enum.CameraType.Custom
