@@ -14,3 +14,4 @@ tools/preview/node_modules/
 tools/preview/scene.json
 tools/preview/*.png
 __pycache__/
+tools/preview/api.json
