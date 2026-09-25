@@ -2,3 +2,9 @@ UploadToRoblox.zip
 SuitTextures.zip
 NewFaces.zip
 tools/fonts/
+
+# Local-only files on the Windows setup
+rojo.exe
+*.rbxlx.lock
+*.rbxl.lock
+Berserker Rage.rbxlx
