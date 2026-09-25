@@ -455,6 +455,12 @@ Fx.OnClientEvent:Connect(function(kind, data)
 		SlashFX.BeamUpdate(data.Char, data.From, data.To, data.Hit, data.Burns)
 	elseif kind == "LaserEnd" then
 		SlashFX.BeamEnd(data.Char)
+	elseif kind == "PounceTrail" then
+		SlashFX.PounceTrail(data.Char, data.Color, data.Duration)
+	elseif kind == "PounceStrike" then
+		SlashFX.PounceStrike(data.Position, data.Dir, data.Color)
+	elseif kind == "PounceLand" then
+		SlashFX.PounceLand(data.Position)
 	elseif kind == "ImpaleBurst" then
 		SlashFX.ImpaleBurst(data.Position, data.Dir, data.Color, data.Heavy)
 	elseif kind == "KickImpact" then

@@ -1727,4 +1727,130 @@ function SlashFX.Electrocute(fromChar, toChar, duration)
 	SlashFX.Electric(toChar, duration + 0.2)
 end
 
+---------------------------------------------------------------------------
+-- Pounce: a launch burst, claw trails and speed lines through the dive, an
+-- X of claw gashes on the catch, and a heavy landing when he misses
+---------------------------------------------------------------------------
+
+local TRAIL_N = 14
+function SlashFX.PounceTrail(char, color, duration)
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	if not root then
+		return
+	end
+	color = color or char:GetAttribute("ClawGlow") or DEFAULT_GLOW
+	duration = duration or 1
+	-- launch: a burst kicked back off the floor behind him
+	local back = -Vector3.new(root.CFrame.LookVector.X, 0, root.CFrame.LookVector.Z)
+	back = back.Magnitude > 0.01 and back.Unit or Vector3.new(0, 0, 1)
+	SlashFX.KickImpact(root.Position - Vector3.new(0, 2.2, 0), (back + Vector3.new(0, 0.4, 0)).Unit)
+	local hands = {}
+	for _, name in { "RightHand", "LeftHand" } do
+		local h = char:FindFirstChild(name)
+		if h then
+			table.insert(hands, { Part = h, Hist = {}, Glow = takeRibbon(TRAIL_N, color, 3), Core = takeRibbon(TRAIL_N, WHITE, 7) })
+		end
+	end
+	local ribbons, lines = {}, {}
+	for _, h in hands do
+		table.insert(ribbons, h.Glow)
+		table.insert(ribbons, h.Core)
+	end
+	for i = 1, 10 do
+		local r = takeRibbon(5, i % 3 == 0 and color or WHITE, 3)
+		table.insert(ribbons, r)
+		lines[i] = { R = r, T = math.random() * 0.25 }
+	end
+	local pts, ws, wg = table.create(TRAIL_N), table.create(TRAIL_N), table.create(TRAIL_N)
+	run(ribbons, function(t)
+		if not root.Parent then
+			return false
+		end
+		local k = t / (duration + 0.25) -- trails fade out just after he lands
+		if k >= 1 then
+			return false
+		end
+		local fade = t < duration and 1 or 1 - (t - duration) / 0.25
+		for _, h in hands do
+			local hist = h.Hist
+			if t < duration then
+				table.insert(hist, 1, h.Part.Position)
+				if #hist > TRAIL_N then
+					table.remove(hist)
+				end
+			end
+			if #hist >= 2 then
+				for i = 1, TRAIL_N do
+					pts[i] = hist[math.min(i, #hist)]
+					local u = (i - 1) / (TRAIL_N - 1)
+					ws[i] = 0.28 * (1 - u) * fade
+					wg[i] = ws[i] * 3.6
+				end
+				setRibbon(h.Core, pts, ws, 1 - fade)
+				setRibbon(h.Glow, pts, wg, 0.35 + 0.65 * (1 - fade))
+			end
+		end
+		-- speed lines streaming back off his body
+		local vel = root.AssemblyLinearVelocity
+		local dir = vel.Magnitude > 2 and vel.Unit or -back
+		for _, l in lines do
+			l.T += 1 / 60
+			local q = (l.T % 0.25) / 0.25
+			if not l.Off or q < l.Q0 then
+				l.Off = Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5) * 3.2
+			end
+			l.Q0 = q
+			local p0 = root.Position + l.Off - dir * (1 + 5 * q)
+			setNeedle(l.R, p0, p0 - dir * 3 * (1 - q), 0.08 * fade, t < duration and q or 1)
+		end
+		return true
+	end)
+end
+
+-- The catch: two sets of claw gashes crossing in an X, a big flare and a ring
+function SlashFX.PounceStrike(position, dir, color)
+	if not position then
+		return
+	end
+	color = color or DEFAULT_GLOW
+	clawRake(position, color, 1.5)
+	task.delay(0.05, function()
+		clawRake(position, color, 1.5)
+	end)
+	starFlare(position, color, 2.4, 0.45)
+	sparks(position, 2, color, 14)
+	if dir then
+		SlashFX.KickImpact(position, dir)
+	end
+end
+
+-- Whiffed: he lands hard on all fours, the floor ringing out round him
+function SlashFX.PounceLand(position)
+	if not position then
+		return
+	end
+	local ribbons = { takeRibbon(32, WHITE, 5), takeRibbon(32, Color3.fromRGB(220, 210, 190), 3) }
+	local streaks = {}
+	for i = 1, 12 do
+		local r = takeRibbon(5, Color3.fromRGB(230, 220, 200), 3)
+		table.insert(ribbons, r)
+		local a = i / 12 * math.pi * 2 + math.random() * 0.3
+		streaks[i] = { R = r, D = Vector3.new(math.cos(a), 0.15, math.sin(a)).Unit, L = 1.5 + math.random() * 2 }
+	end
+	local LIFE = 0.45
+	run(ribbons, function(t)
+		local k = t / LIFE
+		if k >= 1 then
+			return false
+		end
+		setRing(ribbons[1], position + Vector3.new(0, 0.2, 0), Vector3.new(0, 1, 0), 1 + 9 * outQuad(k), 0.5 * (1 - k), k)
+		setRing(ribbons[2], position + Vector3.new(0, 0.25, 0), Vector3.new(0, 1, 0), 0.6 + 6 * outQuad(k), 0.3 * (1 - k), k)
+		for _, s in streaks do
+			local p0 = position + Vector3.new(0, 0.3, 0) + s.D * (1 + 8 * outQuad(k))
+			setNeedle(s.R, p0, p0 + s.D * s.L * (1 - k), 0.12 * (1 - k), k)
+		end
+		return true
+	end)
+end
+
 return SlashFX

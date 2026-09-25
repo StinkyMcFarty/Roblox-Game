@@ -725,6 +725,7 @@ local function pounceStrike(player, char, root, target)
 	Util.Sound(Config.Sounds.PounceHit, torso, { Volume = 2, Range = 200, Pitch = Config.UploadedSounds.PounceHit ~= 0 and 1 or 0.85 })
 	VFX.Pierce(root, clawGlow)
 	VFX.Impact(torso.Position, clawGlow, 1.3, target.Char)
+	Fx:FireAllClients("PounceStrike", { Position = torso.Position, Dir = dir, Color = clawGlow })
 	VFX.ExitSpray(target.Char, dir)
 	VFX.Shockwave(Vector3.new(target.Root.Position.X, groundY(target.Root.Position, { char, target.Char }) + 0.2, target.Root.Position.Z), 14)
 	Combat.Blood(torso, 40)
@@ -748,6 +749,7 @@ local function pounce(player, char, root)
 	else
 		Util.Sound(Config.Sounds.Slash, root, { Pitch = 0.72, Volume = 1.2 })
 	end
+	Fx:FireAllClients("PounceTrail", { Char = char, Color = clawGlow, Duration = cfg.AirTime })
 	-- The client applies the leap; the server watches for contact.
 	local launched = os.clock()
 	local untilTime = launched + cfg.Window
@@ -774,7 +776,10 @@ local function pounce(player, char, root)
 	-- whiffed: land hard
 	VFX.Anim(char, "PounceLand")
 	Util.Sound(Config.Sounds.Land, root, { Volume = 1.6, Pitch = 0.8 })
-	VFX.Shockwave(Vector3.new(root.Position.X, groundY(root.Position, { char }) + 0.2, root.Position.Z), 9)
+	local landAt = Vector3.new(root.Position.X, groundY(root.Position, { char }) + 0.2, root.Position.Z)
+	VFX.Shockwave(landAt, 9)
+	Fx:FireAllClients("PounceLand", { Position = landAt })
+	Fx:FireAllClients("Shake", { Position = landAt, Intensity = 0.6, Radius = 50 })
 end
 
 -- Uppercut impale: drive the claws up through them and hoist them overhead.
