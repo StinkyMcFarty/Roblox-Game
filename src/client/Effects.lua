@@ -374,6 +374,17 @@ local function scentGhost(big)
 		p.Size = spec[1] * scale
 		p:SetAttribute("Offset", spec[2] * scale)
 		p.Parent = model
+		-- a see-through red body drawn through walls. The Highlight below adds the
+		-- crisp outline, but Highlights can fail to show live (the client caps how
+		-- many draw at once), so the ghost must not depend on it.
+		local box = Instance.new("BoxHandleAdornment")
+		box.Adornee = p
+		box.AlwaysOnTop = true
+		box.ZIndex = 1
+		box.Size = p.Size
+		box.Color3 = SCENT
+		box.Transparency = 0.6
+		box.Parent = p
 		if i == 1 then
 			core = p
 		end
@@ -449,6 +460,7 @@ function Effects.Sniff(duration, targets)
 	for _ in sniffMarks do
 		count += 1
 	end
+	print(("[Sniff] %d scent(s) from the server, %d drawn"):format(type(targets) == "table" and #targets or -1, count))
 
 	TweenService:Create(tint, TweenInfo.new(0.3), { Saturation = -0.85, TintColor = Color3.fromRGB(255, 190, 180) }):Play()
 	Interface.Announce(count > 0 and ("You catch their scent...  (%d)"):format(count) or "No scent...", Color3.fromRGB(255, 90, 90), 2)
