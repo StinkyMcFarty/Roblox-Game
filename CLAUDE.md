@@ -119,7 +119,7 @@ The user is re-creating these on a new experience; the IDs need replacing once m
 | Item | Price | Config |
 | --- | --- | --- |
 | 2x Wolverine Chance (Game Pass) | R$250 | `DoubleChanceGamepassId` |
-| Become Wolverine | R$80 | `GuaranteedWolverineProductId` |
+| Become Wolverine | R$29 | `GuaranteedWolverineProductId` (label fallback `GuaranteedWolverinePrice`) |
 | Handful of Berserker Coins (500) | R$49 | `CoinPacks[1].ProductId` |
 | Pouch of Berserker Coins (1,200) | R$99 | `CoinPacks[2].ProductId` |
 | Crate of Berserker Coins (3,000) | R$199 | `CoinPacks[3].ProductId` |

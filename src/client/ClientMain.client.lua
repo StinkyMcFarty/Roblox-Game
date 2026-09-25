@@ -568,7 +568,11 @@ Fx.OnClientEvent:Connect(function(kind, data)
 		Effects.Shake(0.4)
 	elseif kind == "Stunned" then
 		if data.Name == player.Name then
-			Interface.Announce("STUNNED", Color3.fromRGB(255, 210, 60), data.Duration)
+			if data.Rage then
+				Interface.Announce("SLOWED", Color3.fromRGB(255, 60, 50), data.Duration) -- raging: no stun
+			else
+				Interface.Announce("STUNNED", Color3.fromRGB(255, 210, 60), data.Duration)
+			end
 		end
 	elseif kind == "DailyReward" then
 		Daily.ShowReward(data.Amount, data.Streak)

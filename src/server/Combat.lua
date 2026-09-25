@@ -611,7 +611,7 @@ function Combat.Wound(killer, victim, opts)
 	local kRoot = Util.Root(killer.Character)
 	local dir = opts.Dir or (kRoot and Util.Flat(root.Position - kRoot.Position) or Util.Flat(-root.CFrame.LookVector))
 	local throw = dir * (opts.Force or Config.Throw.Force) + Vector3.new(0, opts.Up or Config.Throw.Up, 0)
-	if victim.IsBot then
+	if typeof(victim) ~= "Instance" then -- a bot (Bots.lua): the server throws it
 		local hum2 = Util.Humanoid(char)
 		hum2.PlatformStand = true
 		root.AssemblyLinearVelocity = throw

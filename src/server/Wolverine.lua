@@ -932,7 +932,7 @@ local function release(p, r)
 	if p then
 		Status.Clear(p, "Busy")
 		Status.Clear(p, "Frozen")
-		if r and r.Parent and not r.Anchored and p:IsA("Player") and not p:GetAttribute("IsBot") then
+		if r and r.Parent and not r.Anchored and typeof(p) == "Instance" and p:IsA("Player") then
 			pcall(function()
 				r:SetNetworkOwner(p)
 			end)

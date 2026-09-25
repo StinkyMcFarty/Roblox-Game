@@ -423,10 +423,18 @@ end
 
 local function stunWolverine(duration)
 	local w = Round.Wolverine
-	if w then
-		Status.Apply(w, "Stunned", duration)
-		Fx:FireAllClients("Stunned", { Name = w.Name, Duration = duration })
+	if not w then
+		return
 	end
+	if w:GetAttribute("Rage") then
+		-- berserk: he shrugs the stun off and is only slowed for as long as it
+		-- would have held him
+		Status.Apply(w, "Slowed", duration)
+		Fx:FireAllClients("Stunned", { Name = w.Name, Duration = duration, Rage = true })
+		return
+	end
+	Status.Apply(w, "Stunned", duration)
+	Fx:FireAllClients("Stunned", { Name = w.Name, Duration = duration })
 end
 
 -- The punch's big sounds; built-in stand-ins until the files are uploaded.
