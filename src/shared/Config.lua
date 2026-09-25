@@ -98,7 +98,7 @@ Config.Sentinel = {
 
 -- Survivor fart: masks your scent from Wolverine's Sniff
 Config.Fart = {
-	Cooldown = 60, MaskTime = 20, CloudTime = 20,
+	Cooldown = 45, MaskTime = 20, CloudTime = 20,
 	-- Wolverine caught in the fresh cloud: can't attack and staggers slowly
 	GasRadius = 7, GasWindow = 4, GasTime = 2, GasSlow = 0.4,
 }
