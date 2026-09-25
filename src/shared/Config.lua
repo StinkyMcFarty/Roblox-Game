@@ -40,7 +40,7 @@ Config.Survivor = {
 }
 
 Config.Wolverine = {
-	MaxHealth = 600,
+	MaxHealth = 780, -- 600 x 1.3
 	HealPerSecond = 14, -- healing factor
 	HealDelay = 3, -- seconds after taking damage before healing starts
 	Scale = 1.15,
