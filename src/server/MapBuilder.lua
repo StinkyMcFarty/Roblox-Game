@@ -1918,18 +1918,47 @@ function MapBuilder.BuildLobby()
 	for i = 0, 1 do
 		block(lobby, Vector3.new(0.6, 0.8, 0.6), CFrame.new(lx + i * 1.6, Y + 2.55, 8), M.SmoothPlastic, i == 0 and rgb(200, 40, 40) or rgb(230, 230, 230), { Shape = Enum.PartType.Cylinder })
 	end
-	-- stone fireplace on the west wall
+	-- stone fireplace on the west wall: an open firebox (sooty back wall,
+	-- pillars either side, stone over the opening) so the fire is on show, a
+	-- raised stone hearth in front, logs on a bed of glowing embers
 	local fz = 8
-	block(lobby, Vector3.new(3, 12, 12), CFrame.new(-hx + 2.5, Y + 6, fz), M.Cobblestone, rgb(88, 84, 82))
-	block(lobby, Vector3.new(2.6, H - 12, 7), CFrame.new(-hx + 2.3, Y + 12 + (H - 12) / 2, fz), M.Cobblestone, rgb(78, 74, 72))
-	block(lobby, Vector3.new(3.4, 0.8, 13), CFrame.new(-hx + 2.8, Y + 12.2, fz), M.Wood, rgb(60, 38, 24))
-	local hearth = block(lobby, Vector3.new(2, 4.5, 6), CFrame.new(-hx + 3.6, Y + 2.25, fz), M.Slate, rgb(15, 12, 10))
-	make("Fire", hearth, { Size = 5, Heat = 6, Color = rgb(255, 150, 50), SecondaryColor = rgb(255, 70, 20) })
+	local stone, stone2 = rgb(88, 84, 82), rgb(78, 74, 72)
+	block(lobby, Vector3.new(1, 12, 12), CFrame.new(-hx + 1.5, Y + 6, fz), M.Cobblestone, stone2) -- back
+	block(lobby, Vector3.new(0.2, 5, 6), CFrame.new(-hx + 2.1, Y + 2.5, fz), M.Slate, rgb(22, 18, 16)) -- soot
+	for side = -1, 1, 2 do
+		block(lobby, Vector3.new(2, 12, 3), CFrame.new(-hx + 3, Y + 6, fz + side * 4.5), M.Cobblestone, stone) -- pillars
+	end
+	block(lobby, Vector3.new(2, 7, 6), CFrame.new(-hx + 3, Y + 8.5, fz), M.Cobblestone, stone) -- over the opening
+	block(lobby, Vector3.new(2.2, 0.6, 6.4), CFrame.new(-hx + 3.1, Y + 5.2, fz), M.Slate, rgb(40, 36, 34)) -- lintel
+	block(lobby, Vector3.new(2.6, H - 12, 7), CFrame.new(-hx + 2.3, Y + 12 + (H - 12) / 2, fz), M.Cobblestone, stone2) -- chimney breast
+	block(lobby, Vector3.new(3.4, 0.8, 13), CFrame.new(-hx + 2.8, Y + 12.2, fz), M.Wood, rgb(60, 38, 24)) -- mantel
+	block(lobby, Vector3.new(2, 0.3, 6), CFrame.new(-hx + 3, Y + 0.15, fz), M.Slate, rgb(26, 22, 20)) -- firebox floor
+	block(lobby, Vector3.new(1.8, 0.4, 9), CFrame.new(-hx + 4.9, Y + 0.2, fz), M.Slate, rgb(58, 54, 52)) -- hearth
+	block(lobby, Vector3.new(1.3, 0.2, 3.6), CFrame.new(-hx + 3, Y + 0.38, fz), M.Neon, rgb(255, 90, 20)) -- embers
+	for i = 0, 2 do
+		block(lobby, Vector3.new(0.8, 0.8, 3.4), CFrame.new(-hx + 3 + (i - 1) * 0.3, Y + 0.75 + i * 0.12, fz) * CFrame.Angles(0, math.rad(i * 40), 0), M.Wood, rgb(60, 40, 24), { Shape = Enum.PartType.Cylinder })
+	end
+	local hearth = block(lobby, Vector3.new(1, 1, 1), CFrame.new(-hx + 3, Y + 1.2, fz), M.SmoothPlastic, rgb(0, 0, 0), { Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false })
+	hearth.Name = "FireplaceFire"
+	make("Fire", hearth, { Size = 4, Heat = 7, Color = rgb(255, 150, 50), SecondaryColor = rgb(255, 70, 20) })
+	make("ParticleEmitter", hearth, {
+		Name = "Flames",
+		Texture = "rbxasset://textures/particles/fire_main.dds",
+		Color = ColorSequence.new(rgb(255, 190, 90), rgb(255, 70, 20)),
+		LightEmission = 1,
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.8), NumberSequenceKeypoint.new(1, 0.3) }),
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) }),
+		Lifetime = NumberRange.new(0.5, 0.9),
+		Rate = 45,
+		Speed = NumberRange.new(2, 4),
+		SpreadAngle = Vector2.new(12, 12),
+		Acceleration = Vector3.new(0, 4, 0),
+		Rotation = NumberRange.new(0, 360),
+		RotSpeed = NumberRange.new(-60, 60),
+		EmissionDirection = Enum.NormalId.Top,
+	})
 	light(hearth, { Range = 26, Brightness = 2.5, Color = rgb(255, 150, 70), Shadows = true })
 	CollectionService:AddTag(hearth, "FireLight")
-	for i = 0, 2 do
-		block(lobby, Vector3.new(0.8, 0.8, 4), CFrame.new(-hx + 3.6 + (i - 1) * 0.3, Y + 0.5 + i * 0.1, fz) * CFrame.Angles(0, math.rad(i * 40), 0), M.Wood, rgb(60, 40, 24), { Shape = Enum.PartType.Cylinder })
-	end
 	-- mounted claws trophy above the fireplace
 	for b = -1, 1 do
 		block(lobby, Vector3.new(0.15, 4, 0.4), CFrame.new(-hx + 1.6, Y + 15.5, fz + b * 0.9) * CFrame.Angles(math.rad(b * 8), 0, 0), M.Metal, rgb(210, 214, 222), { Reflectance = 0.4 })
