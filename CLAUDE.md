@@ -16,8 +16,8 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
   `render.js` draws it with three.js (clothing templates from `assets/textures/`). Serve the repo
   root on :8765, then `node tools/preview/shot.cjs out.png "scenes=wolverine:Comic/Adamantium&views=25,160"`.
   `npm i` in tools/preview and `pip install lupa pillow` first.
-- **Before pushing server changes run `python3 tools/preview/smoke.py`**: it builds the lobby and
-  dresses every suit/claw/Sentinel skin against a strict mock (Roblox API dump: unknown
+- **Before pushing server changes run `python3 tools/preview/smoke.py`**: it builds the lobby and the
+  round map (`Facility.Build`), and dresses every suit/claw/Sentinel skin and the survivor outfit against a strict mock (Roblox API dump: unknown
   properties, bad enums and wrong value types throw like the engine). A throw in `BuildLobby`
   kills GameManager at startup (no lobby, no sprint, timer stuck on --:--). Also compile-check
   with the real `luau-compile` (github.com/luau-lang/luau releases) when available.

@@ -68,7 +68,21 @@ end
 Vector3.zero = v3(0,0,0); Vector3.one = v3(1,1,1)
 Vector3.xAxis = v3(1,0,0); Vector3.yAxis = v3(0,1,0); Vector3.zAxis = v3(0,0,1)
 
-Vector2 = { new = function(x, y) return {X = x or 0, Y = y or 0} end }
+local V2 = {}
+V2.__index = function(t, k) if k == "Magnitude" then return math.sqrt(t.X * t.X + t.Y * t.Y) elseif k == "Unit" then local m = math.sqrt(t.X * t.X + t.Y * t.Y); return Vector2.new(t.X / m, t.Y / m) end end
+V2.__add = function(a, b) return Vector2.new(a.X + b.X, a.Y + b.Y) end
+V2.__sub = function(a, b) return Vector2.new(a.X - b.X, a.Y - b.Y) end
+V2.__unm = function(a) return Vector2.new(-a.X, -a.Y) end
+V2.__mul = function(a, b)
+  if type(a) == "number" then return Vector2.new(a * b.X, a * b.Y) end
+  if type(b) == "number" then return Vector2.new(a.X * b, a.Y * b) end
+  return Vector2.new(a.X * b.X, a.Y * b.Y)
+end
+V2.__div = function(a, b)
+  if type(b) == "number" then return Vector2.new(a.X / b, a.Y / b) end
+  return Vector2.new(a.X / b.X, a.Y / b.Y)
+end
+Vector2 = { new = function(x, y) return setmetatable({X = x or 0, Y = y or 0}, V2) end }
 Vector2.zero = Vector2.new(0, 0); Vector2.one = Vector2.new(1, 1)
 
 -- CFrame -------------------------------------------------------------
@@ -271,6 +285,7 @@ function methods:ClearAllChildren() for _, c in ipairs(self:GetChildren()) do c:
 function methods:Clone()
   local n = Instance.new(self.ClassName)
   for k, v in pairs(rawget(self, "__props")) do if k ~= "Parent" then rawget(n, "__props")[k] = v end end
+  for k, v in pairs(rawget(self, "__attr")) do rawget(n, "__attr")[k] = v end
   for _, c in ipairs(rawget(self, "__children")) do local cc = c:Clone(); cc.Parent = n end
   return n
 end

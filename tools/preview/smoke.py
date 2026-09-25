@@ -1,4 +1,4 @@
-"""Strict smoke test: builds the lobby and dresses every suit/claw/Sentinel skin
+"""Strict smoke test: builds the lobby and the round map, and dresses every suit/claw/Sentinel skin
 against a mock Roblox that rejects unknown classes, properties, enum items and
 wrongly-typed values, like the real engine does. Run before pushing server
 changes:  python3 tools/preview/smoke.py
@@ -14,16 +14,18 @@ local cs = game_services("CollectionService")
 rawset(cs, "AddTag", function() end)
 rawset(cs, "HasTag", function() return false end)
 rawset(cs, "GetTagged", function() return {} end)
+rawset(game_services("HttpService"), "JSONEncode", function() return "{}" end)
 workspace.Terrain = Instance.new("Terrain")
 local SSS = game_services("ServerScriptService")
 local Server = Instance.new("Folder"); Server.Name = "Server"; Server.Parent = SSS
-for _, n in ipairs({"Costumes", "MapBuilder"}) do
+for _, n in ipairs({"Costumes", "MapBuilder", "Facility"}) do
   local m = Instance.new("ModuleScript"); m.Name = n; m.Parent = Server
   m:SetAttribute("__path", "src/server/" .. n .. ".lua")
 end
 script = Server.MapBuilder
 Costumes = require(Server.Costumes)
 MapBuilder = require(Server.MapBuilder)
+Facility = require(Server.Facility)
 Skins = require(game_services("ReplicatedStorage").Shared.Skins)
 ''')
 
@@ -37,6 +39,7 @@ def check(label, code):
 
 for fn in ('SetupLighting', 'SetupTerrain', 'BuildLobby'):
     check('MapBuilder.' + fn, f'MapBuilder.{fn}()')
+check('Facility.Build (round map)', 'Facility.Build(); Facility.Build()')
 for skin in lua.eval('Skins.Order').values():
     for claw in lua.eval('Skins.ClawOrder').values():
         lua.globals().__char = make_rig(skin)
@@ -45,6 +48,8 @@ for sk in lua.eval('Skins.SentinelOrder').values():
     lua.globals().__char = make_rig('S')
     check(f'sentinel {sk}', f'Costumes.DressSentinel(__char, "{sk}")')
     check(f'sentinel statue {sk}', f'Costumes.SentinelStatue(Instance.new("Folder"), CFrame.new(), 1.2, "{sk}")')
+lua.globals().__char = make_rig('Comic')
+check('scientist (survivor outfit)', 'Costumes.DressScientist(__char)')
 check('claw displays', 'for _, id in ipairs(Skins.ClawOrder) do Costumes.ClawDisplay(Instance.new("Folder"), CFrame.new(), Skins.Claws[id]) end')
 print(f'\n{len(fails)} failed' if fails else '\nall passed')
 sys.exit(1 if fails else 0)
