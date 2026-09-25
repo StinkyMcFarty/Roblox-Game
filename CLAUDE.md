@@ -64,6 +64,11 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
   x1.5 (390) while he's 70+ studs from that suit.
   Inhibitor Blast (`Config.Sentinel.Pulse`): radius 30, shatters his i-frames, and during its
   stun a punch grants i-frames only every 2nd hit (`pulseStun` in `Sentinel.lua`).
+- Sentinel walk/run: `SENTINEL LOCOMOTION` block in `Anims.lua` (`heavyLeg` stride model,
+  `stompPose` walk, `chargePose` run above 23 speed, `sentinelWarp` lingers on each footfall;
+  translations scale with the suit via `st.Scale`). Heels strike at phase 0/pi: `stompDust` +
+  shake + StepHeavy. Preview the cycle: `python3 tools/preview/cycle.py stomp 10 none`, then
+  render with `compose=1&nofloor=1`.
 - Sentinel moves run one at a time (`perform`/`acting` in `Sentinel.lua`, `Acting` attribute).
   Ground Slam (`Config.Sentinel.Slam`, right mouse / L2): 1.75x punch damage within 30 studs;
   floor cracks are client-side (`SlashFX.GroundSlam`) and heal after `Config.WallRegen`.

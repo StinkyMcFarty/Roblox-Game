@@ -257,7 +257,7 @@ if (q.get('compose')) {
     const [x = 0, y = 0, z = 0, yaw = 0, sc = 1] = place[i] || [];
     const box = new THREE.Box3().setFromObject(g);
     const holder = new THREE.Group();
-    g.position.y -= box.min.y; // feet on the floor
+    if (!q.get('nofloor')) g.position.y -= box.min.y; // feet on the floor
     holder.add(g);
     holder.scale.setScalar(sc);
     holder.rotation.y = yaw * Math.PI / 180;

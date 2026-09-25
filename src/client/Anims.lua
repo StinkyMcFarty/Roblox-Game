@@ -36,6 +36,39 @@ local function pawStep(st, root, pitch)
 	snd.TimePosition = 0
 	snd:Play()
 end
+-- A Sentinel foot slamming down: dust rolling out from under it.
+local function stompDust(char, footName, k, big)
+	local foot = char:FindFirstChild(footName)
+	if not foot then
+		return
+	end
+	local p = Instance.new("Part")
+	p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch = true, false, false, false
+	p.Transparency = 1
+	p.Size = Vector3.new(1, 0.2, 1)
+	p.CFrame = CFrame.new(foot.Position - Vector3.new(0, foot.Size.Y * 0.5, 0))
+	p.Parent = workspace
+	local e = Instance.new("ParticleEmitter")
+	e.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	e.Color = ColorSequence.new(Color3.fromRGB(150, 144, 136))
+	e.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.5), NumberSequenceKeypoint.new(1, 1) })
+	e.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.6 * k), NumberSequenceKeypoint.new(1, 2 * k) })
+	e.Lifetime = NumberRange.new(0.5, 0.9)
+	e.Speed = NumberRange.new(4 * k, 7 * k)
+	e.SpreadAngle = Vector2.new(80, 80)
+	e.EmissionDirection = Enum.NormalId.Top
+	e.Drag = 6
+	e.Acceleration = Vector3.new(0, 1.5, 0)
+	e.Rotation = NumberRange.new(0, 360)
+	e.RotSpeed = NumberRange.new(-40, 40)
+	e.Rate = 0
+	e.Parent = p
+	e:Emit(big and 14 or 9)
+	task.delay(1.2, function()
+		p:Destroy()
+	end)
+end
+
 -- Footsteps: custom multi-take files (tools/generate_sfx.py). Each file holds
 -- several takes back to back; a random one (never the same twice running) is
 -- played through PlaybackRegion. Surfaces: tile, steel grating, Sentinel stomp.
@@ -404,53 +437,106 @@ local function prowlPose(s, c)
 	}
 end
 
--- Sentinel walking: tons of armour on every step. A slow stride; the body
--- drops and the knee buckles as each foot slams down (plant), the weight
--- rolls onto the planted leg, the torso counter-twists and the arms swing
--- heavily a beat behind the legs.
-local function stompPose(s, c)
-	local plant = math.abs(s) ^ 4 -- a foot hitting the deck
-	local right = s > 0 and plant or 0
-	local left = s < 0 and plant or 0
-	local sa = s * 0.825 - c * 0.565 -- sin(phase - 0.6): the arms lag the legs
+-- SENTINEL LOCOMOTION ------------------------------------------------------
+-- (tools/preview/cycle.py renders these: keep them pure, phase in, joints out)
+-- Phase p runs 0..2pi per stride: the right heel strikes at 0, the left at pi.
+-- The loop feeds a warped phase so each stride lingers on its footfall and
+-- hurries through the swing (sentinelWarp). k = the suit's scale, so the body
+-- drop reads the same on a 1.8x Sentinel.
+local SENTINEL_WARP = 0.2
+
+local function sentinelWarp(p)
+	return p - SENTINEL_WARP * math.sin(2 * p)
+end
+
+local function smooth01(x)
+	x = math.clamp(x, 0, 1)
+	return x * x * (3 - 2 * x)
+end
+
+-- One leg through a stride (phi 0 = heel strike). duty: share of the stride
+-- the foot is planted. reach: hip swing either side (deg); lift: knee bend
+-- hauling the foot through; load: how far the knee buckles taking the weight;
+-- over: how far the thigh drives up past its landing angle before the leg
+-- straightens and the foot slams down. Returns hip pitch, knee (negative =
+-- bent) and ankle, in degrees.
+local function heavyLeg(phi, duty, reach, lift, load, over)
+	local u = (phi % TAU) / TAU
+	local hip, knee
+	if u < duty then
+		local v = u / duty -- planted: the leg sweeps back under the body
+		hip = reach * (1 - 2 * v)
+		knee = -(8 + load * math.sin(math.pi * math.min(1, v / 0.45)))
+	else
+		local v = (u - duty) / (1 - duty)
+		-- swing: the thigh drives up and forward (knee high), then the shin
+		-- swings out straight and the whole leg drops onto the heel
+		local drive = 1 - (1 - math.min(1, v / 0.72)) ^ 2
+		hip = -reach + (2 * reach + over) * drive - over * smooth01((v - 0.72) / 0.28)
+		knee = -(8 + lift * math.sin(math.pi * math.min(1, v / 0.8)))
+	end
+	return hip, knee, -(hip + knee) * 0.6 -- the ankle keeps the sole near flat
+end
+
+-- Walking: tons of armour on every step. Long slow strides; each foot slams
+-- down, the body drops hard onto it and the knee buckles taking the weight,
+-- then it rolls over the planted leg. The pelvis turns with the stride, the
+-- chest counter-turns, and the arms swing heavily a beat behind the legs.
+local function stompPose(p, k)
+	local rh, rk, ra = heavyLeg(p, 0.58, 40, 70, 34, 16)
+	local lh, lk, la = heavyLeg(p + math.pi, 0.58, 40, 70, 34, 16)
+	local q = (p % math.pi) / math.pi -- 0 at every heel strike
+	local thud = math.exp(-q * 7) -- the weight landing
+	local bob = (-0.42 * thud + 0.14 * math.sin(math.pi * q) - 0.14) * k
+	local side = math.cos(p - 0.9) -- > 0: the weight is over the right foot
+	local turn = math.cos(p) -- the pelvis turns with the forward leg
+	local arm = math.cos(p - 0.5) -- the arms lag the legs
 	return {
-		Root = CFrame.new(0, math.abs(c) * 0.16 - 0.2 - plant * 0.24, 0) * CFrame.Angles(rad(-8 + plant * 3), rad(4 * s), rad(5 * s)),
-		Waist = CFrame.Angles(rad(-3), rad(-7 * s), rad(-2 * s)),
-		Neck = CFrame.Angles(rad(4 + plant * 4), rad(4 * s), rad(-3 * s)),
-		RShoulder = CFrame.Angles(rad(6 - 20 * sa), 0, rad(16)),
-		LShoulder = CFrame.Angles(rad(6 + 20 * sa), 0, rad(-16)),
-		RElbow = CFrame.Angles(rad(22 + 12 * math.max(0, -sa)), 0, 0),
-		LElbow = CFrame.Angles(rad(22 + 12 * math.max(0, sa)), 0, 0),
-		RHip = CFrame.Angles(rad(30 * s + 8), 0, rad(6)),
-		LHip = CFrame.Angles(rad(-30 * s + 8), 0, rad(-6)),
-		RKnee = CFrame.Angles(rad(-(14 + 46 * math.max(0, -s) + 14 * right)), 0, 0),
-		LKnee = CFrame.Angles(rad(-(14 + 46 * math.max(0, s) + 14 * left)), 0, 0),
-		RAnkle = CFrame.Angles(rad(-6 * s + 4), 0, 0),
-		LAnkle = CFrame.Angles(rad(6 * s + 4), 0, 0),
+		Root = CFrame.new(side * 0.16 * k, bob, 0) * CFrame.Angles(rad(-9 + thud * 5), rad(9 * turn), rad(-side * 6)),
+		Waist = CFrame.Angles(rad(-4 - thud * 4), rad(-7 * turn), rad(side * 3)),
+		Neck = CFrame.Angles(rad(6 + thud * 7), rad(-3 * turn), rad(side * 3)),
+		RShoulder = CFrame.Angles(rad(8 - 26 * arm + thud * 6), 0, rad(18)),
+		LShoulder = CFrame.Angles(rad(8 + 26 * arm + thud * 6), 0, rad(-18)),
+		RElbow = CFrame.Angles(rad(24 + 18 * math.max(0, -arm)), 0, 0),
+		LElbow = CFrame.Angles(rad(24 + 18 * math.max(0, arm)), 0, 0),
+		RHip = CFrame.Angles(rad(rh), 0, rad(7)),
+		LHip = CFrame.Angles(rad(lh), 0, rad(-7)),
+		RKnee = CFrame.Angles(rad(rk), 0, 0),
+		LKnee = CFrame.Angles(rad(lk), 0, 0),
+		RAnkle = CFrame.Angles(rad(ra), 0, 0),
+		LAnkle = CFrame.Angles(rad(la), 0, 0),
 	}
 end
 
--- Sentinel running (fast: pursuit thrusters): heavy but fast. It leans into
--- the charge, long pounding strides with the knees driving high, arms
--- pumping hard, and a hard drop through the body on every footfall.
-local function chargePose(s, c)
-	local plant = math.abs(s) ^ 4
+-- Running (pursuit thrusters): heavy but fast. Leaning hard into it, huge
+-- pounding strides with the knees driving high, arms pumping, and a big drop
+-- through the whole body on every footfall.
+local function chargePose(p, k)
+	local rh, rk, ra = heavyLeg(p, 0.44, 44, 100, 34, 20)
+	local lh, lk, la = heavyLeg(p + math.pi, 0.44, 44, 100, 34, 20)
+	local q = (p % math.pi) / math.pi
+	local thud = math.exp(-q * 6)
+	local bob = (-0.44 * thud + 0.32 * math.sin(math.pi * math.min(1, q * 1.1)) - 0.3) * k
+	local side = math.cos(p - 0.7)
+	local turn = math.cos(p)
+	local arm = math.cos(p - 0.35)
 	return {
-		Root = CFrame.new(0, math.abs(c) * 0.32 - 0.36 - plant * 0.26, 0) * CFrame.Angles(rad(-22 + plant * 4), rad(8 * s), rad(4 * s)),
-		Waist = CFrame.Angles(rad(-6), rad(-14 * s), 0),
-		Neck = CFrame.Angles(rad(18), rad(6 * s), 0),
-		RShoulder = CFrame.Angles(rad(14 - 55 * s), 0, rad(18)),
-		LShoulder = CFrame.Angles(rad(14 + 55 * s), 0, rad(-18)),
-		RElbow = CFrame.Angles(rad(80 + 15 * s), 0, 0),
-		LElbow = CFrame.Angles(rad(80 - 15 * s), 0, 0),
-		RHip = CFrame.Angles(rad(58 * s + 16), 0, rad(4)),
-		LHip = CFrame.Angles(rad(-58 * s + 16), 0, rad(-4)),
-		RKnee = CFrame.Angles(rad(-(20 + 90 * math.max(0, -s))), 0, 0),
-		LKnee = CFrame.Angles(rad(-(20 + 90 * math.max(0, s))), 0, 0),
-		RAnkle = CFrame.Angles(rad(-20 * s), 0, 0),
-		LAnkle = CFrame.Angles(rad(20 * s), 0, 0),
+		Root = CFrame.new(side * 0.1 * k, bob, 0) * CFrame.Angles(rad(-17 + thud * 6), rad(12 * turn), rad(-side * 5)),
+		Waist = CFrame.Angles(rad(-8 - thud * 5), rad(-12 * turn), rad(side * 3)),
+		Neck = CFrame.Angles(rad(20 + thud * 6), rad(-4 * turn), 0),
+		RShoulder = CFrame.Angles(rad(16 - 58 * arm), 0, rad(20)),
+		LShoulder = CFrame.Angles(rad(16 + 58 * arm), 0, rad(-20)),
+		RElbow = CFrame.Angles(rad(78 + 18 * arm), 0, 0),
+		LElbow = CFrame.Angles(rad(78 - 18 * arm), 0, 0),
+		RHip = CFrame.Angles(rad(rh), 0, rad(5)),
+		LHip = CFrame.Angles(rad(lh), 0, rad(-5)),
+		RKnee = CFrame.Angles(rad(rk), 0, 0),
+		LKnee = CFrame.Angles(rad(lk), 0, 0),
+		RAnkle = CFrame.Angles(rad(ra), 0, 0),
+		LAnkle = CFrame.Angles(rad(la), 0, 0),
 	}
 end
+-- END SENTINEL LOCOMOTION ----------------------------------------------------
 
 -- Sentinel standing: wide armoured stance, systems idling.
 local function sentinelIdle(t)
@@ -703,6 +789,12 @@ step:Connect(function(a, b)
 			continue
 		end
 		local st = getState(char)
+		if not st.ScaleAt or now - st.ScaleAt > 1 then
+			-- suits are scaled up (Config.Sentinel.Scale): body moves scale with them
+			st.ScaleAt = now
+			local ok, k = pcall(char.GetScale, char)
+			st.Scale = ok and k or 1
+		end
 		local role = attr(char, "Role")
 		local v = root.AssemblyLinearVelocity
 		local speed = Vector3.new(v.X, 0, v.Z).Magnitude
@@ -730,7 +822,7 @@ step:Connect(function(a, b)
 		end
 		st.LoopBlend = math.clamp(st.LoopBlend + (loop and dt * 7 or -dt * 7), 0, 1)
 		local prevPhase = st.Phase
-		st.Phase += dt * math.max(speed, (st.Loop == "Prowl" or st.Loop == "Stomp") and 6 or 10) * (st.Loop == "Gallop" and 0.36 or st.Loop == "Prowl" and 0.55 or st.Loop == "Stomp" and 0.36 or st.Loop == "Charge" and 0.3 or 0.5)
+		st.Phase += dt * math.max(speed, (st.Loop == "Prowl" or st.Loop == "Stomp") and 6 or 10) * (st.Loop == "Gallop" and 0.36 or st.Loop == "Prowl" and 0.55 or st.Loop == "Stomp" and 0.45 or st.Loop == "Charge" and 0.34 or 0.5)
 
 		-- all-fours footfalls (and custom footsteps) replace the normal running sound
 		local running = root:FindFirstChild("Running")
@@ -773,9 +865,11 @@ step:Connect(function(a, b)
 				vol = 0.36
 			end
 			local stepped = false
+			local stomping = st.Loop == "Stomp" or st.Loop == "Charge"
 			if loop and st.Loop == loop and st.LoopBlend > 0.5 then
-				-- heel strike lands where the stride peaks (|sin phase| = 1)
-				local off = math.pi / 2
+				-- heel strike lands where the stride peaks (|sin phase| = 1); a
+				-- Sentinel's heels strike at 0 and pi (see SENTINEL LOCOMOTION)
+				local off = stomping and 0 or math.pi / 2
 				stepped = math.floor((prevPhase - off) / math.pi) ~= math.floor((st.Phase - off) / math.pi)
 				st.StepDist = 0
 			else
@@ -788,12 +882,19 @@ step:Connect(function(a, b)
 			end
 			if stepped then
 				footstep(st, root, kind, vol, pitch)
-				if role == "Sentinel" and _G.WolverineShake then
-					-- the deck shakes under a Sentinel's footfall (harder at a run)
-					local d = (workspace.CurrentCamera.CFrame.Position - root.Position).Magnitude
-					local amt = (st.Loop == "Charge" and 0.3 or 0.16) * math.clamp(1 - d / 45, 0, 1)
-					if amt > 0.02 then
-						_G.WolverineShake(amt)
+				if role == "Sentinel" then
+					if stomping and loop then
+						-- dust bursts out from under the foot that just landed
+						local right = math.floor(st.Phase / math.pi) % 2 == 0
+						stompDust(char, right and "RightFoot" or "LeftFoot", st.Scale or 1, st.Loop == "Charge")
+					end
+					if _G.WolverineShake then
+						-- the deck shakes under a Sentinel's footfall (harder at a run)
+						local d = (workspace.CurrentCamera.CFrame.Position - root.Position).Magnitude
+						local amt = (st.Loop == "Charge" and 0.42 or 0.24) * math.clamp(1 - d / 60, 0, 1)
+						if amt > 0.02 then
+							_G.WolverineShake(amt)
+						end
 					end
 				end
 				if role == "Wolverine" then
@@ -834,9 +935,9 @@ step:Connect(function(a, b)
 			elseif st.Loop == "Prowl" then
 				pose = prowlPose(s, c)
 			elseif st.Loop == "Stomp" then
-				pose = stompPose(s, c)
+				pose = stompPose(sentinelWarp(st.Phase), st.Scale)
 			elseif st.Loop == "Charge" then
-				pose = chargePose(s, c)
+				pose = chargePose(sentinelWarp(st.Phase), st.Scale)
 			else
 				local look = 0
 				if now > st.NextLook and wolverineNear(root) then
