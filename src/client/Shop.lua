@@ -1,6 +1,7 @@
 -- Wolverine shop: suits + claws, and the left-side menu dock.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
@@ -38,6 +39,22 @@ local function fitDock()
 end
 workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fitDock)
 fitDock()
+
+-- The dock is for the lobby: hidden while you're alive in a round (Wolverine,
+-- survivor or Sentinel), back as soon as you die or the round ends.
+local PLAYING = { Wolverine = true, Survivor = true, Sentinel = true }
+local wasPlaying = nil
+RunService.Heartbeat:Connect(function()
+	local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+	local playing = PLAYING[player:GetAttribute("Role")] == true and not (hum and hum.Health <= 0)
+	if playing ~= wasPlaying then
+		wasPlaying = playing
+		dock.Visible = not playing
+		if playing then
+			UIKit.CloseWindows()
+		end
+	end
+end)
 
 function Shop.DockButton(text, icon, color, order)
 	local b, label = UIKit.Button(dock, { Text = text, Icon = icon, Color = color, Size = UDim2.fromOffset(170, 54), LayoutOrder = order })

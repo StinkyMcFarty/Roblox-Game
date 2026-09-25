@@ -173,6 +173,10 @@ src/shared/   Config, Skins, Util
 - **Intro**: Wolverine floats in the atrium's adamantium tank, wakes, smashes out through the glass, lands, crosses his forearms and the claws shoot out in an X, then roars (his camera films it). Timings: `Config.Intro`.
 - **Kill scream** after every rip-in-half. **Molten sparks** fly when his claws tear through metal or hit a Sentinel.
 
+### Lobby menu & spectating
+- The left menu (Berserker Coins, Armory, Daily, Become Wolverine, 2x chance, Store, AFK) is hidden while you're alive in a round. It comes back as soon as you die or the round ends, and any open window closes when a round starts.
+- **SPECTATE** appears at the top of that menu while a round is on and you're out of it (killed, or waiting in the lobby). It starts on Wolverine, and **◀ / ▶** (or Q / E, L1 / R1 on a gamepad) switch between him and every survivor and Sentinel still alive. If the player you're watching dies it moves on by itself, and it stops when the round ends.
+
 ### Store & AFK
 - **STORE** (lobby dock): four packs of Berserker Coins — 500 (R$49), 1,200 (R$99, +20%), 3,000 (R$199, +50%), 7,000 (R$399, +75%).
   Create a Developer Product for each at that price (Creator Dashboard > your experience > Monetization > Developer Products)

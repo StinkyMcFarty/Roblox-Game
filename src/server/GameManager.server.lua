@@ -215,6 +215,10 @@ Ability.OnServerEvent:Connect(function(player, name, arg)
 		Hiding.Leave(player)
 	elseif name == "TerminalResult" then
 		Sentinel.TerminalResult(player, arg)
+	elseif name == "Spectate" then
+		-- stream the map in around whoever they're watching (nil = themselves)
+		local root = typeof(arg) == "Instance" and arg:IsA("Model") and arg:IsDescendantOf(workspace) and arg:FindFirstChild("HumanoidRootPart")
+		player.ReplicationFocus = root or nil
 	elseif role == "Wolverine" then
 		Wolverine.Handle(player, name, arg)
 	elseif role == "Sentinel" then
@@ -444,6 +448,7 @@ local function runRound()
 	ReplicatedStorage:SetAttribute("InRound", false)
 	for _, p in Players:GetPlayers() do
 		Hiding.Clear(p)
+		p.ReplicationFocus = nil -- stop following whoever they spectated
 		p:SetAttribute("Role", "Lobby")
 		p:SetAttribute("Hits", 0)
 		p:SetAttribute("Armor", nil)

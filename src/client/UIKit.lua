@@ -224,6 +224,15 @@ function UIKit.Recolor(button, accent)
 end
 
 -- Standard window: title bar, close button, pop-in animation.
+UIKit.Windows = {} -- every window made with UIKit.Window
+
+-- Shuts every open window at once (a round starting).
+function UIKit.CloseWindows()
+	for _, api in UIKit.Windows do
+		api.Frame.Visible = false
+	end
+end
+
 function UIKit.Window(parent, title, size, accent)
 	local w = new("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -307,6 +316,7 @@ function UIKit.Window(parent, title, size, accent)
 	end
 	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fit)
 	fit()
+	table.insert(UIKit.Windows, api)
 	return api
 end
 
