@@ -173,7 +173,12 @@ local function refresh()
 
 	local tokens = player:GetAttribute("GuaranteedTokens") or 0
 	local chance = player:GetAttribute("WolverineChance") or 0
-	if tokens > 0 then
+	local place = player:GetAttribute("WolverineQueue") or 1
+	if tokens > 0 and place > 1 then
+		oddsText.Text = ("IN QUEUE #%d"):format(place) -- someone else goes first
+		oddsFill.Size = UDim2.fromScale(1, 1)
+		oddsStroke.Color = K.Yellow
+	elseif tokens > 0 then
 		oddsText.Text = "GUARANTEED"
 		oddsFill.Size = UDim2.fromScale(1, 1)
 		oddsStroke.Color = K.Yellow
@@ -244,7 +249,7 @@ passButton.Activated:Connect(function()
 	MarketplaceService:PromptGamePassPurchase(player, Config.DoubleChanceGamepassId)
 end)
 
-for _, attr in { "Challenges", "LoginStreak", "WolverineChance", "GuaranteedTokens" } do
+for _, attr in { "Challenges", "LoginStreak", "WolverineChance", "GuaranteedTokens", "WolverineQueue" } do
 	player:GetAttributeChangedSignal(attr):Connect(refresh)
 end
 refresh()

@@ -155,6 +155,8 @@ function PlayerData.Load(player)
 		Upgrades = {}, -- [id] = true, survivor upgrades (Config.Upgrades)
 		Power = "", -- the one upgrade equipped on G ("" = the plain fart)
 		Tokens = 0,
+		TokenRound = 0, -- Become Wolverine queue (this server only; see queueOf)
+		TokenTie = math.random(),
 		LastLogin = "",
 		LastClaim = 0, -- os.time() of the last daily login reward
 		Streak = 0,
@@ -488,6 +490,29 @@ MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passI
 	end
 end)
 
+-- Become Wolverine queue. Everyone holding a token waits in line: tokens from
+-- earlier rounds go first, and people who bought in the same round are put in
+-- a random order (TokenTie). A second token owned by the same player joins
+-- the back of the line once the first is used.
+local roundNo = 0
+local function queueOf(list)
+	local q = {}
+	for _, p in list do
+		local d = cache[p]
+		if d and d.Tokens > 0 then
+			table.insert(q, p)
+		end
+	end
+	table.sort(q, function(a, b)
+		local da, db = cache[a], cache[b]
+		if da.TokenRound ~= db.TokenRound then
+			return da.TokenRound < db.TokenRound
+		end
+		return da.TokenTie < db.TokenTie
+	end)
+	return q
+end
+
 function PlayerData.PublishChances()
 	local list = {}
 	for _, p in Players:GetPlayers() do
@@ -501,10 +526,19 @@ function PlayerData.PublishChances()
 	for _, p in list do
 		total += weight(p)
 	end
+	local queue = queueOf(list)
+	local place = {}
+	for i, p in queue do
+		place[p] = i
+	end
+	for _, p in Players:GetPlayers() do
+		p:SetAttribute("WolverineQueue", place[p])
+	end
 	for _, p in list do
-		local d = cache[p]
-		if d and d.Tokens > 0 then
-			p:SetAttribute("WolverineChance", 100)
+		if place[p] then
+			p:SetAttribute("WolverineChance", place[p] == 1 and 100 or 0)
+		elseif #queue > 0 then
+			p:SetAttribute("WolverineChance", 0) -- someone bought it this round
 		else
 			p:SetAttribute("WolverineChance", total > 0 and math.floor(weight(p) / total * 100 + 0.5) or 0)
 		end
@@ -512,15 +546,16 @@ function PlayerData.PublishChances()
 end
 
 function PlayerData.PickWolverine(list)
-	-- A purchased token guarantees it (first buyer in the server goes first)
-	for _, p in list do
+	-- A purchased token guarantees it: the front of the queue goes this round,
+	-- everyone else holding one keeps it for the next rounds
+	local p = queueOf(list)[1]
+	if p then
 		local d = cache[p]
-		if d and d.Tokens > 0 then
-			d.Tokens -= 1
-			publish(p)
-			task.spawn(PlayerData.Save, p)
-			return p, true
-		end
+		d.Tokens -= 1
+		d.TokenRound, d.TokenTie = roundNo + 1, math.random() -- a second token waits its turn
+		publish(p)
+		task.spawn(PlayerData.Save, p)
+		return p, true
 	end
 	local total = 0
 	for _, p in list do
@@ -538,6 +573,7 @@ end
 
 -- Called once per round with everyone who played in it.
 function PlayerData.RoundPlayed(list, wolverine)
+	roundNo += 1
 	for _, p in list do
 		local d = cache[p]
 		if d then
@@ -593,6 +629,9 @@ MarketplaceService.ProcessReceipt = function(receipt)
 	if pack then
 		d.Coins += pack.Coins
 	else
+		if d.Tokens == 0 then
+			d.TokenRound, d.TokenTie = roundNo, math.random() -- joins the queue now
+		end
 		d.Tokens += 1
 	end
 	table.insert(d.Receipts, purchaseId)
@@ -611,7 +650,12 @@ MarketplaceService.ProcessReceipt = function(receipt)
 		fx(player, "Announce", { Text = ("+%d %s — thanks for the support!"):format(pack.Coins, Config.CoinName:upper()), Color = Color3.fromRGB(255, 205, 30), Duration = 3 })
 	else
 		PlayerData.PublishChances()
-		fx(player, "Announce", { Text = "You WILL be Wolverine next round.", Color = Color3.fromRGB(255, 205, 30), Duration = 4 })
+		local place = player:GetAttribute("WolverineQueue") or 1
+		fx(player, "Announce", {
+			Text = place <= 1 and "You WILL be Wolverine next round." or ("Someone else bought it too: you're #%d in the Wolverine queue."):format(place),
+			Color = Color3.fromRGB(255, 205, 30),
+			Duration = 4,
+		})
 	end
 	return Enum.ProductPurchaseDecision.PurchaseGranted
 end
