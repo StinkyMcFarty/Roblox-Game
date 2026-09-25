@@ -238,6 +238,8 @@ ShopRemote.OnServerInvoke = function(player, action, id)
 		return PlayerData.BuyClaw(player, id)
 	elseif action == "EquipClaw" then
 		return PlayerData.EquipClaw(player, id)
+	elseif action == "BuyUpgrade" then
+		return PlayerData.BuyUpgrade(player, id)
 	end
 	return false, "Bad request"
 end

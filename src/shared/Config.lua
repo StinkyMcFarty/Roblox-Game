@@ -118,6 +118,21 @@ Config.Sentinel = {
 	Pulse = { Cooldown = 18, Charge = 2, Radius = 30, Stun = 3, Damage = 12, CancelCooldown = 3, IFramesEvery = 2 },
 }
 
+-- Survivor upgrades (bought once with coins, kept forever; client/Upgrades).
+-- Order sets the order in the Upgrades window.
+Config.Upgrades = {
+	TurboFart = {
+		Order = 1,
+		Name = "Turbo Fart",
+		Icon = "💨",
+		Price = 300,
+		Desc = "Fart while sprinting: instant top speed PLUS a speed burst, leaving a trail of gas behind you.",
+		Boost = 8, -- extra walk speed during the burst
+		Duration = 2.5, -- seconds of burst
+		TrailTime = 2, -- the gas trail fades after this long
+	},
+}
+
 -- Survivor fart: masks your scent from Wolverine's Sniff
 Config.Fart = {
 	Cooldown = 45, MaskTime = 10, CloudTime = 10, -- the cloud (and its Sniff decoy) lasts 10s

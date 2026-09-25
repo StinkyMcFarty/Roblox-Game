@@ -36,7 +36,9 @@ function Movement.MaxOut(player)
 	if s.Sprint and not s.Exhausted then
 		local ramp = Config.SprintRamp
 		s.RunTime = math.max(s.RunTime or 0, ramp.Delay + ramp.Time)
+		return true
 	end
+	return false
 end
 
 function Movement.Reset(player)
@@ -127,6 +129,9 @@ RunService.Heartbeat:Connect(function(dt)
 
 			if Status.Has(player, "Boost") then
 				speed += Config.AdrenalineBonus
+			end
+			if Status.Has(player, "FartBoost") then
+				speed += Config.Upgrades.TurboFart.Boost -- Turbo Fart burst
 			end
 			if Status.Has(player, "Bracing") then
 				speed *= Config.Sentinel.Laser.Resist.Walk -- forcing his way up the death ray

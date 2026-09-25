@@ -64,6 +64,9 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
   `Minimap`, JSON). It shows only the local player - never other players or Wolverine.
 - Terminal ambience (`src/client/TerminalSounds.lua`): beeps now; the hum needs
   `assets/sfx/TerminalHum.ogg` uploaded and its ID in `Config.UploadedSounds.TerminalHum`.
+- Survivor upgrades (`Config.Upgrades`, `PlayerData.BuyUpgrade`/`HasUpgrade`, saved as `Upgrades`,
+  UI `src/client/Upgrades.lua` on the lobby dock). Turbo Fart (300): a sprinting fart also gives
+  `FartBoost` (+8 speed, 2.5s) and a gas trail that fades after 2s (`Fart.Trail`).
 - Survivors see a white glow on the 6 nearest hiding spots (`src/client/HideGlow.lua`); keep the
   client's Highlight count low (Roblox caps it at 31), which is why Sniff ghosts also draw boxes.
 - Sentinel pilot exit: destroyed by Wolverine → Hits = 2 (one from death); timed out → full health.

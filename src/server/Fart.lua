@@ -10,6 +10,7 @@ local Hiding = require(script.Parent.Hiding)
 local VFX = require(script.Parent.VFX)
 local Status = require(script.Parent.Status)
 local Movement = require(script.Parent.Movement)
+local PlayerData = require(script.Parent.PlayerData)
 
 local Fx = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Fx")
 
@@ -33,7 +34,13 @@ function Fart.Use(player)
 	end
 	lastUsed[player] = os.clock()
 	VFX.Anim(char, "Fart")
-	Movement.MaxOut(player) -- fart mid-sprint: instantly at full speed
+	-- fart mid-sprint: instantly at full speed; with Turbo Fart, a burst on
+	-- top and a trail of gas streaming out behind
+	if Movement.MaxOut(player) and PlayerData.HasUpgrade(player, "TurboFart") then
+		local up = Config.Upgrades.TurboFart
+		Status.Apply(player, "FartBoost", up.Duration)
+		Fart.Trail(char, up.Duration, up.TrailTime)
+	end
 
 	local butt = char:FindFirstChild("LowerTorso") or char:FindFirstChild("Torso") or root
 	local pos = butt.Position - root.CFrame.LookVector * 1.2 - Vector3.new(0, 0.4, 0)
@@ -129,6 +136,51 @@ function Fart.SniffTargets()
 		end
 	end
 	return targets
+end
+
+-- A green trail of gas streaming from their backside for `duration` seconds;
+-- each bit of it fades `fade` seconds after it's laid down.
+function Fart.Trail(char, duration, fade)
+	local butt = char:FindFirstChild("LowerTorso") or char:FindFirstChild("Torso")
+	if not butt then
+		return
+	end
+	local a0 = Instance.new("Attachment")
+	a0.Name = "FartTrail"
+	a0.Position = Vector3.new(0, 0.7, 0.6)
+	a0.Parent = butt
+	local a1 = Instance.new("Attachment")
+	a1.Name = "FartTrail"
+	a1.Position = Vector3.new(0, -0.7, 0.6)
+	a1.Parent = butt
+	local trail = Instance.new("Trail")
+	trail.Attachment0, trail.Attachment1 = a0, a1
+	trail.Lifetime = fade
+	trail.Color = ColorSequence.new(Color3.fromRGB(170, 230, 60), Color3.fromRGB(90, 140, 30))
+	trail.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.25), NumberSequenceKeypoint.new(1, 1) })
+	trail.WidthScale = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.6), NumberSequenceKeypoint.new(1, 2.2) })
+	trail.LightEmission = 0.2
+	trail.FaceCamera = true
+	trail.Parent = butt
+	local puffs = Instance.new("ParticleEmitter")
+	puffs.Name = "FartTrail"
+	puffs.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	puffs.Color = ColorSequence.new(Color3.fromRGB(160, 220, 60), Color3.fromRGB(100, 150, 40))
+	puffs.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.8), NumberSequenceKeypoint.new(1, 2.6) })
+	puffs.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.35), NumberSequenceKeypoint.new(1, 1) })
+	puffs.Lifetime = NumberRange.new(fade * 0.6, fade)
+	puffs.Rate = 30
+	puffs.Speed = NumberRange.new(0.5, 1.5)
+	puffs.SpreadAngle = Vector2.new(40, 40)
+	puffs.EmissionDirection = Enum.NormalId.Back
+	puffs.Parent = butt
+	task.delay(duration, function()
+		trail.Enabled = false
+		puffs.Enabled = false
+	end)
+	for _, inst in { a0, a1, trail, puffs } do
+		Debris:AddItem(inst, duration + fade + 0.2)
+	end
 end
 
 function Fart.Reset(player)

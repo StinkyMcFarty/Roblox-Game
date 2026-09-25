@@ -56,6 +56,11 @@ local function publish(player)
 	end
 	player:SetAttribute("OwnedClaws", table.concat(claws, ","))
 	player:SetAttribute("Claw", d.Claw)
+	local ups = {}
+	for id in d.Upgrades do
+		table.insert(ups, id)
+	end
+	player:SetAttribute("Upgrades", table.concat(ups, ","))
 	player:SetAttribute("GuaranteedTokens", d.Tokens)
 	player:SetAttribute("LoginStreak", d.Streak)
 	player:SetAttribute("Challenges", HttpService:JSONEncode(d.Daily))
@@ -88,6 +93,13 @@ function PlayerData.Save(player)
 				return list
 			end)(),
 			Claw = d.Claw,
+			Upgrades = (function()
+				local list = {}
+				for id in d.Upgrades do
+					table.insert(list, id)
+				end
+				return list
+			end)(),
 			Tokens = d.Tokens,
 			LastLogin = d.LastLogin,
 			LastClaim = d.LastClaim,
@@ -122,6 +134,7 @@ function PlayerData.Load(player)
 		Skin = Skins.Default,
 		OwnedClaws = { [Skins.DefaultClaw] = true },
 		Claw = Skins.DefaultClaw,
+		Upgrades = {}, -- [id] = true, survivor upgrades (Config.Upgrades)
 		Tokens = 0,
 		LastLogin = "",
 		LastClaim = 0, -- os.time() of the last daily login reward
@@ -156,6 +169,11 @@ function PlayerData.Load(player)
 			end
 			if saved.Claw and data.OwnedClaws[saved.Claw] then
 				data.Claw = saved.Claw
+			end
+			for _, id in saved.Upgrades or {} do
+				if Config.Upgrades[id] then
+					data.Upgrades[id] = true
+				end
 			end
 			data.Tokens = tonumber(saved.Tokens) or 0
 			if type(saved.Receipts) == "table" then
@@ -262,6 +280,29 @@ function PlayerData.BuyClaw(player, id)
 	publish(player)
 	task.spawn(PlayerData.Save, player)
 	return true, "Unlocked " .. claw.Name .. "!"
+end
+
+function PlayerData.HasUpgrade(player, id)
+	local d = cache[player]
+	return d ~= nil and d.Upgrades[id] == true
+end
+
+function PlayerData.BuyUpgrade(player, id)
+	local d, up = cache[player], Config.Upgrades[id]
+	if not (d and up) then
+		return false, "Unknown upgrade"
+	end
+	if d.Upgrades[id] then
+		return false, "Already owned"
+	end
+	if d.Coins < up.Price then
+		return false, "Not enough " .. Config.CoinName
+	end
+	d.Coins -= up.Price
+	d.Upgrades[id] = true
+	publish(player)
+	task.spawn(PlayerData.Save, player)
+	return true, "Unlocked " .. up.Name .. "!"
 end
 
 function PlayerData.EquipClaw(player, id)
