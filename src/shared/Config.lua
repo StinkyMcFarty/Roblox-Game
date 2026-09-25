@@ -141,6 +141,11 @@ Config.DailyChallenges = {
 
 -- Daily login reward: Base + PerStreakDay * (streak - 1), capped at MaxStreak days
 Config.WallRegen = 10 -- seconds before shredded walls/props grow back
+
+-- Skybox: a Creator Store sky model, loaded into Lighting when the server
+-- starts. It has to be in the game owner's inventory (Roblox only lets a game
+-- load assets its owner has). 0 = the built-in starry night sky.
+Config.SkyAssetId = 10594688909
 Config.DailyReward = { Base = 50, PerStreakDay = 25, MaxStreak = 7 }
 
 -- Sounds ----------------------------------------------------------------

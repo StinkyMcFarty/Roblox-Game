@@ -19,6 +19,7 @@ The whole game is written as code. The map, Wolverine's look, the claws, the "an
 | **Avatar type: R15** | Studio → Game Settings → Avatar (the gore and all-fours run are built for R15) |
 | **Saving Berserker Coins/skins in Studio** | Game Settings → Security → *Enable Studio Access to API Services* |
 | **80 Robux "Be Wolverine" pass** | Create a Developer Product (80 R$), then paste its ID into `Config.GuaranteedWolverineProductId` in `src/shared/Config.lua` |
+| **Sky** | `Config.SkyAssetId` (a Creator Store sky model) loads into Lighting when the server starts. It must be in your inventory. A Sky you put in Lighting yourself in Studio takes priority. |
 | **Sounds** | Paste Creator Store sound IDs into `Config.Sounds` (Roar, Heartbeat, Fart, Sniff are empty by default) |
 
 ## Make the suits realistic (upload the textures)

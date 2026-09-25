@@ -1387,6 +1387,28 @@ function MapBuilder.SetupLighting()
 	})
 	if not customSky then
 		make("Sky", Lighting, { StarCount = 5000, MoonAngularSize = 16, CelestialBodiesShown = true })
+		if (Config.SkyAssetId or 0) ~= 0 then
+			task.spawn(function()
+				local ok, model = pcall(function()
+					return game:GetService("InsertService"):LoadAsset(Config.SkyAssetId)
+				end)
+				local sky = ok and model and model:FindFirstChildWhichIsA("Sky", true)
+				if sky then
+					for _, old in Lighting:GetChildren() do
+						if old:IsA("Sky") then
+							old:Destroy()
+						end
+					end
+					sky.Parent = Lighting
+				else
+					warn(("[Lighting] couldn't load sky %s (%s); keeping the starry sky"):format(
+						tostring(Config.SkyAssetId), ok and "no Sky inside that asset" or tostring(model)))
+				end
+				if ok and model then
+					model:Destroy()
+				end
+			end)
+		end
 	end
 	make("ColorCorrectionEffect", Lighting, {
 		Brightness = 0,
