@@ -54,6 +54,7 @@ local ROLE_HOLDS = {
 	},
 	Sentinel = {
 		{ Name = "LinkHold", Label = "Twin Link", Desc = "Beside the other suit: " .. S.LinkedMultiplier .. "x. Apart: " .. S.SoloMultiplier .. "x", Icon = "🔗", KeyText = "30m", Attr = "Linked", Color = Color3.fromRGB(190, 140, 255) },
+		{ Name = "PursuitHold", Label = "Pursuit", Desc = "Thrusters kick in when he runs " .. S.Pursuit.Start .. "+ studs away", Icon = "🚀", KeyText = "AUTO", Attr = "Pursuit", Color = Color3.fromRGB(255, 120, 60) },
 	},
 	Survivor = {
 		{ Name = "SprintHold", Label = "Sprint", Desc = "Run for your life", Icon = "🏃", KeyText = "SHIFT", Attr = "Sprinting", Color = Color3.fromRGB(80, 170, 255) },

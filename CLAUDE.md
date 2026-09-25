@@ -34,6 +34,11 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
 - Pounce is a scripted dive arc (`Effects.Leap`): Height 7.6, AirTime 0.92, Forward 78 (~72 studs).
 - Running does not break walls; M1, pounce, impale and Sentinel punches do. Wall cores carry a
   `Surface` attribute (`Facility.lua`) that picks the clash effect (`Combat.StoneClash` etc).
+- Sentinels: linked (within 30 studs of each other) hit at 1.25x, apart 0.6x, a lone suit 1x.
+  Pursuit thrusters (`Config.Sentinel.Pursuit`, `Movement.lua`): once Wolverine is 70+ studs
+  away a suit gets +14 speed until it's back within 30 studs.
+- Survivors see a white glow on the 6 nearest hiding spots (`src/client/HideGlow.lua`); keep the
+  client's Highlight count low (Roblox caps it at 31), which is why Sniff ghosts also draw boxes.
 - Sentinel pilot exit: destroyed by Wolverine → Hits = 2 (one from death); timed out → full health.
 - Currency is shown as "Berserker Coins" (`Config.CoinName`); saves still use the key `Coins`.
 - Sky: `Config.SkyAssetId` loads via InsertService at server start unless a Sky is placed in

@@ -84,6 +84,11 @@ Config.Sentinel = {
 	LinkedMultiplier = 1.25,
 	SoloMultiplier = 0.6, -- two suits but far apart; a lone suit hits at 1x
 	WalkSpeed = 18,
+	-- Pursuit thrusters: once Wolverine gets Start studs away the suits surge
+	-- (+Bonus speed, ramping in over Ramp seconds) and keep it until they're
+	-- back within Stop studs, so he can't just run off and heal. 18 + 14 = 32
+	-- beats his sprint (~24) and matches his all-fours top speed.
+	Pursuit = { Start = 70, Stop = 30, Bonus = 14, Ramp = 1 },
 	Scale = 1.8, -- same size as the docked suits in the Hangar
 	Punch = { Cooldown = 0.9, Damage = 40, Range = 9, Stun = 0.6, Knockback = 70 },
 	-- Laser burns through walls and flashes Wolverine's adamantium skeleton

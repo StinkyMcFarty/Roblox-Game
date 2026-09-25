@@ -34,6 +34,7 @@ function Movement.Reset(player)
 	player:SetAttribute("Feral", false)
 	player:SetAttribute("Sprinting", false)
 	player:SetAttribute("Stamina", 1)
+	player:SetAttribute("Pursuit", false)
 end
 
 Players.PlayerRemoving:Connect(function(player)
@@ -83,7 +84,21 @@ RunService.Heartbeat:Connect(function(dt)
 					speed = 0
 				end
 			elseif role == "Sentinel" then
-				speed = Config.Sentinel.WalkSpeed
+				local c = Config.Sentinel.Pursuit
+				local wolf = Round.Wolverine and Util.Root(Round.Wolverine.Character)
+				local d = wolf and Round.Released and (wolf.Position - root.Position).Magnitude
+				if not d or d < c.Stop then
+					s.Chasing = false
+				elseif d > c.Start then
+					s.Chasing = true
+				end
+				s.Surge = math.clamp((s.Surge or 0) + (s.Chasing and dt or -dt) / c.Ramp, 0, 1)
+				speed = Config.Sentinel.WalkSpeed + c.Bonus * s.Surge
+				local pursuing = s.Surge > 0.5
+				if pursuing ~= s.PursuitOn then
+					s.PursuitOn = pursuing
+					player:SetAttribute("Pursuit", pursuing)
+				end
 			else
 				local c = Config.Survivor
 				if s.Sprint and moving and not s.Exhausted then
