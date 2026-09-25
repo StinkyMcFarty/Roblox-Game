@@ -1754,18 +1754,25 @@ function MapBuilder.BuildLobby()
 		end
 	end
 
-	-- Wall sconces + ceiling light strips so the hangar is well lit
-	for x = -hx + 7.5, hx - 7.5, 15 do
-		for _, z in { -hz + 1.6, hz - 1.6 } do
-			local sc = block(lobby, Vector3.new(1.4, 1.8, 0.6), CFrame.new(x, Y + 11, z), M.Neon, rgb(255, 196, 140))
-			light(sc, { Range = 18, Brightness = 0.9, Color = rgb(255, 200, 150) })
-		end
+	-- Wall sconces + ceiling light strips so the hangar is well lit. Each
+	-- sconce sits on bare wall: between the south windows, clear of the rules
+	-- board, the fireplace, the bookcases, the leaderboard and the gallery.
+	local function sconce(pos, alongX)
+		local size = alongX and Vector3.new(1.4, 1.8, 0.6) or Vector3.new(0.6, 1.8, 1.4)
+		local sc = block(lobby, size, CFrame.new(pos), M.Neon, rgb(255, 196, 140))
+		light(sc, { Range = 18, Brightness = 0.9, Color = rgb(255, 200, 150) })
 	end
-	for z = -hz + 7.5, hz - 7.5, 15 do
-		for _, x in { -hx + 1.6, hx - 1.6 } do
-			local sc = block(lobby, Vector3.new(0.6, 1.8, 1.4), CFrame.new(x, Y + 11, z), M.Neon, rgb(255, 196, 140))
-			light(sc, { Range = 18, Brightness = 0.9, Color = rgb(255, 200, 150) })
-		end
+	for _, x in { -55, -36, -18, 0, 36, 55 } do -- south: in the gaps between windows
+		sconce(Vector3.new(x, Y + 11, hz - 1.6), true)
+	end
+	for _, x in { -52.5, 37.5, 52.5 } do -- north: either side of the rules board
+		sconce(Vector3.new(x, Y + 11, -hz + 1.6), true)
+	end
+	for _, z in { -37.5, -22.5, -1, 17 } do -- west: Sentinel bay, then either side of the fireplace
+		sconce(Vector3.new(-hx + 1.6, Y + 11, z), false)
+	end
+	for _, z in { -37.5, 37.5 } do -- east: the gallery has its own light bars
+		sconce(Vector3.new(hx - 1.6, Y + 11, z), false)
 	end
 	for z = -hz + 10, hz - 10, 15 do
 		for x = -45, 45, 30 do
