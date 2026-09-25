@@ -330,28 +330,68 @@ function Combat.BreakInBox(cframe, size, origin, force)
 	return n
 end
 
--- A slash into something it can't tear through (the facility's outer shell,
--- consoles, docked suits) still lands on it: sparks off steel, a clash and a
--- puff of dust off concrete.
-local wallRay = RaycastParams.new()
-wallRay.FilterType = Enum.RaycastFilterType.Include
-function Combat.ClawWall(root, range)
+-- A Sentinel's fist through a wall: the wall bursts apart (chunks flung hard)
+-- in a big cloud of dust in its own colour, with sparks off steel and a
+-- crunching boom. Returns how many parts broke, and where the fist met them.
+function Combat.SmashInBox(cframe, size, origin, force)
 	local map = Round.Map
 	if not map then
-		return
+		return 0
+	end
+	local params = OverlapParams.new()
+	params.FilterType = Enum.RaycastFilterType.Include
+	params.FilterDescendantsInstances = { map }
+	local n, at, color, metal = 0, nil, nil, false
+	for _, p in workspace:GetPartBoundsInBox(cframe, size, params) do
+		local surface, contact, c = Combat.Surface(p), nearestPoint(p, origin), p.Color
+		if Combat.BreakPart(p, origin, force) then
+			n += 1
+			if not at then
+				at, color = contact, c
+			end
+			metal = metal or surface == "Metal"
+		end
+	end
+	if at then
+		VFX.Dust(at, color:Lerp(Color3.fromRGB(200, 196, 188), 0.5), 14 + n * 4)
+		if metal then
+			Util.Burst(at, Util.SparkProps, 30, 1.5)
+		end
+		Util.SoundAt(Config.Sounds.Break, at, { Volume = 2.2, Pitch = 0.45 + math.random() * 0.15, Range = 300 })
+	end
+	return n, at
+end
+
+-- The first wall (not floor) in front of root within range, fanning out a little.
+local wallRay = RaycastParams.new()
+wallRay.FilterType = Enum.RaycastFilterType.Include
+function Combat.WallAhead(root, range)
+	local map = Round.Map
+	if not map then
+		return nil
 	end
 	wallRay.FilterDescendantsInstances = { map }
 	for _, yaw in { 0, 0.45, -0.45 } do
 		local dir = (root.CFrame * CFrame.Angles(0, yaw, 0)).LookVector
 		local hit = workspace:Raycast(root.Position + Vector3.new(0, 0.6, 0), dir * range, wallRay)
 		if hit and math.abs(hit.Normal.Y) < 0.5 then
-			local surface = Combat.Surface(hit.Instance)
-			if surface == "Metal" then
-				Combat.MetalSparks(hit.Position + hit.Normal * 0.3, hit.Normal)
-			elseif surface == "Stone" then
-				Combat.StoneClash(hit.Position + hit.Normal * 0.1, hit.Normal, hit.Instance.Color)
-			end
-			return
+			return hit
+		end
+	end
+	return nil
+end
+
+-- A slash into something it can't tear through (the facility's outer shell,
+-- consoles, docked suits) still lands on it: sparks off steel, a clash and a
+-- puff of dust off concrete.
+function Combat.ClawWall(root, range)
+	local hit = Combat.WallAhead(root, range)
+	if hit then
+		local surface = Combat.Surface(hit.Instance)
+		if surface == "Metal" then
+			Combat.MetalSparks(hit.Position + hit.Normal * 0.3, hit.Normal)
+		elseif surface == "Stone" then
+			Combat.StoneClash(hit.Position + hit.Normal * 0.1, hit.Normal, hit.Instance.Color)
 		end
 	end
 end
@@ -504,6 +544,18 @@ function Combat.Hit(victim, ignoreImmunity)
 	return hits >= Config.HitsToKill and "kill" or "hit"
 end
 
+-- His claws tearing through someone (every hit on a survivor, and the kill).
+function Combat.FleshTear(part, pitch, volume)
+	pitch = pitch or 1
+	if Config.UploadedSounds.ClawFlesh ~= 0 then
+		Util.Sound(Config.Sounds.ClawFlesh, part, { Volume = volume or 1.8, Pitch = pitch * (0.94 + math.random() * 0.12), Range = 200 })
+	else
+		-- stand-in until ClawFlesh.ogg is uploaded
+		Util.Sound(Config.Sounds.Slash, part, { Volume = 0.9, Pitch = 0.75 * pitch, Range = 180 })
+		Util.Sound(Config.Sounds.Gore, part, { Volume = 0.9, Pitch = 0.8 * pitch })
+	end
+end
+
 -- Non-lethal hit: blood, knockback, i-frames and an adrenaline burst.
 -- opts (optional): { Force, Up, Dir } to customise the throw.
 function Combat.Wound(killer, victim, opts)
@@ -518,13 +570,14 @@ function Combat.Wound(killer, victim, opts)
 		local kRoot0 = killer and Util.Root(killer.Character)
 		local torso0 = Util.Torso(char) or root
 		Combat.MetalSparks(torso0.Position, kRoot0 and Util.Flat(kRoot0.Position - torso0.Position) or nil)
+		Util.Sound(Config.Sounds.Gore, root, { Pitch = 0.8, Volume = 0.7 })
 	else
 		local hits = victim:GetAttribute("Hits") or 0
 		hum.Health = hum.MaxHealth * math.max(0.05, 1 - hits / Config.HitsToKill)
 		Combat.Blood(Util.Torso(char), 35)
+		Combat.FleshTear(Util.Torso(char) or root)
 	end
 	Util.Sound(Config.Sounds.Impact, root, { Pitch = 0.95 + math.random() * 0.1, Volume = 1.1 })
-	Util.Sound(Config.Sounds.Gore, root, { Pitch = 0.8, Volume = 0.7 })
 	Status.Apply(victim, "Immune", Config.HitImmunity)
 	Status.Apply(victim, "Boost", Config.HitImmunity + Config.AdrenalineTime)
 	Status.Apply(killer, "Busy", Config.WolverineHitRecovery)
@@ -707,6 +760,7 @@ function Combat.Execute(killer, victim)
 	VFX.Anim(kChar, "Rip")
 	VFX.Anim(vChar, "Grabbed")
 	Util.Sound(Config.Sounds.Lunge, kRoot, { Pitch = 0.8, Volume = 1.5 })
+	Combat.FleshTear(Util.Torso(vChar) or vRoot, 0.9) -- the claws sink in as he grabs them
 	TweenService:Create(vRoot, TweenInfo.new(0.4, Enum.EasingStyle.Quad), {
 		CFrame = base * CFrame.new(0, 2.4, -2.7) * CFrame.Angles(0, math.pi, 0),
 	}):Play()
@@ -720,6 +774,7 @@ function Combat.Execute(killer, victim)
 		Fx:FireAllClients("HitStop", { Attacker = kChar, Victim = vChar, Duration = 0.12 })
 		Combat.RipInHalf(vChar, base)
 		Util.Sound(Config.Sounds.Tear, kRoot, { Volume = 2, Range = 220 })
+		Combat.FleshTear(kRoot, 0.7, 2.4) -- deeper and louder: tearing them in half
 		Fx:FireAllClients("Shake", { Position = kRoot.Position, Intensity = 1.2, Radius = 90 })
 		Fx:FireAllClients("Gore", { Position = kRoot.Position, Victim = victim.Name })
 	end

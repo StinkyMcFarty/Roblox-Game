@@ -377,12 +377,39 @@ Clips.Fart = {
 ---------------------------------------------------------------------------
 -- Sentinel
 ---------------------------------------------------------------------------
+-- Hydraulic Smash: a heavy haymaker. The suit sinks and loads up (torso
+-- twisted away, arm cocked back by its head), then the hips and torso whip
+-- round, it steps in and drives the arm straight through (the fist lands at
+-- 0.27s, when the server connects). The weight carries past the impact, the
+-- piston kicks back and the suit settles slowly.
 Clips.Punch = {
 	Keys = {
 		{ T = 0, Pose = REST },
-		{ T = 0.09, Ease = "Out", Pose = { Waist = { 0, -26, 0 }, Root = { -4, -10, 0 }, RShoulder = { -40, 0, 22 }, RElbow = { 100, 0, 0 }, LShoulder = { 60, 0, -10 }, LElbow = { 80, 0, 0 } } },
-		{ T = 0.17, Ease = "In", Pose = { Waist = { -6, 28, 0 }, Root = { -12, 14, 0 }, RShoulder = { 92, 0, 0 }, RElbow = { 0, 0, 0 }, LShoulder = { 20, 0, -20 }, LElbow = { 90, 0, 0 }, LHip = { 24, 0, 0 } } },
-		{ T = 0.5, Ease = "InOut", Pose = REST },
+		{ T = 0.2, Ease = "Out", Pose = {
+			Root = { 6, -14, 0, 0, -0.5, 0.3 }, Waist = { 4, -30, 0 }, Neck = { -8, 42, 0 },
+			RShoulder = { -15, 0, 65 }, RElbow = { 115, 0, 0 }, RWrist = { -10, 0, 0 },
+			LShoulder = { 72, 0, -22 }, LElbow = { 75, 0, 0 },
+			RHip = { -8, 0, 6 }, RKnee = { -38, 0, 0 }, LHip = { 26, 0, -6 }, LKnee = { -30, 0, 0 },
+		} },
+		{ T = 0.27, Ease = "In", Pose = {
+			Root = { -16, 16, 0, 0, -0.42, -0.6 }, Waist = { -8, 30, 0 }, Neck = { 10, -44, 0 },
+			RShoulder = { 100, 0, 40 }, RElbow = { 0, 0, 0 }, RWrist = { 0, 0, 0 },
+			LShoulder = { -24, 0, -32 }, LElbow = { 105, 0, 0 },
+			RHip = { -30, 0, 4 }, RKnee = { -10, 0, 0 }, LHip = { 42, 0, -4 }, LKnee = { -48, 0, 0 },
+		} },
+		{ T = 0.4, Ease = "Out", Pose = {
+			Root = { -18, 18, 0, 0, -0.46, -0.7 }, Waist = { -10, 32, 0 }, Neck = { 12, -48, 0 },
+			RShoulder = { 102, 0, 38 }, RElbow = { 0, 0, 0 },
+			LShoulder = { -28, 0, -34 }, LElbow = { 108, 0, 0 },
+			RHip = { -32, 0, 4 }, RKnee = { -10, 0, 0 }, LHip = { 44, 0, -4 }, LKnee = { -50, 0, 0 },
+		} },
+		{ T = 0.52, Ease = "Out", Pose = {
+			Root = { -12, 12, 0, 0, -0.38, -0.45 }, Waist = { -6, 22, 0 }, Neck = { 8, -34, 0 },
+			RShoulder = { 84, 0, 30 }, RElbow = { 38, 0, 0 },
+			LShoulder = { -8, 0, -26 }, LElbow = { 95, 0, 0 },
+			RHip = { -22, 0, 4 }, RKnee = { -16, 0, 0 }, LHip = { 34, 0, -4 }, LKnee = { -40, 0, 0 },
+		} },
+		{ T = 0.95, Ease = "InOut", Pose = REST },
 	},
 }
 

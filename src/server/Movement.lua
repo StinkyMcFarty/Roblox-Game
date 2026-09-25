@@ -29,11 +29,6 @@ function Movement.SetInput(player, key, value)
 	end
 end
 
-function Movement.IsCharging(player)
-	local s = states[player]
-	return s ~= nil and (s.Sprint or s.FeralOn)
-end
-
 function Movement.Reset(player)
 	states[player] = nil
 	player:SetAttribute("Feral", false)

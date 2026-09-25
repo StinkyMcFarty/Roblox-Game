@@ -94,7 +94,6 @@ Config.Wolverine = {
 	FeralTopSpeed = Config.Survivor.TopSpeed * 1.15,
 	FeralStamina = 4.5,
 	FeralRegen = 0.6,
-	ShredSpeed = 18, -- moving faster than this tears through walls in his path
 }
 
 -- Sprint momentum: after Delay seconds of running you accelerate to top
@@ -229,6 +228,9 @@ Config.UploadedSounds = {
 	StepWolverine = 103555591209626, -- Wolverine's heavy adamantium footfalls (4 takes)
 	ClawDig = 81900803629932, -- his claws biting into the floor on all fours (4 concrete + 3 steel takes)
 	ClawStone = 79213537781413, -- his claws clashing into concrete walls
+	ClawFlesh = 0, -- his claws tearing through a survivor
+	SentinelSwing = 0, -- Sentinel punch wind-up (servos, hydraulics, the fist moving the air)
+	SentinelSmash = 0, -- Sentinel fist landing (on Wolverine or through a wall)
 }
 Config.Sounds.Snarl = Config.Sounds.Snarl or ""
 for name, id in Config.UploadedSounds do
@@ -1104,28 +1106,68 @@ function Combat.BreakInBox(cframe, size, origin, force)
 	return n
 end
 
--- A slash into something it can't tear through (the facility's outer shell,
--- consoles, docked suits) still lands on it: sparks off steel, a clash and a
--- puff of dust off concrete.
-local wallRay = RaycastParams.new()
-wallRay.FilterType = Enum.RaycastFilterType.Include
-function Combat.ClawWall(root, range)
+-- A Sentinel's fist through a wall: the wall bursts apart (chunks flung hard)
+-- in a big cloud of dust in its own colour, with sparks off steel and a
+-- crunching boom. Returns how many parts broke, and where the fist met them.
+function Combat.SmashInBox(cframe, size, origin, force)
 	local map = Round.Map
 	if not map then
-		return
+		return 0
+	end
+	local params = OverlapParams.new()
+	params.FilterType = Enum.RaycastFilterType.Include
+	params.FilterDescendantsInstances = { map }
+	local n, at, color, metal = 0, nil, nil, false
+	for _, p in workspace:GetPartBoundsInBox(cframe, size, params) do
+		local surface, contact, c = Combat.Surface(p), nearestPoint(p, origin), p.Color
+		if Combat.BreakPart(p, origin, force) then
+			n += 1
+			if not at then
+				at, color = contact, c
+			end
+			metal = metal or surface == "Metal"
+		end
+	end
+	if at then
+		VFX.Dust(at, color:Lerp(Color3.fromRGB(200, 196, 188), 0.5), 14 + n * 4)
+		if metal then
+			Util.Burst(at, Util.SparkProps, 30, 1.5)
+		end
+		Util.SoundAt(Config.Sounds.Break, at, { Volume = 2.2, Pitch = 0.45 + math.random() * 0.15, Range = 300 })
+	end
+	return n, at
+end
+
+-- The first wall (not floor) in front of root within range, fanning out a little.
+local wallRay = RaycastParams.new()
+wallRay.FilterType = Enum.RaycastFilterType.Include
+function Combat.WallAhead(root, range)
+	local map = Round.Map
+	if not map then
+		return nil
 	end
 	wallRay.FilterDescendantsInstances = { map }
 	for _, yaw in { 0, 0.45, -0.45 } do
 		local dir = (root.CFrame * CFrame.Angles(0, yaw, 0)).LookVector
 		local hit = workspace:Raycast(root.Position + Vector3.new(0, 0.6, 0), dir * range, wallRay)
 		if hit and math.abs(hit.Normal.Y) < 0.5 then
-			local surface = Combat.Surface(hit.Instance)
-			if surface == "Metal" then
-				Combat.MetalSparks(hit.Position + hit.Normal * 0.3, hit.Normal)
-			elseif surface == "Stone" then
-				Combat.StoneClash(hit.Position + hit.Normal * 0.1, hit.Normal, hit.Instance.Color)
-			end
-			return
+			return hit
+		end
+	end
+	return nil
+end
+
+-- A slash into something it can't tear through (the facility's outer shell,
+-- consoles, docked suits) still lands on it: sparks off steel, a clash and a
+-- puff of dust off concrete.
+function Combat.ClawWall(root, range)
+	local hit = Combat.WallAhead(root, range)
+	if hit then
+		local surface = Combat.Surface(hit.Instance)
+		if surface == "Metal" then
+			Combat.MetalSparks(hit.Position + hit.Normal * 0.3, hit.Normal)
+		elseif surface == "Stone" then
+			Combat.StoneClash(hit.Position + hit.Normal * 0.1, hit.Normal, hit.Instance.Color)
 		end
 	end
 end
@@ -1278,6 +1320,18 @@ function Combat.Hit(victim, ignoreImmunity)
 	return hits >= Config.HitsToKill and "kill" or "hit"
 end
 
+-- His claws tearing through someone (every hit on a survivor, and the kill).
+function Combat.FleshTear(part, pitch, volume)
+	pitch = pitch or 1
+	if Config.UploadedSounds.ClawFlesh ~= 0 then
+		Util.Sound(Config.Sounds.ClawFlesh, part, { Volume = volume or 1.8, Pitch = pitch * (0.94 + math.random() * 0.12), Range = 200 })
+	else
+		-- stand-in until ClawFlesh.ogg is uploaded
+		Util.Sound(Config.Sounds.Slash, part, { Volume = 0.9, Pitch = 0.75 * pitch, Range = 180 })
+		Util.Sound(Config.Sounds.Gore, part, { Volume = 0.9, Pitch = 0.8 * pitch })
+	end
+end
+
 -- Non-lethal hit: blood, knockback, i-frames and an adrenaline burst.
 -- opts (optional): { Force, Up, Dir } to customise the throw.
 function Combat.Wound(killer, victim, opts)
@@ -1292,13 +1346,14 @@ function Combat.Wound(killer, victim, opts)
 		local kRoot0 = killer and Util.Root(killer.Character)
 		local torso0 = Util.Torso(char) or root
 		Combat.MetalSparks(torso0.Position, kRoot0 and Util.Flat(kRoot0.Position - torso0.Position) or nil)
+		Util.Sound(Config.Sounds.Gore, root, { Pitch = 0.8, Volume = 0.7 })
 	else
 		local hits = victim:GetAttribute("Hits") or 0
 		hum.Health = hum.MaxHealth * math.max(0.05, 1 - hits / Config.HitsToKill)
 		Combat.Blood(Util.Torso(char), 35)
+		Combat.FleshTear(Util.Torso(char) or root)
 	end
 	Util.Sound(Config.Sounds.Impact, root, { Pitch = 0.95 + math.random() * 0.1, Volume = 1.1 })
-	Util.Sound(Config.Sounds.Gore, root, { Pitch = 0.8, Volume = 0.7 })
 	Status.Apply(victim, "Immune", Config.HitImmunity)
 	Status.Apply(victim, "Boost", Config.HitImmunity + Config.AdrenalineTime)
 	Status.Apply(killer, "Busy", Config.WolverineHitRecovery)
@@ -1481,6 +1536,7 @@ function Combat.Execute(killer, victim)
 	VFX.Anim(kChar, "Rip")
 	VFX.Anim(vChar, "Grabbed")
 	Util.Sound(Config.Sounds.Lunge, kRoot, { Pitch = 0.8, Volume = 1.5 })
+	Combat.FleshTear(Util.Torso(vChar) or vRoot, 0.9) -- the claws sink in as he grabs them
 	TweenService:Create(vRoot, TweenInfo.new(0.4, Enum.EasingStyle.Quad), {
 		CFrame = base * CFrame.new(0, 2.4, -2.7) * CFrame.Angles(0, math.pi, 0),
 	}):Play()
@@ -1494,6 +1550,7 @@ function Combat.Execute(killer, victim)
 		Fx:FireAllClients("HitStop", { Attacker = kChar, Victim = vChar, Duration = 0.12 })
 		Combat.RipInHalf(vChar, base)
 		Util.Sound(Config.Sounds.Tear, kRoot, { Volume = 2, Range = 220 })
+		Combat.FleshTear(kRoot, 0.7, 2.4) -- deeper and louder: tearing them in half
 		Fx:FireAllClients("Shake", { Position = kRoot.Position, Intensity = 1.2, Radius = 90 })
 		Fx:FireAllClients("Gore", { Position = kRoot.Position, Victim = victim.Name })
 	end
@@ -8248,11 +8305,6 @@ function Movement.SetInput(player, key, value)
 	end
 end
 
-function Movement.IsCharging(player)
-	local s = states[player]
-	return s ~= nil and (s.Sprint or s.FeralOn)
-end
-
 function Movement.Reset(player)
 	states[player] = nil
 	player:SetAttribute("Feral", false)
@@ -9432,11 +9484,41 @@ local function stunWolverine(duration)
 	end
 end
 
+-- The punch's big sounds; built-in stand-ins until the files are uploaded.
+local function smashSound(parent, pitch, volume)
+	if Config.UploadedSounds.SentinelSmash ~= 0 then
+		Util.Sound(Config.Sounds.SentinelSmash, parent, { Volume = volume or 2.6, Pitch = (pitch or 1) * (0.95 + math.random() * 0.1), Range = 320, MinRange = 16 })
+	else
+		Util.Sound(Config.Sounds.PounceHit, parent, { Volume = 2.5, Pitch = 0.55 * (pitch or 1), Range = 220 })
+		Util.Sound(Config.Sounds.Punch, parent, { Volume = 2, Pitch = 0.6 * (pitch or 1) })
+	end
+end
+
+local floorRay = RaycastParams.new()
+floorRay.FilterType = Enum.RaycastFilterType.Exclude
+local function floorBelow(position, exclude)
+	floorRay.FilterDescendantsInstances = exclude
+	local hit = workspace:Raycast(position, Vector3.new(0, -14, 0), floorRay)
+	return hit and hit.Position or position - Vector3.new(0, 3, 0)
+end
+
 local function punch(player, char, root)
 	local cfg = Config.Sentinel.Punch
 	VFX.Anim(char, "Punch")
-	task.wait(0.12) -- connect on the punch frame
-	local w, _, wRoot = wolverineParts()
+	if Config.UploadedSounds.SentinelSwing ~= 0 then
+		Util.Sound(Config.Sounds.SentinelSwing, root, { Volume = 1.8, Range = 200 })
+	end
+	-- wind-up (the suit sinks and cocks its arm), then it steps into the swing
+	task.wait(0.19)
+	if not (char.Parent and Util.IsAlive(char)) then
+		return
+	end
+	Util.FireClient(Fx, player, "Knock", { Velocity = Util.Flat(root.CFrame.LookVector) * 26, Duration = 0.12 })
+	task.wait(0.08) -- the fist lands on the clip's strike frame (0.27s)
+	if not (char.Parent and Util.IsAlive(char)) then
+		return
+	end
+	local w, wChar, wRoot = wolverineParts()
 	local fist = root.CFrame * CFrame.new(0, 0.5, -3.2)
 	local hit = false
 	if wRoot then
@@ -9449,17 +9531,33 @@ local function punch(player, char, root)
 			stunWolverine(cfg.Stun * mult)
 			local dir = Util.Flat(wRoot.Position - root.Position)
 			Fx:FireClient(w, "Knock", { Velocity = dir * cfg.Knockback + Vector3.new(0, 25, 0) })
-			Util.Sound(Config.Sounds.PounceHit, wRoot, { Volume = 2.5, Pitch = 0.55, Range = 220 })
-			Util.Sound(Config.Sounds.Punch, wRoot, { Volume = 2, Pitch = 0.6 })
-			Fx:FireAllClients("Shake", { Position = wRoot.Position, Intensity = 0.9, Radius = 45 })
-			Fx:FireAllClients("HitStop", { Attacker = char, Victim = w and w.Character, Duration = 0.1 })
+			smashSound(wRoot)
+			-- the fist rings off his adamantium skeleton; the floor jumps
+			Util.Burst(wRoot, Util.SparkProps, 30, 1.5)
+			VFX.Shockwave(floorBelow(wRoot.Position, { char, wChar }) + Vector3.new(0, 0.2, 0), 11)
+			Fx:FireAllClients("Shake", { Position = wRoot.Position, Intensity = 1.4, Radius = 80 })
+			Fx:FireAllClients("HitStop", { Attacker = char, Victim = wChar, Duration = 0.15 })
 			fist = CFrame.new(wRoot.Position)
 		end
 	end
-	if not hit then
-		Util.Sound(Config.Sounds.Slash, root, { Pitch = 0.5, Volume = 1.3 })
+	-- the fist goes straight through any wall in its way
+	local broke, wallAt = Combat.SmashInBox(root.CFrame * CFrame.new(0, 0.5, -cfg.Range / 2), Vector3.new(7, 10, cfg.Range), root.Position, 80)
+	local wall = broke == 0 and not hit and Combat.WallAhead(root, cfg.Range)
+	if wall then
+		-- a wall it can't break (the outer shell): it still lands, hard
+		wallAt = wall.Position
+		VFX.Dust(wallAt + wall.Normal * 0.5, wall.Instance.Color:Lerp(Color3.fromRGB(200, 196, 188), 0.5), 10)
 	end
-	Fx:FireAllClients("Smash", { Char = char, Position = fist.Position, Dir = root.CFrame.LookVector, Hit = hit })
+	if wallAt then
+		if not hit then
+			smashSound(root, 0.85, 2.2)
+			fist = CFrame.new(wallAt)
+		end
+		Fx:FireAllClients("Shake", { Position = wallAt, Intensity = 1, Radius = 60 })
+	elseif not hit and Config.UploadedSounds.SentinelSwing == 0 then
+		Util.Sound(Config.Sounds.Slash, root, { Pitch = 0.5, Volume = 1.3 }) -- whiff (until SentinelSwing is uploaded)
+	end
+	Fx:FireAllClients("Smash", { Char = char, Position = fist.Position, Dir = root.CFrame.LookVector, Hit = hit or wallAt ~= nil })
 end
 
 -- aim updates streamed from the firing client while the beam is live
@@ -9973,7 +10071,6 @@ local STEEL = Color3.fromRGB(210, 214, 222)
 
 local cooldowns = {}
 local lastDamaged = 0
-local lastShredFx = 0
 local combo = 0
 local clawGlow = Color3.fromRGB(210, 230, 255)
 local clawSkin = nil
@@ -10942,10 +11039,10 @@ function Wolverine.Damage(amount, by)
 end
 
 ---------------------------------------------------------------------------
--- Healing factor + running through walls
+-- Healing factor. (Running no longer tears through walls: he claws, pounces
+-- or impales his way through them.)
 ---------------------------------------------------------------------------
 
-local shredClock = 0
 RunService.Heartbeat:Connect(function(dt)
 	local player = Round.Wolverine
 	if not (player and Round.Active) then
@@ -10959,35 +11056,6 @@ RunService.Heartbeat:Connect(function(dt)
 
 	if os.clock() - lastDamaged > Config.Wolverine.HealDelay and hum.Health < hum.MaxHealth then
 		hum.Health = math.min(hum.MaxHealth, hum.Health + Config.Wolverine.HealPerSecond * dt)
-	end
-
-	shredClock += dt
-	if shredClock < 0.1 or not Round.Released or Status.Has(player, "Busy") or Status.Has(player, "Stunned") or Status.Has(player, "Gassed") then
-		return
-	end
-	shredClock = 0
-
-	local v = root.AssemblyLinearVelocity
-	local flat = Vector3.new(v.X, 0, v.Z)
-	local dir
-	if flat.Magnitude > Config.Wolverine.ShredSpeed then
-		dir = flat.Unit
-	elseif Movement.IsCharging(player) and hum.MoveDirection.Magnitude > 0.5 then
-		dir = Util.Flat(hum.MoveDirection)
-	end
-	if dir then
-		local cf = CFrame.lookAt(root.Position, root.Position + dir) * CFrame.new(0, 0.5, -3)
-		local broke = Combat.BreakInBox(cf, Vector3.new(5.5, 9, 4), root.Position, 45)
-		if broke > 0 and os.clock() - lastShredFx > 0.3 then
-			lastShredFx = os.clock()
-			combo = combo % 2 + 1
-			local side = combo == 1 and "R" or "L"
-			if not player:GetAttribute("Feral") then
-				VFX.Anim(char, side == "R" and "SlashR" or "SlashL", 1.4)
-			end
-			clawStreaks(root, side)
-			Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 0.5, Radius = 50 })
-		end
 	end
 end)
 
@@ -11409,12 +11477,39 @@ Clips.Fart = {
 ---------------------------------------------------------------------------
 -- Sentinel
 ---------------------------------------------------------------------------
+-- Hydraulic Smash: a heavy haymaker. The suit sinks and loads up (torso
+-- twisted away, arm cocked back by its head), then the hips and torso whip
+-- round, it steps in and drives the arm straight through (the fist lands at
+-- 0.27s, when the server connects). The weight carries past the impact, the
+-- piston kicks back and the suit settles slowly.
 Clips.Punch = {
 	Keys = {
 		{ T = 0, Pose = REST },
-		{ T = 0.09, Ease = "Out", Pose = { Waist = { 0, -26, 0 }, Root = { -4, -10, 0 }, RShoulder = { -40, 0, 22 }, RElbow = { 100, 0, 0 }, LShoulder = { 60, 0, -10 }, LElbow = { 80, 0, 0 } } },
-		{ T = 0.17, Ease = "In", Pose = { Waist = { -6, 28, 0 }, Root = { -12, 14, 0 }, RShoulder = { 92, 0, 0 }, RElbow = { 0, 0, 0 }, LShoulder = { 20, 0, -20 }, LElbow = { 90, 0, 0 }, LHip = { 24, 0, 0 } } },
-		{ T = 0.5, Ease = "InOut", Pose = REST },
+		{ T = 0.2, Ease = "Out", Pose = {
+			Root = { 6, -14, 0, 0, -0.5, 0.3 }, Waist = { 4, -30, 0 }, Neck = { -8, 42, 0 },
+			RShoulder = { -15, 0, 65 }, RElbow = { 115, 0, 0 }, RWrist = { -10, 0, 0 },
+			LShoulder = { 72, 0, -22 }, LElbow = { 75, 0, 0 },
+			RHip = { -8, 0, 6 }, RKnee = { -38, 0, 0 }, LHip = { 26, 0, -6 }, LKnee = { -30, 0, 0 },
+		} },
+		{ T = 0.27, Ease = "In", Pose = {
+			Root = { -16, 16, 0, 0, -0.42, -0.6 }, Waist = { -8, 30, 0 }, Neck = { 10, -44, 0 },
+			RShoulder = { 100, 0, 40 }, RElbow = { 0, 0, 0 }, RWrist = { 0, 0, 0 },
+			LShoulder = { -24, 0, -32 }, LElbow = { 105, 0, 0 },
+			RHip = { -30, 0, 4 }, RKnee = { -10, 0, 0 }, LHip = { 42, 0, -4 }, LKnee = { -48, 0, 0 },
+		} },
+		{ T = 0.4, Ease = "Out", Pose = {
+			Root = { -18, 18, 0, 0, -0.46, -0.7 }, Waist = { -10, 32, 0 }, Neck = { 12, -48, 0 },
+			RShoulder = { 102, 0, 38 }, RElbow = { 0, 0, 0 },
+			LShoulder = { -28, 0, -34 }, LElbow = { 108, 0, 0 },
+			RHip = { -32, 0, 4 }, RKnee = { -10, 0, 0 }, LHip = { 44, 0, -4 }, LKnee = { -50, 0, 0 },
+		} },
+		{ T = 0.52, Ease = "Out", Pose = {
+			Root = { -12, 12, 0, 0, -0.38, -0.45 }, Waist = { -6, 22, 0 }, Neck = { 8, -34, 0 },
+			RShoulder = { 84, 0, 30 }, RElbow = { 38, 0, 0 },
+			LShoulder = { -8, 0, -26 }, LElbow = { 95, 0, 0 },
+			RHip = { -22, 0, 4 }, RKnee = { -16, 0, 0 }, LHip = { 34, 0, -4 }, LKnee = { -40, 0, 0 },
+		} },
+		{ T = 0.95, Ease = "InOut", Pose = REST },
 	},
 }
 
@@ -12360,7 +12455,7 @@ local ROLE_KIT = {
 		{ Name = "Fart", Label = "Fart", Desc = "Gas cloud throws off his Sniff", Icon = "💨", KeyText = "G", Key = Enum.KeyCode.G, Cooldown = Config.Fart.Cooldown, Color = Color3.fromRGB(150, 210, 50) },
 	},
 	Sentinel = {
-		{ Name = "Punch", Label = "Hydraulic Smash", Desc = "Piston-driven haymaker. Stuns and launches him", Icon = "👊", KeyText = "M1", Key = Enum.KeyCode.ButtonR2, Cooldown = S.Punch.Cooldown, Click = true, Color = Color3.fromRGB(200, 160, 255) },
+		{ Name = "Punch", Label = "Hydraulic Smash", Desc = "Piston-driven haymaker. Smashes through walls, stuns and launches him", Icon = "👊", KeyText = "M1", Key = Enum.KeyCode.ButtonR2, Cooldown = S.Punch.Cooldown, Click = true, Color = Color3.fromRGB(200, 160, 255) },
 		{ Name = "Laser", Label = "Death Ray", Desc = "Melts through walls. Burns him to the adamantium", Icon = "🔴", KeyText = "Q", Key = Enum.KeyCode.Q, Cooldown = S.Laser.Cooldown, Color = Color3.fromRGB(255, 90, 60) },
 		{ Name = "Pulse", Label = "Inhibitor Blast", Desc = "Charge 2s (E again to cancel). Stuns him for 3s", Icon = "💥", KeyText = "E", Key = Enum.KeyCode.E, Cooldown = S.Pulse.Cooldown, Color = Color3.fromRGB(255, 210, 60) },
 	},
@@ -12387,7 +12482,7 @@ local ROLE_TITLE = {
 }
 
 local HINTS = {
-	Wolverine = "Shift: sprint   C / Ctrl: run on all fours\nRunning into walls tears through them. Hit anyone 3 times to rip them in half.",
+	Wolverine = "Shift: sprint   C / Ctrl: run on all fours\nClaw (M1) or pounce through walls. Hit anyone 3 times to rip them in half.",
 	Sentinel = "MUTANT-HUNTER ONLINE. M1 Hydraulic Smash · Q Death Ray · E Inhibitor Blast.\nLinked: 1.5x power. Apart: 0.6x. Last suit standing: 1x. Core burns out in " .. S.Duration .. "s.",
 	Survivor = "Subject X is loose. Reboot the 3 Sentinel Protocol consoles (Foundry, Genetics Lab, Command Centre), then suit up in the Hangar.\nShift: sprint. G: fart (hides your scent). He tears through walls — keep moving.",
 	Lobby = "Waiting for the next round.",

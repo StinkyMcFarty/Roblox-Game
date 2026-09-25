@@ -38,7 +38,7 @@ local ROLE_KIT = {
 		{ Name = "Fart", Label = "Fart", Desc = "Gas cloud throws off his Sniff", Icon = "💨", KeyText = "G", Key = Enum.KeyCode.G, Cooldown = Config.Fart.Cooldown, Color = Color3.fromRGB(150, 210, 50) },
 	},
 	Sentinel = {
-		{ Name = "Punch", Label = "Hydraulic Smash", Desc = "Piston-driven haymaker. Stuns and launches him", Icon = "👊", KeyText = "M1", Key = Enum.KeyCode.ButtonR2, Cooldown = S.Punch.Cooldown, Click = true, Color = Color3.fromRGB(200, 160, 255) },
+		{ Name = "Punch", Label = "Hydraulic Smash", Desc = "Piston-driven haymaker. Smashes through walls, stuns and launches him", Icon = "👊", KeyText = "M1", Key = Enum.KeyCode.ButtonR2, Cooldown = S.Punch.Cooldown, Click = true, Color = Color3.fromRGB(200, 160, 255) },
 		{ Name = "Laser", Label = "Death Ray", Desc = "Melts through walls. Burns him to the adamantium", Icon = "🔴", KeyText = "Q", Key = Enum.KeyCode.Q, Cooldown = S.Laser.Cooldown, Color = Color3.fromRGB(255, 90, 60) },
 		{ Name = "Pulse", Label = "Inhibitor Blast", Desc = "Charge 2s (E again to cancel). Stuns him for 3s", Icon = "💥", KeyText = "E", Key = Enum.KeyCode.E, Cooldown = S.Pulse.Cooldown, Color = Color3.fromRGB(255, 210, 60) },
 	},
@@ -65,7 +65,7 @@ local ROLE_TITLE = {
 }
 
 local HINTS = {
-	Wolverine = "Shift: sprint   C / Ctrl: run on all fours\nRunning into walls tears through them. Hit anyone 3 times to rip them in half.",
+	Wolverine = "Shift: sprint   C / Ctrl: run on all fours\nClaw (M1) or pounce through walls. Hit anyone 3 times to rip them in half.",
 	Sentinel = "MUTANT-HUNTER ONLINE. M1 Hydraulic Smash · Q Death Ray · E Inhibitor Blast.\nLinked: 1.5x power. Apart: 0.6x. Last suit standing: 1x. Core burns out in " .. S.Duration .. "s.",
 	Survivor = "Subject X is loose. Reboot the 3 Sentinel Protocol consoles (Foundry, Genetics Lab, Command Centre), then suit up in the Hangar.\nShift: sprint. G: fart (hides your scent). He tears through walls — keep moving.",
 	Lobby = "Waiting for the next round.",

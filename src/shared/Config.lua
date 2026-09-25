@@ -51,7 +51,6 @@ Config.Wolverine = {
 	FeralTopSpeed = Config.Survivor.TopSpeed * 1.15,
 	FeralStamina = 4.5,
 	FeralRegen = 0.6,
-	ShredSpeed = 18, -- moving faster than this tears through walls in his path
 }
 
 -- Sprint momentum: after Delay seconds of running you accelerate to top
@@ -186,6 +185,9 @@ Config.UploadedSounds = {
 	StepWolverine = 103555591209626, -- Wolverine's heavy adamantium footfalls (4 takes)
 	ClawDig = 81900803629932, -- his claws biting into the floor on all fours (4 concrete + 3 steel takes)
 	ClawStone = 79213537781413, -- his claws clashing into concrete walls
+	ClawFlesh = 0, -- his claws tearing through a survivor
+	SentinelSwing = 0, -- Sentinel punch wind-up (servos, hydraulics, the fist moving the air)
+	SentinelSmash = 0, -- Sentinel fist landing (on Wolverine or through a wall)
 }
 Config.Sounds.Snarl = Config.Sounds.Snarl or ""
 for name, id in Config.UploadedSounds do

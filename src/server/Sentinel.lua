@@ -402,11 +402,41 @@ local function stunWolverine(duration)
 	end
 end
 
+-- The punch's big sounds; built-in stand-ins until the files are uploaded.
+local function smashSound(parent, pitch, volume)
+	if Config.UploadedSounds.SentinelSmash ~= 0 then
+		Util.Sound(Config.Sounds.SentinelSmash, parent, { Volume = volume or 2.6, Pitch = (pitch or 1) * (0.95 + math.random() * 0.1), Range = 320, MinRange = 16 })
+	else
+		Util.Sound(Config.Sounds.PounceHit, parent, { Volume = 2.5, Pitch = 0.55 * (pitch or 1), Range = 220 })
+		Util.Sound(Config.Sounds.Punch, parent, { Volume = 2, Pitch = 0.6 * (pitch or 1) })
+	end
+end
+
+local floorRay = RaycastParams.new()
+floorRay.FilterType = Enum.RaycastFilterType.Exclude
+local function floorBelow(position, exclude)
+	floorRay.FilterDescendantsInstances = exclude
+	local hit = workspace:Raycast(position, Vector3.new(0, -14, 0), floorRay)
+	return hit and hit.Position or position - Vector3.new(0, 3, 0)
+end
+
 local function punch(player, char, root)
 	local cfg = Config.Sentinel.Punch
 	VFX.Anim(char, "Punch")
-	task.wait(0.12) -- connect on the punch frame
-	local w, _, wRoot = wolverineParts()
+	if Config.UploadedSounds.SentinelSwing ~= 0 then
+		Util.Sound(Config.Sounds.SentinelSwing, root, { Volume = 1.8, Range = 200 })
+	end
+	-- wind-up (the suit sinks and cocks its arm), then it steps into the swing
+	task.wait(0.19)
+	if not (char.Parent and Util.IsAlive(char)) then
+		return
+	end
+	Util.FireClient(Fx, player, "Knock", { Velocity = Util.Flat(root.CFrame.LookVector) * 26, Duration = 0.12 })
+	task.wait(0.08) -- the fist lands on the clip's strike frame (0.27s)
+	if not (char.Parent and Util.IsAlive(char)) then
+		return
+	end
+	local w, wChar, wRoot = wolverineParts()
 	local fist = root.CFrame * CFrame.new(0, 0.5, -3.2)
 	local hit = false
 	if wRoot then
@@ -419,17 +449,33 @@ local function punch(player, char, root)
 			stunWolverine(cfg.Stun * mult)
 			local dir = Util.Flat(wRoot.Position - root.Position)
 			Fx:FireClient(w, "Knock", { Velocity = dir * cfg.Knockback + Vector3.new(0, 25, 0) })
-			Util.Sound(Config.Sounds.PounceHit, wRoot, { Volume = 2.5, Pitch = 0.55, Range = 220 })
-			Util.Sound(Config.Sounds.Punch, wRoot, { Volume = 2, Pitch = 0.6 })
-			Fx:FireAllClients("Shake", { Position = wRoot.Position, Intensity = 0.9, Radius = 45 })
-			Fx:FireAllClients("HitStop", { Attacker = char, Victim = w and w.Character, Duration = 0.1 })
+			smashSound(wRoot)
+			-- the fist rings off his adamantium skeleton; the floor jumps
+			Util.Burst(wRoot, Util.SparkProps, 30, 1.5)
+			VFX.Shockwave(floorBelow(wRoot.Position, { char, wChar }) + Vector3.new(0, 0.2, 0), 11)
+			Fx:FireAllClients("Shake", { Position = wRoot.Position, Intensity = 1.4, Radius = 80 })
+			Fx:FireAllClients("HitStop", { Attacker = char, Victim = wChar, Duration = 0.15 })
 			fist = CFrame.new(wRoot.Position)
 		end
 	end
-	if not hit then
-		Util.Sound(Config.Sounds.Slash, root, { Pitch = 0.5, Volume = 1.3 })
+	-- the fist goes straight through any wall in its way
+	local broke, wallAt = Combat.SmashInBox(root.CFrame * CFrame.new(0, 0.5, -cfg.Range / 2), Vector3.new(7, 10, cfg.Range), root.Position, 80)
+	local wall = broke == 0 and not hit and Combat.WallAhead(root, cfg.Range)
+	if wall then
+		-- a wall it can't break (the outer shell): it still lands, hard
+		wallAt = wall.Position
+		VFX.Dust(wallAt + wall.Normal * 0.5, wall.Instance.Color:Lerp(Color3.fromRGB(200, 196, 188), 0.5), 10)
 	end
-	Fx:FireAllClients("Smash", { Char = char, Position = fist.Position, Dir = root.CFrame.LookVector, Hit = hit })
+	if wallAt then
+		if not hit then
+			smashSound(root, 0.85, 2.2)
+			fist = CFrame.new(wallAt)
+		end
+		Fx:FireAllClients("Shake", { Position = wallAt, Intensity = 1, Radius = 60 })
+	elseif not hit and Config.UploadedSounds.SentinelSwing == 0 then
+		Util.Sound(Config.Sounds.Slash, root, { Pitch = 0.5, Volume = 1.3 }) -- whiff (until SentinelSwing is uploaded)
+	end
+	Fx:FireAllClients("Smash", { Char = char, Position = fist.Position, Dir = root.CFrame.LookVector, Hit = hit or wallAt ~= nil })
 end
 
 -- aim updates streamed from the firing client while the beam is live

@@ -614,6 +614,92 @@ def claw_dig_take(k):
     return reverb(highpass(mix(*parts), 80, 2), 0.2, 0.1)
 
 
+def claw_flesh():
+    """Claws tearing through a survivor: three blades slice in, then a wet,
+    ragged rip through clothes and flesh (a dense crackle that drags and slows),
+    a meaty squelch with a couple of splats, and the thump of the blow."""
+    parts = []
+    # the blades going in: three quick cuts
+    for j in range(3):
+        cut = sweep_band(noise(0.04), 6500, 2200, 0.5, 8) * env(0.04, 0.0008, 0.012, 5)
+        parts.append(pad(cut * (1 - j * 0.15), j * 0.008))
+    parts.append(ring([2600, 4100, 5900], 0.12, 0.018) * 0.12)  # a faint steel edge, damped by the body
+    # the rip: grains of tearing cloth and flesh, fast at first, dragging slower
+    dur = 0.34
+    rip = np.zeros(int(SR * dur))
+    tt = 0.006
+    while tt < dur - 0.02:
+        g = bandpass(noise(0.01), rng.uniform(300, 700), rng.uniform(2200, 4200)) * env(0.01, 0.0003, 0.003)
+        i = int(tt * SR)
+        rip[i:i + len(g)] += g[: len(rip) - i] * rng.uniform(0.35, 1)
+        tt += rng.uniform(0.0015, 0.006) * (1 + 5 * tt / dur)
+    body = bandpass(noise(dur), 350, 2000) * (0.4 + 0.6 * np.abs(lowpass(rng.normal(0, 1, int(SR * dur)), 45)) * 3)
+    rip = (rip + body * 0.35) * env(dur, 0.01, 0.16)
+    parts.append(pad(rip * 1.2, 0.012))
+    # wet squelch through a fleshy resonance, then splats
+    sq = noise(0.3)
+    sq = resonator(sq, 330, 120) * 1.0 + resonator(sq, 720, 220) * 0.7 + lowpass(sq, 500) * 0.2
+    parts.append(pad(sq / (np.max(np.abs(sq)) + 1e-9) * env(0.3, 0.004, 0.09) * 0.8, 0.01))
+    for at in (rng.uniform(0.09, 0.13), rng.uniform(0.17, 0.24)):
+        splat = resonator(noise(0.05), rng.uniform(400, 650), 180)
+        parts.append(pad(splat / (np.max(np.abs(splat)) + 1e-9) * env(0.05, 0.001, 0.015) * 0.35, at))
+    # the weight of the blow
+    t = t_axis(0.2)
+    parts.append(np.sin(2 * np.pi * (95 - 220 * t) * t) * env(0.2, 0.001, 0.05) * 0.9)
+    x = np.tanh(mix(*parts) * 1.5)
+    return finish(reverb(highpass(x, 45, 2), 0.25, 0.12), 0.85, 0.05)
+
+
+SMASH_AT = 0.27  # SentinelSwing: when the fist lands (the server connects the punch here)
+
+
+def sentinel_swing():
+    """Sentinel haymaker wind-up: servos whine up as the arm cocks back,
+    hydraulics hiss as the pressure builds, a piston clacks and the huge fist
+    shoves the air aside on its way in."""
+    dur = 0.5
+    t = t_axis(SMASH_AT)
+    f = 420 + 1300 * (t / SMASH_AT) ** 1.6
+    ph = 2 * np.pi * np.cumsum(f) / SR
+    whine = (np.sin(ph) + 0.35 * np.sin(2 * ph) + 0.15 * signal.sawtooth(3 * ph)) * (t / SMASH_AT) ** 1.4 * 0.16
+    hiss = bandpass(noise(SMASH_AT), 2500, 8500) * (t / SMASH_AT) ** 2 * 0.22
+    clack = ring([310, 780, 1460, 2350], 0.12, 0.02) * env(0.12, 0.0005, 0.03)
+    clack = mix(clack, highpass(noise(0.01), 2000) * env(0.01, 0.0003, 0.003) * 0.8)
+    wd = 0.24
+    wt = t_axis(wd)
+    air = sweep_band(noise(wd), 160, 900, 0.9, 16) * np.sin(np.pi * wt / wd) ** 1.3 * 1.1
+    air = mix(air, lowpass(noise(wd), 220) * np.sin(np.pi * wt / wd) ** 2 * 0.6)
+    tail = np.minimum(1, (SMASH_AT - t) / 0.03)  # the build-up chokes off as the fist lands
+    x = mix(whine * tail, hiss * tail, pad(clack * 0.7, SMASH_AT - 0.1), pad(air, SMASH_AT - 0.17))
+    x = np.concatenate([x, np.zeros(max(0, int(SR * dur) - len(x)))])
+    return finish(reverb(highpass(x, 40, 2), 0.25, 0.1), 0.8, 0.06)
+
+
+def sentinel_smash():
+    """A Sentinel's fist landing: a cracking impact, a sub boom you feel in
+    your chest, the armoured knuckles clanging, something crunching under it,
+    then the piston hissing and ka-chunking back."""
+    parts = []
+    parts.append(mix(highpass(noise(0.008), 1500) * env(0.008, 0.0002, 0.002) * 1.4,
+                     bandpass(noise(0.03), 900, 6000) * env(0.03, 0.0004, 0.009)))
+    t = t_axis(1.0)
+    fade = np.minimum(1, (1.0 - t) / 0.2)
+    parts.append(np.sin(2 * np.pi * 44 * t * (1 - 0.18 * t)) * np.exp(-t / 0.22) * fade * 1.6)
+    parts.append(lowpass(noise(0.14), 380) * env(0.14, 0.001, 0.05) * 1.2)
+    parts.append(bandpass(noise(0.1), 120, 450) * env(0.1, 0.001, 0.03) * 1.3)  # the whump small speakers can play
+    clang = ring([182, 463, 912, 1517, 2386, 3310], 1.0, 0.16) * env(1.0, 0.0004, 0.35) * fade
+    parts.append(clang * 0.8)
+    parts.append(mix(*[pad(bandpass(noise(0.02), 500, 4500) * env(0.02, 0.0004, 0.006) * rng.uniform(0.3, 0.8),
+                           rng.uniform(0.0, 0.07)) for _ in range(10)]))
+    hiss = bandpass(noise(0.6), 2500, 9000) * env(0.6, 0.06, 0.22) * 0.2
+    parts.append(pad(hiss, 0.14))
+    chunk = mix(ring([260, 690, 1310], 0.15, 0.025) * env(0.15, 0.0005, 0.04),
+                lowpass(noise(0.04), 900) * env(0.04, 0.0005, 0.01) * 0.6)
+    parts.append(pad(chunk * 0.45, 0.38))
+    x = np.tanh(mix(*parts) * 1.6)
+    return finish(reverb(highpass(x, 28, 2), 0.55, 0.2), 0.9, 0.08)
+
+
 def step_wolverine():
     return takes(step_wolverine_take, 4, WOLF_SLOT)
 
@@ -767,7 +853,8 @@ SOUNDS = {
     "Sniff": sniff, "Laser": laser, "Punch": punch, "Terminal": terminal,
     "UIHover": ui_hover, "UIClick": ui_click, "Paw": paw, "PounceHit": pounce_hit, "Impale": impale, "DeathRay": death_ray, "Chase": chase,
     "PounceLeap": pounce_leap, "Scream": scream, "Step": step, "StepMetal": step_metal, "StepHeavy": step_heavy,
-    "StepWolverine": step_wolverine, "ClawDig": claw_dig, "ClawStone": claw_stone,
+    "StepWolverine": step_wolverine, "ClawDig": claw_dig, "ClawStone": claw_stone, "ClawFlesh": claw_flesh,
+    "SentinelSwing": sentinel_swing, "SentinelSmash": sentinel_smash,
 }
 
 

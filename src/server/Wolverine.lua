@@ -28,7 +28,6 @@ local STEEL = Color3.fromRGB(210, 214, 222)
 
 local cooldowns = {}
 local lastDamaged = 0
-local lastShredFx = 0
 local combo = 0
 local clawGlow = Color3.fromRGB(210, 230, 255)
 local clawSkin = nil
@@ -997,10 +996,10 @@ function Wolverine.Damage(amount, by)
 end
 
 ---------------------------------------------------------------------------
--- Healing factor + running through walls
+-- Healing factor. (Running no longer tears through walls: he claws, pounces
+-- or impales his way through them.)
 ---------------------------------------------------------------------------
 
-local shredClock = 0
 RunService.Heartbeat:Connect(function(dt)
 	local player = Round.Wolverine
 	if not (player and Round.Active) then
@@ -1014,35 +1013,6 @@ RunService.Heartbeat:Connect(function(dt)
 
 	if os.clock() - lastDamaged > Config.Wolverine.HealDelay and hum.Health < hum.MaxHealth then
 		hum.Health = math.min(hum.MaxHealth, hum.Health + Config.Wolverine.HealPerSecond * dt)
-	end
-
-	shredClock += dt
-	if shredClock < 0.1 or not Round.Released or Status.Has(player, "Busy") or Status.Has(player, "Stunned") or Status.Has(player, "Gassed") then
-		return
-	end
-	shredClock = 0
-
-	local v = root.AssemblyLinearVelocity
-	local flat = Vector3.new(v.X, 0, v.Z)
-	local dir
-	if flat.Magnitude > Config.Wolverine.ShredSpeed then
-		dir = flat.Unit
-	elseif Movement.IsCharging(player) and hum.MoveDirection.Magnitude > 0.5 then
-		dir = Util.Flat(hum.MoveDirection)
-	end
-	if dir then
-		local cf = CFrame.lookAt(root.Position, root.Position + dir) * CFrame.new(0, 0.5, -3)
-		local broke = Combat.BreakInBox(cf, Vector3.new(5.5, 9, 4), root.Position, 45)
-		if broke > 0 and os.clock() - lastShredFx > 0.3 then
-			lastShredFx = os.clock()
-			combo = combo % 2 + 1
-			local side = combo == 1 and "R" or "L"
-			if not player:GetAttribute("Feral") then
-				VFX.Anim(char, side == "R" and "SlashR" or "SlashL", 1.4)
-			end
-			clawStreaks(root, side)
-			Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 0.5, Radius = 50 })
-		end
 	end
 end)
 

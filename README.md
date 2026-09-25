@@ -55,7 +55,7 @@ Anything left at `0` uses a built-in Roblox sound instead. Roblox may ask you to
 Also upload `DeathRay.ogg`, `Chase.ogg` (chase music), `Heartbeat.ogg` and `Fart.ogg`, then paste their IDs.
 Footsteps: upload `Step.ogg` (tile), `StepMetal.ogg` (grating) and `StepHeavy.ogg` (Sentinel stomp) and paste their IDs as `Step`, `StepMetal`, `StepHeavy`. Until `Step` is set, walking keeps the default Roblox run sound.
 Also upload `PounceLeap.ogg` (pounce launch) as `PounceLeap`, `Scream.ogg` (kill scream) as `Scream`, and the remade `Roar.ogg` (replace the old `Roar` ID).
-Wolverine's adamantium body: upload `StepWolverine.ogg` (his heavy footfalls), `ClawDig.ogg` (claws biting into the floor on all fours) and `ClawStone.ogg` (claws clashing into concrete) and paste their IDs as `StepWolverine`, `ClawDig`, `ClawStone`. Until then, pitched built-in sounds stand in.
+Wolverine's adamantium body: upload `StepWolverine.ogg` (his heavy footfalls), `ClawDig.ogg` (claws biting into the floor on all fours) and `ClawStone.ogg` (claws clashing into concrete) and paste their IDs as `StepWolverine`, `ClawDig`, `ClawStone`. Also `ClawFlesh.ogg` (his claws tearing through a survivor) as `ClawFlesh`, and the Sentinel punch: `SentinelSwing.ogg` (wind-up) and `SentinelSmash.ogg` (the fist landing) as `SentinelSwing`, `SentinelSmash`. Until then, pitched built-in sounds stand in.
 
 To remake only some sounds, name them: `python3 tools/generate_sfx.py ClawStone ClawDig` (the others stay untouched).
 
@@ -70,7 +70,7 @@ To remake only some sounds, name them: `python3 tools/generate_sfx.py ClawStone 
 | Input | Ability |
 |---|---|
 | M1 / tap | Claw slash (tears through walls) |
-| Shift | Sprint. Running into walls rips them apart |
+| Shift | Sprint (running doesn't break walls: claw, pounce or impale through them) |
 | C / Ctrl | Run on all fours (fastest, uses stamina) |
 | Q | Pounce: leap, pin a survivor and claw at them |
 | E | Impale: stab both claws in and lift them |
@@ -95,7 +95,7 @@ To remake only some sounds, name them: `python3 tools/generate_sfx.py ClawStone 
 - Repair the **3 Sentinel Protocol consoles**. Their locations are random each round, and they're outlined in faint green. Each console has a different minigame (Recalibrate, Reroute Power, Override Code, Tune Frequency, Balance Pressure). Botching one trips an alarm that pings your location to Wolverine.
 - Once all three are repaired, press **E** at a docked suit in the Sentinel Hangar to step into it. **Two** survivors can suit up.
 - **Teamwork is required:** suits within 30 studs of each other are *linked* (energy tether, 1.6x damage, longer stuns). Alone they deal 0.5x damage, which his healing outpaces.
-- **M1 Hydraulic Smash**: stuns him and knocks him back.
+- **M1 Hydraulic Smash**: a heavy haymaker. The suit loads up, steps in and drives through. It stuns him, knocks him back and smashes straight through walls.
 - **Q Death Ray**: charges up, then fires an aimable beam for 3s. It burns through walls, pushes him back and flashes his **adamantium skeleton**. The suit is slowed for 3s afterwards.
 - **E Inhibitor Blast**: stuns everything nearby.
 - Other limits:
@@ -183,6 +183,7 @@ src/shared/   Config, Skins, Util
 - **Speeds**: Wolverine's upright run is 15% slower than a survivor sprint; on all fours he's 15% faster.
 - **Gallop**: on all fours his hind legs drive back hard, kick up high behind him and stay tucked through the swing.
 - **Adamantium weight**: his footsteps land far heavier than a survivor's; on all fours you hear his claws dig into the floor (concrete grinds, steel rings).
+- **Walls**: Wolverine gets through walls by clawing (M1), pouncing or impaling. Just running into them (upright or on all fours) no longer tears them down. Sentinel punches smash through walls too.
 - **Claws vs surfaces**: metal walls and Sentinels throw molten sparks; concrete and painted walls clash like steel on stone with a small puff of dust. This includes walls he can't tear through, like the outer shell.
 - **Currency**: coins are called **Berserker Coins** on screen (`Config.CoinName`). Saves still store them as `Coins`, so nobody loses theirs.
 
