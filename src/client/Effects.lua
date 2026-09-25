@@ -71,7 +71,7 @@ local function applyZone(lobby)
 	local bloom = Lighting:FindFirstChildOfClass("BloomEffect")
 	if bloom then
 		-- the lobby is daylit: keep glow tight and subtle there
-		TweenService:Create(bloom, TweenInfo.new(1.2), lobby and { Intensity = 0.35, Size = 56, Threshold = 1.6 } or { Intensity = 0.9, Size = 56, Threshold = 1.15 }):Play()
+		TweenService:Create(bloom, TweenInfo.new(1.2), lobby and { Intensity = 0.35, Size = 56, Threshold = 1.6 } or { Intensity = 0.55, Size = 40, Threshold = 1.35 }):Play()
 	end
 	local atmo = Lighting:FindFirstChildOfClass("Atmosphere")
 	if atmo then

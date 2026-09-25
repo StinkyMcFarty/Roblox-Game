@@ -75,6 +75,9 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
   client's Highlight count low (Roblox caps it at 31), which is why Sniff ghosts also draw boxes.
 - Sentinel pilot exit: destroyed by Wolverine → Hits = 2 (one from death); timed out → full health.
 - Currency is shown as "Berserker Coins" (`Config.CoinName`); saves still use the key `Coins`.
+- Lighting (`MapBuilder.SetupLighting`): gentle grade (contrast 0.15, saturation 0.08), bloom
+  0.55/40/1.35 (client arena zone matches), low blue-grey ambient so lamps shape the rooms.
+  Foundry: cool work floods, forged-steel crucibles (one pouring into a mould).
 - Sky: `Config.SkyAssetId` loads via InsertService at server start unless a Sky is placed in
   Lighting in Studio.
 

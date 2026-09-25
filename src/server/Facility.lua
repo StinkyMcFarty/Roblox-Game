@@ -1652,50 +1652,102 @@ end
 -- FOUNDRY
 ---------------------------------------------------------------------------
 
-local function crucible(parent, pos)
-	local rust = rgb(78, 58, 46)
+-- A forged-steel crucible on four legs: riveted bands, seams glowing with the
+-- heat inside, a cracked crust round a white-hot pool, embers rising. One of
+-- them (pouring) tips a stream of molten adamantium into an ingot mould.
+local function crucible(parent, pos, pouring)
+	local steel, dark, hot = rgb(62, 64, 70), rgb(34, 35, 38), rgb(255, 120, 34)
 	for k = 0, 3 do
 		local a = k / 4 * math.pi * 2 + math.pi / 4
 		local foot = pos + Vector3.new(math.cos(a) * 6.5, 0, math.sin(a) * 6.5)
-		P(parent, Vector3.new(1.2, 12, 1.2), CFrame.new(foot + Vector3.new(0, 6, 0)), M.Metal, rgb(40, 38, 36))
-		D(parent, Vector3.new(2.4, 0.4, 2.4), CFrame.new(foot + Vector3.new(0, 0.2, 0)), M.Metal, rgb(34, 32, 30))
+		P(parent, Vector3.new(1.2, 12, 1.2), CFrame.new(foot + Vector3.new(0, 6, 0)), M.Metal, dark)
+		D(parent, Vector3.new(2.4, 0.4, 2.4), CFrame.new(foot + Vector3.new(0, 0.2, 0)), M.Metal, rgb(28, 28, 30))
+		D(parent, Vector3.new(1.6, 1, 1.6), CFrame.new(foot + Vector3.new(0, 11.6, 0)), M.Metal, steel)
 	end
-	drum(parent, pos + Vector3.new(0, 12.4, 0), 15, 0.8, M.Metal, rgb(44, 42, 40))
-	drum(parent, pos + Vector3.new(0, 17, 0), 12, 8.4, M.CorrodedMetal, rust)
-	ball(parent, pos + Vector3.new(0, 12.6, 0), 11, M.CorrodedMetal, rust, nil, true)
+	drum(parent, pos + Vector3.new(0, 12.4, 0), 15, 0.8, M.Metal, dark)
+	drum(parent, pos + Vector3.new(0, 17, 0), 12, 8.4, M.Metal, steel, { Reflectance = 0.05 })
+	ball(parent, pos + Vector3.new(0, 12.6, 0), 11, M.Metal, steel, nil, true)
 	for _, y in { 14, 17, 20 } do
-		drum(parent, pos + Vector3.new(0, y, 0), 12.4, 0.5, M.Metal, rgb(40, 38, 36), nil, true)
+		drum(parent, pos + Vector3.new(0, y, 0), 12.5, 0.55, M.Metal, dark, nil, true)
+		for k = 0, 11 do -- rivets round each band
+			local a = k / 12 * math.pi * 2
+			ball(parent, pos + Vector3.new(math.cos(a) * 6.28, y, math.sin(a) * 6.28), 0.34, M.Metal, rgb(96, 98, 104), nil, true)
+		end
 	end
-	drum(parent, pos + Vector3.new(0, 21.3, 0), 12.6, 0.4, M.Metal, rgb(30, 28, 26), nil, true)
-	local molten = drum(parent, pos + Vector3.new(0, 21.2, 0), 10.4, 0.3, M.Neon, rgb(255, 120, 30), nil, true)
-	pointLight(molten, 34, 2.6, rgb(255, 130, 50), true)
+	for _, y in { 15.5, 18.5 } do -- seams glowing between the plates
+		drum(parent, pos + Vector3.new(0, y, 0), 12.08, 0.12, M.Neon, hot, { Transparency = 0.15 }, true)
+	end
+	drum(parent, pos + Vector3.new(0, 21.3, 0), 12.8, 0.6, M.Metal, dark, nil, true)
+	drum(parent, pos + Vector3.new(0, 21.28, 0), 10.8, 0.3, M.CrackedLava, rgb(80, 36, 18), nil, true) -- crust
+	local molten = drum(parent, pos + Vector3.new(0, 21.36, 0), 7.2, 0.3, M.Neon, rgb(255, 150, 50), nil, true)
+	pointLight(molten, 26, 1.8, rgb(255, 140, 60), true)
 	make("ParticleEmitter", molten, {
-		Rate = 6,
+		Name = "Embers",
+		Texture = "rbxasset://textures/particles/sparkles_main.dds",
+		Rate = 14,
+		Lifetime = NumberRange.new(1.5, 3),
+		Speed = NumberRange.new(3, 6),
+		SpreadAngle = Vector2.new(25, 25),
+		EmissionDirection = N.Right, -- the drum's axis points up
+		Size = NumberSequence.new(0.28, 0.05),
+		Transparency = NumberSequence.new(0, 1),
+		Color = ColorSequence.new(rgb(255, 200, 90), rgb(255, 80, 20)),
+		LightEmission = 1,
+	})
+	make("ParticleEmitter", molten, {
+		Name = "Heat",
+		Rate = 4,
 		Lifetime = NumberRange.new(4, 6),
 		Speed = NumberRange.new(2, 4),
-		EmissionDirection = N.Top,
+		EmissionDirection = N.Right,
 		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 3), NumberSequenceKeypoint.new(1, 9) }),
-		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.7), NumberSequenceKeypoint.new(1, 1) }),
-		Color = ColorSequence.new(rgb(120, 110, 100)),
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.82), NumberSequenceKeypoint.new(1, 1) }),
+		Color = ColorSequence.new(rgb(150, 140, 130)),
 		RotSpeed = NumberRange.new(-20, 20),
 	})
 	-- pour spout
-	wedge(parent, Vector3.new(3, 2, 4), CFrame.new(pos + Vector3.new(0, 20.6, -7.4)) * CFrame.Angles(0, math.pi, 0), M.CorrodedMetal, rust)
+	wedge(parent, Vector3.new(3, 2, 4), CFrame.new(pos + Vector3.new(0, 20.6, -7.4)) * CFrame.Angles(0, math.pi, 0), M.Metal, dark)
 	local label = D(parent, Vector3.new(6, 1.4, 0.1), CFrame.new(pos + Vector3.new(0, 16.4, -6.05)), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
 	stencil(label, N.Front, "ADAMANTIUM", rgb(230, 220, 200), 30)
+	if pouring then
+		-- a glowing stream from the spout down into an ingot mould
+		local lip = pos + Vector3.new(0, 20.2, -9.2)
+		local bottom = pos + Vector3.new(0, 1.6, -9.2)
+		cyl(parent, lip, bottom, 0.55, M.Neon, rgb(255, 160, 60), nil, true)
+		P(parent, Vector3.new(4.4, 1.4, 3.2), CFrame.new(pos + Vector3.new(0, 0.7, -9.2)), M.Metal, dark) -- ingot mould
+		local pool = D(parent, Vector3.new(3.6, 0.1, 2.4), CFrame.new(pos + Vector3.new(0, 1.42, -9.2)), M.Neon, rgb(255, 140, 40))
+		pointLight(pool, 16, 1.6, rgb(255, 130, 50))
+		make("ParticleEmitter", pool, {
+			Name = "Splash",
+			Texture = "rbxasset://textures/particles/sparkles_main.dds",
+			Rate = 30,
+			Lifetime = NumberRange.new(0.4, 0.8),
+			Speed = NumberRange.new(4, 9),
+			SpreadAngle = Vector2.new(70, 70),
+			Acceleration = Vector3.new(0, -30, 0),
+			Size = NumberSequence.new(0.22, 0.04),
+			Color = ColorSequence.new(rgb(255, 220, 120), rgb(255, 90, 20)),
+			LightEmission = 1,
+		})
+	end
 end
 
 local function buildFoundry(parent)
 	local r = ROOM.Foundry
-	r.Warm = rgb(255, 180, 110)
+	-- cool white work floods overhead, so the only warm light is the molten
+	-- metal itself (it used to be orange lamps on rust: a flat red wash)
+	r.Warm = rgb(226, 234, 255)
 	floorTiles(parent, r, "Grate")
 	ceiling(parent, r, "Truss")
 	-- molten channel across the hall, with grates and three bridges
 	local cz = -94
 	P(parent, Vector3.new(r.x1 - r.x0 - 16, 0.3, 5), CFrame.new(0, F + 0.15, cz), M.Metal, rgb(34, 32, 30))
-	local lava = D(parent, Vector3.new(r.x1 - r.x0 - 18, 0.1, 3), CFrame.new(0, F + 0.34, cz), M.Neon, rgb(255, 110, 20))
+	local lava = D(parent, Vector3.new(r.x1 - r.x0 - 18, 0.1, 3), CFrame.new(0, F + 0.34, cz), M.Neon, rgb(255, 120, 26))
+	for _, s in { -1, 1 } do -- cooling crust along both edges
+		D(parent, Vector3.new(r.x1 - r.x0 - 18, 0.12, 0.7), CFrame.new(0, F + 0.35, cz + s * 1.25), M.CrackedLava, rgb(80, 36, 18))
+	end
 	for x = r.x0 + 10, r.x1 - 10, 14 do
-		pointLight(D(parent, Vector3.new(0.2, 0.2, 0.2), CFrame.new(x, F + 1, cz), M.SmoothPlastic, Color3.new(), { Transparency = 1 }), 16, 1.8, rgb(255, 120, 40))
+		pointLight(D(parent, Vector3.new(0.2, 0.2, 0.2), CFrame.new(x, F + 1, cz), M.SmoothPlastic, Color3.new(), { Transparency = 1 }), 14, 1.3, rgb(255, 130, 50))
 	end
 	local cover = P(parent, Vector3.new(r.x1 - r.x0 - 18, 0.12, 3.2), CFrame.new(0, F + 0.46, cz), M.Metal, rgb(20, 20, 20), { Transparency = 0.9 })
 	for x = r.x0 + 10, r.x1 - 10, 0.9 do
@@ -1710,7 +1762,7 @@ local function buildFoundry(parent)
 	_ = lava
 	_ = cover
 	crucible(parent, Vector3.new(-32, F, -120))
-	crucible(parent, Vector3.new(0, F, -126))
+	crucible(parent, Vector3.new(0, F, -126), true)
 	crucible(parent, Vector3.new(32, F, -120))
 	-- gantry crane
 	local railY = F + 24
