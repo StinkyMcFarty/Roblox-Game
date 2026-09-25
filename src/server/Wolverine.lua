@@ -30,6 +30,7 @@ local cooldowns = {}
 local lastDamaged = 0
 local combo = 0
 local rage = { Count = 0, Armed = true, Until = 0 } -- this round's rage (Config.Rage)
+local roarUntil = 0 -- untouchable while he roars into the rage
 local updateRage
 local crackGlass
 
@@ -753,6 +754,7 @@ function Wolverine.Transform(player, spawnCFrame)
 	combo = 0
 	lastDamaged = 0
 	rage = { Count = 0, Armed = true, Until = 0 }
+	roarUntil = 0
 	char:PivotTo(spawnCFrame)
 
 	local function valid()
@@ -1245,6 +1247,9 @@ function Wolverine.Damage(amount, by)
 	local player = Round.Wolverine
 	local char = player and player.Character
 	local hum, root = Util.Humanoid(char), Util.Root(char)
+	if os.clock() < roarUntil then
+		return -- roaring into his rage: nothing touches him
+	end
 	if not (hum and root) or hum.Health <= 0 then
 		return
 	end
@@ -1331,17 +1336,30 @@ updateRage = function(player, char, hum)
 	elseif rage.Armed and rage.Count < cfg.MaxPerGame and not player:GetAttribute("Rage") then
 		rage.Armed = false
 		rage.Count += 1
-		rage.Until = now + cfg.Duration
+		-- he snaps: stops dead (and can't be hurt) for the roar, arms by his
+		-- sides, head thrown back; the aura bursts on as he roars, and the
+		-- rage's Duration counts from after it
+		local ROAR = cfg.RoarTime
+		rage.Until = now + ROAR + cfg.Duration
+		roarUntil = now + ROAR
+		Status.Apply(player, "Frozen", ROAR)
+		Status.Apply(player, "Busy", ROAR)
 		player:SetAttribute("Rage", true)
-		player:SetAttribute("RageEnds", workspace:GetServerTimeNow() + cfg.Duration)
-		rageAura(char, true)
-		local root = Util.Root(char)
-		if root then
-			Util.Sound(Config.Sounds.Roar, root, { Volume = 2.6, Pitch = 0.85, Range = 400 })
-			VFX.Shockwave(root.Position - Vector3.new(0, 2.8, 0), 22, RAGE_RED)
-			Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 1, Radius = 90 })
-		end
+		player:SetAttribute("RageEnds", workspace:GetServerTimeNow() + ROAR + cfg.Duration)
+		VFX.Anim(char, "RageRoar")
 		Fx:FireAllClients("Announce", { Text = "WOLVERINE IS ENRAGED!", Color = RAGE_RED, Duration = 3 })
+		task.delay(0.45, function()
+			local root = Util.Root(char)
+			if not (root and char.Parent) or not player:GetAttribute("Rage") then
+				return
+			end
+			rageAura(char, true)
+			Util.Sound(Config.Sounds.Roar, root, { Volume = 3, Pitch = 0.8, Range = 500 })
+			Util.Sound(Config.Sounds.Roar, root, { Volume = 2, Pitch = 0.55, Range = 300 }) -- a low growl under it
+			VFX.Shockwave(root.Position - Vector3.new(0, 2.8, 0), 26, RAGE_RED)
+			Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 1.8, Radius = 120 })
+			Fx:FireAllClients("RageRoar", { Char = char })
+		end)
 	end
 end
 

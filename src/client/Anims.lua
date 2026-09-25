@@ -599,6 +599,58 @@ local function breath(phase, amp)
 	}
 end
 
+-- Rage stance, added on top of everything else: he leans further over, head
+-- jutting forward, shoulders rolled up and in, arms held heavier.
+local function rageHunch(w)
+	return {
+		Root = CFrame.new(0, -0.12 * w, 0) * CFrame.Angles(rad(-10 * w), 0, 0),
+		Waist = CFrame.Angles(rad(-8 * w), 0, 0),
+		Neck = CFrame.Angles(rad(10 * w), 0, 0),
+		RShoulder = CFrame.Angles(rad(8 * w), 0, rad(6 * w)),
+		LShoulder = CFrame.Angles(rad(8 * w), 0, rad(-6 * w)),
+		RElbow = CFrame.Angles(rad(10 * w), 0, 0),
+		LElbow = CFrame.Angles(rad(10 * w), 0, 0),
+	}
+end
+
+-- Each hard exhale in a rage shows: a hot puff from his mouth.
+local function rageExhale(char)
+	local head = char:FindFirstChild("Head")
+	if not head then
+		return
+	end
+	local at = head:FindFirstChild("RageBreathAt")
+	local em = at and at:FindFirstChild("RageBreath")
+	if not em then
+		at = Instance.new("Attachment")
+		at.Name = "RageBreathAt"
+		at.Position = Vector3.new(0, -0.25, -0.6) -- his mouth; Front is the way he faces
+		at.Parent = head
+		em = Instance.new("ParticleEmitter")
+		em.Name = "RageBreath"
+		em.Texture = "rbxasset://textures/particles/smoke_main.dds"
+		em.Color = ColorSequence.new(Color3.fromRGB(255, 225, 215), Color3.fromRGB(180, 150, 150))
+		em.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.55),
+			NumberSequenceKeypoint.new(0.3, 0.7),
+			NumberSequenceKeypoint.new(1, 1),
+		})
+		em.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.25), NumberSequenceKeypoint.new(1, 1.4) })
+		em.Lifetime = NumberRange.new(0.45, 0.8)
+		em.Speed = NumberRange.new(5, 8)
+		em.SpreadAngle = Vector2.new(18, 18)
+		em.Drag = 4
+		em.Acceleration = Vector3.new(0, 1.5, 0)
+		em.Rotation = NumberRange.new(0, 360)
+		em.RotSpeed = NumberRange.new(-60, 60)
+		em.LightEmission = 0.1
+		em.EmissionDirection = Enum.NormalId.Front
+		em.Rate = 0
+		em.Parent = at
+	end
+	em:Emit(6)
+end
+
 ---------------------------------------------------------------------------
 -- Springs: every joint chases its target with a little overshoot + settle
 ---------------------------------------------------------------------------
@@ -760,8 +812,17 @@ step:Connect(function(a, b)
 		local exertion = math.clamp((1 - stamina) * 1.4 + (speed > 12 and 0.4 or 0), 0, 1)
 		st.Exertion = (st.Exertion or 0) + (exertion - (st.Exertion or 0)) * math.min(1, dt * 1.5)
 		local rate = (role == "Wolverine" and 1.4 or 1.7) + st.Exertion * 5.5
-		st.BreathPhase = (st.BreathPhase or 0) + dt * rate
-		local breathAmp = (role == "Wolverine" and 1.8 or 1) * (1 + st.Exertion * 1.6)
+		-- rage: he hunches lower and heaves, big ragged breaths he can't hold in
+		local roaring = st.Clip ~= nil and st.Clip.Name == "RageRoar"
+		local raging = role == "Wolverine" and attr(char, "Rage") == true and st.Loop ~= "Gallop" and not roaring
+		st.RageBlend = math.clamp((st.RageBlend or 0) + (raging and dt * 2 or -dt * 1.5), 0, 1)
+		rate *= 1 + st.RageBlend * 0.9
+		local prevBreath = st.BreathPhase or 0
+		st.BreathPhase = prevBreath + dt * rate
+		local breathAmp = (role == "Wolverine" and 1.8 or 1) * (1 + st.Exertion * 1.6) * (1 + st.RageBlend * 1.4)
+		if st.RageBlend > 0.5 and math.sin(prevBreath) > 0 and math.sin(st.BreathPhase) <= 0 then
+			rageExhale(char)
+		end
 
 		local pose = {}
 		if st.LoopBlend > 0 and st.Loop then
@@ -823,7 +884,8 @@ step:Connect(function(a, b)
 		local legsFree = clip ~= nil and clip.Def.LegsWhenMoving and st.LoopBlend > 0.25
 
 		local breathPose = breath(st.BreathPhase, breathAmp)
-		local layered = st.LoopBlend > 0 or st.IdleBlend > 0 or st.Clip ~= nil
+		local hunch = st.RageBlend > 0.01 and rageHunch(st.RageBlend) or nil
+		local layered = st.LoopBlend > 0 or st.IdleBlend > 0 or st.Clip ~= nil or hunch ~= nil
 		st.Springs = st.Springs or {}
 		for key, m in st.Motors do
 			if m.Parent then
@@ -843,6 +905,10 @@ step:Connect(function(a, b)
 				end
 				if cp then
 					target = target:Lerp(cp, clipWeight)
+				end
+				local hp = hunch and hunch[key]
+				if hp then
+					target = hp * target -- leans the whole pose over, on top of whatever it's doing
 				end
 				local br = breathPose[key]
 				if br then

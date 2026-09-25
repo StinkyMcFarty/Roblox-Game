@@ -117,6 +117,40 @@ Clips.Impale = {
 	},
 }
 
+-- RAGE: he snaps. Head drops and the arms pull down to his sides, fists
+-- clenched, knees dipping as it builds (0.22s); then he throws his head back
+-- and ROARS (0.45s), chest out, arms locked down and flared by his sides,
+-- shaking with it; then he sinks into the hunched rage stance.
+Clips.RageRoar = {
+	Tremble = true,
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.22, Ease = "Out", Pose = {
+			Root = { -14, 0, 0, 0, -0.35, 0 }, Waist = { -10, 0, 0 }, Neck = { -18, 0, 0 },
+			RShoulder = { -12, 0, 14 }, LShoulder = { -12, 0, -14 }, RElbow = { 18, 0, 0 }, LElbow = { 18, 0, 0 },
+			RWrist = { 10, 0, 0 }, LWrist = { 10, 0, 0 },
+			RHip = { 22, 0, 6 }, LHip = { 22, 0, -6 }, RKnee = { -34, 0, 0 }, LKnee = { -34, 0, 0 },
+		} },
+		{ T = 0.45, Ease = "Back", Pose = {
+			Root = { 10, 0, 0, 0, 0.05, 0 }, Waist = { 18, 0, 0 }, Neck = { 38, 0, 0 },
+			RShoulder = { -22, 0, 26 }, LShoulder = { -22, 0, -26 }, RElbow = { 8, 0, 0 }, LElbow = { 8, 0, 0 },
+			RWrist = { -20, 0, 0 }, LWrist = { -20, 0, 0 },
+			RHip = { 6, 0, 10 }, LHip = { 6, 0, -10 }, RKnee = { -12, 0, 0 }, LKnee = { -12, 0, 0 },
+		} },
+		{ T = 1.15, Pose = {
+			Root = { 12, 0, 0, 0, 0.05, 0 }, Waist = { 20, 0, 0 }, Neck = { 42, 0, 0 },
+			RShoulder = { -24, 0, 28 }, LShoulder = { -24, 0, -28 }, RElbow = { 6, 0, 0 }, LElbow = { 6, 0, 0 },
+			RWrist = { -22, 0, 0 }, LWrist = { -22, 0, 0 },
+			RHip = { 6, 0, 10 }, LHip = { 6, 0, -10 }, RKnee = { -12, 0, 0 }, LKnee = { -12, 0, 0 },
+		} },
+		{ T = 1.5, Ease = "InOut", Pose = {
+			Root = { -18, 0, 0, 0, -0.3, 0 }, Waist = { -12, 0, 0 }, Neck = { 24, 0, 0 },
+			RShoulder = { 18, 0, 20 }, LShoulder = { 18, 0, -20 }, RElbow = { 40, 0, 0 }, LElbow = { 40, 0, 0 },
+			RHip = { 16, 0, 6 }, LHip = { 16, 0, -6 }, RKnee = { -24, 0, 0 }, LKnee = { -24, 0, 0 },
+		} },
+	},
+}
+
 -- A Sentinel is too heavy for one arm: both claws go in and he hoists the
 -- suit overhead, legs braced wide, straining under it.
 local HEAVE = {

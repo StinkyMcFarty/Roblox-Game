@@ -1853,4 +1853,47 @@ function SlashFX.PounceLand(position)
 	end)
 end
 
+-- Rage roar: blood-red shock rings rolling out across the floor, a red star
+-- bursting from his chest and embers ripped up around him.
+function SlashFX.RageBurst(char)
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	if not root then
+		return
+	end
+	local RED, HOT = Color3.fromRGB(255, 30, 20), Color3.fromRGB(255, 120, 80)
+	local floor = root.Position - Vector3.new(0, 2.8, 0)
+	starFlare(root.Position + Vector3.new(0, 1.2, 0), RED, 2.2, 0.5)
+	local ribbons = { takeRibbon(36, RED, 6), takeRibbon(36, HOT, 4), takeRibbon(36, RED, 4) }
+	local embers = {}
+	for i = 1, 16 do
+		local r = takeRibbon(5, i % 3 == 0 and HOT or RED, 3)
+		table.insert(ribbons, r)
+		local a = i / 16 * math.pi * 2 + math.random() * 0.3
+		embers[i] = {
+			R = r,
+			D = Vector3.new(math.cos(a), 0.35 + math.random() * 0.9, math.sin(a)).Unit,
+			L = 2 + math.random() * 2.5,
+			V = 14 + math.random() * 10,
+		}
+	end
+	local LIFE = 0.9
+	run(ribbons, function(t)
+		local k = t / LIFE
+		if k >= 1 then
+			return false
+		end
+		local up = Vector3.new(0, 1, 0)
+		setRing(ribbons[1], floor + Vector3.new(0, 0.2, 0), up, 1.5 + 22 * outCubic(k), 0.9 * (1 - k), k)
+		local k2 = clamp01((t - 0.12) / (LIFE - 0.12))
+		setRing(ribbons[2], floor + Vector3.new(0, 0.3, 0), up, 1 + 14 * outCubic(k2), 0.5 * (1 - k2), k2)
+		setRing(ribbons[3], root.Position, up, 2 + 9 * outQuad(math.min(1, k * 2)), 0.35 * (1 - math.min(1, k * 2)), math.min(1, k * 2))
+		for _, e in embers do
+			local dist = e.V * t - 6 * t * t
+			local p0 = root.Position + e.D * (1 + dist)
+			setNeedle(e.R, p0, p0 + e.D * e.L * (1 - k), 0.14 * (1 - k), k)
+		end
+		return true
+	end)
+end
+
 return SlashFX

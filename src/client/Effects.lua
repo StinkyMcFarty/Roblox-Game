@@ -90,7 +90,6 @@ tint.Parent = Lighting
 function Effects.SetRage(on)
 	if on then
 		TweenService:Create(tint, TweenInfo.new(0.4), { TintColor = Color3.fromRGB(255, 175, 165), Contrast = 0.22, Saturation = 0.15 }):Play()
-		Effects.Shake(0.6)
 	else
 		TweenService:Create(tint, TweenInfo.new(1), { Saturation = 0 }):Play()
 		Effects.SetHunterVision(player:GetAttribute("Role") == "Wolverine")
@@ -113,6 +112,32 @@ function Effects.Roar(position)
 	Effects.Shake(math.clamp(1.6 - d / 220, 0.25, 1.6))
 	if d < 160 then
 		Interface.Flash(Color3.fromRGB(150, 0, 0), 0.35, 0.8)
+	end
+end
+
+-- The rage roar lands: his own camera punches out and shudders under a red
+-- flash; everyone else feels it by how close they are.
+function Effects.RageRoar(char)
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	if not root then
+		return
+	end
+	local cam = workspace.CurrentCamera
+	if char == player.Character then
+		Effects.Shake(1.6)
+		Interface.Flash(Color3.fromRGB(190, 0, 0), 0.45, 0.9)
+		local fov = cam.FieldOfView
+		local out = TweenService:Create(cam, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { FieldOfView = fov + 14 })
+		out:Play()
+		out.Completed:Once(function()
+			TweenService:Create(cam, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), { FieldOfView = fov }):Play()
+		end)
+	else
+		local d = (cam.CFrame.Position - root.Position).Magnitude
+		Effects.Shake(math.clamp(1.4 - d / 90, 0, 1.4))
+		if d < 70 then
+			Interface.Flash(Color3.fromRGB(150, 0, 0), 0.3 * (1 - d / 70), 0.7)
+		end
 	end
 end
 

@@ -484,6 +484,9 @@ Fx.OnClientEvent:Connect(function(kind, data)
 		Effects.ShakeAt(data.Position, data.Intensity, data.Radius)
 	elseif kind == "Roar" then
 		Effects.Roar(data.Position)
+	elseif kind == "RageRoar" then
+		SlashFX.RageBurst(data.Char)
+		Effects.RageRoar(data.Char)
 	elseif kind == "Knock" then
 		Effects.Knock(data.Velocity, data.Tumble, data.Spin, data.Duration)
 	elseif kind == "Hurt" then
