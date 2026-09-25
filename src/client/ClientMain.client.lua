@@ -131,6 +131,9 @@ local function activate(name)
 	if os.clock() < (readyAt[name] or 0) then
 		return
 	end
+	if player:GetAttribute("Role") == "Sentinel" and player:GetAttribute("Acting") then
+		return -- one Sentinel move at a time
+	end
 	if name == "Pounce" and not player:GetAttribute("Feral") then
 		Interface.Announce("Get on all fours to pounce (hold C)", Color3.fromRGB(255, 140, 30), 1.2)
 		return

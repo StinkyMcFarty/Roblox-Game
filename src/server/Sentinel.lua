@@ -703,6 +703,22 @@ local function pulse(player, char, root)
 	end
 end
 
+-- One move at a time: while a punch, beam, blast (or slam) is winding up or
+-- running, the others are refused. "Acting" tells the client too.
+local acting = {}
+local function perform(player, name, fn, ...)
+	acting[player] = name
+	player:SetAttribute("Acting", name)
+	local ok, err = pcall(fn, ...)
+	if acting[player] == name then
+		acting[player] = nil
+		player:SetAttribute("Acting", nil)
+	end
+	if not ok then
+		warn("[Sentinel] " .. name .. ": " .. tostring(err))
+	end
+end
+
 function Sentinel.Handle(player, ability, arg)
 	if player:GetAttribute("Role") ~= "Sentinel" or not Round.Active then
 		return
@@ -723,6 +739,9 @@ function Sentinel.Handle(player, ability, arg)
 		charging[player] = nil -- cancel the charge
 		return
 	end
+	if acting[player] then
+		return -- already mid-move
+	end
 	local cfg = Config.Sentinel[ability]
 	if type(cfg) ~= "table" or not cfg.Cooldown then
 		return
@@ -738,11 +757,11 @@ function Sentinel.Handle(player, ability, arg)
 	cd[ability] = os.clock() + cfg.Cooldown - 0.1
 
 	if ability == "Punch" then
-		punch(player, char, root)
+		perform(player, ability, punch, player, char, root)
 	elseif ability == "Laser" then
-		laser(player, char, root, arg)
+		perform(player, ability, laser, player, char, root, arg)
 	elseif ability == "Pulse" then
-		pulse(player, char, root)
+		perform(player, ability, pulse, player, char, root)
 	end
 end
 
