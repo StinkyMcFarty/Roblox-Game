@@ -332,6 +332,10 @@ end
 
 function PlayerData.EquipSentinel(player, id)
 	local d = cache[player]
+	local suit = Skins.Sentinels[id]
+	if d and suit and suit.Price == 0 then
+		d.OwnedSentinels[id] = true -- free suits are always yours
+	end
 	if d and d.OwnedSentinels[id] then
 		d.SentinelSkin = id
 		publish(player)

@@ -154,7 +154,7 @@ local function refresh()
 			UIKit.Recolor(card.Button, K.Green)
 			card.Stroke.Color = K.Green
 			card.Stroke.Thickness = 3
-		elseif owned[id] then
+		elseif owned[id] or item.Price == 0 then -- free items are always yours
 			UIKit.CoinText(card.Label, "EQUIP", false)
 			UIKit.Recolor(card.Button, K.Blue)
 			card.Stroke.Color = Color3.fromRGB(70, 70, 80)
@@ -317,7 +317,7 @@ local function build()
 		end)
 		button.Activated:Connect(function()
 			local cat = CATS[category]
-			local owned = ownedList(cat.Owned)[id]
+			local owned = ownedList(cat.Owned)[id] or cat.List[id].Price == 0
 			local action = owned and cat.Equip or cat.Buy
 			local ok, msg = ShopRemote:InvokeServer(action, id)
 			message.Text = msg or ""
