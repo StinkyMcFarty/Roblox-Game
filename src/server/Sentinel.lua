@@ -402,6 +402,9 @@ RunService.Heartbeat:Connect(function()
 	end
 end)
 
+-- The Inhibitor Blast's stun window, and the punches landed inside it
+local pulseStun = { Until = 0, Hits = 0 }
+
 local function stunWolverine(duration)
 	local w = Round.Wolverine
 	if w then
@@ -468,9 +471,17 @@ local function punch(player, char, root)
 				VFX.Shockwave(floorBelow(wRoot.Position, { char, wChar }) + Vector3.new(0, 0.2, 0), 11)
 				Fx:FireAllClients("Shake", { Position = wRoot.Position, Intensity = 1.4, Radius = 80 })
 				Fx:FireAllClients("HitStop", { Attacker = char, Victim = wChar, Duration = 0.15 })
-				-- i-frames, the same as a Sentinel gets when he hits them
-				Status.Apply(w, "Immune", Config.HitImmunity)
-				VFX.IFrames(wChar, Config.HitImmunity)
+				-- i-frames, the same as a Sentinel gets when he hits them. Inside an
+				-- Inhibitor Blast stun he only gets them every IFramesEvery-th hit.
+				local grant = true
+				if os.clock() < pulseStun.Until then
+					pulseStun.Hits += 1
+					grant = pulseStun.Hits % Config.Sentinel.Pulse.IFramesEvery == 0
+				end
+				if grant then
+					Status.Apply(w, "Immune", Config.HitImmunity)
+					VFX.IFrames(wChar, Config.HitImmunity)
+				end
 			end
 		end
 	end
@@ -679,6 +690,9 @@ local function pulse(player, char, root)
 		if near or Combat.BoxOverlap(CFrame.new(root.Position), Vector3.one * cfg.Radius * 1.4, bcf, bsize) then
 			Wolverine.Damage(cfg.Damage * power(player), player)
 			stunWolverine(cfg.Stun)
+			pulseStun.Until = os.clock() + cfg.Stun
+			pulseStun.Hits = 0
+			Combat.BreakShield(Round.Wolverine) -- the blast shatters any i-frames he had
 			Wolverine.RevealSkeleton()
 		end
 	end

@@ -37,6 +37,8 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
 - Sentinels: linked (within 30 studs of each other) hit at 1.25x, apart 0.6x, a lone suit 1x.
   Pursuit thrusters (`Config.Sentinel.Pursuit`, `Movement.lua`): once Wolverine is 70+ studs
   away a suit gets +14 speed until it's back within 30 studs.
+  Inhibitor Blast (`Config.Sentinel.Pulse`): radius 30, shatters his i-frames, and during its
+  stun a punch grants i-frames only every 2nd hit (`pulseStun` in `Sentinel.lua`).
 - Survivors see a white glow on the 6 nearest hiding spots (`src/client/HideGlow.lua`); keep the
   client's Highlight count low (Roblox caps it at 31), which is why Sniff ghosts also draw boxes.
 - Sentinel pilot exit: destroyed by Wolverine → Hits = 2 (one from death); timed out → full health.

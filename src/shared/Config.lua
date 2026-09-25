@@ -98,7 +98,9 @@ Config.Sentinel = {
 		-- Wolverine mashing F while beamed: Presses/sec for full resist; past
 		-- Threshold he braces and walks into the beam at Walk x speed
 		Resist = { Presses = 7, Threshold = 0.5, Walk = 0.38 }, Recover = 3 },
-	Pulse = { Cooldown = 18, Charge = 2, Radius = 20, Stun = 3, Damage = 12, CancelCooldown = 3 },
+	-- Inhibitor Blast: while he's stunned by it, a punch only gives him i-frames
+	-- every IFramesEvery-th hit, so the suits get a real damage window.
+	Pulse = { Cooldown = 18, Charge = 2, Radius = 30, Stun = 3, Damage = 12, CancelCooldown = 3, IFramesEvery = 2 },
 }
 
 -- Survivor fart: masks your scent from Wolverine's Sniff
