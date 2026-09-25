@@ -736,14 +736,16 @@ local function pounce(player, char, root)
 	end
 	-- The client applies the leap; the server watches for contact.
 	local untilTime = os.clock() + cfg.Window
+	local blocked = false
 	task.wait(0.12)
 	while os.clock() < untilTime and char.Parent and Util.IsAlive(char) do
 		Combat.BreakInBox(root.CFrame * CFrame.new(0, 0, -2.5), Vector3.new(6, 8, 5), root.Position, 55)
-		local target = Combat.FindNear(root.Position, cfg.GrabRadius)[1]
+		local target = not blocked and Combat.FindNear(root.Position, cfg.GrabRadius)[1]
 		if target and Combat.BreakShield(target.Player) then
-			target = nil -- pounced into their i-frames: shatters them instead
-		end
-		if target and not Status.Has(target.Player, "Immune") then
+			-- pounced into their i-frames: they shatter and the pounce is spent
+			-- (it still flies on through walls and lands, but grabs nobody)
+			blocked = true
+		elseif target then
 			pounceStrike(player, char, root, target)
 			return
 		end
@@ -775,13 +777,11 @@ local function stab(player, char, root)
 			broke = true
 			Combat.BreakInBox(cf, Vector3.new(6, 9, cfg.Range), root.Position, 65)
 		end
-		for _, cand in Combat.FindTargets(cf, Vector3.new(cfg.Width, 10, cfg.Range + 2)) do
-			if not Status.Has(cand.Player, "Immune") then
-				target = cand
-				break
-			end
-			Combat.BreakShield(cand.Player)
+		local nearest = Combat.FindTargets(cf, Vector3.new(cfg.Width, 10, cfg.Range + 2))[1]
+		if nearest and Combat.BreakShield(nearest.Player) then
+			break -- impaled into their i-frames: they shatter and the impale misses
 		end
+		target = nearest
 		if not target then
 			task.wait()
 		end
