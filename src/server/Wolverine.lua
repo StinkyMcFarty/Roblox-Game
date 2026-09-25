@@ -1180,7 +1180,7 @@ function Wolverine.MakeStatue(skinId, cframe, parent)
 	-- every claw skin is built onto the statue; each player's client shows only
 	-- the claws they have equipped (Shop.lua). Others see the default claws.
 	for _, clawId in Skins.ClawOrder do
-		Costumes.BuildClaws(model, Skins.Claws[clawId], true)
+		Costumes.BuildClaws(model, Skins.Claws[clawId], true, true)
 		local folder = model:FindFirstChild("Claws")
 		for _, p in folder and folder:GetChildren() or {} do
 			if p:IsA("BasePart") and p:GetAttribute("ClawSkin") == nil then

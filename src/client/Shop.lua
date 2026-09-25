@@ -119,6 +119,13 @@ local message = new("TextLabel", {
 
 local category = "Suits"
 local cards = {}
+-- each Armory tab: the item list and order, the player attributes that say
+-- what's owned/equipped, and the shop actions
+local CATS = {
+	Suits = { List = Skins.List, Order = Skins.Order, Owned = "OwnedSkins", Equipped = "Skin", Buy = "Buy", Equip = "Equip" },
+	Claws = { List = Skins.Claws, Order = Skins.ClawOrder, Owned = "OwnedClaws", Equipped = "Claw", Buy = "BuyClaw", Equip = "EquipClaw" },
+	Sentinel = { List = Skins.Sentinels, Order = Skins.SentinelOrder, Owned = "OwnedSentinels", Equipped = "SentinelSkin", Buy = "BuySentinel", Equip = "EquipSentinel" },
+}
 
 local function ownedList(attr)
 	local set = {}
@@ -136,9 +143,10 @@ end
 
 local function refresh()
 	coinText.Text = tostring(coins())
-	local owned = ownedList(category == "Suits" and "OwnedSkins" or "OwnedClaws")
-	local equipped = player:GetAttribute(category == "Suits" and "Skin" or "Claw")
-	local list = category == "Suits" and Skins.List or Skins.Claws
+	local cat = CATS[category]
+	local owned = ownedList(cat.Owned)
+	local equipped = player:GetAttribute(cat.Equipped)
+	local list = cat.List
 	for id, card in cards do
 		local item = list[id]
 		if equipped == id then
@@ -177,6 +185,36 @@ local function clawPreview(parent, item)
 	end
 end
 
+-- Draws a little Sentinel preview: helmet with a face, huge shoulders,
+-- armoured chest with the glowing core, purple limbs
+local function sentinelPreview(parent, item)
+	local c = item.Preview
+	local function box(x, y, wd, h, color, r)
+		local f = new("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, x, 0, y),
+			Size = UDim2.fromOffset(wd, h),
+			BackgroundColor3 = color,
+			ZIndex = 34,
+		}, parent)
+		corner(f, r or 4)
+		return f
+	end
+	box(0, 6, 24, 26, c.Helm, 8)
+	box(0, 14, 16, 16, c.Face, 4)
+	box(-26, 32, 22, 18, c.Armor, 9)
+	box(26, 32, 22, 18, c.Armor, 9)
+	box(0, 32, 40, 32, c.Armor, 5)
+	box(0, 40, 10, 10, c.Core, 5)
+	box(-28, 50, 12, 26, c.Limb)
+	box(28, 50, 12, 26, c.Limb)
+	box(0, 64, 34, 12, c.Limb)
+	box(-10, 76, 14, 18, c.Limb)
+	box(10, 76, 14, 18, c.Limb)
+	box(-10, 94, 16, 12, c.Armor)
+	box(10, 94, 16, 12, c.Armor)
+end
+
 -- Draws a little suit preview (colour blocks shaped like a body)
 local function suitPreview(parent, item)
 	local c = item.Colors
@@ -213,8 +251,8 @@ local function build()
 		c.Card:Destroy()
 	end
 	cards = {}
-	local order = category == "Suits" and Skins.Order or Skins.ClawOrder
-	local list = category == "Suits" and Skins.List or Skins.Claws
+	local order = CATS[category].Order
+	local list = CATS[category].List
 	for i, id in order do
 		local item = list[id]
 		local card = new("Frame", { Size = UDim2.fromOffset(190, 250), BackgroundColor3 = Color3.new(1, 1, 1), LayoutOrder = i, ZIndex = 32 }, scroller)
@@ -231,10 +269,12 @@ local function build()
 			ZIndex = 33,
 		}, card)
 		corner(preview, 10)
-		local accent = category == "Suits" and item.Swatch or item.Glow
+		local accent = item.Swatch or item.Glow
 		gradient(preview, accent:Lerp(Color3.new(0, 0, 0), 0.35), Color3.fromRGB(12, 12, 16))
 		if category == "Suits" then
 			suitPreview(preview, item)
+		elseif category == "Sentinel" then
+			sentinelPreview(preview, item)
 		else
 			clawPreview(preview, item)
 		end
@@ -276,9 +316,9 @@ local function build()
 			TweenService:Create(scale, TweenInfo.new(0.15), { Scale = 1 }):Play()
 		end)
 		button.Activated:Connect(function()
-			local isSuit = category == "Suits"
-			local owned = ownedList(isSuit and "OwnedSkins" or "OwnedClaws")[id]
-			local action = (owned and "Equip" or "Buy") .. (isSuit and "" or "Claw")
+			local cat = CATS[category]
+			local owned = ownedList(cat.Owned)[id]
+			local action = owned and cat.Equip or cat.Buy
 			local ok, msg = ShopRemote:InvokeServer(action, id)
 			message.Text = msg or ""
 			message.TextColor3 = ok and K.Green or Color3.fromRGB(255, 110, 110)
@@ -302,10 +342,11 @@ local function selectTab(name)
 	end
 	build()
 end
-for i, name in { "Suits", "Claws" } do
+local TAB_LOOK = { Suits = { "SUITS", "🦸" }, Claws = { "CLAWS", "🗡️" }, Sentinel = { "SENTINEL", "🤖" } }
+for i, name in { "Suits", "Claws", "Sentinel" } do
 	local b = UIKit.Button(tabs, {
-		Text = name == "Suits" and "SUITS" or "CLAWS",
-		Icon = name == "Suits" and "🦸" or "🗡️",
+		Text = TAB_LOOK[name][1],
+		Icon = TAB_LOOK[name][2],
 		Color = K.Yellow,
 		Size = UDim2.fromOffset(150, 40),
 		LayoutOrder = i,
@@ -328,6 +369,8 @@ player:GetAttributeChangedSignal("OwnedSkins"):Connect(refresh)
 player:GetAttributeChangedSignal("Skin"):Connect(refresh)
 player:GetAttributeChangedSignal("OwnedClaws"):Connect(refresh)
 player:GetAttributeChangedSignal("Claw"):Connect(refresh)
+player:GetAttributeChangedSignal("OwnedSentinels"):Connect(refresh)
+player:GetAttributeChangedSignal("SentinelSkin"):Connect(refresh)
 task.spawn(function()
 	local ls = player:WaitForChild("leaderstats", 30)
 	local c = ls and ls:WaitForChild(Config.CoinName, 30)

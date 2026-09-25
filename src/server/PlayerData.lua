@@ -56,6 +56,12 @@ local function publish(player)
 	end
 	player:SetAttribute("OwnedClaws", table.concat(claws, ","))
 	player:SetAttribute("Claw", d.Claw)
+	local suits = {}
+	for id in d.OwnedSentinels do
+		table.insert(suits, id)
+	end
+	player:SetAttribute("OwnedSentinels", table.concat(suits, ","))
+	player:SetAttribute("SentinelSkin", d.SentinelSkin)
 	local ups = {}
 	for id in d.Upgrades do
 		table.insert(ups, id)
@@ -93,6 +99,14 @@ function PlayerData.Save(player)
 				return list
 			end)(),
 			Claw = d.Claw,
+			OwnedSentinels = (function()
+				local list = {}
+				for id in d.OwnedSentinels do
+					table.insert(list, id)
+				end
+				return list
+			end)(),
+			SentinelSkin = d.SentinelSkin,
 			Upgrades = (function()
 				local list = {}
 				for id in d.Upgrades do
@@ -134,6 +148,8 @@ function PlayerData.Load(player)
 		Skin = Skins.Default,
 		OwnedClaws = { [Skins.DefaultClaw] = true },
 		Claw = Skins.DefaultClaw,
+		OwnedSentinels = { [Skins.DefaultSentinel] = true },
+		SentinelSkin = Skins.DefaultSentinel,
 		Upgrades = {}, -- [id] = true, survivor upgrades (Config.Upgrades)
 		Tokens = 0,
 		LastLogin = "",
@@ -169,6 +185,14 @@ function PlayerData.Load(player)
 			end
 			if saved.Claw and data.OwnedClaws[saved.Claw] then
 				data.Claw = saved.Claw
+			end
+			for _, id in saved.OwnedSentinels or {} do
+				if Skins.Sentinels[id] then
+					data.OwnedSentinels[id] = true
+				end
+			end
+			if saved.SentinelSkin and data.OwnedSentinels[saved.SentinelSkin] then
+				data.SentinelSkin = saved.SentinelSkin
 			end
 			for _, id in saved.Upgrades or {} do
 				if Config.Upgrades[id] then
@@ -280,6 +304,40 @@ function PlayerData.BuyClaw(player, id)
 	publish(player)
 	task.spawn(PlayerData.Save, player)
 	return true, "Unlocked " .. claw.Name .. "!"
+end
+
+function PlayerData.GetSentinelSkin(player)
+	local d = cache[player]
+	return d and d.SentinelSkin or Skins.DefaultSentinel
+end
+
+function PlayerData.BuySentinel(player, id)
+	local d, suit = cache[player], Skins.Sentinels[id]
+	if not (d and suit) then
+		return false, "Unknown suit"
+	end
+	if d.OwnedSentinels[id] then
+		return false, "Already owned"
+	end
+	if d.Coins < suit.Price then
+		return false, "Not enough " .. Config.CoinName
+	end
+	d.Coins -= suit.Price
+	d.OwnedSentinels[id] = true
+	d.SentinelSkin = id
+	publish(player)
+	task.spawn(PlayerData.Save, player)
+	return true, "Unlocked " .. suit.Name .. "!"
+end
+
+function PlayerData.EquipSentinel(player, id)
+	local d = cache[player]
+	if d and d.OwnedSentinels[id] then
+		d.SentinelSkin = id
+		publish(player)
+		return true, "Equipped " .. Skins.Sentinels[id].Name
+	end
+	return false, "You don't own that suit"
 end
 
 function PlayerData.HasUpgrade(player, id)

@@ -232,7 +232,7 @@ function Sentinel.Become(player)
 	pcall(function()
 		char:ScaleTo(Config.Sentinel.Scale)
 	end)
-	Costumes.DressSentinel(char)
+	Costumes.DressSentinel(char, PlayerData.GetSentinelSkin(player))
 
 	hum.MaxHealth = 100
 	hum.Health = 100

@@ -82,7 +82,7 @@ Skins.List = {
 Skins.Default = "Logan"
 
 -- Claw skins (separate from suits)
-Skins.ClawOrder = { "Adamantium", "Bone", "Gold", "Blood", "Obsidian", "Cosmic" }
+Skins.ClawOrder = { "Adamantium", "Bone", "Gold", "Blood", "Obsidian", "Cosmic", "Verity" }
 Skins.DefaultClaw = "Adamantium"
 Skins.Claws = {
 	Adamantium = {
@@ -108,6 +108,30 @@ Skins.Claws = {
 	Cosmic = {
 		Name = "Cosmic", Price = 2200, Description = "Forged in a dying star. Glows and sparkles.",
 		Color = rgb(120, 90, 255), Material = Enum.Material.Neon, Reflectance = 0, Glow = rgb(90, 220, 255), Sparkle = true,
+	},
+	-- Verity: jet black blades, a yellow cutting edge and a red spine, and a
+	-- grinning yellow smiley on each forearm (Costumes)
+	Verity = {
+		Name = "Verity Claws", Price = 3000, Description = "Jet black, yellow edge. Something is grinning at you.",
+		Color = rgb(18, 16, 16), Material = Enum.Material.Metal, Reflectance = 0.3, Glow = rgb(255, 210, 40),
+		EdgeColor = rgb(255, 205, 40), SpineColor = rgb(200, 20, 20), Sparkle = true, Verity = true,
+	},
+}
+
+-- Sentinel suit skins (bought in the Armory's SENTINEL tab). The colours
+-- live in Costumes.SentinelSkins; Preview is just for the shop card.
+Skins.SentinelOrder = { "Default", "Verity" }
+Skins.DefaultSentinel = "Default"
+Skins.Sentinels = {
+	Default = {
+		Name = "Sentinel Mk I", Price = 0, Description = "Trask Industries standard issue. Mutant-hunting steel.",
+		Swatch = rgb(100, 56, 132),
+		Preview = { Armor = rgb(92, 100, 130), Limb = rgb(112, 54, 124), Helm = rgb(100, 56, 132), Face = rgb(172, 178, 194), Core = rgb(255, 196, 80) },
+	},
+	Verity = {
+		Name = "Verity Sentinel", Price = 3000, Description = "Black armour and a grin painted on its face. Smile.",
+		Swatch = rgb(255, 205, 40),
+		Preview = { Armor = rgb(26, 24, 26), Limb = rgb(240, 190, 30), Helm = rgb(20, 18, 20), Face = rgb(255, 210, 40), Core = rgb(255, 40, 40) },
 	},
 }
 

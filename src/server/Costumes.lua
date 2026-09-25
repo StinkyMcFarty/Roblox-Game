@@ -635,8 +635,8 @@ end
 local function bladesOn(owner, hand, claw, extended, set)
 	local L = Costumes.CLAW_LEN
 	local thick = claw.Thick or 1
-	local edgeColor = lighten(claw.Color, 0.65)
-	local spineColor = claw.Color:Lerp(Color3.new(0, 0, 0), 0.35)
+	local edgeColor = claw.EdgeColor or lighten(claw.Color, 0.65)
+	local spineColor = claw.SpineColor or claw.Color:Lerp(Color3.new(0, 0, 0), 0.35)
 	local out = CFrame.new(0, -hand.Size.Y * 0.3, -hand.Size.Z * 0.1)
 	local tucked = CFrame.new(0, L * 0.5, -hand.Size.Z * 0.1)
 	local root, rootWeld = Costumes.Gear(owner, hand, "ClawRoot", Vector3.one * 0.05, Color3.new(), M.SmoothPlastic, extended and out or tucked, { Transparency = 1 }, "Claws")
@@ -681,12 +681,22 @@ local function bladesOn(owner, hand, claw, extended, set)
 end
 
 -- Builds 3 claws per hand. Returns { Roots = { {Weld, Extended} }, Parts, Tips, Bases }.
-function Costumes.BuildClaws(char, claw, extended)
+-- `display`: a statue carrying every claw skin at once (no Verity badges:
+-- a SurfaceGui still shows on a hidden part)
+function Costumes.BuildClaws(char, claw, extended, display)
 	local set = { Roots = {}, Parts = {}, Tips = {}, Bases = {} }
 	for _, side in { "Right", "Left" } do
 		local hand = Util.Hand(char, side)
 		if hand then
 			bladesOn(char, hand, claw, extended, set)
+		end
+		-- Verity: the grin on a badge on the outside of each forearm
+		local arm = claw.Verity and not display and char:FindFirstChild(side .. "LowerArm")
+		if arm then
+			local s = arm.Size
+			local sx = side == "Right" and 1 or -1
+			local badge = Costumes.Gear(char, arm, "VerityBadge", Vector3.new(0.06, s.X * 0.8, s.X * 0.8), rgb(18, 16, 16), M.SmoothPlastic, CFrame.new(sx * (s.X / 2 + 0.03), -s.Y * 0.1, 0), nil, "Claws")
+			Costumes.Smiley(badge, sx == 1 and Enum.NormalId.Right or Enum.NormalId.Left)
 		end
 	end
 	return set
@@ -833,6 +843,52 @@ function Costumes.DressScientist(char)
 	end
 end
 
+-- The Verity grin: a yellow smiley with black eyes and a wide mouth of white
+-- teeth, drawn on one face of `part` with frames (no image uploads).
+function Costumes.Smiley(part, face)
+	local sg = Instance.new("SurfaceGui")
+	sg.Name = "Verity"
+	sg.Face = face or Enum.NormalId.Front
+	sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	sg.PixelsPerStud = 120
+	sg.LightInfluence = 0.4
+	sg.Parent = part
+	local function f(props, parent)
+		local fr = Instance.new("Frame")
+		fr.BorderSizePixel = 0
+		for k, v in props do
+			fr[k] = v
+		end
+		fr.Parent = parent or sg
+		return fr
+	end
+	local round = function(fr, r)
+		local c = Instance.new("UICorner")
+		c.CornerRadius = r or UDim.new(0.5, 0)
+		c.Parent = fr
+	end
+	local ball = f({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.94, 0.94), BackgroundColor3 = rgb(255, 205, 40) })
+	round(ball)
+	local rim = Instance.new("UIStroke")
+	rim.Color = rgb(150, 100, 10)
+	rim.Thickness = 3
+	rim.Parent = ball
+	for _, x in { 0.33, 0.67 } do
+		round(f({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(x, 0.34), Size = UDim2.fromScale(0.13, 0.24), BackgroundColor3 = rgb(10, 8, 8) }, ball))
+	end
+	local mouth = f({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.66), Size = UDim2.fromScale(0.66, 0.2), BackgroundColor3 = rgb(250, 248, 240) }, ball)
+	round(mouth, UDim.new(0.45, 0))
+	local lips = Instance.new("UIStroke")
+	lips.Color = rgb(20, 10, 10)
+	lips.Thickness = 3
+	lips.Parent = mouth
+	f({ AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0.04, 0.5), Size = UDim2.new(0.92, 0, 0, 2), BackgroundColor3 = rgb(20, 10, 10) }, mouth)
+	for i = 1, 6 do
+		f({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(i / 7, 0.5), Size = UDim2.new(0, 2, 0.9, 0), BackgroundColor3 = rgb(20, 10, 10) }, mouth)
+	end
+	return sg
+end
+
 -- Sentinel suit palettes. Default follows the comics: steel-blue armour
 -- plates, deep purple limbs and hips, a tall ribbed purple helmet with a
 -- silver face and amber eyes, a glowing gold chest disc, dark mechanics.
@@ -842,6 +898,15 @@ Costumes.SentinelSkins = {
 		Limb = rgb(112, 54, 124), Helm = rgb(100, 56, 132), Face = rgb(172, 178, 194),
 		Mech = rgb(32, 32, 40), Cable = rgb(48, 48, 58),
 		Core = rgb(255, 196, 80), Eye = rgb(255, 160, 40), Thruster = rgb(120, 190, 255),
+	},
+	-- Verity: black armour, yellow limbs, red hoses, core and thrusters, and
+	-- the grin painted over the face (Verity = true)
+	Verity = {
+		Armor = rgb(26, 24, 26), Armor2 = rgb(14, 14, 16), Edge = rgb(255, 205, 40),
+		Limb = rgb(240, 190, 30), Helm = rgb(20, 18, 20), Face = rgb(255, 210, 40),
+		Mech = rgb(30, 28, 30), Cable = rgb(150, 20, 20),
+		Core = rgb(255, 40, 40), Eye = rgb(255, 40, 40), Thruster = rgb(255, 60, 40),
+		Verity = true,
 	},
 }
 
@@ -909,19 +974,28 @@ function Costumes.DressSentinel(char, skinId)
 			g(head, "Rib", Vector3.new(hs.X * 0.07, hs.Y * 0.2, hs.Z * 1.16), HELM:Lerp(Color3.new(1, 1, 1), 0.12), M.Metal, CFrame.new(i * hs.X * 0.16, hs.Y * (0.72 - math.abs(i) * 0.07), hs.Z * 0.1))
 		end
 		g(head, "Crest", Vector3.new(hs.X * 0.14, hs.Y * 0.22, hs.Z * 1.2), EDGE, M.Metal, CFrame.new(0, hs.Y * 0.84, hs.Z * 0.1))
-		g(head, "FacePlate", Vector3.new(hs.X * 0.8, hs.Y * 0.7, 0.18), FACE, M.Metal, CFrame.new(0, -hs.Y * 0.06, -hs.Z * 0.56), { Reflectance = 0.18 })
+		local faceplate = g(head, "FacePlate", Vector3.new(hs.X * 0.8, hs.Y * 0.7, 0.18), FACE, M.Metal, CFrame.new(0, -hs.Y * 0.06, -hs.Z * 0.56), { Reflectance = 0.18 })
+		if P.Verity then
+			Costumes.Smiley(faceplate, Enum.NormalId.Front)
+		end
 		g(head, "Brow", Vector3.new(hs.X * 0.88, hs.Y * 0.14, 0.26), FACE:Lerp(Color3.new(0, 0, 0), 0.3), M.Metal, CFrame.new(0, hs.Y * 0.22, -hs.Z * 0.6))
-		g(head, "Visor", Vector3.new(hs.X * 0.66, hs.Y * 0.12, 0.05), rgb(20, 14, 12), M.SmoothPlastic, CFrame.new(0, hs.Y * 0.08, -hs.Z * 0.65))
+		if not P.Verity then
+			g(head, "Visor", Vector3.new(hs.X * 0.66, hs.Y * 0.12, 0.05), rgb(20, 14, 12), M.SmoothPlastic, CFrame.new(0, hs.Y * 0.08, -hs.Z * 0.65))
+		end
 		for s = -1, 1, 2 do
-			local eye = g(head, "Eye", Vector3.new(hs.X * 0.2, hs.Y * 0.07, 0.05), P.Eye, M.Neon, CFrame.new(s * hs.X * 0.17, hs.Y * 0.08, -hs.Z * 0.68))
-			glow(eye, P.Eye, 6, 1.6)
+			if not P.Verity then
+				local eye = g(head, "Eye", Vector3.new(hs.X * 0.2, hs.Y * 0.07, 0.05), P.Eye, M.Neon, CFrame.new(s * hs.X * 0.17, hs.Y * 0.08, -hs.Z * 0.68))
+				glow(eye, P.Eye, 6, 1.6)
+			end
 			g(head, "Cheek", Vector3.new(hs.X * 0.2, hs.Y * 0.24, 0.22), FACE:Lerp(Color3.new(0, 0, 0), 0.18), M.Metal, CFrame.new(s * hs.X * 0.3, -hs.Y * 0.1, -hs.Z * 0.6) * CFrame.Angles(0, rad(s * 20), 0))
 			g(head, "EarDisc", Vector3.new(0.16, hs.Y * 0.5, hs.Y * 0.5), HELM:Lerp(Color3.new(0, 0, 0), 0.25), M.Metal, CFrame.new(s * hs.X * 0.62, 0, 0), { Shape = Enum.PartType.Cylinder })
 			g(head, "EarBolt", Vector3.new(0.2, hs.Y * 0.2, hs.Y * 0.2), EDGE, M.Metal, CFrame.new(s * hs.X * 0.68, 0, 0), { Shape = Enum.PartType.Cylinder })
 		end
 		g(head, "Jaw", Vector3.new(hs.X * 0.6, hs.Y * 0.26, 0.22), FACE:Lerp(Color3.new(0, 0, 0), 0.15), M.Metal, CFrame.new(0, -hs.Y * 0.38, -hs.Z * 0.52))
-		for i = 0, 4 do
-			g(head, "Grille", Vector3.new(0.04, hs.Y * 0.16, 0.03), rgb(40, 40, 48), M.Metal, CFrame.new((i - 2) * hs.X * 0.09, -hs.Y * 0.36, -hs.Z * 0.64))
+		if not P.Verity then
+			for i = 0, 4 do
+				g(head, "Grille", Vector3.new(0.04, hs.Y * 0.16, 0.03), rgb(40, 40, 48), M.Metal, CFrame.new((i - 2) * hs.X * 0.09, -hs.Y * 0.36, -hs.Z * 0.64))
+			end
 		end
 	end
 
@@ -955,7 +1029,22 @@ function Costumes.DressSentinel(char, skinId)
 		end
 		g(torso, "Collar", Vector3.new(s.X * 0.84, s.Y * 0.18, s.Z * 1.3), ARMOR2, M.Metal, CFrame.new(0, s.Y * 0.58, 0))
 		g(torso, "Neck", Vector3.new(s.X * 0.36, s.Y * 0.24, s.Z * 0.52), MECH, M.Metal, CFrame.new(0, s.Y * 0.63, 0))
-		g(torso, "BackPack", Vector3.new(s.X * 0.95, s.Y * 0.64, s.Z * 0.56), ARMOR2, M.Metal, CFrame.new(0, s.Y * 0.16, s.Z * 0.74))
+		local pack = g(torso, "BackPack", Vector3.new(s.X * 0.95, s.Y * 0.64, s.Z * 0.56), ARMOR2, M.Metal, CFrame.new(0, s.Y * 0.16, s.Z * 0.74))
+		if P.Verity then
+			local sg = Instance.new("SurfaceGui")
+			sg.Face = Enum.NormalId.Back
+			sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+			sg.PixelsPerStud = 80
+			sg.Parent = pack
+			local t = Instance.new("TextLabel")
+			t.Size = UDim2.fromScale(1, 1)
+			t.BackgroundTransparency = 1
+			t.Text = "VERITY"
+			t.Font = Enum.Font.Creepster
+			t.TextScaled = true
+			t.TextColor3 = rgb(230, 30, 30)
+			t.Parent = sg
+		end
 		g(torso, "Spine", Vector3.new(s.X * 0.2, s.Y * 0.9, 0.2), MECH, M.Metal, CFrame.new(0, -s.Y * 0.05, s.Z * 1.02))
 	end
 
