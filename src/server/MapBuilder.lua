@@ -1496,48 +1496,84 @@ local function surfaceText(p, face, props)
 	return gui, label
 end
 
-local function ruleCard(parent, cf, icon, heading, body, accent)
-	local p = block(parent, Vector3.new(15, 11, 0.4), cf, M.SmoothPlastic, rgb(16, 16, 20))
-	local gui = make("SurfaceGui", p, { Face = Enum.NormalId.Front, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 40, LightInfluence = 0 })
-	local bg = make("Frame", gui, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0 })
-	make("UIGradient", bg, { Rotation = 90, Color = ColorSequence.new(rgb(40, 34, 38), rgb(10, 9, 12)) })
-	make("UIStroke", bg, { Color = accent, Thickness = 8, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
-	local top = make("Frame", bg, { Size = UDim2.new(1, 0, 0, 16), BackgroundColor3 = accent, BorderSizePixel = 0 })
-	make("UIGradient", top, { Color = ColorSequence.new(accent, Color3.new(0, 0, 0)) })
-	make("TextLabel", bg, {
-		Position = UDim2.fromScale(0.05, 0.1),
-		Size = UDim2.fromScale(0.9, 0.32),
+-- Rules board pieces (lobby, north wall): printed sheets, key caps, sticky
+-- notes. Every SurfaceGui here is 40 px per stud.
+local OSWALD = Font.new("rbxasset://fonts/families/Oswald.json", Enum.FontWeight.Bold)
+
+local function boardGui(p, bgColor)
+	local gui = make("SurfaceGui", p, { Face = Enum.NormalId.Front, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 40, LightInfluence = 0.35, ZIndexBehavior = Enum.ZIndexBehavior.Sibling })
+	local bg = make("Frame", gui, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = bgColor, BorderSizePixel = 0 })
+	return bg
+end
+
+local function boardText(parent, props)
+	local label = make("TextLabel", parent, {
 		BackgroundTransparency = 1,
-		Font = Enum.Font.GothamBlack,
-		TextScaled = true,
-		Text = icon,
-	})
-	local h = make("TextLabel", bg, {
-		Position = UDim2.fromScale(0.05, 0.44),
-		Size = UDim2.fromScale(0.9, 0.18),
-		BackgroundTransparency = 1,
-		Font = Enum.Font.LuckiestGuy,
-		TextScaled = true,
-		TextColor3 = accent,
-		Text = heading,
-	})
-	make("UIStroke", h, { Thickness = 4 })
-	make("TextLabel", bg, {
-		Position = UDim2.fromScale(0.07, 0.64),
-		Size = UDim2.fromScale(0.86, 0.3),
-		BackgroundTransparency = 1,
-		Font = Enum.Font.GothamBold,
-		TextScaled = true,
 		TextWrapped = true,
-		TextColor3 = rgb(215, 210, 215),
-		Text = body,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
 	})
-	-- neon underline + small spot lamp above the card
-	block(parent, Vector3.new(15, 0.25, 0.25), cf * CFrame.new(0, -5.8, -0.2), M.Neon, accent)
-	local lampArm = block(parent, Vector3.new(0.4, 0.4, 2.4), cf * CFrame.new(0, 6.6, -1.2), M.Metal, C.DarkMetal)
-	local head = block(parent, Vector3.new(1.4, 0.7, 1.4), cf * CFrame.new(0, 6.4, -2.4), M.Metal, C.DarkMetal)
-	make("SpotLight", head, { Face = Enum.NormalId.Bottom, Range = 16, Angle = 70, Brightness = 3, Color = rgb(255, 235, 210) })
-	return p, lampArm
+	for k, v in props do
+		label[k] = v
+	end
+	return label
+end
+
+-- A printed sheet: its own column of lines (UIListLayout, top to bottom)
+local function boardSheet(parent, cf, size, paper)
+	local p = block(parent, size, cf, M.SmoothPlastic, paper, { CanCollide = false })
+	local bg = boardGui(p, paper)
+	-- a little yellowing towards the bottom edge
+	make("UIGradient", bg, { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), rgb(218, 214, 204)) })
+	local col = make("Frame", bg, { Position = UDim2.fromOffset(36, 28), Size = UDim2.new(1, -72, 1, -56), BackgroundTransparency = 1 })
+	make("UIListLayout", col, { Padding = UDim.new(0, 12), SortOrder = Enum.SortOrder.LayoutOrder })
+	return p, bg, col
+end
+
+-- One control: a key cap and what it does
+local function keyRow(col, order, key, text, style)
+	local row = make("Frame", col, { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = order })
+	local shadow = make("Frame", row, { Position = UDim2.fromOffset(0, 5), Size = UDim2.fromOffset(110, 52), BackgroundColor3 = Color3.new(), BorderSizePixel = 0 })
+	local cap = make("Frame", row, { Size = UDim2.fromOffset(110, 52), BackgroundColor3 = style.Cap, BorderSizePixel = 0 })
+	make("UICorner", shadow, { CornerRadius = UDim.new(0, 8) })
+	make("UICorner", cap, { CornerRadius = UDim.new(0, 8) })
+	boardText(cap, {
+		Size = UDim2.fromScale(1, 1),
+		Text = key,
+		Font = Enum.Font.RobotoMono,
+		TextSize = #key > 3 and 24 or 28,
+		TextColor3 = style.CapText,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextYAlignment = Enum.TextYAlignment.Center,
+	})
+	boardText(row, {
+		Position = UDim2.fromOffset(128, 4),
+		Size = UDim2.new(1, -128, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Text = text,
+		Font = style.Font,
+		TextSize = style.Size,
+		TextColor3 = style.Ink,
+	})
+	return row
+end
+
+-- A yellow sticky note with a scrawl on it
+local function stickyNote(parent, cf, text)
+	local p = block(parent, Vector3.new(4.25, 4.25, 0.04), cf, M.SmoothPlastic, rgb(246, 221, 90), { CanCollide = false })
+	local bg = boardGui(p, rgb(246, 221, 90))
+	make("UIGradient", bg, { Rotation = 90, Color = ColorSequence.new(rgb(255, 255, 255), rgb(225, 225, 225)) })
+	boardText(bg, {
+		Position = UDim2.fromOffset(14, 14),
+		Size = UDim2.new(1, -28, 1, -28),
+		Text = text,
+		Font = Enum.Font.PermanentMarker,
+		TextScaled = true,
+		TextColor3 = rgb(32, 36, 44),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextYAlignment = Enum.TextYAlignment.Center,
+	})
+	return p
 end
 
 -- Three glowing gouges ripped through steel, with bent metal flaps.
@@ -1732,7 +1768,7 @@ function MapBuilder.BuildLobby()
 			block(lobby, Vector3.new(1.4, H, 1.8), CFrame.new(hx - 1.2, Y + H / 2, z), M.Metal, rgb(58, 60, 66))
 		end
 	end
-	for _, y in { H - 3, H - 4.4 } do
+	for _, y in { H - 2.2, H - 3.2 } do -- up high, clear of the rules board
 		block(lobby, Vector3.new(W - 4, 0.8, 0.8), CFrame.new(0, Y + y, -hz + 2.2) * CFrame.Angles(0, math.rad(90), 0) * CFrame.Angles(0, math.rad(90), 0), M.Metal, rgb(110, 80, 50), { Shape = Enum.PartType.Cylinder })
 	end
 	-- Ceiling + trusses
@@ -1782,29 +1818,191 @@ function MapBuilder.BuildLobby()
 	end
 
 	-- RULES WALL (north) -----------------------------------------------
+	-- A facility notice board, not a poster: a steel plate with a stencilled
+	-- banner, and the how-to-play pinned up as real paperwork (a staff memo,
+	-- Subject X's file, a Sentinel pilot card) with sticky notes scrawled on.
 	local rz = -hz + 1.3
-	block(lobby, Vector3.new(76, 26, 0.6), CFrame.new(-6, Y + 13.5, rz) * CFrame.Angles(0, math.pi, 0), M.DiamondPlate, rgb(28, 28, 32))
-	block(lobby, Vector3.new(77, 0.4, 0.4), CFrame.new(-6, Y + 26.6, rz + 0.3), M.Neon, rgb(200, 20, 20))
-	block(lobby, Vector3.new(77, 0.4, 0.4), CFrame.new(-6, Y + 0.6, rz + 0.3), M.Neon, rgb(200, 20, 20))
-	for _, x in { -44.3, 32.3 } do
-		block(lobby, Vector3.new(0.36, 25.9, 0.36), CFrame.new(x, Y + 13.6, rz + 0.3), M.Neon, rgb(200, 20, 20))
+	local face = CFrame.Angles(0, math.pi, 0) -- fronts face into the room
+	local function onBoard(x, y, z, tilt)
+		return CFrame.new(x, Y + y, rz + z) * face * CFrame.Angles(0, 0, math.rad(tilt or 0))
 	end
-	local title = block(lobby, Vector3.new(62, 8, 0.3), CFrame.new(-6, Y + 21.5, rz + 0.5) * CFrame.Angles(0, math.pi, 0), M.SmoothPlastic, rgb(12, 12, 14), { Transparency = 1 })
-	local _, tl = surfaceText(title, Enum.NormalId.Front, { Text = "SURVIVE THE WOLVERINE", Font = Enum.Font.LuckiestGuy, TextColor3 = rgb(255, 200, 30) })
-	make("UIStroke", tl, { Thickness = 10, Color = rgb(0, 0, 0) })
-	make("UIGradient", tl, { Rotation = 90, Color = ColorSequence.new(rgb(255, 230, 90), rgb(230, 120, 10)) })
-	local sub = block(lobby, Vector3.new(50, 2, 0.3), CFrame.new(-6, Y + 16.6, rz + 0.5) * CFrame.Angles(0, math.pi, 0), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
-	surfaceText(sub, Enum.NormalId.Front, { Text = "ONE OF YOU IS THE MONSTER. THE REST OF YOU ARE MEAT.", Font = Enum.Font.GothamBlack, TextColor3 = rgb(230, 70, 60) })
+	block(lobby, Vector3.new(76, 23.6, 0.6), onBoard(-6, 12.4, 0), M.DiamondPlate, rgb(34, 34, 38))
+	local trim = rgb(58, 60, 66)
+	for _, y in { 0.6, 24.2 } do
+		block(lobby, Vector3.new(77.2, 0.7, 0.5), onBoard(-6, y, 0.2), M.Metal, trim)
+	end
+	for _, x in { -44, 32 } do
+		block(lobby, Vector3.new(0.7, 24.3, 0.5), onBoard(x, 12.4, 0.2), M.Metal, trim)
+		for _, y in { 0.6, 12.4, 24.2 } do -- bolt heads
+			block(lobby, Vector3.new(0.35, 0.45, 0.45), onBoard(x, y, 0.5) * CFrame.Angles(0, math.rad(90), 0), M.Metal, rgb(120, 122, 128), { Shape = Enum.PartType.Cylinder })
+		end
+	end
 
-	local rules = {
-		{ "🐺", "ONE HUNTER", "A random player becomes Wolverine. Every kill buys him +15 seconds.", rgb(255, 190, 30) },
-		{ "🩸", "3 HITS = DEAD", "Two hits throw you. The third tears you in half.", rgb(230, 40, 40) },
-		{ "🤖", "SUIT UP", "Reboot 3 terminals. Two Sentinel suits. Stay linked or die.", rgb(180, 110, 255) },
-		{ "💨", "HIDE • FART • RUN", "Lockers hide you. Gas hides your scent. Walls won't.", rgb(120, 220, 90) },
-	}
-	for i, r in rules do
-		local x = -6 + (i - 2.5) * 17
-		ruleCard(lobby, CFrame.new(x, Y + 8, rz + 0.6) * CFrame.Angles(0, math.pi, 0), r[1], r[2], r[3], r[4])
+	-- the banner: hazard stripes, the name stencilled in yellow, and the
+	-- incident counter nobody ever gets to reset
+	block(lobby, Vector3.new(72, 4, 0.2), onBoard(-6, 21.7, 0.4), M.Metal, rgb(20, 20, 22))
+	local hazard = block(lobby, Vector3.new(5, 4, 0.05), onBoard(-39.5, 21.7, 0.52), M.SmoothPlastic, rgb(232, 184, 40), { CanCollide = false })
+	local stripes = {}
+	for i = 0, 9 do
+		local col = i % 2 == 0 and rgb(232, 184, 40) or rgb(17, 17, 17)
+		table.insert(stripes, ColorSequenceKeypoint.new(i == 0 and 0 or i / 10 + 0.002, col))
+		table.insert(stripes, ColorSequenceKeypoint.new((i + 1) / 10, col))
+	end
+	make("UIGradient", boardGui(hazard, Color3.new(1, 1, 1)), { Rotation = 45, Color = ColorSequence.new(stripes) })
+	local nameplate = block(lobby, Vector3.new(48, 2.8, 0.05), onBoard(-12.25, 22.2, 0.52), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false })
+	surfaceText(nameplate, Enum.NormalId.Front, {
+		Text = "SURVIVE THE WOLVERINE",
+		FontFace = OSWALD,
+		TextColor3 = rgb(232, 186, 40),
+		TextTransparency = 0.06,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	})
+	local strap = block(lobby, Vector3.new(48, 0.72, 0.05), onBoard(-12.25, 20.45, 0.52), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false })
+	surfaceText(strap, Enum.NormalId.Front, {
+		Text = "WEAPON X  ·  FACILITY 7  ·  CONTAINMENT BREACH PROTOCOL  —  READ BEFORE ENTERING",
+		Font = Enum.Font.RobotoMono,
+		TextColor3 = rgb(154, 154, 162),
+		TextXAlignment = Enum.TextXAlignment.Left,
+	})
+	local counter = block(lobby, Vector3.new(10.5, 3.1, 0.06), onBoard(24.15, 21.7, 0.53), M.SmoothPlastic, rgb(233, 230, 220), { CanCollide = false })
+	local cbg = boardGui(counter, rgb(233, 230, 220))
+	boardText(cbg, {
+		Position = UDim2.fromOffset(16, 12),
+		Size = UDim2.new(1, -170, 1, -24),
+		Text = "DAYS WITHOUT AN INCIDENT",
+		FontFace = OSWALD,
+		TextScaled = true,
+		TextColor3 = rgb(27, 27, 27),
+	})
+	local digit = make("Frame", cbg, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -14, 0.5, 0), Size = UDim2.fromOffset(124, 100), BackgroundColor3 = rgb(17, 17, 17), BorderSizePixel = 0 })
+	boardText(digit, {
+		Size = UDim2.fromScale(1, 1),
+		Text = "0",
+		FontFace = OSWALD,
+		TextScaled = true,
+		TextColor3 = rgb(255, 51, 38),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextYAlignment = Enum.TextYAlignment.Center,
+	})
+
+	local S = Config.Sentinel
+	local INK, TYPE = rgb(28, 27, 25), { Cap = rgb(29, 29, 32), CapText = Color3.new(1, 1, 1), Font = Enum.Font.SpecialElite, Size = 34, Ink = rgb(28, 27, 25) }
+	local function header(col, text, color)
+		boardText(col, { Size = UDim2.new(1, 0, 0, 30), Text = text, Font = Enum.Font.RobotoMono, TextSize = 24, TextColor3 = color, LayoutOrder = 1 })
+	end
+	local function heading(col, text, props)
+		local h = boardText(col, { Size = UDim2.new(1, 0, 0, 64), Text = text, Font = Enum.Font.SpecialElite, TextSize = 58, TextColor3 = INK, LayoutOrder = 2 })
+		for k, v in props or {} do
+			h[k] = v
+		end
+		make("Frame", col, { Size = UDim2.new(1, 0, 0, 3), BackgroundColor3 = h.TextColor3, BorderSizePixel = 0, LayoutOrder = 3 })
+	end
+	local function pin(x, y)
+		block(lobby, Vector3.new(0.55, 0.55, 0.55), onBoard(x, y, 0.62), M.SmoothPlastic, rgb(194, 34, 28), { Shape = Enum.PartType.Ball, CanCollide = false })
+	end
+
+	-- 1) the staff memo: what survivors do
+	local _, memo, memoCol = boardSheet(lobby, Vector3.new(21, 17.4, 0.04), onBoard(-30, 10, 0.36, -1.5), rgb(233, 227, 210))
+	header(memoCol, "WEAPON X // FACILITY 7 // MEMO 0419", rgb(109, 102, 90))
+	heading(memoCol, "SUBJECT X IS LOOSE.")
+	keyRow(memoCol, 4, "SHIFT", "RUN. He is faster. Break his line of sight.", TYPE)
+	keyRow(memoCol, 5, "E", "HIDE in anything that glows white.", TYPE)
+	keyRow(memoCol, 6, "G", "FART to throw off his Sniff. Or buy Turbo Fart / Dodge.", TYPE)
+	keyRow(memoCol, 7, "M", "MAP. Only you are on it.", TYPE)
+	keyRow(memoCol, 8, "3x", "REBOOT the 3 consoles, then suit up in the Hangar.", TYPE)
+	boardText(memo, {
+		Position = UDim2.fromOffset(300, 600),
+		Size = UDim2.fromOffset(500, 60),
+		Rotation = -4,
+		Text = Config.HitsToKill .. " hits = torn in half",
+		Font = Enum.Font.PermanentMarker,
+		TextSize = 44,
+		TextColor3 = rgb(200, 21, 27),
+		TextXAlignment = Enum.TextXAlignment.Right,
+	})
+	pin(-30, 18.3)
+
+	-- 2) Subject X's file: what he does
+	local _, file, fileCol = boardSheet(lobby, Vector3.new(21, 17.4, 0.04), onBoard(-6, 10, 0.36, 1), rgb(239, 236, 228))
+	header(fileCol, "PERSONNEL FILE // SUBJECT X", rgb(109, 102, 90))
+	heading(fileCol, "IF YOU ARE HIM")
+	keyRow(fileCol, 4, "M1", "CLAW. Through people. Through walls.", TYPE)
+	keyRow(fileCol, 5, "Q", "POUNCE from all fours.", TYPE)
+	keyRow(fileCol, 6, "E", "IMPALE. Both claws in. Lift.", TYPE)
+	keyRow(fileCol, 7, "R", "SNIFF. Smell every scent.", TYPE)
+	keyRow(fileCol, 8, "C", "ALL FOURS. Fastest.", TYPE)
+	boardText(fileCol, {
+		Size = UDim2.new(0, 520, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Text = ("Every kill: +%d seconds.\nUnder %d%% health: RAGE."):format(Config.KillTimeBonus, Config.Rage.Threshold * 100),
+		Font = Enum.Font.SpecialElite,
+		TextSize = 34,
+		TextColor3 = INK,
+		LayoutOrder = 9,
+	})
+	-- his mugshot: three claw marks where a face should be
+	local photo = make("Frame", file, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -40, 1, -40), Size = UDim2.fromOffset(170, 210), BackgroundColor3 = rgb(21, 21, 26), BorderSizePixel = 0 })
+	make("UIStroke", photo, { Color = Color3.new(1, 1, 1), Thickness = 6, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
+	for i = 0, 2 do
+		make("Frame", photo, { Position = UDim2.fromOffset(50 + i * 30, 20), Size = UDim2.fromOffset(10, 170), Rotation = 18, BackgroundColor3 = rgb(210, 30, 30), BorderSizePixel = 0 })
+	end
+	local stamp = make("Frame", file, { Position = UDim2.fromOffset(420, 560), Size = UDim2.fromOffset(300, 80), Rotation = -12, BackgroundTransparency = 1 })
+	make("UIStroke", stamp, { Color = rgb(200, 21, 27), Thickness = 6, Transparency = 0.15, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
+	boardText(stamp, {
+		Size = UDim2.fromScale(1, 1),
+		Text = "CLASSIFIED",
+		FontFace = OSWALD,
+		TextSize = 52,
+		TextColor3 = rgb(200, 21, 27),
+		TextTransparency = 0.15,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextYAlignment = Enum.TextYAlignment.Center,
+	})
+	pin(-6, 18.4)
+
+	-- 3) the Sentinel pilot card: a blueprint
+	local BLUE = rgb(29, 74, 140)
+	local PRINT = { Cap = Color3.new(1, 1, 1), CapText = BLUE, Font = Enum.Font.RobotoMono, Size = 30, Ink = Color3.new(1, 1, 1) }
+	local _, card, cardCol = boardSheet(lobby, Vector3.new(21, 17.4, 0.04), onBoard(18, 10, 0.36, -0.8), BLUE)
+	for gx = 40, 800, 40 do
+		make("Frame", card, { Position = UDim2.fromOffset(gx, 0), Size = UDim2.new(0, 2, 1, 0), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.88, BorderSizePixel = 0 })
+	end
+	for gy = 40, 680, 40 do
+		make("Frame", card, { Position = UDim2.fromOffset(0, gy), Size = UDim2.new(1, 0, 0, 2), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.88, BorderSizePixel = 0 })
+	end
+	cardCol.ZIndex = 2 -- the text sits over the grid
+	header(cardCol, "SENTINEL MK I // PILOT CARD", rgb(185, 208, 240))
+	heading(cardCol, "SUIT UP.", { FontFace = OSWALD, TextSize = 64, TextColor3 = Color3.new(1, 1, 1) })
+	keyRow(cardCol, 4, "M1", "HYDRAULIC SMASH. Stuns and launches him.", PRINT)
+	keyRow(cardCol, 5, "M2", ("GROUND SLAM. Hits him within %d studs."):format(S.Slam.Radius), PRINT)
+	keyRow(cardCol, 6, "Q", "DEATH RAY. Melts through walls.", PRINT)
+	keyRow(cardCol, 7, "E", ("INHIBITOR BLAST. Stuns him %gs."):format(S.Pulse.Stun), PRINT)
+	boardText(cardCol, {
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Text = ("LINKED (%d studs) %gx\nAPART %gx · LAST SUIT 1x\nCORE BURNS OUT IN %ds"):format(S.LinkRange, S.LinkedMultiplier, S.SoloMultiplier, S.Duration),
+		Font = Enum.Font.RobotoMono,
+		TextSize = 30,
+		LineHeight = 1.15,
+		TextColor3 = Color3.new(1, 1, 1),
+		LayoutOrder = 8,
+	})
+	for _, side in { -1, 1 } do -- taped up
+		block(lobby, Vector3.new(3.5, 1, 0.03), onBoard(18 + side * 9.8, 18.5, 0.42, side * -30), M.SmoothPlastic, rgb(228, 218, 184), { Transparency = 0.3, CanCollide = false })
+	end
+
+	-- scrawled sticky notes, stuck where there was room
+	stickyNote(lobby, onBoard(-18, 11.5, 0.44, 6), "he can SMELL you")
+	stickyNote(lobby, onBoard(6, 13, 0.44, -7), "he heals.\nyou don't.")
+	stickyNote(lobby, onBoard(26.6, 3.8, 0.44, 5), "STAY TOGETHER!!")
+
+	-- three work lamps hanging from the ceiling, aimed at the paperwork
+	for _, x in { -30, -6, 18 } do
+		local headPos = Vector3.new(x, Y + 25.2, rz + 4.2)
+		block(lobby, Vector3.new(0.2, H - 25.6, 0.2), CFrame.new(x, Y + (H + 25.6) / 2, rz + 4.2), M.Metal, rgb(40, 40, 44))
+		local lamp = block(lobby, Vector3.new(1.4, 0.9, 1.6), CFrame.lookAt(headPos, Vector3.new(x, Y + 11, rz)), M.Metal, rgb(36, 36, 40))
+		block(lobby, Vector3.new(1.1, 0.6, 0.05), lamp.CFrame * CFrame.new(0, 0, -0.81), M.Neon, rgb(255, 236, 200))
+		make("SpotLight", lamp, { Face = Enum.NormalId.Front, Range = 22, Angle = 62, Brightness = 2.6, Color = rgb(255, 236, 210) })
 	end
 	-- He clawed through the wall next to the board
 	clawGouge(lobby, CFrame.new(45, Y + 14, rz + 0.3) * CFrame.Angles(0, math.pi, 0), 20, 22)

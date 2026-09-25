@@ -81,6 +81,10 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
 - Survivors see a white glow on the 6 nearest hiding spots (`src/client/HideGlow.lua`); keep the
   client's Highlight count low (Roblox caps it at 31), which is why Sniff ghosts also draw boxes.
 - Sentinel pilot exit: destroyed by Wolverine → Hits = 2 (one from death); timed out → full health.
+- Lobby how-to-play board (`RULES WALL` in `MapBuilder.lua`, north wall): a notice board with
+  pinned paperwork (staff memo = survivors, Subject X file = Wolverine, blueprint pilot card =
+  Sentinels), key caps, sticky notes. Numbers come from `Config`; update the copy when controls
+  or mechanics change.
 - Currency is shown as "Berserker Coins" (`Config.CoinName`); saves still use the key `Coins`.
 - Lighting (`MapBuilder.SetupLighting`): gentle grade (contrast 0.15, saturation 0.08), bloom
   0.55/40/1.35 (client arena zone matches), low blue-grey ambient so lamps shape the rooms.
