@@ -150,6 +150,81 @@ local function gloves(char, color, cuff, flare)
 	end
 end
 
+-- Rounded shoulders: a roll along the top outer edge of the torso (so it
+-- stops reading as a box) and a cap over the top of each upper arm.
+local function shoulders(char, color, material, bulk, noCaps)
+	bulk = bulk or 1
+	local torso = char:FindFirstChild("UpperTorso")
+	if torso then
+		local s = torso.Size
+		local d = s.Y * 0.5 * bulk
+		for _, side in { -1, 1 } do
+			gear(char, torso, "ShoulderRoll", Vector3.new(s.Z * 1.04, d, d), color, material,
+				CFrame.new(side * (s.X / 2 - d * 0.36), s.Y / 2 - d * 0.36, 0) * CFrame.Angles(0, rad(90), 0), { Shape = Enum.PartType.Cylinder })
+		end
+	end
+	for _, n in { "RightUpperArm", "LeftUpperArm" } do
+		local arm = not noCaps and char:FindFirstChild(n)
+		if arm then
+			local s = arm.Size
+			gear(char, arm, "Deltoid", Vector3.new(s.X * 1.12 * bulk, s.Y * 0.62, s.Z * 1.1 * bulk), color, material,
+				CFrame.new(0, s.Y * 0.26, 0), { Mesh = Enum.MeshType.Sphere })
+		end
+	end
+end
+
+-- A sculpted build over the torso and arms: pecs with a shadow line under
+-- them, a six-pack, traps sloping up to the neck, biceps and calves.
+-- c = { Chest, Shade, Abs, Traps, Arms, Calves, Material }
+local function physique(char, c)
+	local mat = c.Material or M.SmoothPlastic
+	local torso = char:FindFirstChild("UpperTorso")
+	if torso then
+		local s = torso.Size
+		local fz = -s.Z / 2
+		for _, side in { -1, 1 } do
+			gear(char, torso, "Pec", Vector3.new(s.X * 0.29, s.Y * 0.28, 0.12), c.Chest, mat,
+				CFrame.new(side * s.X * 0.15, s.Y * 0.2, fz - 0.04) * CFrame.Angles(rad(-5), 0, 0))
+			gear(char, torso, "PecShade", Vector3.new(s.X * 0.27, 0.05, 0.1), c.Shade, mat, CFrame.new(side * s.X * 0.15, s.Y * 0.055, fz - 0.05))
+			gear(char, torso, "Trap", Vector3.new(s.Z * 0.62, s.Y * 0.14, s.X * 0.24), c.Traps or c.Chest, mat,
+				CFrame.new(side * s.X * 0.28, s.Y * 0.57, s.Z * 0.06) * CFrame.Angles(0, rad(-side * 90), 0), { Class = "WedgePart" })
+		end
+		for row = 0, 2 do
+			for _, side in { -1, 1 } do
+				gear(char, torso, "Ab", Vector3.new(s.X * 0.13, s.Y * 0.12, 0.06), c.Abs or c.Chest, mat,
+					CFrame.new(side * s.X * 0.075, -s.Y * (0.08 + row * 0.15), fz - 0.02))
+			end
+		end
+		gear(char, torso, "AbLine", Vector3.new(0.04, s.Y * 0.46, 0.05), c.Shade, mat, CFrame.new(0, -s.Y * 0.23, fz - 0.015))
+	end
+	for _, n in { "RightUpperArm", "LeftUpperArm" } do
+		local arm = char:FindFirstChild(n)
+		if arm and c.Arms then
+			local s = arm.Size
+			gear(char, arm, "Bicep", Vector3.new(s.X * 0.7, s.Y * 0.5, s.Z * 0.5), c.Arms, mat,
+				CFrame.new(0, -s.Y * 0.08, -s.Z * 0.32), { Mesh = Enum.MeshType.Sphere })
+		end
+	end
+	for _, n in { "RightLowerLeg", "LeftLowerLeg" } do
+		local leg = char:FindFirstChild(n)
+		if leg and c.Calves then
+			local s = leg.Size
+			gear(char, leg, "Calf", Vector3.new(s.X * 0.8, s.Y * 0.5, s.Z * 0.5), c.Calves, mat,
+				CFrame.new(0, s.Y * 0.12, s.Z * 0.34), { Mesh = Enum.MeshType.Sphere })
+		end
+	end
+end
+
+-- A pointed flap (an isosceles triangle standing up) on a surface: two
+-- wedges back to back. `base` is the flap's centre in anchor space; its local
+-- X is the surface normal, Y up, Z across.
+local function pointFlap(char, anchor, name, base, width, height, thick, color, material)
+	for _, k in { 0, math.pi } do
+		gear(char, anchor, name, Vector3.new(thick, height, width / 2), color, material or M.SmoothPlastic,
+			base * CFrame.Angles(0, k, 0) * CFrame.new(0, 0, -width / 4), { Class = "WedgePart" })
+	end
+end
+
 local SLOT_PARTS = {
 	UpperTorso = { "UpperTorso", "Torso" },
 	LowerTorso = { "LowerTorso" },
@@ -160,6 +235,9 @@ local SLOT_PARTS = {
 	LowerLeg = { "RightLowerLeg", "LeftLowerLeg" },
 	Foot = { "RightFoot", "LeftFoot" },
 }
+
+local SHIRT_SLOTS = { UpperTorso = true, UpperArm = true, LowerArm = true, Hand = true }
+local PANTS_SLOTS = { LowerTorso = true, UpperLeg = true, LowerLeg = true, Foot = true }
 
 local function asset(id)
 	if not id or id == 0 or id == "" then
@@ -370,81 +448,130 @@ local function faceBlock(char, head, style, hair, skinTone)
 end
 
 local function comicGear(char, head)
-	local YEL, BLU, BLK = rgb(238, 184, 20), rgb(28, 56, 140), rgb(18, 18, 22)
+	local YEL, YEL2, BLU, BLU2, BLK = rgb(238, 184, 20), rgb(206, 150, 12), rgb(28, 56, 140), rgb(20, 40, 104), rgb(18, 18, 22)
 	if head then
 		local hs = head.Size
 		head.Color = YEL
-		-- sculpted cowl over the top of the head
-		-- fitted cowl over the top of the (block) head, above the brow line
-		gear(char, head, "Cowl", Vector3.new(hs.X * 1.06, hs.Y * 0.3, hs.Z * 1.06), YEL, M.SmoothPlastic,
-			CFrame.new(0, hs.Y * 0.4, hs.Z * 0.01))
-		-- the iconic swept-back fins: black, with a yellow inner layer
+		-- fitted cowl over the top and back of the (block) head
+		gear(char, head, "Cowl", Vector3.new(hs.X * 1.06, hs.Y * 0.3, hs.Z * 1.06), YEL, M.SmoothPlastic, CFrame.new(0, hs.Y * 0.4, hs.Z * 0.01))
+		gear(char, head, "CowlBack", Vector3.new(hs.X * 1.06, hs.Y * 0.8, hs.Z * 0.1), YEL, M.SmoothPlastic, CFrame.new(0, hs.Y * 0.1, hs.Z * 0.52))
+		-- the iconic fins: tall black blades swept up and back from the
+		-- temples, a yellow inner layer and a black ear patch under each
 		for s = -1, 1, 2 do
-			gear(char, head, "Fin", Vector3.new(0.12, hs.Y * 1.15, hs.Z * 0.7), BLK, M.SmoothPlastic,
-				CFrame.new(s * hs.X * 0.48, hs.Y * 0.7, hs.Z * 0.14) * CFrame.Angles(rad(-14), 0, rad(-s * 18)),
-				{ Class = "WedgePart" })
-			gear(char, head, "FinInner", Vector3.new(0.1, hs.Y * 0.8, hs.Z * 0.46), YEL, M.SmoothPlastic,
-				CFrame.new(s * hs.X * 0.44, hs.Y * 0.6, hs.Z * 0.1) * CFrame.Angles(rad(-14), 0, rad(-s * 18)),
-				{ Class = "WedgePart" })
+			gear(char, head, "Fin", Vector3.new(0.14, hs.Y * 1.3, hs.Z * 0.78), BLK, M.SmoothPlastic,
+				CFrame.new(s * hs.X * 0.47, hs.Y * 0.74, hs.Z * 0.16) * CFrame.Angles(rad(-18), 0, rad(-s * 16)), { Class = "WedgePart" })
+			gear(char, head, "FinInner", Vector3.new(0.12, hs.Y * 0.86, hs.Z * 0.5), YEL, M.SmoothPlastic,
+				CFrame.new(s * hs.X * 0.43, hs.Y * 0.62, hs.Z * 0.13) * CFrame.Angles(rad(-18), 0, rad(-s * 16)), { Class = "WedgePart" })
 		end
 	end
-	-- the classic suit shape: blue flanks down the torso, slashed with black
-	-- tiger stripes (front and back), and stripes down the outer thighs
+
 	local torso = char:FindFirstChild("UpperTorso")
 	if torso then
 		local s = torso.Size
+		local fz = s.Z * 0.525 + 0.02
+		-- muscle under the spandex
+		physique(char, { Chest = YEL, Shade = YEL2, Abs = YEL, Traps = BLU, Material = M.SmoothPlastic })
 		for side = -1, 1, 2 do
-			gear(char, torso, "Flank", Vector3.new(s.X * 0.26, s.Y * 0.96, s.Z * 1.05), BLU, M.SmoothPlastic, CFrame.new(side * s.X * 0.39, -s.Y * 0.02, 0))
+			-- blue flanks from the armpits to the belt
+			gear(char, torso, "Flank", Vector3.new(s.X * 0.2, s.Y * 0.96, s.Z * 1.05), BLU, M.SmoothPlastic, CFrame.new(side * s.X * 0.41, -s.Y * 0.02, 0))
+			-- the blue sweeps over the shoulders and in to the collar
+			gear(char, torso, "Yoke", Vector3.new(s.X * 0.4, s.Y * 0.2, s.Z * 1.06), BLU, M.SmoothPlastic, CFrame.new(side * s.X * 0.31, s.Y * 0.41, 0))
+			gear(char, torso, "YokePoint", Vector3.new(0.05, s.Y * 0.3, s.X * 0.2), BLU, M.SmoothPlastic,
+				CFrame.new(side * s.X * 0.2, s.Y * 0.2, -fz) * CFrame.Angles(0, 0, rad(180)) * CFrame.Angles(0, rad(-side * 90), 0), { Class = "WedgePart" })
+			-- black tiger stripes knifing in from the flanks, front and back
 			for k = 0, 2 do
-				for face = -1, 1, 2 do
-					gear(char, torso, "Stripe", Vector3.new(s.X * 0.2, s.Y * 0.07, 0.04), BLK, M.SmoothPlastic,
-						CFrame.new(side * s.X * 0.36, s.Y * (0.22 - k * 0.22), face * (s.Z * 0.525 + 0.02)) * CFrame.Angles(0, 0, rad(side * 28)))
+				for _, face in { -1, 1 } do
+					local y = -s.Y * (0.02 + k * 0.16)
+					gear(char, torso, "Stripe", Vector3.new(0.04, s.Y * 0.08, s.X * (0.26 - k * 0.03)), BLK, M.SmoothPlastic,
+						CFrame.new(side * s.X * (0.38 - k * 0.01), y, face * fz) * CFrame.Angles(0, 0, rad(side * -12)) * CFrame.Angles(0, rad(side * 90), 0), { Class = "WedgePart" })
 				end
 			end
 		end
 	end
-	for _, n in { "RightUpperLeg", "LeftUpperLeg" } do
-		local leg = char:FindFirstChild(n)
-		if leg then
-			local s = leg.Size
-			local side = n:sub(1, 5) == "Right" and 1 or -1
-			for k = 0, 2 do
-				gear(char, leg, "Stripe", Vector3.new(0.04, s.Y * 0.07, s.Z * 0.6), BLK, M.SmoothPlastic,
-					CFrame.new(side * (s.X * 0.5 + 0.02), s.Y * (0.25 - k * 0.22), 0) * CFrame.Angles(rad(side * 25), 0, 0))
-			end
-		end
-	end
-	gloves(char, BLU, BLU, true)
-	boots(char, BLU, BLK, true)
-	-- rounded blue shoulder pads
+	shoulders(char, BLU, M.SmoothPlastic, 1.08, true)
+	-- rounded blue shoulder pads with a black rim
 	for _, n in { "RightUpperArm", "LeftUpperArm" } do
 		local arm = char:FindFirstChild(n)
 		if arm then
 			local s = arm.Size
 			local side = n:sub(1, 5) == "Right" and 1 or -1
-			gear(char, arm, "ShoulderPad", Vector3.new(s.X * 1.9, s.Y * 0.62, s.Z * 1.9), BLU, M.SmoothPlastic,
-				CFrame.new(side * s.X * 0.12, s.Y * 0.3, 0), { Mesh = Enum.MeshType.Sphere })
-			gear(char, arm, "PadTrim", Vector3.new(s.X * 1.95, 0.06, s.Z * 1.95), BLK, M.SmoothPlastic,
-				CFrame.new(side * s.X * 0.12, s.Y * 0.05, 0), { Mesh = Enum.MeshType.Sphere })
+			gear(char, arm, "ShoulderPad", Vector3.new(s.X * 1.36, s.Y * 0.7, s.Z * 1.28), BLU, M.SmoothPlastic,
+				CFrame.new(side * s.X * 0.06, s.Y * 0.4, 0), { Mesh = Enum.MeshType.Sphere })
+			gear(char, arm, "PadRim", Vector3.new(s.X * 1.32, s.Y * 0.08, s.Z * 1.24), BLK, M.SmoothPlastic,
+				CFrame.new(side * s.X * 0.06, s.Y * 0.2, 0), { Mesh = Enum.MeshType.Sphere })
+			for k = 0, 1 do -- stripes round the yellow sleeve
+				gear(char, arm, "Stripe", Vector3.new(0.04, s.Y * 0.08, s.Z * 0.62), BLK, M.SmoothPlastic,
+					CFrame.new(side * (s.X * 0.5 + 0.02), -s.Y * (0.12 + k * 0.2), 0) * CFrame.Angles(rad(side * 20), 0, 0))
+			end
 		end
 	end
-	-- 3D belt + buckle
+	-- gauntlets: blue to the elbow, a black-trimmed cuff with a big point on
+	-- the outside of the forearm
+	for _, side in { "Right", "Left" } do
+		local sx = side == "Right" and 1 or -1
+		local hand = char:FindFirstChild(side .. "Hand")
+		if hand then
+			local hsz = hand.Size
+			gear(char, hand, "Glove", Vector3.new(hsz.X * 1.12, hsz.Y * 1.08, hsz.Z * 1.12), BLU, M.SmoothPlastic, CFrame.new())
+			gear(char, hand, "Knuckles", Vector3.new(hsz.X * 1.14, hsz.Y * 0.3, hsz.Z * 0.5), BLU2, M.SmoothPlastic, CFrame.new(0, -hsz.Y * 0.3, -hsz.Z * 0.2))
+		end
+		local arm = char:FindFirstChild(side .. "LowerArm")
+		if arm then
+			local as = arm.Size
+			gear(char, arm, "GloveCuff", Vector3.new(as.X * 1.16, as.Y * 0.16, as.Z * 1.16), BLU, M.SmoothPlastic, CFrame.new(0, as.Y * 0.36, 0))
+			gear(char, arm, "CuffRim", Vector3.new(as.X * 1.18, as.Y * 0.04, as.Z * 1.18), BLK, M.SmoothPlastic, CFrame.new(0, as.Y * 0.45, 0))
+			pointFlap(char, arm, "GloveFin", CFrame.new(sx * (as.X * 0.58 + 0.04), as.Y * 0.62, 0), as.Z * 1.0, as.Y * 0.62, 0.08, BLU)
+			pointFlap(char, arm, "GloveFinRim", CFrame.new(sx * (as.X * 0.58 + 0.01), as.Y * 0.64, 0), as.Z * 1.08, as.Y * 0.68, 0.06, BLK)
+		end
+	end
+	-- boots: blue, a black sole, the top cut into a point at the front
+	boots(char, BLU, BLK)
+	for _, n in { "RightLowerLeg", "LeftLowerLeg" } do
+		local leg = char:FindFirstChild(n)
+		if leg then
+			local ls = leg.Size
+			gear(char, leg, "BootTop", Vector3.new(ls.X * 1.14, ls.Y * 0.1, ls.Z * 1.14), BLU, M.SmoothPlastic, CFrame.new(0, ls.Y * 0.32, 0))
+			pointFlap(char, leg, "BootPoint", CFrame.new(0, ls.Y * 0.5, -(ls.Z * 0.57 + 0.04)) * CFrame.Angles(0, rad(90), 0), ls.X * 0.9, ls.Y * 0.4, 0.08, BLU)
+			pointFlap(char, leg, "BootPointRim", CFrame.new(0, ls.Y * 0.52, -(ls.Z * 0.57 + 0.01)) * CFrame.Angles(0, rad(90), 0), ls.X * 0.98, ls.Y * 0.46, 0.06, BLK)
+		end
+	end
+	for _, n in { "RightUpperLeg", "LeftUpperLeg" } do
+		local leg = char:FindFirstChild(n)
+		if leg then
+			local ls = leg.Size
+			local side = n:sub(1, 5) == "Right" and 1 or -1
+			for k = 0, 2 do -- tiger stripes down the outer thigh
+				gear(char, leg, "Stripe", Vector3.new(0.04, ls.Y * 0.07, ls.Z * (0.66 - k * 0.08)), BLK, M.SmoothPlastic,
+					CFrame.new(side * (ls.X * 0.5 + 0.02), ls.Y * (0.28 - k * 0.22), 0) * CFrame.Angles(rad(side * 24), 0, 0))
+			end
+			gear(char, leg, "Briefs", Vector3.new(ls.X * 1.06, ls.Y * 0.2, ls.Z * 1.06), BLU, M.SmoothPlastic, CFrame.new(0, ls.Y * 0.42, 0))
+		end
+	end
+	-- red belt, black buckle with the X
 	local lower = char:FindFirstChild("LowerTorso")
 	if lower then
 		local s = lower.Size
-		gear(char, lower, "Belt", Vector3.new(s.X * 1.06, s.Y * 0.28, s.Z * 1.08), rgb(170, 26, 30), M.Leather, CFrame.new(0, s.Y * 0.32, 0))
-		local buckle = gear(char, lower, "Buckle", Vector3.new(0.12, s.Y * 0.5, s.Y * 0.5), BLK, M.Metal,
-			CFrame.new(0, s.Y * 0.32, -s.Z * 0.56) * CFrame.Angles(0, rad(90), 0), { Shape = Enum.PartType.Cylinder })
+		gear(char, lower, "Briefs", Vector3.new(s.X * 1.03, s.Y * 0.9, s.Z * 1.04), BLU, M.SmoothPlastic, CFrame.new(0, -s.Y * 0.05, 0))
+		gear(char, lower, "Belt", Vector3.new(s.X * 1.08, s.Y * 0.3, s.Z * 1.1), rgb(186, 24, 30), M.Leather, CFrame.new(0, s.Y * 0.34, 0))
+		local buckle = gear(char, lower, "Buckle", Vector3.new(0.12, s.Y * 0.62, s.Y * 0.62), BLK, M.Metal,
+			CFrame.new(0, s.Y * 0.34, -s.Z * 0.57) * CFrame.Angles(0, rad(90), 0), { Shape = Enum.PartType.Cylinder })
 		buckle.Reflectance = 0.2
+		gear(char, lower, "BuckleRim", Vector3.new(0.1, s.Y * 0.7, s.Y * 0.7), rgb(200, 200, 206), M.Metal,
+			CFrame.new(0, s.Y * 0.34, -s.Z * 0.555) * CFrame.Angles(0, rad(90), 0), { Shape = Enum.PartType.Cylinder, Reflectance = 0.3 })
 		for k = -1, 1, 2 do -- the X on the buckle
-			gear(char, lower, "BuckleX", Vector3.new(s.Y * 0.44, 0.05, 0.05), YEL, M.Metal,
-				CFrame.new(0, s.Y * 0.32, -s.Z * 0.56 - 0.07) * CFrame.Angles(0, 0, rad(k * 45)), { Reflectance = 0.25 })
+			gear(char, lower, "BuckleX", Vector3.new(s.Y * 0.52, 0.06, 0.05), YEL, M.Metal,
+				CFrame.new(0, s.Y * 0.34, -s.Z * 0.57 - 0.07) * CFrame.Angles(0, 0, rad(k * 45)), { Reflectance = 0.25 })
 		end
 	end
 end
 
 local function weaponXGear(char, head)
 	local GUN, DARK = rgb(58, 58, 62), rgb(34, 34, 38)
+	-- the body they built: bare, scarred and cut like a statue
+	local tone = head and head.Color or rgb(226, 176, 140)
+	local shade = tone:Lerp(Color3.new(0, 0, 0), 0.22)
+	physique(char, { Chest = tone, Shade = shade, Abs = tone, Traps = tone, Material = M.SmoothPlastic })
+	shoulders(char, tone, M.SmoothPlastic, 1, true)
 	if head then
 		local hs = head.Size
 		-- helmet shell and visor band, boxed to fit the block head
@@ -541,6 +668,37 @@ local function weaponXGear(char, head)
 		end
 	end
 
+	-- a restraint collar round the neck and a spine plate the helmet cables
+	-- plug into; broken shackles on the wrists and ankles, a snapped link
+	-- hanging off each
+	if torso then
+		local s = torso.Size
+		gear(char, torso, "Collar", Vector3.new(s.Y * 0.2, s.X * 0.66, s.X * 0.66), GUN, M.Metal,
+			CFrame.new(0, s.Y * 0.5, 0) * CFrame.Angles(0, 0, rad(90)), { Shape = Enum.PartType.Cylinder, Reflectance = 0.1 })
+		gear(char, torso, "CollarRing", Vector3.new(s.Y * 0.05, s.X * 0.68, s.X * 0.68), DARK, M.Metal,
+			CFrame.new(0, s.Y * 0.44, 0) * CFrame.Angles(0, 0, rad(90)), { Shape = Enum.PartType.Cylinder })
+		gear(char, torso, "CollarLED", Vector3.new(0.12, 0.08, 0.04), rgb(255, 40, 40), M.Neon, CFrame.new(0, s.Y * 0.5, -s.X * 0.33 - 0.01))
+		gear(char, torso, "SpinePlate", Vector3.new(s.X * 0.22, s.Y * 0.84, 0.14), DARK, M.Metal, CFrame.new(0, s.Y * 0.02, s.Z * 0.56))
+		for k = -1, 1 do
+			gear(char, torso, "SpinePort", Vector3.new(0.1, 0.18, 0.18), rgb(150, 150, 155), M.Metal,
+				CFrame.new(0, s.Y * (0.08 + k * 0.24), s.Z * 0.64) * CFrame.Angles(0, rad(90), 0), { Shape = Enum.PartType.Cylinder, Reflectance = 0.2 })
+		end
+	end
+	for _, n in { "RightLowerArm", "LeftLowerArm", "RightLowerLeg", "LeftLowerLeg" } do
+		local limb = char:FindFirstChild(n)
+		if limb then
+			local s = limb.Size
+			local side = n:sub(1, 5) == "Right" and 1 or -1
+			local y = -s.Y * 0.36
+			gear(char, limb, "Shackle", Vector3.new(s.X * 1.24, s.Y * 0.2, s.Z * 1.24), GUN, M.Metal, CFrame.new(0, y, 0), { Reflectance = 0.15 })
+			gear(char, limb, "ShackleRidge", Vector3.new(s.X * 1.28, s.Y * 0.04, s.Z * 1.28), DARK, M.Metal, CFrame.new(0, y, 0))
+			gear(char, limb, "ShackleBolt", Vector3.new(0.1, 0.16, 0.16), rgb(150, 150, 155), M.Metal, CFrame.new(side * s.X * 0.66, y, 0), { Shape = Enum.PartType.Cylinder })
+			gear(char, limb, "Link", Vector3.new(0.07, 0.3, 0.18), rgb(120, 122, 128), M.Metal, CFrame.new(side * s.X * 0.68, y - 0.2, 0), { Reflectance = 0.2 })
+			gear(char, limb, "Link", Vector3.new(0.18, 0.28, 0.07), rgb(120, 122, 128), M.Metal,
+				CFrame.new(side * s.X * 0.7, y - 0.44, 0) * CFrame.Angles(0, 0, rad(side * 18)), { Reflectance = 0.2 })
+		end
+	end
+
 	-- cables wrapped around the arms and legs
 	wrap(char, char:FindFirstChild("RightUpperArm"), 1.6, 0.08, 0.35, -0.4)
 	wrap(char, char:FindFirstChild("LeftLowerArm"), 1.8, 0.08, 0.4, -0.35)
@@ -566,8 +724,8 @@ local function loganGear(char)
 			-- open front panels, the shirt shows down the middle
 			gear(char, torso, "JacketFront", Vector3.new(s.X * 0.34, s.Y, t), LEATHER, M.Leather, CFrame.new(side * s.X * 0.33, 0, fz))
 			gear(char, torso, "JacketShoulder", Vector3.new(s.X * 0.36, t, s.Z + 2 * t), LEATHER, M.Leather, CFrame.new(side * s.X * 0.33, s.Y / 2 + t / 2, 0))
-			-- folded-back collar
-			gear(char, torso, "Lapel", Vector3.new(s.X * 0.15, s.Y * 0.34, t), DARK, M.Leather,
+			-- folded-back sheepskin collar
+			gear(char, torso, "Lapel", Vector3.new(s.X * 0.15, s.Y * 0.34, t), rgb(196, 170, 130), M.Fabric,
 				CFrame.new(side * s.X * 0.19, s.Y * 0.3, fz - t) * CFrame.Angles(0, 0, rad(side * 24)))
 			-- hem band
 			gear(char, torso, "JacketHem", Vector3.new(s.X * 0.36, s.Y * 0.09, t * 1.4), DARK, M.Leather, CFrame.new(side * s.X * 0.33, -s.Y * 0.466, fz))
@@ -617,6 +775,25 @@ local function loganGear(char)
 		gear(char, lower, "Belt", Vector3.new(s.X * 1.05, s.Y * 0.3, s.Z * 1.06), rgb(34, 26, 20), M.Leather, CFrame.new(0, s.Y * 0.3, 0))
 		local buckle = gear(char, lower, "Buckle", Vector3.new(s.X * 0.16, s.Y * 0.34, 0.06), rgb(170, 170, 176), M.Metal, CFrame.new(0, s.Y * 0.3, -s.Z * 0.56))
 		buckle.Reflectance = 0.25
+	end
+	-- the jacket's cut: rounded shoulders, chest pockets with snaps, zips down
+	-- the open front, a ribbed waistband and seams across the back
+	shoulders(char, LEATHER, M.Leather, 1, true)
+	if torso then
+		local s = torso.Size
+		local t = 0.08
+		local front, back = -(s.Z / 2 + t + 0.02), s.Z / 2 + t + 0.01
+		for k = 0, 2 do
+			gear(char, torso, "Rib", Vector3.new(s.X + 2 * t + 0.02, 0.05, 0.03), DARK, M.Leather, CFrame.new(0, -s.Y * (0.39 + k * 0.035), back))
+		end
+		gear(char, torso, "Yoke", Vector3.new(s.X + 2 * t, 0.04, 0.02), DARK, M.Leather, CFrame.new(0, s.Y * 0.22, back))
+		for _, side in { -1, 1 } do
+			gear(char, torso, "PocketFlap", Vector3.new(s.X * 0.2, s.Y * 0.08, 0.05), DARK, M.Leather, CFrame.new(side * s.X * 0.34, s.Y * 0.14, front))
+			gear(char, torso, "Snap", Vector3.new(0.04, 0.09, 0.09), rgb(170, 170, 176), M.Metal,
+				CFrame.new(side * s.X * 0.34, s.Y * 0.12, front - 0.03) * CFrame.Angles(0, rad(90), 0), { Shape = Enum.PartType.Cylinder, Reflectance = 0.3 })
+			gear(char, torso, "ZipEdge", Vector3.new(0.04, s.Y * 0.84, 0.03), rgb(150, 140, 120), M.Metal, CFrame.new(side * s.X * 0.165, -s.Y * 0.06, front + 0.01), { Reflectance = 0.2 })
+			gear(char, torso, "Seam", Vector3.new(0.03, s.Y * 0.6, 0.02), DARK, M.Leather, CFrame.new(side * s.X * 0.25, -s.Y * 0.1, back))
+		end
 	end
 end
 
@@ -677,6 +854,8 @@ local function oldManGear(char)
 			CFrame.new(0, -hs.Y * 0.68, -hs.Z * 0.4) * CFrame.Angles(rad(180), 0, 0), { Class = "WedgePart" })
 	end
 	boots(char, rgb(48, 36, 28), rgb(24, 20, 16))
+	-- heavy, rounded shoulders on the duster
+	shoulders(char, COAT, M.Leather, 1.12, true)
 end
 
 local function loadHair(char, id)
@@ -711,10 +890,11 @@ function Costumes.Dress(char, skinId)
 		end
 	end
 
-	-- Base body colours: skin tone under textures, flat colours as a fallback
+	-- Base body colours: skin tone under a clothing texture (its see-through
+	-- bits are bare skin), the suit's flat colours where there's no texture
 	for slot, names in SLOT_PARTS do
 		local color = skin.Colors[slot]
-		if hasShirt or hasPants or color == "Skin" then
+		if color == "Skin" or (hasShirt and SHIRT_SLOTS[slot]) or (hasPants and PANTS_SLOTS[slot]) then
 			color = skinTone
 		end
 		for _, name in names do

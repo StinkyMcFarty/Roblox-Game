@@ -11,6 +11,11 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
   give them short, click-by-click steps.
 - Sounds are synthesised by `tools/generate_sfx.py` (`python3 tools/generate_sfx.py <Name>` writes
   only that sound); store icons by `tools/generate_icons.py` into `assets/icons/`.
+- `tools/preview/` renders suits offline: `run.py` runs the real `Costumes.lua` (Luau shimmed to Lua
+  5.4 via lupa, mock Roblox API in `prelude.lua`) on a blocky R15 rig and dumps `scene.json`;
+  `render.js` draws it with three.js (clothing templates from `assets/textures/`). Serve the repo
+  root on :8765, then `node tools/preview/shot.cjs out.png "scenes=wolverine:Comic/Adamantium&views=25,160"`.
+  `npm i` in tools/preview and `pip install lupa pillow` first.
 - `tools/publish.sh` publishes via Open Cloud (needs `ROBLOX_API_KEY`, `ROBLOX_UNIVERSE_ID`,
   `ROBLOX_PLACE_ID`).
 
@@ -74,6 +79,10 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
   after 2s (`Fart.Trail`). Dodge (300): replaces the fart; G gives 0.5s of i-frames (`Fart.Dodge`,
   statuses `Immune` + `Dodging`), 30s cooldown; a hit in that window whiffs (`Combat.BreakShield`
   fires Fx `Dodged`). Client swaps the G kit entry by `Power` (`DODGE_KIT`/`TURBO_KIT`).
+- Wolverine suits (`Costumes.lua`): everyone is a blocky R15 (`blockyDescription`). Shared sculpt
+  helpers `shoulders` (rolls + deltoid caps), `physique` (pecs, abs, traps), `pointFlap` (comic
+  cuff/boot points). Comic and Weapon X no longer use a Shirt texture (the top is 3D); body
+  colours only turn skin-tone under a texture that covers that slot (`SHIRT_SLOTS`/`PANTS_SLOTS`).
 - Sentinel suit skins: palettes in `Costumes.SentinelSkins`, shop data in `Skins.Sentinels`
   (Armory SENTINEL tab, `PlayerData.BuySentinel`/`EquipSentinel`, saved `OwnedSentinels`/
   `SentinelSkin`). Verity (3000): black/yellow suit with the grin (`Costumes.Smiley`) on its face;

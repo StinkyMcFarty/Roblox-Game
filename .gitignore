@@ -8,3 +8,8 @@ rojo.exe
 *.rbxlx.lock
 *.rbxl.lock
 Berserker Rage.rbxlx
+
+# costume preview (tools/preview)
+tools/preview/node_modules/
+tools/preview/scene.json
+tools/preview/*.png

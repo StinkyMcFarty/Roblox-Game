@@ -1,0 +1,9 @@
+{
+  "name": "costume-preview",
+  "private": true,
+  "description": "Renders Costumes.lua outfits offline (see CLAUDE.md)",
+  "dependencies": {
+    "playwright-core": "1.56.1",
+    "three": "0.169.0"
+  }
+}

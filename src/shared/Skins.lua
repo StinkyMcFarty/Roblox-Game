@@ -39,12 +39,12 @@ Skins.List = {
 		Price = 2000,
 		Description = "Straight off the page. Cowl, fins, shoulder pads, tiger stripes.",
 		FaceStyle = "Comic",
-		Textures = { Shirt = 112579941158359, Pants = 84892200431804, Face = 0 },
+		Textures = { Shirt = 0, Pants = 84892200431804, Face = 0 }, -- the top is built in 3D (Costumes comicGear); old shirt: 112579941158359
 		HairAccessoryId = 0,
 		Swatch = YELLOW,
 		Colors = {
 			UpperTorso = YELLOW, LowerTorso = BLUE,
-			UpperArm = "Skin", LowerArm = BLUE, Hand = BLUE,
+			UpperArm = YELLOW, LowerArm = BLUE, Hand = BLUE,
 			UpperLeg = YELLOW, LowerLeg = BLUE, Foot = BLUE,
 		},
 	},
@@ -53,7 +53,7 @@ Skins.List = {
 		Price = 4000,
 		Description = "Fresh out of the tank. Visor helmet, cables, harness, scars.",
 		FaceStyle = "WeaponX",
-		Textures = { Shirt = 125698769813626, Pants = 121111924489660, Face = 0 },
+		Textures = { Shirt = 0, Pants = 121111924489660, Face = 0 }, -- bare chest, all the gear is 3D; old shirt: 125698769813626
 		HairAccessoryId = 0,
 		Swatch = rgb(120, 200, 190),
 		Colors = {
