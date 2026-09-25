@@ -7582,8 +7582,9 @@ function MapBuilder.SetupLighting()
 	Lighting.ShadowSoftness = 1
 	Lighting.GeographicLatitude = 48
 	Lighting.ExposureCompensation = 0.1
+	local customSky = Lighting:FindFirstChildOfClass("Sky") -- a sky set up in Studio is kept
 	for _, c in Lighting:GetChildren() do
-		if c:IsA("PostEffect") or c:IsA("Atmosphere") or c:IsA("Sky") then
+		if c:IsA("PostEffect") or c:IsA("Atmosphere") or (c:IsA("Sky") and c ~= customSky) then
 			c:Destroy()
 		end
 	end
@@ -7595,7 +7596,9 @@ function MapBuilder.SetupLighting()
 		Glare = 0.25,
 		Haze = 1.7,
 	})
-	make("Sky", Lighting, { StarCount = 5000, MoonAngularSize = 16, CelestialBodiesShown = true })
+	if not customSky then
+		make("Sky", Lighting, { StarCount = 5000, MoonAngularSize = 16, CelestialBodiesShown = true })
+	end
 	make("ColorCorrectionEffect", Lighting, {
 		Brightness = 0,
 		Contrast = 0.5,
@@ -11124,11 +11127,29 @@ return Wolverine
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="33">
+      <Item class="LocalScript" referent="33">
+        <Properties>
+          <string name="Name">CharacterOutline</string>
+          <string name="Source"><![CDATA[local Player = game.Players.LocalPlayer
+
+Player.CharacterAdded:Connect(function(Character)
+	local Highlight = Instance.new("Highlight")
+	Highlight.Parent = Character
+	Highlight.FillTransparency = 0.8
+	Highlight.FillColor = Color3.fromRGB(0, 0, 0)
+	Highlight.OutlineColor = Color3.fromRGB(0, 0, 0)
+	Highlight.DepthMode = Enum.HighlightDepthMode.Occluded
+	Highlight.Enabled = true
+	Highlight.Adornee = Character
+end)
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="Folder" referent="34">
         <Properties>
           <string name="Name">Client</string>
         </Properties>
-        <Item class="ModuleScript" referent="34">
+        <Item class="ModuleScript" referent="35">
           <Properties>
             <string name="Name">AnimClips</string>
             <string name="Source"><![CDATA[-- Keyframed animation clips (R15). Poses are joint rotations in degrees:
@@ -11612,7 +11633,7 @@ return Clips
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="35">
+        <Item class="ModuleScript" referent="36">
           <Properties>
             <string name="Name">Anims</string>
             <string name="Source"><![CDATA[-- Client animation engine. Runs on every client for every character, so all
@@ -12445,7 +12466,7 @@ return Anims
 ]]></string>
           </Properties>
         </Item>
-        <Item class="LocalScript" referent="36">
+        <Item class="LocalScript" referent="37">
           <Properties>
             <string name="Name">ClientMain</string>
             <string name="Source"><![CDATA[-- Input + role handling. PC keys, gamepad and mobile touch buttons.
@@ -12937,7 +12958,7 @@ end)
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="37">
+        <Item class="ModuleScript" referent="38">
           <Properties>
             <string name="Name">Daily</string>
             <string name="Source"><![CDATA[-- Daily challenges, login streak, Wolverine odds and the Robux pass.
@@ -13274,7 +13295,7 @@ return Daily
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="38">
+        <Item class="ModuleScript" referent="39">
           <Properties>
             <string name="Name">Effects</string>
             <string name="Source"><![CDATA[-- Client-only atmosphere: camera shake, snowfall, flickering lights,
@@ -13920,7 +13941,7 @@ return Effects
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="39">
+        <Item class="ModuleScript" referent="40">
           <Properties>
             <string name="Name">Interface</string>
             <string name="Source"><![CDATA[-- HUD built entirely from code.
@@ -14814,7 +14835,7 @@ return Interface
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="40">
+        <Item class="ModuleScript" referent="41">
           <Properties>
             <string name="Name">Minigame</string>
             <string name="Source"><![CDATA[-- Sentinel console repair minigames. Each console this round has its own
@@ -15322,7 +15343,7 @@ return Minigame
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="41">
+        <Item class="ModuleScript" referent="42">
           <Properties>
             <string name="Name">Shop</string>
             <string name="Source"><![CDATA[-- Wolverine shop: suits + claws, and the left-side menu dock.
@@ -15709,7 +15730,7 @@ return Shop
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="42">
+        <Item class="ModuleScript" referent="43">
           <Properties>
             <string name="Name">SlashFX</string>
             <string name="Source"><![CDATA[-- Crisp anime-style slash VFX, drawn on each client every frame so they stay smooth.
@@ -16649,7 +16670,7 @@ return SlashFX
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="43">
+        <Item class="ModuleScript" referent="44">
           <Properties>
             <string name="Name">Spectate</string>
             <string name="Source"><![CDATA[-- Spectate: once you're out of the round (killed, or waiting in the lobby) you
@@ -16890,7 +16911,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="44">
+        <Item class="ModuleScript" referent="45">
           <Properties>
             <string name="Name">Store</string>
             <string name="Source"><![CDATA[-- Lobby dock: STORE (buy coin packs with Robux) and AFK (sit out matches).
@@ -17110,7 +17131,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="45">
+        <Item class="ModuleScript" referent="46">
           <Properties>
             <string name="Name">UIKit</string>
             <string name="Source"><![CDATA[-- Shared UI building blocks: animated buttons, panels, gradients.
@@ -17523,7 +17544,7 @@ return UIKit
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="46">
+  <Item class="Workspace" referent="47">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>

@@ -35,6 +35,9 @@
         "$className": "StarterPlayerScripts",
         "Client": {
           "$path": "src/client"
+        },
+        "CharacterOutline": {
+          "$path": "src/playerscripts/CharacterOutline.client.lua"
         }
       },
       "StarterCharacterScripts": {

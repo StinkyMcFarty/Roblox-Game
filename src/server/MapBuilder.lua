@@ -1371,8 +1371,9 @@ function MapBuilder.SetupLighting()
 	Lighting.ShadowSoftness = 1
 	Lighting.GeographicLatitude = 48
 	Lighting.ExposureCompensation = 0.1
+	local customSky = Lighting:FindFirstChildOfClass("Sky") -- a sky set up in Studio is kept
 	for _, c in Lighting:GetChildren() do
-		if c:IsA("PostEffect") or c:IsA("Atmosphere") or c:IsA("Sky") then
+		if c:IsA("PostEffect") or c:IsA("Atmosphere") or (c:IsA("Sky") and c ~= customSky) then
 			c:Destroy()
 		end
 	end
@@ -1384,7 +1385,9 @@ function MapBuilder.SetupLighting()
 		Glare = 0.25,
 		Haze = 1.7,
 	})
-	make("Sky", Lighting, { StarCount = 5000, MoonAngularSize = 16, CelestialBodiesShown = true })
+	if not customSky then
+		make("Sky", Lighting, { StarCount = 5000, MoonAngularSize = 16, CelestialBodiesShown = true })
+	end
 	make("ColorCorrectionEffect", Lighting, {
 		Brightness = 0,
 		Contrast = 0.5,
