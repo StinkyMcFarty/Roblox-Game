@@ -245,6 +245,7 @@ Config.UploadedSounds = {
 	SentinelSmash = 93700336440724, -- Sentinel fist landing (on Wolverine or through a wall)
 }
 Config.Sounds.Snarl = Config.Sounds.Snarl or ""
+Config.BuiltinSounds = table.clone(Config.Sounds) -- stand-ins if an upload won't play (client/SoundCheck)
 for name, id in Config.UploadedSounds do
 	if id and id ~= 0 then
 		Config.Sounds[name] = "rbxassetid://" .. (type(id) == "number" and string.format("%.0f", id) or tostring(id))
@@ -9576,18 +9577,26 @@ local function punch(player, char, root)
 		local bcf, bsize = Combat.BodyBox(wRoot)
 		if Combat.BoxOverlap(box, Vector3.new(9, 11, cfg.Range + 1), bcf, bsize) then
 			hit = true
-			local mult = power(player)
-			Wolverine.Damage(cfg.Damage * mult, player)
-			stunWolverine(cfg.Stun * mult)
-			local dir = Util.Flat(wRoot.Position - root.Position)
-			Fx:FireClient(w, "Knock", { Velocity = dir * cfg.Knockback + Vector3.new(0, 25, 0) })
-			smashSound(wRoot)
-			-- the fist rings off his adamantium skeleton; the floor jumps
-			Util.Burst(wRoot, Util.SparkProps, 30, 1.5)
-			VFX.Shockwave(floorBelow(wRoot.Position, { char, wChar }) + Vector3.new(0, 0.2, 0), 11)
-			Fx:FireAllClients("Shake", { Position = wRoot.Position, Intensity = 1.4, Radius = 80 })
-			Fx:FireAllClients("HitStop", { Attacker = char, Victim = wChar, Duration = 0.15 })
 			fist = CFrame.new(wRoot.Position)
+			if Combat.BreakShield(w) then
+				-- punched into his i-frames: they shatter and that's all this punch does
+				Fx:FireAllClients("Shake", { Position = wRoot.Position, Intensity = 0.5, Radius = 40 })
+			else
+				local mult = power(player)
+				Wolverine.Damage(cfg.Damage * mult, player)
+				stunWolverine(cfg.Stun * mult)
+				local dir = Util.Flat(wRoot.Position - root.Position)
+				Fx:FireClient(w, "Knock", { Velocity = dir * cfg.Knockback + Vector3.new(0, 25, 0) })
+				smashSound(wRoot)
+				-- the fist rings off his adamantium skeleton; the floor jumps
+				Util.Burst(wRoot, Util.SparkProps, 30, 1.5)
+				VFX.Shockwave(floorBelow(wRoot.Position, { char, wChar }) + Vector3.new(0, 0.2, 0), 11)
+				Fx:FireAllClients("Shake", { Position = wRoot.Position, Intensity = 1.4, Radius = 80 })
+				Fx:FireAllClients("HitStop", { Attacker = char, Victim = wChar, Duration = 0.15 })
+				-- i-frames, the same as a Sentinel gets when he hits them
+				Status.Apply(w, "Immune", Config.HitImmunity)
+				VFX.IFrames(wChar, Config.HitImmunity)
+			end
 		end
 	end
 	-- the fist goes straight through any wall in its way
@@ -12539,6 +12548,7 @@ require(script.Parent:WaitForChild("Shop"))
 local Daily = require(script.Parent:WaitForChild("Daily"))
 require(script.Parent:WaitForChild("Store"))
 require(script.Parent:WaitForChild("Spectate"))
+require(script.Parent:WaitForChild("SoundCheck"))
 local Anims = require(script.Parent:WaitForChild("Anims"))
 local SlashFX = require(script.Parent:WaitForChild("SlashFX"))
 local Minigame = require(script.Parent:WaitForChild("Minigame"))
@@ -16796,6 +16806,78 @@ return SlashFX
         </Item>
         <Item class="ModuleScript" referent="44">
           <Properties>
+            <string name="Name">SoundCheck</string>
+            <string name="Source"><![CDATA[-- Checks every uploaded sound once when you join. Roblox refuses to play an
+-- upload the experience isn't allowed to use (e.g. the game is owned by a
+-- group but the audio by a person) or one still waiting for moderation, and
+-- that fails silently. So: each one that fails is listed in the F9 console
+-- under [Sounds] with the reason, and from then on it plays its built-in
+-- stand-in instead of nothing.
+local ContentProvider = game:GetService("ContentProvider")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+
+local fallback = {} -- [uploaded SoundId that failed] = built-in SoundId
+
+local function patch(sound)
+	local id = fallback[sound.SoundId]
+	if id then
+		local playing = sound.IsPlaying
+		sound.SoundId = id
+		if playing then
+			sound:Play()
+		end
+	end
+end
+
+task.spawn(function()
+	local probes, nameOf = {}, {}
+	for name, id in Config.UploadedSounds do
+		if id and id ~= 0 and Config.Sounds[name] then
+			local s = Instance.new("Sound")
+			s.SoundId = Config.Sounds[name]
+			nameOf[s.SoundId] = name
+			table.insert(probes, s)
+		end
+	end
+	local failed = {}
+	pcall(function()
+		ContentProvider:PreloadAsync(probes, function(contentId, status)
+			if status ~= Enum.AssetFetchStatus.Success and nameOf[contentId] then
+				local name = nameOf[contentId]
+				table.insert(failed, ("%s (%s: %s)"):format(name, contentId, status.Name))
+				local builtin = Config.BuiltinSounds[name]
+				if builtin and builtin ~= "" and builtin ~= contentId then
+					fallback[contentId] = builtin
+				end
+			end
+		end)
+	end)
+	if #failed == 0 then
+		print(("[Sounds] all %d uploaded sounds loaded"):format(#probes))
+		return
+	end
+	warn(("[Sounds] %d of %d uploaded sounds won't play here: %s"):format(#failed, #probes, table.concat(failed, ", ")))
+	warn("[Sounds] Fix: make sure the game and the audio belong to the same owner, or give this experience permission on each sound (Creator Dashboard > the audio > Permissions), and that each one passed moderation.")
+	for _, d in workspace:GetDescendants() do
+		if d:IsA("Sound") then
+			patch(d)
+		end
+	end
+	workspace.DescendantAdded:Connect(function(d)
+		if d:IsA("Sound") then
+			patch(d)
+		end
+	end)
+end)
+
+return {}
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="45">
+          <Properties>
             <string name="Name">Spectate</string>
             <string name="Source"><![CDATA[-- Spectate: once you're out of the round (killed, or waiting in the lobby) you
 -- can watch the match. SPECTATE sits at the top of the dock while a round is
@@ -17035,7 +17117,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="45">
+        <Item class="ModuleScript" referent="46">
           <Properties>
             <string name="Name">Store</string>
             <string name="Source"><![CDATA[-- Lobby dock: STORE (buy coin packs with Robux) and AFK (sit out matches).
@@ -17255,7 +17337,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="46">
+        <Item class="ModuleScript" referent="47">
           <Properties>
             <string name="Name">UIKit</string>
             <string name="Source"><![CDATA[-- Shared UI building blocks: animated buttons, panels, gradients.
@@ -17668,7 +17750,7 @@ return UIKit
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="47">
+  <Item class="Workspace" referent="48">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>

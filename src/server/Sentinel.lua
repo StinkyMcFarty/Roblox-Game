@@ -452,18 +452,26 @@ local function punch(player, char, root)
 		local bcf, bsize = Combat.BodyBox(wRoot)
 		if Combat.BoxOverlap(box, Vector3.new(9, 11, cfg.Range + 1), bcf, bsize) then
 			hit = true
-			local mult = power(player)
-			Wolverine.Damage(cfg.Damage * mult, player)
-			stunWolverine(cfg.Stun * mult)
-			local dir = Util.Flat(wRoot.Position - root.Position)
-			Fx:FireClient(w, "Knock", { Velocity = dir * cfg.Knockback + Vector3.new(0, 25, 0) })
-			smashSound(wRoot)
-			-- the fist rings off his adamantium skeleton; the floor jumps
-			Util.Burst(wRoot, Util.SparkProps, 30, 1.5)
-			VFX.Shockwave(floorBelow(wRoot.Position, { char, wChar }) + Vector3.new(0, 0.2, 0), 11)
-			Fx:FireAllClients("Shake", { Position = wRoot.Position, Intensity = 1.4, Radius = 80 })
-			Fx:FireAllClients("HitStop", { Attacker = char, Victim = wChar, Duration = 0.15 })
 			fist = CFrame.new(wRoot.Position)
+			if Combat.BreakShield(w) then
+				-- punched into his i-frames: they shatter and that's all this punch does
+				Fx:FireAllClients("Shake", { Position = wRoot.Position, Intensity = 0.5, Radius = 40 })
+			else
+				local mult = power(player)
+				Wolverine.Damage(cfg.Damage * mult, player)
+				stunWolverine(cfg.Stun * mult)
+				local dir = Util.Flat(wRoot.Position - root.Position)
+				Fx:FireClient(w, "Knock", { Velocity = dir * cfg.Knockback + Vector3.new(0, 25, 0) })
+				smashSound(wRoot)
+				-- the fist rings off his adamantium skeleton; the floor jumps
+				Util.Burst(wRoot, Util.SparkProps, 30, 1.5)
+				VFX.Shockwave(floorBelow(wRoot.Position, { char, wChar }) + Vector3.new(0, 0.2, 0), 11)
+				Fx:FireAllClients("Shake", { Position = wRoot.Position, Intensity = 1.4, Radius = 80 })
+				Fx:FireAllClients("HitStop", { Attacker = char, Victim = wChar, Duration = 0.15 })
+				-- i-frames, the same as a Sentinel gets when he hits them
+				Status.Apply(w, "Immune", Config.HitImmunity)
+				VFX.IFrames(wChar, Config.HitImmunity)
+			end
 		end
 	end
 	-- the fist goes straight through any wall in its way

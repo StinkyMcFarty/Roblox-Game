@@ -202,6 +202,7 @@ Config.UploadedSounds = {
 	SentinelSmash = 93700336440724, -- Sentinel fist landing (on Wolverine or through a wall)
 }
 Config.Sounds.Snarl = Config.Sounds.Snarl or ""
+Config.BuiltinSounds = table.clone(Config.Sounds) -- stand-ins if an upload won't play (client/SoundCheck)
 for name, id in Config.UploadedSounds do
 	if id and id ~= 0 then
 		Config.Sounds[name] = "rbxassetid://" .. (type(id) == "number" and string.format("%.0f", id) or tostring(id))
