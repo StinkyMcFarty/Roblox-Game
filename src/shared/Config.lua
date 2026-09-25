@@ -61,10 +61,11 @@ Config.Abilities = {
 	-- A slash that lands locks his claws: slash, pounce and impale all wait
 	-- HitLock seconds after hitting a survivor, SentinelHitLock after a Sentinel.
 	Slash = { Cooldown = 0.55, Range = 8, Width = 8, HitLock = 3, SentinelHitLock = 1 },
-	-- Pounce: a scripted dive arc. Peaks Height studs up (he clears the 11-stud
-	-- doorways up to ~6) and lands after AirTime seconds at Forward studs/s:
-	-- ~72 studs, the same distance as the old high leap.
-	Pounce = { Cooldown = 15, Forward = 78, Height = 5.5, AirTime = 0.92, GrabRadius = 7, Window = 1.2 },
+	-- Pounce: a scripted dive arc. His hips rise Height studs (7 puts the top of
+	-- his body ~11.5 studs up, just under the 12.4-stud Hangar entrance; lower
+	-- doors he tears through) and he lands after AirTime seconds at Forward
+	-- studs/s: ~72 studs, the same distance as the old high leap.
+	Pounce = { Cooldown = 15, Forward = 78, Height = 7, AirTime = 0.92, GrabRadius = 7, Window = 1.2 },
 	Stab = { Cooldown = 15, Range = 10, Width = 8, Lunge = 60 },
 	Sniff = { Cooldown = 25, Duration = 5 }, -- only 5s of tracking so he can't wallhack all round
 }
