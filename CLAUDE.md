@@ -101,7 +101,9 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
 - Sentinel suit skins: palettes in `Costumes.SentinelSkins`, shop data in `Skins.Sentinels`
   (Armory SENTINEL tab, `PlayerData.BuySentinel`/`EquipSentinel`, saved `OwnedSentinels`/
   `SentinelSkin`). Verity (3000): black/yellow suit with the grin (`Costumes.Smiley`) on its face;
-  Verity claws (3000) are black with a yellow edge and a grin badge on each forearm.
+  Verity claws (3000) are yellow blades covered in grins (`SmileyStrip`, `drawGrin`), a black
+  edge and a grin badge on each forearm; running with them out sheds a trail of tiny faces
+  (`src/client/VerityTrail.lua`). Claw cases aren't Glass (Glass hides SurfaceGuis behind it).
 - Survivors see a white glow on the 6 nearest hiding spots (`src/client/HideGlow.lua`); keep the
   client's Highlight count low (Roblox caps it at 31), which is why Sniff ghosts also draw boxes.
 - Sentinel pilot exit: destroyed by Wolverine → Hits = 2 (one from death); timed out → full health.
