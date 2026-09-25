@@ -13,3 +13,4 @@ Berserker Rage.rbxlx
 tools/preview/node_modules/
 tools/preview/scene.json
 tools/preview/*.png
+__pycache__/
