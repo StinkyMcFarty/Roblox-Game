@@ -959,7 +959,15 @@ end
 -- Inhibitor Blast
 ---------------------------------------------------------------------------
 
-local GOLD = Color3.fromRGB(255, 210, 90)
+-- The Inhibitor Blast's colours: molten gold with electric-blue arcs.
+local PULSE = {
+	Core = WHITE,
+	Hot = Color3.fromRGB(255, 240, 170),
+	Gold = Color3.fromRGB(255, 200, 60),
+	Ember = Color3.fromRGB(255, 120, 20),
+	Arc = Color3.fromRGB(90, 190, 255),
+}
+local GOLD = PULSE.Gold
 local pulseState = {}
 
 -- jagged lightning between two points
@@ -979,6 +987,31 @@ local function setBolt(r, a, b, jag, width, transparency)
 	setRibbon(r, pts, ws, transparency)
 end
 
+-- a flat polygon on the floor (n-1 sides), spun by `rot`: the hexagon sigils
+local function setPoly(r, center, radius, rot, width, transparency)
+	local n = r.N
+	local pts, ws = table.create(n), table.create(n)
+	for i = 1, n do
+		local a = rot + (i - 1) / (n - 1) * math.pi * 2
+		pts[i] = center + Vector3.new(math.cos(a), 0, math.sin(a)) * radius
+		ws[i] = width
+	end
+	setRibbon(r, pts, ws, transparency)
+end
+
+local function ball(color, material)
+	local p = Instance.new("Part")
+	p.Shape = Enum.PartType.Ball
+	p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch, p.CastShadow = true, false, false, false, false
+	p.Material = material
+	p.Color = color
+	p.Size = Vector3.one * 0.5
+	p.Parent = workspace
+	return p
+end
+
+-- Charge: a crackling gold sphere with a white-hot core, energy sucked up out
+-- of the floor into it, and two hexagon sigils spinning tighter on the ground.
 function SlashFX.PulseCharge(char, duration)
 	local root = char and char:FindFirstChild("HumanoidRootPart")
 	if not root then
@@ -987,58 +1020,76 @@ function SlashFX.PulseCharge(char, duration)
 	duration = duration or 2
 	local state = { Cancelled = false }
 	pulseState[char] = state
-	local sphere = Instance.new("Part")
-	sphere.Shape = Enum.PartType.Ball
-	sphere.Anchored, sphere.CanCollide, sphere.CanQuery, sphere.CanTouch, sphere.CastShadow = true, false, false, false, false
-	sphere.Material = Enum.Material.ForceField
-	sphere.Color = GOLD
-	sphere.Size = Vector3.one * 2
-	sphere.Parent = workspace
+	local sphere = ball(GOLD, Enum.Material.ForceField)
+	local core = ball(PULSE.Hot, Enum.Material.Neon)
 	local light = Instance.new("PointLight")
 	light.Color = GOLD
-	light.Parent = sphere
-	local ribbons, bolts = {}, {}
-	for i = 1, 6 do
-		local r = takeRibbon(8, i % 2 == 0 and WHITE or GOLD, 6)
+	light.Parent = core
+	local ribbons, bolts, streaks = {}, {}, {}
+	for i = 1, 10 do
+		local r = takeRibbon(8, i % 3 == 0 and PULSE.Arc or (i % 2 == 0 and WHITE or GOLD), 7)
 		table.insert(ribbons, r)
 		bolts[i] = r
 	end
-	local ring = takeRibbon(32, GOLD, 5)
-	local ring2 = takeRibbon(32, WHITE, 5)
-	table.insert(ribbons, ring)
-	table.insert(ribbons, ring2)
+	for i = 1, 14 do
+		local r = takeRibbon(5, i % 3 == 0 and WHITE or PULSE.Hot, 7)
+		table.insert(ribbons, r)
+		streaks[i] = { R = r, A = math.random() * math.pi * 2, T = math.random() }
+	end
+	local ring = takeRibbon(32, GOLD, 6)
+	local ring2 = takeRibbon(32, WHITE, 6)
+	local hex = takeRibbon(7, PULSE.Arc, 7)
+	local hex2 = takeRibbon(7, GOLD, 7)
+	for _, r in { ring, ring2, hex, hex2 } do
+		table.insert(ribbons, r)
+	end
 	state.Sphere = sphere
 	run(ribbons, function(t)
 		local k = math.min(1, t / duration)
 		if state.Cancelled or t > duration + 0.4 or not root.Parent then
 			sphere:Destroy()
+			core:Destroy()
 			return false
 		end
 		local s = root.Size.Y / 2
 		local c = root.Position
-		local rad = (3 + 5 * k * k) * s
+		local rad = (3 + 6 * k * k) * s
+		local flicker = 0.92 + math.random() * 0.16
 		sphere.Position = c
-		sphere.Size = Vector3.one * rad * (0.95 + math.random() * 0.1)
-		light.Range = 8 + 22 * k
-		light.Brightness = 1 + 6 * k
+		sphere.Size = Vector3.one * rad * flicker
+		core.Position = c
+		core.Size = Vector3.one * (0.6 + 2.6 * k * k) * s * flicker
+		core.Color = GOLD:Lerp(WHITE, k)
+		light.Range = 10 + 30 * k
+		light.Brightness = 2 + 10 * k
 		-- lightning crawling over the sphere, more of it as the charge builds
-		for i, b in bolts do
-			if math.random() < 0.35 + 0.5 * k then
+		for _, b in bolts do
+			if math.random() < 0.3 + 0.6 * k then
 				local a1 = math.random() * math.pi * 2
-				local a2 = a1 + (math.random() - 0.5) * 2
+				local a2 = a1 + (math.random() - 0.5) * 2.4
 				local e1 = (math.random() - 0.5) * 1.6
 				local p1 = c + Vector3.new(math.cos(a1) * math.cos(e1), math.sin(e1), math.sin(a1) * math.cos(e1)) * rad * 0.5
 				local p2 = c + Vector3.new(math.cos(a2), (math.random() - 0.5), math.sin(a2)) * rad * 0.5
-				setBolt(b, p1, p2, 0.8 * s, (0.1 + 0.12 * k) * s, 0)
+				setBolt(b, p1, p2, 1 * s, (0.12 + 0.16 * k) * s, 0)
 			else
 				hideRibbon(b)
 			end
-			_ = i
 		end
-		-- spinning ground rings tightening in
+		-- energy pulled up out of the floor into the core
 		local floor = c - Vector3.new(0, 2.8 * s, 0)
-		setRing(ring, floor, Vector3.new(0, 1, 0), (7 - 3 * k) * s, 0.25 * s, 0.2)
-		setRing(ring2, floor + Vector3.new(0, 0.05, 0), Vector3.new(0, 1, 0), (5 - 2.5 * k + math.sin(t * 20) * 0.2) * s, 0.12 * s, 0.1)
+		for _, st in streaks do
+			st.T += (1 / 60) * (1.2 + 2 * k)
+			local q = st.T % 1
+			local from = floor + Vector3.new(math.cos(st.A), 0, math.sin(st.A)) * (6 - 2 * k) * s
+			local p = from:Lerp(c, q * q)
+			local d = (c - from).Unit
+			setNeedle(st.R, p, p + d * (1.2 + 1.5 * k) * s, (0.1 + 0.12 * k) * s, q < 0.1 and 1 - q * 10 or q)
+		end
+		-- spinning ground rings and hexagon sigils tightening in
+		setRing(ring, floor, Vector3.new(0, 1, 0), (7.5 - 3 * k) * s, 0.3 * s, 0.15)
+		setRing(ring2, floor + Vector3.new(0, 0.05, 0), Vector3.new(0, 1, 0), (5.5 - 2.5 * k + math.sin(t * 20) * 0.2) * s, 0.14 * s, 0.1)
+		setPoly(hex, floor + Vector3.new(0, 0.08, 0), (6.5 - 2.5 * k) * s, t * (1.5 + 4 * k), 0.2 * s, 0.1)
+		setPoly(hex2, floor + Vector3.new(0, 0.1, 0), (4.2 - 1.5 * k) * s, -t * (2 + 5 * k), 0.16 * s, 0.15)
 		return true
 	end)
 end
@@ -1055,6 +1106,10 @@ function SlashFX.PulseCancel(char)
 	end
 end
 
+-- The blast: a blinding white flash inside a gold dome and an electric-blue
+-- second dome, a pillar of light punching up, shock rings and a hexagon sigil
+-- blasting across the floor, forked lightning ripping out to the edge, a
+-- spray of embers, and electric arcs crackling on the ground afterwards.
 function SlashFX.PulseBlast(position, radius)
 	if not position then
 		return
@@ -1068,61 +1123,135 @@ function SlashFX.PulseBlast(position, radius)
 			pulseState[char] = nil
 		end
 	end
-	local dome = Instance.new("Part")
-	dome.Shape = Enum.PartType.Ball
-	dome.Anchored, dome.CanCollide, dome.CanQuery, dome.CanTouch, dome.CastShadow = true, false, false, false, false
-	dome.Material = Enum.Material.ForceField
-	dome.Color = GOLD
+	local dome = ball(GOLD, Enum.Material.ForceField)
 	dome.Size = Vector3.one * 4
 	dome.Position = position
-	dome.Parent = workspace
-	local core = dome:Clone()
-	core.Material = Enum.Material.Neon
-	core.Color = WHITE
-	core.Parent = workspace
+	local dome2 = ball(PULSE.Arc, Enum.Material.ForceField)
+	dome2.Size = Vector3.one * 2
+	dome2.Position = position
+	local core = ball(WHITE, Enum.Material.Neon)
+	core.Size = Vector3.one * 4
+	core.Position = position
 	local light = Instance.new("PointLight")
 	light.Color = GOLD
 	light.Range = 60
-	light.Brightness = 10
+	light.Brightness = 14
 	light.Parent = core
 	TweenService:Create(dome, TweenInfo.new(0.45, Enum.EasingStyle.Quint), { Size = Vector3.one * radius * 2.2, Transparency = 1 }):Play()
-	TweenService:Create(core, TweenInfo.new(0.2, Enum.EasingStyle.Quad), { Size = Vector3.one * 9, Transparency = 1 }):Play()
-	TweenService:Create(light, TweenInfo.new(0.6), { Brightness = 0 }):Play()
-	task.delay(0.7, function()
-		dome:Destroy()
-		core:Destroy()
-	end)
-	-- ground shock rings + lightning bolts ripping outward
-	local ribbons, rings, bolts = {}, {}, {}
-	for i = 1, 3 do
-		local r = takeRibbon(40, i == 1 and WHITE or GOLD, 6)
-		table.insert(ribbons, r)
-		rings[i] = { R = r, Delay = (i - 1) * 0.07 }
-	end
-	for i = 1, 10 do
-		local r = takeRibbon(9, i % 2 == 0 and WHITE or GOLD, 7)
-		table.insert(ribbons, r)
-		local a = i / 10 * math.pi * 2 + math.random() * 0.4
-		bolts[i] = { R = r, Dir = Vector3.new(math.cos(a), (math.random() - 0.3) * 0.5, math.sin(a)).Unit }
-	end
+	TweenService:Create(dome2, TweenInfo.new(0.7, Enum.EasingStyle.Quint), { Size = Vector3.one * radius * 1.7, Transparency = 1 }):Play()
+	TweenService:Create(core, TweenInfo.new(0.28, Enum.EasingStyle.Quad), { Size = Vector3.one * 14, Transparency = 1 }):Play()
+	TweenService:Create(light, TweenInfo.new(0.8), { Brightness = 0 }):Play()
+	-- a flat shockwave of light racing along the floor
 	local floor = position - Vector3.new(0, 2.6, 0)
-	local LIFE = 0.55
+	local wave = Instance.new("Part")
+	wave.Shape = Enum.PartType.Cylinder
+	wave.Anchored, wave.CanCollide, wave.CanQuery, wave.CanTouch, wave.CastShadow = true, false, false, false, false
+	wave.Material = Enum.Material.Neon
+	wave.Color = PULSE.Hot
+	wave.Transparency = 0.35
+	wave.Size = Vector3.new(0.15, 4, 4)
+	wave.CFrame = CFrame.new(floor + Vector3.new(0, 0.1, 0)) * CFrame.Angles(0, 0, math.rad(90))
+	wave.Parent = workspace
+	TweenService:Create(wave, TweenInfo.new(0.5, Enum.EasingStyle.Quint), { Size = Vector3.new(0.05, radius * 2.3, radius * 2.3), Transparency = 1, Color = GOLD }):Play()
+	task.delay(0.9, function()
+		dome:Destroy()
+		dome2:Destroy()
+		core:Destroy()
+		wave:Destroy()
+	end)
+	starFlare(position, GOLD, 3, 0.6)
+	local ribbons, rings, bolts, forks, embers, arcs = {}, {}, {}, {}, {}, {}
+	for i = 1, 4 do
+		local r = takeRibbon(40, i == 1 and WHITE or (i == 3 and PULSE.Arc or GOLD), 7)
+		table.insert(ribbons, r)
+		rings[i] = { R = r, Delay = (i - 1) * 0.06 }
+	end
+	local sigil = takeRibbon(7, PULSE.Arc, 8)
+	local sigil2 = takeRibbon(7, WHITE, 8)
+	table.insert(ribbons, sigil)
+	table.insert(ribbons, sigil2)
+	-- the pillar: a column of light slamming up out of the blast
+	local pillar = { takeRibbon(2, WHITE, 10), takeRibbon(2, GOLD, 6), takeRibbon(2, PULSE.Arc, 3) }
+	for _, r in pillar do
+		table.insert(ribbons, r)
+	end
+	for i = 1, 16 do
+		local r = takeRibbon(10, i % 3 == 0 and PULSE.Arc or (i % 2 == 0 and WHITE or GOLD), 8)
+		table.insert(ribbons, r)
+		local a = i / 16 * math.pi * 2 + math.random() * 0.3
+		bolts[i] = { R = r, Dir = Vector3.new(math.cos(a), (math.random() - 0.3) * 0.5, math.sin(a)).Unit }
+		if i % 2 == 0 then
+			local f = takeRibbon(6, PULSE.Arc, 7)
+			table.insert(ribbons, f)
+			forks[#forks + 1] = { R = f, Bolt = bolts[i], Turn = (math.random() - 0.5) * 1.4 }
+		end
+	end
+	for i = 1, 24 do
+		local r = takeRibbon(5, i % 3 == 0 and WHITE or PULSE.Ember, 6)
+		table.insert(ribbons, r)
+		local a = math.random() * math.pi * 2
+		embers[i] = { R = r, D = Vector3.new(math.cos(a), 0.4 + math.random() * 0.9, math.sin(a)).Unit, Speed = 30 + math.random() * 40 }
+	end
+	for i = 1, 6 do
+		local r = takeRibbon(8, i % 2 == 0 and PULSE.Arc or WHITE, 7)
+		table.insert(ribbons, r)
+		arcs[i] = r
+	end
+	local LIFE = 0.95
 	run(ribbons, function(t)
 		local k = t / LIFE
 		if k >= 1 then
 			return false
 		end
 		for _, rg in rings do
-			local q = math.clamp((t - rg.Delay) / (LIFE - rg.Delay), 0, 1)
+			local q = math.clamp((t - rg.Delay) / (0.6 - rg.Delay), 0, 1)
 			if q > 0 and q < 1 then
-				setRing(rg.R, floor, Vector3.new(0, 1, 0), 2 + radius * 1.1 * outQuad(q), 0.6 * (1 - q), q)
+				setRing(rg.R, floor, Vector3.new(0, 1, 0), 2 + radius * 1.15 * outQuad(q), 0.9 * (1 - q), q)
 			else
 				hideRibbon(rg.R)
 			end
 		end
+		local qs = math.min(1, t / 0.55)
+		setPoly(sigil, floor + Vector3.new(0, 0.12, 0), 3 + radius * 0.9 * outCubic(qs), t * 3, 0.5 * (1 - qs), qs)
+		setPoly(sigil2, floor + Vector3.new(0, 0.14, 0), 2 + radius * 0.6 * outCubic(qs), -t * 4, 0.3 * (1 - qs), qs)
+		-- pillar punches up fast, then thins and fades
+		local qp = math.min(1, t / 0.5)
+		local top = position + Vector3.new(0, 6 + 60 * outExpo(math.min(1, t / 0.12)), 0)
+		local pw = (1 - qp)
+		local pts = { floor, top }
+		setRibbon(pillar[1], pts, { 3 * pw, 0.6 * pw }, qp)
+		setRibbon(pillar[2], pts, { 7 * pw, 1.5 * pw }, 0.3 + 0.7 * qp)
+		setRibbon(pillar[3], pts, { 12 * pw, 3 * pw }, 0.6 + 0.4 * qp)
+		-- forked lightning ripping out to the edge of the blast
+		local kb = math.min(1, t / 0.6)
 		for _, b in bolts do
-			local len = radius * (0.3 + 0.9 * outQuad(math.min(1, k * 2)))
-			setBolt(b.R, position, position + b.Dir * len, 1.6, 0.35 * (1 - k), k)
+			local len = radius * (0.3 + 0.9 * outQuad(math.min(1, kb * 2)))
+			b.Tip = position + b.Dir * len
+			setBolt(b.R, position, b.Tip, 2, 0.45 * (1 - kb), kb)
+		end
+		for _, f in forks do
+			local mid = position:Lerp(f.Bolt.Tip, 0.55)
+			local d = CFrame.Angles(0, f.Turn, 0):VectorToWorldSpace(f.Bolt.Dir)
+			setBolt(f.R, mid, mid + d * radius * 0.45 * outQuad(math.min(1, kb * 2)), 1.2, 0.28 * (1 - kb), kb)
+		end
+		-- embers flung out and falling
+		for _, e in embers do
+			local q = math.min(1, t / 0.8)
+			local p0 = position + e.D * e.Speed * 0.5 * q + Vector3.new(0, -14 * q * q, 0)
+			setNeedle(e.R, p0, p0 + e.D * 1.6, 0.14, q)
+		end
+		-- leftover arcs crackling across the floor
+		for _, r in arcs do
+			if t > 0.2 and math.random() < 0.6 then
+				local a = math.random() * math.pi * 2
+				local d0 = math.random() * radius * 0.8
+				local p1 = floor + Vector3.new(math.cos(a) * d0, 0.2, math.sin(a) * d0)
+				local a2 = a + (math.random() - 0.5) * 1.2
+				local p2 = p1 + Vector3.new(math.cos(a2), 0, math.sin(a2)) * (3 + math.random() * 5)
+				setBolt(r, p1, p2, 1.2, 0.25 * (1 - k), k)
+			else
+				hideRibbon(r)
+			end
 		end
 		return true
 	end)
@@ -1130,10 +1259,10 @@ function SlashFX.PulseBlast(position, radius)
 		local cam = workspace.CurrentCamera
 		local d = cam and (cam.CFrame.Position - position).Magnitude or 999
 		if d < radius * 3 then
-			_G.WolverineShake(1.2 * (1 - d / (radius * 3)))
+			_G.WolverineShake(1.6 * (1 - d / (radius * 3)))
 		end
 	end
-	SlashFX.HitFlash(position, GOLD, 2)
+	SlashFX.HitFlash(position, GOLD, 2.6)
 end
 
 return SlashFX
