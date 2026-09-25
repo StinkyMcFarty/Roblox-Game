@@ -81,7 +81,7 @@ Config.Sentinel = {
 	-- Teamwork: suits within LinkRange of each other are "linked" and hit hard.
 	-- Two suits apart barely scratch him; the last suit standing hits at 1x.
 	LinkRange = 30,
-	LinkedMultiplier = 1.5,
+	LinkedMultiplier = 1.25,
 	SoloMultiplier = 0.6, -- two suits but far apart; a lone suit hits at 1x
 	WalkSpeed = 18,
 	Scale = 1.8, -- same size as the docked suits in the Hangar

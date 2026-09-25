@@ -52,7 +52,7 @@ local ROLE_HOLDS = {
 		{ Name = "FeralHold", Label = "All Fours", Desc = "Fastest. Burns stamina", Icon = "🐺", KeyText = "C", Attr = "Feral", Color = Color3.fromRGB(255, 140, 30) },
 	},
 	Sentinel = {
-		{ Name = "LinkHold", Label = "Twin Link", Desc = "Beside the other suit: 1.5x. Apart: 0.6x", Icon = "🔗", KeyText = "30m", Attr = "Linked", Color = Color3.fromRGB(190, 140, 255) },
+		{ Name = "LinkHold", Label = "Twin Link", Desc = "Beside the other suit: " .. S.LinkedMultiplier .. "x. Apart: " .. S.SoloMultiplier .. "x", Icon = "🔗", KeyText = "30m", Attr = "Linked", Color = Color3.fromRGB(190, 140, 255) },
 	},
 	Survivor = {
 		{ Name = "SprintHold", Label = "Sprint", Desc = "Run for your life", Icon = "🏃", KeyText = "SHIFT", Attr = "Sprinting", Color = Color3.fromRGB(80, 170, 255) },
@@ -68,7 +68,7 @@ local ROLE_TITLE = {
 
 local HINTS = {
 	Wolverine = "Shift: sprint   C / Ctrl: run on all fours\nClaw (M1) or pounce through walls. Hit anyone 3 times to rip them in half.",
-	Sentinel = "MUTANT-HUNTER ONLINE. M1 Hydraulic Smash · Q Death Ray · E Inhibitor Blast.\nLinked: 1.5x power. Apart: 0.6x. Last suit standing: 1x. Core burns out in " .. S.Duration .. "s.",
+	Sentinel = "MUTANT-HUNTER ONLINE. M1 Hydraulic Smash · Q Death Ray · E Inhibitor Blast.\nLinked: " .. S.LinkedMultiplier .. "x power. Apart: " .. S.SoloMultiplier .. "x. Last suit standing: 1x. Core burns out in " .. S.Duration .. "s.",
 	Survivor = "Subject X is loose. Reboot the 3 Sentinel Protocol consoles (Foundry, Genetics Lab, Command Centre), then suit up in the Hangar.\nShift: sprint. G: fart (hides your scent). He tears through walls — keep moving.",
 	Lobby = "Waiting for the next round.",
 	Dead = "You were torn apart. Wait for the next round.",
