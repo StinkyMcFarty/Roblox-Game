@@ -993,22 +993,35 @@ local function fit(parent, size, cf, mat, color, extra)
 end
 local UPRIGHT = CFrame.Angles(0, 0, math.rad(90)) -- a cylinder standing on end
 
--- A 2x4 ceiling troffer centred at pos (the ceiling's underside): a painted
--- housing, a lipped bezel and a glowing diffuser behind a louvre grid. Every
--- one is lit, and there are few of them.
+-- A lit face on a fitting: a SurfaceGui that ignores the room's light, so
+-- the diffuser reads as switched on without being a Neon part (Neon blooms
+-- into a glowing block). round = a disc (a cylinder's end cap). The middle is
+-- a touch brighter than the edge, like a real diffuser.
+local function glowFace(part, face, color, round)
+	local g = make("SurfaceGui", part, { Face = face, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 24, LightInfluence = 0, Brightness = 1 })
+	local panel = fr(g, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1) })
+	if round then
+		make("UICorner", panel, { CornerRadius = UDim.new(0.5, 0) })
+	end
+	local edge = color:Lerp(Color3.new(1, 1, 1), 0.35)
+	local mid = color:Lerp(Color3.new(1, 1, 1), 0.8)
+	make("UIGradient", panel, { Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, edge), ColorSequenceKeypoint.new(0.5, mid), ColorSequenceKeypoint.new(1, edge) }), Rotation = 90 })
+	return g
+end
+
+-- A recessed 2x4 LED panel centred at pos (the ceiling's underside): a slim
+-- painted flange on the tiles, a bevelled reveal stepping up into the
+-- housing and a flat opal diffuser that glows (glowFace). A wide surface
+-- light under it lights the room.
 local function troffer(parent, pos, color, range, bright)
-	fit(parent, Vector3.new(3.6, 0.3, 7.6), CFrame.new(pos - Vector3.new(0, 0.2, 0)), M.SmoothPlastic, rgb(150, 156, 168))
-	local lens = fit(parent, Vector3.new(3, 0.06, 7), CFrame.new(pos - Vector3.new(0, 0.37, 0)), M.Neon, color)
-	for _, s in { -1, 1 } do -- the lip round the diffuser
-		fit(parent, Vector3.new(3.3, 0.08, 0.15), CFrame.new(pos + Vector3.new(0, -0.39, s * 3.575)), M.SmoothPlastic, rgb(186, 190, 198))
-		fit(parent, Vector3.new(0.15, 0.08, 7.3), CFrame.new(pos + Vector3.new(s * 1.575, -0.39, 0)), M.SmoothPlastic, rgb(186, 190, 198))
+	local paint = rgb(210, 214, 220)
+	fit(parent, Vector3.new(3.8, 0.1, 7.8), CFrame.new(pos - Vector3.new(0, 0.25, 0)), M.SmoothPlastic, paint)
+	for _, sd in { -1, 1 } do -- the reveal round the diffuser, a shade darker (in its own shadow)
+		fit(parent, Vector3.new(3.5, 0.06, 0.15), CFrame.new(pos + Vector3.new(0, -0.33, sd * 3.675)), M.SmoothPlastic, rgb(176, 180, 188))
+		fit(parent, Vector3.new(0.15, 0.06, 7.2), CFrame.new(pos + Vector3.new(sd * 1.675, -0.33, 0)), M.SmoothPlastic, rgb(176, 180, 188))
 	end
-	local g = make("SurfaceGui", lens, { Face = N.Bottom, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 20, LightInfluence = 0 })
-	local louvre = rgb(150, 156, 168)
-	fr(g, { Position = UDim2.new(0.5, -1, 0, 0), Size = UDim2.new(0, 2, 1, 0), BackgroundColor3 = louvre })
-	for k = 1, 5 do
-		fr(g, { Position = UDim2.new(0, 0, k / 6, -1), Size = UDim2.new(1, 0, 0, 2), BackgroundColor3 = louvre })
-	end
+	local lens = fit(parent, Vector3.new(3.2, 0.04, 7.2), CFrame.new(pos - Vector3.new(0, 0.3, 0)), M.SmoothPlastic, rgb(236, 238, 242))
+	glowFace(lens, N.Bottom, color)
 	surfaceLight(lens, N.Bottom, range, bright or 0.85, color, 125)
 end
 
@@ -1030,7 +1043,8 @@ local function highBay(parent, top, lensY, color, shadows, bright)
 		fit(parent, Vector3.new(r[2], r[1], r[1]), CFrame.new(lens + Vector3.new(0, r[3], 0)) * UPRIGHT, M.Metal, rgb(84, 88, 96), { Shape = Enum.PartType.Cylinder, Reflectance = 0.1 })
 	end
 	fit(parent, Vector3.new(0.14, 3.9, 3.9), CFrame.new(lens + Vector3.new(0, -0.02, 0)) * UPRIGHT, M.Metal, rgb(34, 35, 40), { Shape = Enum.PartType.Cylinder })
-	fit(parent, Vector3.new(0.08, 3.3, 3.3), CFrame.new(lens + Vector3.new(0, -0.07, 0)) * UPRIGHT, M.Neon, color, { Shape = Enum.PartType.Cylinder })
+	local glass = fit(parent, Vector3.new(0.08, 3.3, 3.3), CFrame.new(lens + Vector3.new(0, -0.07, 0)) * UPRIGHT, M.SmoothPlastic, rgb(236, 238, 242), { Shape = Enum.PartType.Cylinder })
+	glowFace(glass, N.Left, color, true) -- Left is the cap facing down once it's stood upright
 	-- the light sits just under the lens, so nothing of the fitting is in its way
 	local emit = fit(parent, Vector3.new(0.4, 0.2, 0.4), CFrame.new(lens - Vector3.new(0, 0.3, 0)), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
 	spotDown(emit, 60, bright, color, 120, shadows)
@@ -1048,7 +1062,9 @@ local function domePendant(parent, top, lensY, color)
 		fit(parent, Vector3.new(r[2], r[1], r[1]), CFrame.new(lens + Vector3.new(0, r[3], 0)) * UPRIGHT, M.Metal, shade, { Shape = Enum.PartType.Cylinder, Reflectance = 0.08 })
 	end
 	fit(parent, Vector3.new(0.06, 3.3, 3.3), CFrame.new(lens + Vector3.new(0, 0.03, 0)) * UPRIGHT, M.SmoothPlastic, inner, { Shape = Enum.PartType.Cylinder })
-	local bulb = fit(parent, Vector3.new(0.8, 0.8, 0.8), CFrame.new(lens + Vector3.new(0, -0.05, 0)), M.Neon, color, { Shape = Enum.PartType.Ball })
+	local mouth = fit(parent, Vector3.new(0.04, 2.4, 2.4), CFrame.new(lens + Vector3.new(0, -0.02, 0)) * UPRIGHT, M.SmoothPlastic, inner, { Shape = Enum.PartType.Cylinder })
+	glowFace(mouth, N.Left, color, true)
+	local bulb = fit(parent, Vector3.new(0.4, 0.2, 0.4), CFrame.new(lens - Vector3.new(0, 0.2, 0)), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
 	spotDown(bulb, 40, 3.2, color, 110)
 	pointLight(bulb, 22, 0.5, color)
 end
@@ -1061,8 +1077,13 @@ local function caged(parent, pos, long, color, shadows)
 	for _, z in { -2.22, 2.22 } do -- end caps, a hair bigger than the channel
 		fit(parent, Vector3.new(1.36, 0.42, 0.2), cf * CFrame.new(0, 0.1, z), M.Metal, rgb(40, 42, 46))
 	end
-	for _, x in { -0.3, 0.3 } do
-		fit(parent, Vector3.new(4.2, 0.2, 0.2), cf * CFrame.new(x, -0.02, 0) * CFrame.Angles(0, math.rad(90), 0), M.Neon, color, { Shape = Enum.PartType.Cylinder })
+	-- the two tubes, lit (drawn on a clear plate under the channel; the wire
+	-- guard sits in front of them)
+	local tubes = fit(parent, Vector3.new(1.1, 0.05, 4.2), cf * CFrame.new(0, 0.02, 0), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
+	local g = make("SurfaceGui", tubes, { Face = N.Bottom, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 30, LightInfluence = 0, Brightness = 1 })
+	for _, x in { 0.2, 0.62 } do
+		local t = fr(g, { Position = UDim2.fromScale(x, 0.02), Size = UDim2.new(0, 6, 0.96, 0), AnchorPoint = Vector2.new(0.5, 0), BackgroundColor3 = color:Lerp(Color3.new(1, 1, 1), 0.75) })
+		make("UICorner", t, { CornerRadius = UDim.new(0, 3) })
 	end
 	for z = -1.5, 1.5, 1 do -- wire guard
 		fit(parent, Vector3.new(1.1, 0.05, 0.05), cf * CFrame.new(0, -0.2, z), M.Metal, rgb(90, 94, 100))
@@ -1117,10 +1138,6 @@ local function ceiling(parent, r, kind)
 		D(parent, Vector3.new(sx, 1.4, band), CFrame.new(cx, y - 0.7, r.z1 - band / 2), M.SmoothPlastic, c)
 		D(parent, Vector3.new(band, 1.4, sz - band * 2), CFrame.new(r.x0 + band / 2, y - 0.7, cz), M.SmoothPlastic, c)
 		D(parent, Vector3.new(band, 1.4, sz - band * 2), CFrame.new(r.x1 - band / 2, y - 0.7, cz), M.SmoothPlastic, c)
-		-- cove light strip along the soffit edge
-		for _, e in { { cx, r.z0 + band + 0.1, sx - band * 2, 0.15 }, { cx, r.z1 - band - 0.1, sx - band * 2, 0.15 } } do
-			D(parent, Vector3.new(e[3], 0.12, e[4]), CFrame.new(e[1], y - 1.3, e[2]), M.Neon, rgb(120, 140, 170))
-		end
 		D(parent, Vector3.new(sx - band * 2, 0.2, sz - band * 2), CFrame.new(cx, y - 0.1, cz), M.Plaster, rgb(126, 132, 146)) -- acoustic tiles
 		-- ceiling tile grid
 		for x = r.x0 + band + 4, r.x1 - band - 1, 4 do
@@ -1129,19 +1146,40 @@ local function ceiling(parent, r, kind)
 		for z = r.z0 + band + 4, r.z1 - band - 1, 4 do
 			D(parent, Vector3.new(sx - band * 2, 0.06, 0.08), CFrame.new(cx, y - 0.235, z), M.SmoothPlastic, rgb(128, 132, 138))
 		end
-		-- troffers fill two cells of the grid, so the grid lines run clear of
-		-- their edges: one every 12 studs across and 16 along
+		-- a few panels in a plain, even grid (one every 16 studs across and 20
+		-- along, centred on the room and on the tile grid: a panel fills one
+		-- cell across and two along). Each is as much brighter as there are
+		-- fewer of them than the old 12 x 16 grid, so the room stays as bright.
 		-- (a room can ask for its own colour and strength, and for only every
-		-- other panel: r.LampColor, r.LampBright, r.Sparse)
+		-- other panel of the old grid: r.LampColor, r.LampBright, r.Sparse)
+		local old = 0
 		local ix = 0
-		for x = r.x0 + band + 6, r.x1 - band - 4, 12 do
+		for _ = r.x0 + band + 6, r.x1 - band - 4, 12 do
 			ix += 1
 			local iz = 0
-			for z = r.z0 + band + 8, r.z1 - band - 6, 16 do
+			for _ = r.z0 + band + 8, r.z1 - band - 6, 16 do
 				iz += 1
 				if not r.Sparse or (ix + iz) % 2 == 0 then
-					troffer(parent, Vector3.new(x, y, z), r.LampColor or rgb(168, 198, 255), r.h + 14, r.LampBright) -- a cool, dim blue
+					old += 1
 				end
+			end
+		end
+		local function spread(lo, hi, step, snap0, snapStep)
+			local n = math.max(1, math.floor((hi - lo) / step) + 1)
+			local start = (lo + hi) / 2 - (n - 1) * step / 2
+			start = snap0 + snapStep * math.floor((start - snap0) / snapStep + 0.5)
+			local list = {}
+			for k = 0, n - 1 do
+				table.insert(list, start + k * step)
+			end
+			return list
+		end
+		local xs = spread(r.x0 + band + 6, r.x1 - band - 6, 16, r.x0 + band + 2, 4)
+		local zs = spread(r.z0 + band + 8, r.z1 - band - 8, 20, r.z0 + band, 4)
+		local boost = math.clamp(old / (#xs * #zs), 1, 3)
+		for _, x in xs do
+			for _, z in zs do
+				troffer(parent, Vector3.new(x, y, z), r.LampColor or rgb(168, 198, 255), (r.h + 14) * math.sqrt(boost), (r.LampBright or 0.85) * boost) -- a cool, dim blue
 			end
 		end
 	elseif kind == "Grate" then

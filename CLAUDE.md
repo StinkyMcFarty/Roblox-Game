@@ -150,6 +150,10 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
   goes across the south windows; the claw and WEAPON X signs hang above them.
 - Lobby preview: the preview mock can build the lobby (`MapBuilder.BuildLobby`); `Color3:ToHSV` in
   `prelude.lua` returns real hues (the lobby softens its neon through HSV).
+- Facility light fittings are real lights, not Neon: the lit diffuser/lens is a `glowFace`
+  (SurfaceGui, LightInfluence 0) on SmoothPlastic, the light itself a Surface/SpotLight.
+  Panelled (Coffered) rooms: a plain grid, one `troffer` per 16 x 20 studs, each brighter by
+  how many fewer there are than the old 12 x 16 grid (so rooms stay as bright).
 - Lighting (`MapBuilder.SetupLighting`): gentle grade (contrast 0.15, saturation 0.08), bloom
   0.55/40/1.35 (client arena zone matches), low blue-grey ambient so lamps shape the rooms.
   Foundry: cool work floods, forged-steel crucibles (one pouring into a mould).
