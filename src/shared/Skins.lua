@@ -24,7 +24,7 @@ Skins.Order = { "Logan", "Comic", "WeaponX", "OldManLogan" }
 
 Skins.List = {
 	Logan = {
-		Name = "Logan",
+		Name = "Berserker",
 		Price = 0,
 		Description = "Leather jacket, jeans, sideburns and a bad attitude.",
 		Swatch = rgb(92, 58, 36),
@@ -39,7 +39,7 @@ Skins.List = {
 		HairAccessoryId = 0,
 	},
 	Comic = {
-		Name = "Comic Wolverine",
+		Name = "Comic Berserker",
 		Price = 2000,
 		Description = "Straight off the page. Cowl, fins, shoulder pads, tiger stripes.",
 		FaceStyle = "Comic",
@@ -67,7 +67,7 @@ Skins.List = {
 		},
 	},
 	OldManLogan = {
-		Name = "Old Man Logan",
+		Name = "Old Man Berserker",
 		Price = 6000,
 		Description = "Grey beard, long duster coat, and a lot of anger left.",
 		Hair = { Color = rgb(170, 168, 164), Tuft = 0.7, Chops = 1.3 },

@@ -106,7 +106,7 @@ To remake only some sounds, name them: `python3 tools/generate_sfx.py ClawStone 
 
 **Progression:** Berserker Coins for surviving, kills, terminals and playing matches.
 
-- **Suits** (saved): Logan (free), Comic Wolverine (1000), Weapon X (2000), Old Man Logan (3000).
+- **Suits** (saved): Berserker (free), Comic Berserker (2000), Weapon X (4000), Old Man Berserker (6000). (Internal ids stay Logan, Comic, WeaponX, OldManLogan.)
 - **Claws** (saved): Adamantium (free), Bone (400), Gold (900), Blood-Soaked (1100, drips), Obsidian (1400), Cosmic (2200, glows).
 - Both are sold in the **Armory** (left dock).
 - **Daily challenges:** become Wolverine, 5 kills as Wolverine, survive 5 min total, play 3 matches. They reset for everyone at 00:00 UTC; the DAILY window counts down to it.
