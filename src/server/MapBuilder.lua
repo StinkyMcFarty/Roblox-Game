@@ -1577,21 +1577,67 @@ local function stickyNote(parent, cf, text)
 	return p
 end
 
--- Three glowing gouges ripped through steel, with bent metal flaps.
+-- Three claw gashes ripped through a steel wall. Each is a tapered, slightly
+-- curved tear: a dark void with a red glow deep inside, molten lips glowing
+-- white-hot in the middle and cooling to red at the points, torn metal
+-- curling out along both edges, soot round it, molten drips off the bottom
+-- and sparks falling out of it. origin faces into the room (-Z out).
 local function clawGouge(parent, origin, length, tilt)
+	local HOT, WARM, COOL = rgb(255, 236, 170), rgb(255, 140, 40), rgb(210, 40, 16)
+	local N = 12
+	local soot = block(parent, Vector3.new(10, length + 5, 0.05), origin * CFrame.Angles(0, 0, math.rad(tilt)) * CFrame.new(0, 0, 0.22), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false, CanQuery = false })
+	local sg = make("SurfaceGui", soot, { Face = Enum.NormalId.Front, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 20 })
 	for i = -1, 1 do
-		local cf = origin * CFrame.Angles(0, 0, math.rad(tilt)) * CFrame.new(i * 2.2, 0, 0)
-		block(parent, Vector3.new(0.9, length, 0.3), cf, M.Slate, rgb(8, 6, 6))
-		for s = -1, 1, 2 do
-			block(parent, Vector3.new(0.14, length * 0.96, 0.32), cf * CFrame.new(s * 0.5, 0, 0), M.Neon, rgb(255, 120, 30))
-			-- torn flaps curling out of the cut
-			for f = -1, 1 do
-				block(parent, Vector3.new(0.6, 1.4, 0.1), cf * CFrame.new(s * 0.75, f * length * 0.3, -0.35 - (f + 1) * 0.03 - (s + 1) * 0.01) * CFrame.Angles(math.rad(-35), 0, math.rad(s * 35)), M.Metal, rgb(90, 92, 98))
+		local len = length * (i == 0 and 1 or 0.86)
+		local base = origin * CFrame.Angles(0, 0, math.rad(tilt)) * CFrame.new(i * 2.5, i == 0 and 0.6 or 0, 0)
+		local function at(t) -- the gash's centre line, bottom (t = 0) to top, bowed like a swipe
+			return Vector3.new(1.1 * 4 * t * (1 - t), (t - 0.5) * len, 0)
+		end
+		for k = 0, N - 1 do
+			local t0, t1 = k / N, (k + 1) / N
+			local p0, p1 = at(t0), at(t1)
+			local seg = p1 - p0
+			local u = math.sin(math.pi * (t0 + t1) / 2) -- 0 at the points, 1 in the middle
+			local w = 0.25 + 1.05 * u ^ 0.7
+			local cf = base * CFrame.new((p0 + p1) / 2) * CFrame.Angles(0, 0, -math.atan2(seg.X, seg.Y))
+			local sl = seg.Magnitude + 0.05
+			block(parent, Vector3.new(w, sl, 0.34), cf * CFrame.new(0, 0, -0.02), M.Slate, rgb(8, 6, 6)) -- the void
+			block(parent, Vector3.new(w * 0.28, sl, 0.02), cf * CFrame.new(0, 0, -0.2), M.Neon, rgb(150, 20, 10), { CanCollide = false }) -- glow deep inside
+			local lip = u > 0.55 and HOT:Lerp(WARM, (1 - u) / 0.45) or WARM:Lerp(COOL, 1 - u / 0.55)
+			for _, s in { -1, 1 } do
+				block(parent, Vector3.new(0.15, sl, 0.4), cf * CFrame.new(s * (w / 2 + 0.03), 0, -0.04), M.Neon, lip, { CanCollide = false })
+				-- torn steel curling out of the cut
+				if (k + (s > 0 and 1 or 0)) % 2 == 0 and k > 0 and k < N - 1 then
+					local flap = rng:NextNumber(0.5, 0.9)
+					make("WedgePart", parent, {
+						Size = Vector3.new(0.5, flap, 0.08), Material = M.Metal, Color = rgb(96, 98, 104), CanCollide = false,
+						CFrame = cf * CFrame.new(s * (w / 2 + 0.28), rng:NextNumber(-0.3, 0.3), -0.3) * CFrame.Angles(math.rad(-rng:NextNumber(30, 55)), 0, math.rad(s * rng:NextNumber(25, 50))),
+					})
+				end
+			end
+			if k % 3 == 1 then -- soot blotches along it
+				local sx, sy = (i * 2.5 + (p0.X + p1.X) / 2 + 5) * 20, ((length + 5) / 2 - (p0.Y + p1.Y) / 2 - (i == 0 and 0.6 or 0)) * 20
+				local blot = make("Frame", sg, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(sx, sy), Size = UDim2.fromOffset(w * 20 + 60, len / N * 3 * 20),
+					BackgroundColor3 = rgb(18, 14, 12), BackgroundTransparency = 0.72, BorderSizePixel = 0 })
+				make("UICorner", blot, { CornerRadius = UDim.new(0.5, 0) })
 			end
 		end
+		-- molten drips off the bottom point
+		local tip = base * CFrame.new(at(0))
+		block(parent, Vector3.new(0.09, 0.9, 0.09), tip * CFrame.new(0.05, -0.5, -0.2), M.Neon, WARM, { CanCollide = false })
+		block(parent, Vector3.new(0.2, 0.26, 0.2), tip * CFrame.new(0.05, -1.02, -0.2), M.Neon, WARM, { Shape = Enum.PartType.Ball, CanCollide = false })
+		-- sparks falling out of the cut
+		local src = block(parent, Vector3.new(1, len * 0.8, 0.1), base * CFrame.new(0.6, 0, -0.3), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false })
+		make("ParticleEmitter", src, {
+			Texture = "rbxasset://textures/particles/sparkles_main.dds", Shape = Enum.ParticleEmitterShape.Box,
+			Color = ColorSequence.new(rgb(255, 210, 120), rgb(255, 80, 20)), LightEmission = 1, LightInfluence = 0,
+			Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.16), NumberSequenceKeypoint.new(1, 0) }),
+			Lifetime = NumberRange.new(0.6, 1.2), Rate = 4, Speed = NumberRange.new(0.5, 2), SpreadAngle = Vector2.new(40, 40),
+			Acceleration = Vector3.new(0, -18, 0), EmissionDirection = Enum.NormalId.Front,
+		})
 	end
-	local glow = block(parent, Vector3.new(1, 1, 1), origin * CFrame.new(0, 0, -1), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false })
-	light(glow, { Range = 14, Brightness = 2, Color = rgb(255, 120, 40) })
+	local glow = block(parent, Vector3.new(1, 1, 1), origin * CFrame.new(0, 0, -1.2), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false })
+	light(glow, { Range = 18, Brightness = 2.4, Color = rgb(255, 120, 40) })
 end
 
 -- Lobby fittings. Every part of a light fitting is CastShadow = false: with
@@ -2570,7 +2616,9 @@ function MapBuilder.BuildLobby()
 			LayoutOrder = i,
 		})
 	end
-	local lbLight = block(lobby, Vector3.new(0.3, 0.3, 18), CFrame.new(-hx + 3.3, Y + 15.4, -26), M.Neon, rgb(200, 30, 30))
+	-- a red light bar along the top of the board (it used to hang in mid-air
+	-- over the Sentinel bay, where the board once was)
+	local lbLight = block(lobby, Vector3.new(0.3, 0.3, 14), CFrame.new(-hx + 3.25, Y + 14.7, 36.5), M.Neon, rgb(200, 30, 30))
 	light(lbLight, { Range = 10, Brightness = 1, Color = rgb(255, 60, 40) })
 
 	-- STATUS TV: mounted on the chimney breast above the fireplace, facing
