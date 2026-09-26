@@ -1763,6 +1763,37 @@ local function cagedLamp(parent, cf, color, flicker)
 	end
 end
 
+-- A little theatre stage light: a can on a yoke with a glowing lens and
+-- barn doors, hung from `top` and aimed at `target`, with a soft shaft of
+-- light showing in the air.
+local function stageLight(parent, top, target, color)
+	local at = top - Vector3.new(0, 0.55, 0)
+	local cf = CFrame.lookAt(at, target)
+	local dark = rgb(26, 26, 30)
+	local along = CFrame.Angles(0, math.rad(90), 0) -- a cylinder pointing where the light points
+	fitting(parent, Vector3.new(0.08, 0.5, 0.08), CFrame.new(top - Vector3.new(0, 0.25, 0)), M.Metal, dark) -- stem
+	fitting(parent, Vector3.new(0.9, 0.06, 0.28), cf * CFrame.new(0, 0.4, 0.05), M.Metal, dark) -- yoke
+	for _, x in { -0.43, 0.43 } do
+		fitting(parent, Vector3.new(0.06, 0.46, 0.28), cf * CFrame.new(x, 0.18, 0.05), M.Metal, dark)
+	end
+	fitting(parent, Vector3.new(0.85, 0.7, 0.7), cf * CFrame.new(0, 0, 0.12) * along, M.Metal, rgb(40, 40, 46), { Shape = Enum.PartType.Cylinder }) -- can
+	fitting(parent, Vector3.new(0.12, 0.82, 0.82), cf * CFrame.new(0, 0, -0.34) * along, M.Metal, dark, { Shape = Enum.PartType.Cylinder }) -- rim
+	fitting(parent, Vector3.new(0.04, 0.56, 0.56), cf * CFrame.new(0, 0, -0.41) * along, M.Neon, color, { Shape = Enum.PartType.Cylinder }) -- lens
+	for _, s in { -1, 1 } do -- barn doors, swung open
+		fitting(parent, Vector3.new(0.72, 0.03, 0.34), cf * CFrame.new(0, s * 0.42, -0.52) * CFrame.Angles(math.rad(s * 38), 0, 0), M.Metal, dark)
+	end
+	local emit = fitting(parent, Vector3.new(0.2, 0.2, 0.2), cf * CFrame.new(0, 0, -0.46), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false })
+	make("SpotLight", emit, { Face = Enum.NormalId.Front, Range = 10, Angle = 48, Brightness = 4.5, Color = color })
+	local a0 = make("Attachment", emit, {})
+	local a1 = make("Attachment", emit, { Position = Vector3.new(0, 0, -(target - emit.Position).Magnitude) })
+	make("Beam", emit, {
+		Attachment0 = a0, Attachment1 = a1, FaceCamera = true, Segments = 1,
+		Width0 = 0.45, Width1 = 2.1, LightEmission = 1, LightInfluence = 0,
+		Color = ColorSequence.new(color),
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.55), NumberSequenceKeypoint.new(0.7, 0.85), NumberSequenceKeypoint.new(1, 1) }),
+	})
+end
+
 -- Steel I-beam column standing against a wall: cf at its foot on the wall
 -- face, facing into the room. Anchor-bolted base plate, a hazard-striped
 -- foot and stiffener plates up the web.
@@ -2438,8 +2469,9 @@ function MapBuilder.BuildLobby()
 				block(lobby, Vector3.new(0.14, 5.2, 0.14), base * CFrame.new(cx, 6, czz), M.Metal, rgb(50, 50, 56))
 			end
 		end
-		local cap = block(lobby, Vector3.new(3.4, 0.3, 3.4), base * CFrame.new(0, 8.75, 0), M.Metal, rgb(50, 50, 56))
-		make("SpotLight", cap, { Face = Enum.NormalId.Bottom, Range = 10, Angle = 70, Brightness = 3, Color = item.Glow:Lerp(Color3.new(1, 1, 1), 0.6) })
+		block(lobby, Vector3.new(3.4, 0.3, 3.4), base * CFrame.new(0, 8.75, 0), M.Metal, rgb(50, 50, 56))
+		-- a stage light hung in the top back corner, aimed at the claws
+		stageLight(lobby, (base * CFrame.new(0.95, 8.6, 0.95)).Position, (base * CFrame.new(0, 5, 0)).Position, item.Glow:Lerp(Color3.new(1, 1, 1), 0.55))
 		Costumes.ClawDisplay(lobby, base * CFrame.new(0, 4.35, 0) * CFrame.Angles(0, math.rad(90 + 18), math.rad(6)), item)
 		local plaque = block(lobby, Vector3.new(3.2, 0.9, 0.1), base * CFrame.new(0, 2.2, -1.75) * CFrame.Angles(math.rad(12), 0, 0), M.Metal, rgb(22, 22, 26))
 		surfaceText(plaque, Enum.NormalId.Front, { Text = item.Name .. (item.Price > 0 and ("\n" .. item.Price .. " " .. Config.CoinName:upper()) or "  FREE"), TextColor3 = item.Glow, Font = Enum.Font.GothamBold })
