@@ -1,6 +1,7 @@
 -- Terminals sound alive when you're near one: a looping console hum
--- (TerminalHum, once uploaded) and, until it's repaired, restless beeps
--- calling you over. Played locally, only for terminals within RANGE studs.
+-- (TerminalHum, once uploaded) and, until it's repaired, a double chirp every
+-- couple of seconds calling you over. Played locally, only for terminals
+-- within RANGE studs; full volume within LOUD studs.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -8,7 +9,8 @@ local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Co
 
 local player = Players.LocalPlayer
 
-local RANGE = 45 -- studs
+local RANGE = 70 -- studs
+local LOUD = 12
 local HUM = Config.Sounds.TerminalHum
 local BEEP = Config.Sounds.Terminal
 
@@ -19,7 +21,7 @@ local function sound(id, parent, volume)
 	s.SoundId = id
 	s.Volume = volume
 	s.RollOffMode = Enum.RollOffMode.InverseTapered
-	s.RollOffMinDistance = 6
+	s.RollOffMinDistance = LOUD
 	s.RollOffMaxDistance = RANGE
 	s.Parent = parent
 	return s
@@ -50,7 +52,7 @@ task.spawn(function()
 						st = { NextBeep = os.clock() + math.random() * 2 }
 						near[term] = st
 						if HUM ~= "" then
-							st.Hum = sound(HUM, body, 0.6)
+							st.Hum = sound(HUM, body, 1)
 							st.Hum.Looped = true
 							st.Hum.TimePosition = math.random() * 7 -- consoles side by side don't hum in step
 							st.Hum:Play()
@@ -58,16 +60,24 @@ task.spawn(function()
 					end
 					local done = term:GetAttribute("Done") == true
 					if st.Hum then
-						st.Hum.Volume = done and 0.3 or 0.6 -- repaired ones settle down
+						st.Hum.Volume = done and 0.45 or 1 -- repaired ones settle down
 					end
 					if not done and BEEP ~= "" and os.clock() >= st.NextBeep then
-						st.NextBeep = os.clock() + 2.5 + math.random() * 3
-						local b = sound(BEEP, body, 0.35)
-						b.PlaybackSpeed = 0.8 + math.random() * 0.5
-						b:Play()
-						b.Ended:Connect(function()
-							b:Destroy()
-						end)
+						st.NextBeep = os.clock() + 1.8 + math.random() * 1.4
+						-- a rising double chirp: the console calling for someone
+						local pitch = 0.9 + math.random() * 0.2
+						for k = 0, 1 do
+							task.delay(k * 0.13, function()
+								if body.Parent then
+									local b = sound(BEEP, body, 0.9)
+									b.PlaybackSpeed = pitch * (1 + k * 0.26)
+									b:Play()
+									b.Ended:Connect(function()
+										b:Destroy()
+									end)
+								end
+							end)
+						end
 					end
 				end
 			end

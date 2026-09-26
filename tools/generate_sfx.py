@@ -453,10 +453,17 @@ def punch():
 
 
 def terminal():
-    t = t_axis(0.35)
-    a = np.sin(2 * np.pi * 880 * t) * env(0.35, 0.003, 0.12)
-    b = pad(np.sin(2 * np.pi * 1320 * t) * env(0.35, 0.003, 0.15), 0.1)
-    return finish(reverb(mix(a, b), 0.3, 0.2), 0.7)
+    """Console chirp: one bright, square-edged bleep that flicks up in pitch.
+    Its energy sits at 1.7-5 kHz, where phone and laptop speakers are loud
+    (TerminalSounds plays it twice, the second higher, as a call)."""
+    d = 0.13
+    tt = t_axis(d)
+    f = 1760 * (1 + 0.06 * np.minimum(tt / 0.02, 1))
+    ph = 2 * np.pi * np.cumsum(f) / SR
+    tone = np.tanh(np.sin(ph) * 2.6) + 0.35 * np.sin(2 * ph) + 0.15 * np.sin(3 * ph)
+    click = highpass(noise(0.004), 3000) * env(0.004, 0.0002, 0.001) * 0.4
+    x = mix(tone * env(d, 0.002, 0.05), click)
+    return finish(reverb(x, 0.18, 0.1), 0.95)
 
 
 def paw():
@@ -749,12 +756,15 @@ def terminal_hum():
     L, X = HUM_LOOP, 0.8
     t = t_axis(L + X)
     wobble = 1 + 0.08 * np.sin(2 * np.pi * 0.25 * t)
+    # the mains hum is felt more than heard on small speakers, so the
+    # transformer buzz (its harmonics up to ~2 kHz), the fan and the data
+    # chatter carry the sound
     hum = (np.sin(2 * np.pi * 60 * t) * 0.5 + np.sin(2 * np.pi * 120 * t) * 0.35
            + np.sin(2 * np.pi * 180 * t) * 0.12 + np.sin(2 * np.pi * 240 * t) * 0.06) * wobble
-    buzz = lowpass(signal.sawtooth(2 * np.pi * 120 * t), 900) * 0.12
-    fan = bandpass(noise(L + X), 250, 1400) * (0.55 + 0.25 * np.sin(2 * np.pi * 0.5 * t)) * 0.35
-    whine = np.sin(2 * np.pi * 7400 * t) * 0.012
-    parts = [hum * 0.55, buzz, fan, whine]
+    buzz = bandpass(signal.sawtooth(2 * np.pi * 120 * t), 300, 2200) * 0.3 * wobble
+    fan = bandpass(noise(L + X), 400, 2600) * (0.55 + 0.25 * np.sin(2 * np.pi * 0.5 * t)) * 0.3
+    whine = np.sin(2 * np.pi * 5200 * t) * 0.02
+    parts = [hum * 0.35, buzz, fan, whine]
     # data chatter: runs of quick square-ish bleeps
     for start in (0.6, 2.9, 5.2, 6.9):
         at = start + rng.uniform(-0.15, 0.15)
@@ -762,25 +772,25 @@ def terminal_hum():
             d = rng.uniform(0.025, 0.05)
             f = rng.choice([1320, 1760, 2093, 2637, 3136])
             tt = t_axis(d)
-            b = np.tanh(np.sin(2 * np.pi * f * tt) * 3) * env(d, 0.002, d * 0.6) * 0.09
+            b = np.tanh(np.sin(2 * np.pi * f * tt) * 3) * env(d, 0.002, d * 0.6) * 0.28
             parts.append(pad(b, at))
             at += d + rng.uniform(0.005, 0.03)
     # a couple of rising two-tone chirps
     for at in (1.8, 4.4):
         tt = t_axis(0.22)
         f = 900 + 900 * (tt / 0.22)
-        c = np.sin(2 * np.pi * np.cumsum(f) / SR) * env(0.22, 0.004, 0.08) * 0.12
+        c = np.tanh(np.sin(2 * np.pi * np.cumsum(f) / SR) * 2) * env(0.22, 0.004, 0.08) * 0.3
         parts.append(pad(mix(c, pad(c * 0.8, 0.11)), at))
     # relay clicks
     for at in (3.6, 7.4):
-        parts.append(pad(highpass(noise(0.01), 2500) * env(0.01, 0.0003, 0.002) * 0.5, at))
+        parts.append(pad(highpass(noise(0.01), 2500) * env(0.01, 0.0003, 0.002) * 0.8, at))
     x = mix(*parts)[: len(t)]
     x = reverb(x, 0.25, 0.15)[: len(t)]
     n, nx = int(SR * L), int(SR * X)
     out = x[:n].copy()
     fade = np.linspace(0, 1, nx)
     out[:nx] = out[:nx] * fade + x[n:n + nx] * (1 - fade)
-    return finish(out, 0.7, 0)
+    return finish(np.tanh(out / (np.max(np.abs(out)) + 1e-9) * 1.6), 0.82, 0)
 
 
 def pounce_hit():
