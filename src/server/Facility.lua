@@ -1201,36 +1201,67 @@ local function waitingChairs(parent, cf, count)
 	D(parent, Vector3.new(0.14, 0.9, 1.6), cf * CFrame.new(count * 1.1 + 0.05, 2, 0), M.Metal, metal)
 end
 
+-- An office chair at cf (the sitter faces -Z): a five-star base on casters,
+-- a chrome gas lift, a contoured seat with a waterfall front, a curved back
+-- with a lumbar pad, and armrests.
 local function officeChair(parent, cf)
-	local c = rgb(28, 30, 34)
+	local fabric, frame, chrome = rgb(30, 32, 38), rgb(22, 22, 26), rgb(170, 174, 182)
 	for k = 0, 4 do
-		D(parent, Vector3.new(0.18, 0.14, 1.2), cf * CFrame.Angles(0, k * math.pi * 2 / 5, 0) * CFrame.new(0, 0.2, -0.6), M.Metal, rgb(60, 62, 66))
+		local a = cf * CFrame.Angles(0, k * math.pi * 2 / 5, 0)
+		D(parent, Vector3.new(0.2, 0.16, 1.1), a * CFrame.new(0, 0.34, -0.55) * CFrame.Angles(math.rad(6), 0, 0), M.Metal, frame, { CanCollide = false })
+		D(parent, Vector3.new(0.26, 0.26, 0.26), a * CFrame.new(0, 0.14, -1.06), M.SmoothPlastic, rgb(16, 16, 18), { Shape = Enum.PartType.Ball, CanCollide = false })
 	end
-	cyl(parent, (cf * CFrame.new(0, 0.2, 0)).Position, (cf * CFrame.new(0, 1.6, 0)).Position, 0.25, M.Metal, rgb(90, 92, 96), nil, true)
-	P(parent, Vector3.new(1.8, 0.4, 1.8), cf * CFrame.new(0, 1.8, 0), M.Fabric, c)
-	D(parent, Vector3.new(1.7, 2.2, 0.3), cf * CFrame.new(0, 3.1, 0.85) * CFrame.Angles(math.rad(-8), 0, 0), M.Fabric, c)
+	cyl(parent, (cf * CFrame.new(0, 0.3, 0)).Position, (cf * CFrame.new(0, 0.9, 0)).Position, 0.36, M.Metal, frame, nil, true)
+	cyl(parent, (cf * CFrame.new(0, 0.85, 0)).Position, (cf * CFrame.new(0, 1.55, 0)).Position, 0.2, M.Metal, chrome, { Reflectance = 0.3 }, true)
+	D(parent, Vector3.new(1, 0.2, 1), cf * CFrame.new(0, 1.55, 0), M.Metal, frame)
+	P(parent, Vector3.new(1.9, 0.18, 1.8), cf * CFrame.new(0, 1.72, 0), M.SmoothPlastic, frame)
+	D(parent, Vector3.new(1.8, 0.28, 1.6), cf * CFrame.new(0, 1.93, 0.05), M.Fabric, fabric)
+	D(parent, Vector3.new(1.8, 0.34, 0.34), cf * CFrame.new(0, 1.9, -0.78), M.Fabric, fabric, { Shape = Enum.PartType.Cylinder }) -- waterfall front
+	D(parent, Vector3.new(0.3, 1.2, 0.18), cf * CFrame.new(0, 2.3, 0.98) * CFrame.Angles(math.rad(12), 0, 0), M.Metal, frame) -- spine
+	local back = cf * CFrame.new(0, 3.3, 1.1) * CFrame.Angles(math.rad(10), 0, 0)
+	D(parent, Vector3.new(1.8, 2.3, 0.14), back, M.SmoothPlastic, frame)
+	D(parent, Vector3.new(1.62, 2.08, 0.2), back * CFrame.new(0, 0.02, -0.16), M.Fabric, fabric)
+	D(parent, Vector3.new(1.44, 0.5, 0.12), back * CFrame.new(0, -0.55, -0.3), M.Fabric, rgb(40, 42, 50)) -- lumbar pad
+	for _, x in { -0.98, 0.98 } do -- armrests
+		D(parent, Vector3.new(0.14, 0.9, 0.14), cf * CFrame.new(x, 2.25, 0.25), M.Metal, frame)
+		D(parent, Vector3.new(0.3, 0.12, 1.1), cf * CFrame.new(x, 2.74, 0.1), M.SmoothPlastic, rgb(40, 40, 44))
+	end
 end
 
+-- An office desk at cf (the sitter is on +Z, the screens on -Z): a laminate
+-- top with a dark edge band, a drawer pedestal on the left, a panel leg on
+-- the right, a modesty panel, keyboard, mouse, a mug and paperwork.
 local function desk(parent, cf, w, withScreens)
 	w = w or 6
-	local top = rgb(52, 56, 62)
-	P(parent, Vector3.new(w, 0.25, 3), cf * CFrame.new(0, 3, 0), M.SmoothPlastic, top)
-	D(parent, Vector3.new(w, 0.08, 3.02), cf * CFrame.new(0, 3.16, 0), M.SmoothPlastic, rgb(190, 194, 200), { Transparency = 0.5 })
-	for _, x in { -w / 2 + 0.2, w / 2 - 0.2 } do
-		P(parent, Vector3.new(0.3, 3, 2.8), cf * CFrame.new(x, 1.5, 0), M.SmoothPlastic, rgb(40, 42, 46))
+	local top, body = rgb(60, 64, 72), rgb(42, 44, 50)
+	P(parent, Vector3.new(w, 0.2, 3), cf * CFrame.new(0, 3.05, 0), M.SmoothPlastic, top)
+	D(parent, Vector3.new(w + 0.06, 0.1, 3.06), cf * CFrame.new(0, 2.9, 0), M.SmoothPlastic, rgb(26, 28, 32)) -- edge band
+	local ped = P(parent, Vector3.new(1.8, 2.8, 2.7), cf * CFrame.new(-w / 2 + 1.05, 1.45, 0), M.SmoothPlastic, body)
+	for k = 0, 2 do -- drawers
+		D(ped, Vector3.new(1.6, 0.8, 0.06), cf * CFrame.new(-w / 2 + 1.05, 0.55 + k * 0.9, 1.37), M.SmoothPlastic, rgb(52, 55, 62))
+		D(ped, Vector3.new(0.7, 0.08, 0.1), cf * CFrame.new(-w / 2 + 1.05, 0.75 + k * 0.9, 1.43), M.Metal, rgb(170, 174, 182))
 	end
-	D(parent, Vector3.new(w - 0.4, 2, 0.15), cf * CFrame.new(0, 1.9, -1.3), M.SmoothPlastic, rgb(40, 42, 46))
+	D(parent, Vector3.new(0.2, 2.8, 2.8), cf * CFrame.new(w / 2 - 0.15, 1.45, 0), M.SmoothPlastic, body) -- panel leg
+	D(parent, Vector3.new(w - 2.2, 1.6, 0.1), cf * CFrame.new(0.95, 2.05, -1.35), M.SmoothPlastic, body) -- modesty panel
 	if withScreens then
 		local n = math.max(1, math.floor(w / 3))
 		for i = 0, n - 1 do
 			local x = (i - (n - 1) / 2) * 2.8
 			local s = cf * CFrame.new(x, 4.6, -0.7) * CFrame.Angles(0, math.pi, 0) * CFrame.Angles(math.rad(-6), 0, 0)
-			D(parent, Vector3.new(0.2, 1.2, 0.2), cf * CFrame.new(x, 3.7, -0.9), M.Metal, rgb(40, 40, 44))
+			D(parent, Vector3.new(0.2, 1.2, 0.2), cf * CFrame.new(x, 3.75, -0.9), M.Metal, rgb(40, 40, 44))
+			D(parent, Vector3.new(0.9, 0.06, 0.6), cf * CFrame.new(x, 3.18, -0.9), M.Metal, rgb(40, 40, 44)) -- stand foot
 			screen(parent, s, 2.4, 1.4)
 		end
-		D(parent, Vector3.new(1.8, 0.1, 0.6), cf * CFrame.new(0, 3.2, 0.6), M.SmoothPlastic, rgb(30, 30, 34))
+		local kb = D(parent, Vector3.new(1.9, 0.08, 0.62), cf * CFrame.new(0, 3.19, 0.55), M.SmoothPlastic, rgb(24, 24, 28))
+		local kg = sgui(kb, N.Top, 30)
+		for row = 0, 3 do
+			fr(kg, { Position = UDim2.fromScale(0.03, 0.08 + row * 0.23), Size = UDim2.fromScale(0.94, 0.16), BackgroundColor3 = rgb(70, 72, 80) })
+		end
+		D(parent, Vector3.new(0.26, 0.1, 0.4), cf * CFrame.new(1.35, 3.2, 0.6), M.SmoothPlastic, rgb(24, 24, 28)) -- mouse
 	end
-	-- papers
+	-- a mug, and papers
+	local mx = rng:NextNumber(-w / 2 + 0.5, w / 2 - 0.5)
+	D(parent, Vector3.new(0.44, 0.36, 0.36), cf * CFrame.new(mx, 3.37, -0.2) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, rng:NextNumber() < 0.5 and rgb(226, 226, 220) or rgb(40, 90, 150), { Shape = Enum.PartType.Cylinder })
 	for k = 1, 3 do
 		D(parent, Vector3.new(0.85, 0.03, 1.1), cf * CFrame.new(rng:NextNumber(-w / 2 + 0.6, w / 2 - 0.6), 3.14 + k * 0.006, rng:NextNumber(-1, 0.4)) * CFrame.Angles(0, rng:NextNumber(-0.6, 0.6), 0), M.SmoothPlastic, rgb(236, 236, 230))
 	end
@@ -1262,24 +1293,54 @@ local function barrel(parent, pos, color)
 	return b
 end
 
+-- A lounge sofa at cf (facing -Z) with `seats` places: feet, a piped base,
+-- seat cushions with rolled fronts, leaning back cushions, rolled arms and a
+-- throw pillow.
 local function sofa(parent, cf, seats, color)
 	color = color or rgb(40, 52, 76)
 	local w = seats * 2.6
-	P(parent, Vector3.new(w, 1.6, 3), cf * CFrame.new(0, 0.8, 0), M.Fabric, color)
+	local dark = color:Lerp(Color3.new(0, 0, 0), 0.35)
+	for _, x in { -w / 2 - 0.5, w / 2 + 0.5 } do
+		for _, z in { -1.1, 1.1 } do
+			D(parent, Vector3.new(0.3, 0.42, 0.3), cf * CFrame.new(x, 0.21, z), M.Metal, rgb(30, 30, 34))
+		end
+	end
+	P(parent, Vector3.new(w, 1, 3), cf * CFrame.new(0, 0.92, 0), M.Fabric, color)
+	D(parent, Vector3.new(w + 1.44, 0.1, 3.04), cf * CFrame.new(0, 0.46, 0), M.Fabric, dark) -- piping
 	for i = 0, seats - 1 do
-		D(parent, Vector3.new(2.5, 0.5, 2.5), cf * CFrame.new(-w / 2 + 1.3 + i * 2.6, 1.85, -0.15), M.Fabric, vary(color, 0.05))
+		local x = -w / 2 + 1.3 + i * 2.6
+		D(parent, Vector3.new(2.48, 0.5, 2.4), cf * CFrame.new(x, 1.67, -0.1), M.Fabric, vary(color, 0.05))
+		D(parent, Vector3.new(2.44, 0.52, 0.52), cf * CFrame.new(x, 1.66, -1.3), M.Fabric, vary(color, 0.05), { Shape = Enum.PartType.Cylinder })
+		D(parent, Vector3.new(2.46, 1.7, 0.5), cf * CFrame.new(x, 2.62, 0.72) * CFrame.Angles(math.rad(8), 0, 0), M.Fabric, vary(color, 0.05))
 	end
-	D(parent, Vector3.new(w, 2.4, 0.8), cf * CFrame.new(0, 2.2, 1.1), M.Fabric, color)
+	D(parent, Vector3.new(w, 2.3, 0.7), cf * CFrame.new(0, 2.25, 1.15), M.Fabric, color)
 	for _, x in { -w / 2 - 0.4, w / 2 + 0.4 } do
-		D(parent, Vector3.new(0.8, 2.3, 3), cf * CFrame.new(x, 1.15, 0), M.Fabric, color)
+		D(parent, Vector3.new(0.8, 1.9, 3), cf * CFrame.new(x, 1.4, 0), M.Fabric, color)
+		D(parent, Vector3.new(3.06, 0.9, 0.9), cf * CFrame.new(x, 2.35, 0) * CFrame.Angles(0, math.rad(90), 0), M.Fabric, color, { Shape = Enum.PartType.Cylinder })
 	end
+	D(parent, Vector3.new(1.5, 1.3, 0.4), cf * CFrame.new(-w / 2 + 0.9, 2.5, 0.35) * CFrame.Angles(math.rad(-14), math.rad(20), 0), M.Fabric, rgb(196, 150, 60))
 end
 
+-- A coffee table at cf (long side along X): a glass top on a steel frame,
+-- a wooden shelf under it with magazines, a mug and a paper on top.
 local function coffeeTable(parent, cf)
-	P(parent, Vector3.new(4.5, 0.2, 2.4), cf * CFrame.new(0, 1.5, 0), M.Glass, rgb(40, 44, 50), { Transparency = 0.3 })
-	D(parent, Vector3.new(4.2, 1.4, 0.2), cf * CFrame.new(0, 0.7, 0), M.Metal, rgb(30, 30, 32))
-	D(parent, Vector3.new(0.9, 0.05, 1.2), cf * CFrame.new(0.8, 1.63, 0.2) * CFrame.Angles(0, 0.3, 0), M.SmoothPlastic, rgb(230, 230, 224))
-	drum(parent, (cf * CFrame.new(-1, 1.85, 0)).Position, 0.5, 0.5, M.SmoothPlastic, rgb(240, 240, 240), nil, true)
+	local steel = rgb(46, 48, 54)
+	P(parent, Vector3.new(4.5, 0.14, 2.4), cf * CFrame.new(0, 1.55, 0), M.Glass, rgb(150, 180, 190), { Transparency = 0.45, Reflectance = 0.15 })
+	for _, x in { -2.1, 2.1 } do
+		for _, z in { -1.05, 1.05 } do
+			D(parent, Vector3.new(0.16, 1.46, 0.16), cf * CFrame.new(x, 0.75, z), M.Metal, steel)
+		end
+		D(parent, Vector3.new(0.12, 0.12, 2.26), cf * CFrame.new(x, 1.42, 0), M.Metal, steel)
+	end
+	for _, z in { -1.05, 1.05 } do
+		D(parent, Vector3.new(4.36, 0.12, 0.12), cf * CFrame.new(0, 1.42, z), M.Metal, steel)
+	end
+	D(parent, Vector3.new(4.1, 0.12, 2.0), cf * CFrame.new(0, 0.45, 0), M.WoodPlanks, rgb(92, 62, 40))
+	for k, c in { rgb(170, 40, 40), rgb(40, 90, 150) } do
+		D(parent, Vector3.new(1.2, 0.05, 1.6), cf * CFrame.new(-0.8 + k * 0.3, 0.53 + k * 0.05, 0) * CFrame.Angles(0, math.rad(k * 12 - 10), 0), M.SmoothPlastic, c)
+	end
+	D(parent, Vector3.new(0.9, 0.03, 1.2), cf * CFrame.new(0.8, 1.64, 0.2) * CFrame.Angles(0, 0.3, 0), M.SmoothPlastic, rgb(230, 230, 224))
+	drum(parent, (cf * CFrame.new(-1, 1.84, 0)).Position, 0.46, 0.44, M.SmoothPlastic, rgb(240, 240, 240), nil, true)
 end
 
 local function toolChest(parent, cf, color)
@@ -2095,10 +2156,10 @@ local function buildHangar(parent)
 		breakable(tank)
 		drum(tank, Vector3.new(-50, F + 6.2, 70 + i * 5), 1.2, 0.6, M.Metal, rgb(60, 60, 62), nil, true)
 	end
-	for i = 0, 2 do
-		crate(parent, CFrame.new(46, F, 66 + i * 5) * CFrame.Angles(0, rng:NextNumber(-0.2, 0.2), 0), 4.4, i == 1 and "SENTINEL SPARES" or "TRASK IND.")
+	for i = 0, 2 do -- far enough apart that turned crates never cut into each other
+		crate(parent, CFrame.new(46, F, 66 + i * 5.4) * CFrame.Angles(0, rng:NextNumber(-0.12, 0.12), 0), 4.4, i == 1 and "SENTINEL SPARES" or "TRASK IND.")
 	end
-	crate(parent, CFrame.new(46, F + 4.4, 71), 3.4, "HANDLE WITH CARE")
+	crate(parent, CFrame.new(46, F + 4.4, 71.4), 3.4, "HANDLE WITH CARE")
 	-- a spare Sentinel head on a stand
 	local hp = Vector3.new(40, F, 90)
 	P(parent, Vector3.new(4, 3, 4), CFrame.new(hp + Vector3.new(0, 1.5, 0)), M.Metal, rgb(46, 44, 42))
@@ -2419,20 +2480,59 @@ local function buildReactor(parent)
 		local d = Vector3.new(math.cos(a), 0, math.sin(a))
 		local wallPt = c + d * 44
 		wallPt = Vector3.new(math.clamp(wallPt.X, 58, 158), 0, math.clamp(wallPt.Z, -138, -58))
-		pipe(parent, { c + d * 8 + Vector3.new(0, 6, 0), c + d * 16 + Vector3.new(0, 6, 0), c + d * 16 + Vector3.new(0, 18, 0), Vector3.new(wallPt.X, F + 18, wallPt.Z) }, 2.4, rgb(186, 190, 196), M.Foil)
+		-- clad in dull steel (bright foil flared white under the core's light)
+		pipe(parent, { c + d * 8 + Vector3.new(0, 6, 0), c + d * 16 + Vector3.new(0, 6, 0), c + d * 16 + Vector3.new(0, 18, 0), Vector3.new(wallPt.X, F + 18, wallPt.Z) }, 2.4, rgb(118, 124, 134), M.Metal, rgb(52, 54, 60))
 	end
-	-- transformers with radiator fins
+	-- step-down transformers: a steel tank on a skid, a bolted cover with
+	-- lifting lugs, a conservator tank on top, three skirted porcelain
+	-- bushings wired up into the roof, radiator banks down both sides and a
+	-- warning plate
 	for i = 0, 3 do
 		local p = Vector3.new(153, F, -130 + i * 16)
-		P(parent, Vector3.new(6, 7, 8), CFrame.new(p + Vector3.new(0, 3.5, 0)), M.Metal, rgb(90, 100, 88))
-		for f = -3.4, 3.4, 0.6 do
-			D(parent, Vector3.new(1.4, 5.6, 0.12), CFrame.new(p + Vector3.new(-3.6, 3.4, f)), M.Metal, rgb(80, 90, 78))
+		local tankC, finC, dark = rgb(84, 96, 84), rgb(72, 84, 72), rgb(34, 36, 40)
+		for _, x in { -2.2, 2.2 } do -- skid
+			D(parent, Vector3.new(0.8, 0.6, 8.6), CFrame.new(p + Vector3.new(x, 0.3, 0)), M.Metal, dark)
 		end
-		for _, z in { -2, 0, 2 } do
-			cyl(parent, p + Vector3.new(0, 7, z), p + Vector3.new(0, 8.8, z), 0.6, M.SmoothPlastic, rgb(140, 100, 60), nil, true)
+		P(parent, Vector3.new(5.6, 6.2, 7.6), CFrame.new(p + Vector3.new(0, 3.7, 0)), M.Metal, tankC)
+		D(parent, Vector3.new(6, 0.35, 8), CFrame.new(p + Vector3.new(0, 6.95, 0)), M.Metal, finC) -- cover
+		for _, x in { -2.8, 2.8 } do
+			for _, z in { -3.8, 3.8 } do
+				D(parent, Vector3.new(0.5, 0.6, 0.18), CFrame.new(p + Vector3.new(x, 7.3, z)), M.Metal, dark) -- lifting lugs
+			end
 		end
-		local sg = D(parent, Vector3.new(3, 2, 0.1), CFrame.new(p + Vector3.new(0, 4, -4.06)), M.SmoothPlastic, rgb(230, 190, 30))
-		stencil(sg, N.Front, "⚡ 11 kV", rgb(20, 20, 20), 30)
+		for z = -3.6, 3.6, 0.9 do -- cover bolts
+			for _, x in { -2.9, 2.9 } do
+				D(parent, Vector3.new(0.14, 0.12, 0.14), CFrame.new(p + Vector3.new(x, 7.18, z)), M.Metal, rgb(150, 154, 160))
+			end
+		end
+		-- conservator
+		D(parent, Vector3.new(6.4, 1.6, 1.6), CFrame.new(p + Vector3.new(1.6, 8.9, 0)) * CFrame.Angles(0, math.rad(90), 0), M.Metal, tankC, { Shape = Enum.PartType.Cylinder })
+		for _, z in { -2.4, 2.4 } do
+			D(parent, Vector3.new(0.3, 1.5, 0.3), CFrame.new(p + Vector3.new(1.6, 7.8, z)), M.Metal, dark)
+		end
+		-- bushings: stacked porcelain skirts with a brass terminal, a cable up to the roof
+		for _, z in { -2.2, 0, 2.2 } do
+			local b = p + Vector3.new(-1.2, 7.1, z)
+			for k = 0, 4 do
+				drum(parent, b + Vector3.new(0, 0.3 + k * 0.42, 0), 1.1 - k * 0.1, 0.18, M.SmoothPlastic, rgb(128, 70, 38), nil, true)
+			end
+			cyl(parent, b, b + Vector3.new(0, 2.4, 0), 0.5, M.SmoothPlastic, rgb(110, 60, 32), nil, true)
+			drum(parent, b + Vector3.new(0, 2.55, 0), 0.4, 0.3, M.Metal, rgb(200, 160, 70), nil, true)
+			cable(b + Vector3.new(0, 2.7, 0), Vector3.new(b.X - 2, F + r.h - 2, b.Z), 1.2, 0.22, rgb(20, 20, 22))
+		end
+		-- radiator banks
+		for _, sx in { -1, 1 } do
+			for f = -3.3, 3.3, 0.55 do
+				D(parent, Vector3.new(1.2, 5, 0.1), CFrame.new(p + Vector3.new(sx * 3.4, 3.6, f)), M.Metal, finC)
+			end
+			for _, y in { 1.3, 5.9 } do
+				D(parent, Vector3.new(0.36, 0.36, 7.2), CFrame.new(p + Vector3.new(sx * 3.4, y, 0)) * CFrame.Angles(0, math.rad(90), 0), M.Metal, dark, { Shape = Enum.PartType.Cylinder })
+			end
+		end
+		local sg = D(parent, Vector3.new(3, 2, 0.1), CFrame.new(p + Vector3.new(0, 4, -3.86)), M.SmoothPlastic, rgb(230, 190, 30))
+		stencil(sg, N.Front, "⚡ DANGER 11 kV", rgb(20, 20, 20), 30)
+		local plate = D(parent, Vector3.new(1.4, 0.8, 0.06), CFrame.new(p + Vector3.new(1.8, 5.8, -3.83)), M.Metal, rgb(170, 172, 176))
+		stencil(plate, N.Front, "WX-T" .. (i + 1), rgb(30, 30, 34), 50, Enum.Font.Code)
 	end
 	screen(parent, CFrame.new(108, F + 10, -57.2), 14, 6, "bars", rgb(90, 170, 255))
 	turbine(parent, CFrame.new(80, F, -128))
@@ -2634,26 +2734,136 @@ local function buildCanteen(parent)
 	spawnAt(62, 128)
 end
 
+-- Bedding on a bed deck whose top is at `top` (cf's frame, the bed along X
+-- with its head at +X): a mattress, a blanket over the foot two thirds with
+-- a folded-back sheet, and a pillow.
+local function bedding(parent, cf, top, len, blanket)
+	D(parent, Vector3.new(len - 0.4, 0.5, 2.9), cf * CFrame.new(0, top + 0.25, 0), M.Fabric, rgb(214, 216, 222))
+	local bl = (len - 0.4) * 0.66
+	D(parent, Vector3.new(bl, 0.12, 3.04), cf * CFrame.new(-(len - 0.4) / 2 + bl / 2 - 0.02, top + 0.54, 0), M.Fabric, blanket)
+	D(parent, Vector3.new(0.5, 0.14, 3.02), cf * CFrame.new(-(len - 0.4) / 2 + bl + 0.2, top + 0.55, 0), M.Fabric, rgb(236, 236, 232)) -- sheet turned down
+	for _, z in { -1.52, 1.52 } do -- the blanket hangs over the sides
+		D(parent, Vector3.new(bl, 0.46, 0.06), cf * CFrame.new(-(len - 0.4) / 2 + bl / 2 - 0.02, top + 0.34, z), M.Fabric, blanket)
+	end
+	D(parent, Vector3.new(1.1, 0.36, 2.1), cf * CFrame.new(len / 2 - 0.95, top + 0.66, 0) * CFrame.Angles(0, rng:NextNumber(-0.12, 0.12), math.rad(4)), M.Fabric, rgb(240, 240, 238))
+end
+
+-- A steel bunk bed at cf (along X, head at +X): four posts with caps, side
+-- and end rails, barred head and foot panels, a ladder at the foot, bedding
+-- on both decks and a storage bin under the lower one.
+local BLANKETS = { rgb(40, 56, 92), rgb(70, 82, 52), rgb(110, 36, 40), rgb(60, 60, 66) }
+local function bunkBed(parent, cf, k)
+	local steel, cap = rgb(62, 68, 78), rgb(40, 44, 50)
+	local L = 7
+	for _, x in { -L / 2 + 0.15, L / 2 - 0.15 } do
+		for _, z in { -1.45, 1.45 } do
+			P(parent, Vector3.new(0.3, 7.6, 0.3), cf * CFrame.new(x, 3.8, z), M.Metal, steel)
+			D(parent, Vector3.new(0.38, 0.2, 0.38), cf * CFrame.new(x, 7.7, z), M.Metal, cap)
+		end
+	end
+	for _, top in { 1.6, 5.4 } do
+		D(parent, Vector3.new(L - 0.3, 0.14, 3.0), cf * CFrame.new(0, top - 0.07, 0), M.Metal, rgb(50, 54, 62)) -- deck
+		for _, z in { -1.45, 1.45 } do
+			D(parent, Vector3.new(L - 0.3, 0.3, 0.14), cf * CFrame.new(0, top - 0.2, z), M.Metal, steel) -- side rails
+		end
+		for _, x in { -L / 2 + 0.15, L / 2 - 0.15 } do
+			for _, dy in { 0.5, 1.1 } do
+				D(parent, Vector3.new(0.12, 0.12, 2.6), cf * CFrame.new(x, top + dy, 0), M.Metal, steel) -- head/foot bars
+			end
+		end
+		bedding(parent, cf, top, L, BLANKETS[(k + (top > 3 and 1 or 0)) % #BLANKETS + 1])
+	end
+	D(parent, Vector3.new(L - 0.3, 0.14, 0.12), cf * CFrame.new(0, 6.6, -1.45), M.Metal, steel) -- upper safety rail
+	for _, z in { -0.6, 0.6 } do -- ladder at the foot
+		D(parent, Vector3.new(0.12, 5.6, 0.12), cf * CFrame.new(-L / 2 - 0.12, 2.9, z), M.Metal, steel)
+	end
+	for y = 1.1, 5.1, 1 do
+		D(parent, Vector3.new(0.1, 0.1, 1.24), cf * CFrame.new(-L / 2 - 0.12, y, 0), M.Metal, rgb(90, 96, 106)) -- rungs sit inside the rails
+	end
+	local bin = P(parent, Vector3.new(2.6, 0.9, 2.4), cf * CFrame.new(0.8, 0.45, 0), M.SmoothPlastic, rgb(60, 70, 84))
+	D(bin, Vector3.new(2.66, 0.12, 2.46), cf * CFrame.new(0.8, 0.87, 0), M.SmoothPlastic, rgb(44, 52, 64)) -- lid
+end
+
+-- A single bed at cf (along X, head at +X): a panel headboard, a low frame
+-- on four legs and bedding.
+local function singleBed(parent, cf, k)
+	local frame = rgb(58, 62, 70)
+	P(parent, Vector3.new(6.6, 0.5, 3.2), cf * CFrame.new(-0.2, 1.05, 0), M.Metal, frame)
+	for _, x in { -3.3, 2.9 } do
+		for _, z in { -1.45, 1.45 } do
+			D(parent, Vector3.new(0.26, 0.8, 0.26), cf * CFrame.new(x, 0.4, z), M.Metal, rgb(36, 38, 44))
+		end
+	end
+	D(parent, Vector3.new(0.3, 3.2, 3.4), cf * CFrame.new(3.35, 1.6, 0), M.WoodPlanks, rgb(92, 66, 46)) -- headboard
+	D(parent, Vector3.new(0.34, 0.22, 3.44), cf * CFrame.new(3.35, 3.26, 0), M.Wood, rgb(70, 50, 34))
+	bedding(parent, cf * CFrame.new(-0.2, 0, 0), 1.3, 6.6, BLANKETS[k % #BLANKETS + 1])
+end
+
+-- A bedside cabinet at cf (facing -Z): two drawers, a lamp and a clock.
+local function nightstand(parent, cf)
+	local body = P(parent, Vector3.new(1.6, 2.2, 1.5), cf * CFrame.new(0, 1.1, 0), M.Wood, rgb(84, 60, 42))
+	for k = 0, 1 do
+		D(body, Vector3.new(1.4, 0.8, 0.05), cf * CFrame.new(0, 0.6 + k * 0.95, -0.77), M.Wood, rgb(100, 72, 50))
+		D(body, Vector3.new(0.4, 0.08, 0.08), cf * CFrame.new(0, 0.8 + k * 0.95, -0.82), M.Metal, rgb(180, 170, 140))
+	end
+	D(parent, Vector3.new(0.5, 0.1, 0.5), cf * CFrame.new(-0.3, 2.25, 0.1), M.Metal, rgb(40, 40, 44)) -- lamp base
+	D(parent, Vector3.new(0.08, 0.7, 0.08), cf * CFrame.new(-0.3, 2.6, 0.1), M.Metal, rgb(40, 40, 44))
+	D(parent, Vector3.new(0.6, 0.5, 0.6), cf * CFrame.new(-0.3, 3.1, 0.1) * CFrame.Angles(0, 0, math.rad(90)), M.Fabric, rgb(230, 214, 176), { Shape = Enum.PartType.Cylinder }) -- shade
+	local clock = D(parent, Vector3.new(0.5, 0.3, 0.2), cf * CFrame.new(0.4, 2.35, -0.3), M.SmoothPlastic, rgb(20, 20, 22))
+	local g = sgui(clock, N.Front, 60, true)
+	tx(g, { Size = UDim2.fromScale(1, 1), Text = "03:17", TextColor3 = rgb(255, 60, 50), Font = Enum.Font.Code })
+end
+
+-- A steel footlocker at cf (facing -Z): a banded lid and a padlock.
+local function footLocker(parent, cf)
+	local body = P(parent, Vector3.new(3.2, 1.5, 1.8), cf * CFrame.new(0, 0.75, 0), M.Metal, rgb(70, 80, 60))
+	D(body, Vector3.new(3.26, 0.2, 1.86), cf * CFrame.new(0, 1.43, 0), M.Metal, rgb(58, 66, 50)) -- lid lip
+	for _, x in { -1, 1 } do
+		D(body, Vector3.new(0.22, 1.54, 1.84), cf * CFrame.new(x, 0.75, 0), M.Metal, rgb(90, 92, 96)) -- straps
+	end
+	D(body, Vector3.new(0.3, 0.36, 0.12), cf * CFrame.new(0, 1.05, -0.95), M.Metal, rgb(200, 170, 70)) -- padlock
+end
+
+-- A long common-room table with a bench down each side, at cf (along X).
+local function messTable(parent, cf)
+	local steel = rgb(110, 114, 122)
+	P(parent, Vector3.new(8, 0.2, 3), cf * CFrame.new(0, 3.05, 0), M.WoodPlanks, rgb(150, 112, 74))
+	for _, x in { -3.4, 3.4 } do
+		D(parent, Vector3.new(0.25, 2.9, 2.6), cf * CFrame.new(x, 1.5, 0), M.Metal, steel)
+		D(parent, Vector3.new(0.35, 0.16, 7.2), cf * CFrame.new(x, 0.08, 0), M.Metal, rgb(70, 72, 78)) -- foot runs under both benches
+		for _, z in { -2.6, 2.6 } do
+			D(parent, Vector3.new(0.25, 1.7, 0.25), cf * CFrame.new(x, 0.9, z), M.Metal, steel)
+		end
+	end
+	for _, z in { -2.6, 2.6 } do
+		P(parent, Vector3.new(8, 0.2, 1.2), cf * CFrame.new(0, 1.85, z), M.WoodPlanks, rgb(140, 104, 70))
+	end
+	for k = 1, 4 do -- cards and cups left mid-game
+		D(parent, Vector3.new(0.5, 0.03, 0.7), cf * CFrame.new(rng:NextNumber(-3, 3), 3.165 + k * 0.012, rng:NextNumber(-1, 1)) * CFrame.Angles(0, rng:NextNumber(0, 6), 0), M.SmoothPlastic, k % 2 == 0 and rgb(240, 240, 236) or rgb(200, 40, 40))
+	end
+	drum(parent, (cf * CFrame.new(2.4, 3.36, 0.6)).Position, 0.44, 0.44, M.SmoothPlastic, rgb(230, 230, 224), nil, true)
+end
+
 local function buildQuarters(parent)
 	local r = ROOM.Quarters
 	floorTiles(parent, r, "WarmCarpet")
 	ceiling(parent, r, "Coffered")
-	-- bunk beds
-	for i = 0, 4 do
-		local cf = CFrame.new(154, F, 66 + i * 10) * CFrame.Angles(0, math.rad(90), 0)
-		for _, y in { 1.6, 5.4 } do
-			P(parent, Vector3.new(7, 0.5, 3.2), cf * CFrame.new(0, y, 0), M.Metal, rgb(80, 84, 90))
-			D(parent, Vector3.new(6.6, 0.5, 2.9), cf * CFrame.new(0, y + 0.5, 0), M.Fabric, rgb(210, 214, 220))
-			D(parent, Vector3.new(4.4, 0.2, 3), cf * CFrame.new(0.9, y + 0.8, 0), M.Fabric, rgb(56, 70, 96))
-			D(parent, Vector3.new(1.2, 0.4, 2), cf * CFrame.new(-2.65, y + 0.9, 0), M.Fabric, rgb(236, 236, 236))
+	-- a row of bunks with their heads to the east wall, a bedside cabinet
+	-- between each pair and a footlocker at every foot
+	for i = 0, 6 do
+		local z = 68 + i * 8
+		bunkBed(parent, CFrame.new(155.6, F, z), i)
+		footLocker(parent, CFrame.new(150.4, F, z) * CFrame.Angles(0, math.rad(-90), 0))
+		if i < 6 then
+			nightstand(parent, CFrame.new(158.6, F, z + 4) * CFrame.Angles(0, math.rad(-90), 0))
 		end
-		for _, x in { -3.4, 3.4 } do
-			for _, z in { -1.5, 1.5 } do
-				D(parent, Vector3.new(0.3, 8, 0.3), cf * CFrame.new(x, 4, z), M.Metal, rgb(60, 64, 70))
-			end
+	end
+	-- single beds, heads to the west wall, between its two doors
+	for i, z in { 90, 98, 106 } do
+		singleBed(parent, CFrame.new(112.6, F, z) * CFrame.Angles(0, math.pi, 0), i)
+		if i < 3 then
+			nightstand(parent, CFrame.new(109.6, F, z + 4) * CFrame.Angles(0, math.rad(90), 0))
 		end
-		local foot = P(parent, Vector3.new(3.4, 1.6, 2), cf * CFrame.new(0, 0.8, -3.2), M.Metal, rgb(70, 80, 60))
-		breakable(foot)
 	end
 	-- locker bank (four are hiding spots)
 	for i = 0, 9 do
@@ -2668,20 +2878,8 @@ local function buildQuarters(parent)
 			end
 		end
 	end
-	for _, z in { 80, 104 } do
-		P(parent, Vector3.new(1.8, 1.6, 8), CFrame.new(130, F + 0.8, z), M.WoodPlanks, rgb(120, 90, 60))
-	end
+	messTable(parent, CFrame.new(132, F, 88))
 	plant(parent, Vector3.new(112, F, 60), 1)
-	for i = 0, 2 do
-		local cf = CFrame.new(138, F, 66 + i * 10) * CFrame.Angles(0, math.rad(90), 0)
-		P(parent, Vector3.new(7, 0.5, 3.2), cf * CFrame.new(0, 1.6, 0), M.Metal, rgb(80, 84, 90))
-		D(parent, Vector3.new(6.6, 0.5, 2.9), cf * CFrame.new(0, 2.1, 0), M.Fabric, rgb(210, 214, 220))
-		D(parent, Vector3.new(4.4, 0.25, 3), cf * CFrame.new(0.9, 2.45, 0), M.Fabric, rgb(96, 40, 40))
-		D(parent, Vector3.new(1.2, 0.4, 2), cf * CFrame.new(-2.65, 2.5, 0), M.Fabric, rgb(236, 236, 236))
-		for _, x in { -3.4, 3.4 } do
-			D(parent, Vector3.new(0.3, 2.2, 3.26), cf * CFrame.new(x, 1.1, 0), M.Metal, rgb(60, 64, 70))
-		end
-	end
 	sofa(parent, CFrame.new(122, F, 112) * CFrame.Angles(0, math.rad(90), 0), 3, rgb(70, 40, 36))
 	coffeeTable(parent, CFrame.new(128, F, 112) * CFrame.Angles(0, math.rad(90), 0))
 	screen(parent, CFrame.new(108.9, F + 6.5, 100) * CFrame.Angles(0, math.rad(-90), 0), 6, 3.4, "code", rgb(120, 255, 160))
@@ -2743,44 +2941,109 @@ local function buildSurgery(parent)
 	local r = ROOM.Surgery
 	floorTiles(parent, r, "LabTile")
 	ceiling(parent, r, "Coffered")
-	-- the Weapon X operating table (tilted, with restraints)
+	-- the Weapon X operating table: a hydraulic column, a padded top in three
+	-- sections tilted up, arm boards and restraint straps with buckles
 	local t = CFrame.new(-134, F, 98)
-	P(parent, Vector3.new(4, 3, 4), t * CFrame.new(0, 1.5, 0), M.Metal, rgb(150, 156, 162))
-	local bed = t * CFrame.new(0, 3.6, 0) * CFrame.Angles(math.rad(-20), 0, 0)
-	P(parent, Vector3.new(3.4, 0.5, 9), bed, M.Metal, rgb(190, 196, 202))
-	D(parent, Vector3.new(3.2, 0.2, 8.6), bed * CFrame.new(0, 0.3, 0), M.Leather, rgb(40, 44, 48))
-	for _, z in { -3.4, -1, 1.6, 3.6 } do
-		D(parent, Vector3.new(3.6, 0.3, 0.5), bed * CFrame.new(0, 0.5, z), M.Leather, rgb(80, 60, 40))
+	local white, chrome, dark = rgb(214, 218, 224), rgb(176, 180, 188), rgb(40, 42, 48)
+	P(parent, Vector3.new(4.4, 0.4, 6), t * CFrame.new(0, 0.2, 0), M.Metal, dark) -- base plate
+	D(parent, Vector3.new(3.6, 0.5, 5.2), t * CFrame.new(0, 0.62, 0), M.SmoothPlastic, white) -- base cover
+	P(parent, Vector3.new(1.6, 2.4, 1.6), t * CFrame.new(0, 2.05, 0), M.Metal, chrome) -- column
+	for y = 1.1, 2.9, 0.3 do -- bellows
+		D(parent, Vector3.new(1.8, 0.12, 1.8), t * CFrame.new(0, y, 0), M.Rubber, rgb(30, 30, 34))
 	end
-	-- surgical lamp cluster
-	local lampBase = Vector3.new(-134, F + r.h - 0.5, 98)
-	cyl(parent, lampBase, lampBase - Vector3.new(0, 5, 0), 0.4, M.Metal, rgb(200, 204, 210), nil, true)
-	for k = 0, 2 do
-		local a = k / 3 * math.pi * 2
-		local p = lampBase - Vector3.new(0, 7, 0) + Vector3.new(math.cos(a) * 2.2, 0, math.sin(a) * 2.2)
-		cyl(parent, lampBase - Vector3.new(0, 5, 0), p + Vector3.new(0, 0.6, 0), 0.25, M.Metal, rgb(200, 204, 210), nil, true)
-		drum(parent, p, 2.4, 0.8, M.Metal, rgb(220, 224, 228), nil, true)
-		local lens = drum(parent, p - Vector3.new(0, 0.45, 0), 2, 0.1, M.Neon, rgb(245, 250, 255), nil, true)
-		spotDown(lens, 18, 2, rgb(245, 250, 255), 50, k == 0)
+	D(parent, Vector3.new(2.6, 0.5, 3), t * CFrame.new(0, 3.4, 0), M.Metal, dark) -- tilt head
+	local bed = t * CFrame.new(0, 3.9, 0) * CFrame.Angles(math.rad(-20), 0, 0)
+	P(parent, Vector3.new(3.2, 0.3, 9), bed, M.Metal, chrome)
+	for k, seg in { { -3, 3 }, { 0.3, 3.4 }, { 3.5, 2.4 } } do -- padded sections (legs, torso, head)
+		D(parent, Vector3.new(2.9, 0.34, seg[2] - 0.12), bed * CFrame.new(0, 0.3, seg[1]), M.Leather, k == 3 and rgb(34, 38, 44) or rgb(44, 48, 54))
 	end
-	-- robotic arms + adamantium injection tanks
 	for _, s in { -1, 1 } do
-		local base = Vector3.new(-134 + s * 6, F, 98)
-		drum(parent, base + Vector3.new(0, 0.6, 0), 2.4, 1.2, M.Metal, rgb(60, 62, 66))
-		local j1 = base + Vector3.new(0, 5, 0)
-		local j2 = base + Vector3.new(-s * 2.5, 8.5, -1)
-		local tip = base + Vector3.new(-s * 4.4, 6.4, -1.6)
-		cyl(parent, base + Vector3.new(0, 1.2, 0), j1, 0.9, M.Metal, rgb(220, 224, 228), nil, true)
-		ball(parent, j1, 1.3, M.Metal, rgb(60, 62, 66), nil, true)
-		cyl(parent, j1, j2, 0.7, M.Metal, rgb(220, 224, 228), nil, true)
-		ball(parent, j2, 1, M.Metal, rgb(60, 62, 66), nil, true)
-		cyl(parent, j2, tip, 0.45, M.Metal, rgb(220, 224, 228), nil, true)
-		cyl(parent, tip, tip + (tip - j2).Unit * 1.2, 0.12, M.Metal, rgb(200, 210, 220), { Reflectance = 0.4 }, true)
+		D(parent, Vector3.new(0.12, 0.12, 8.6), bed * CFrame.new(s * 1.72, 0.1, 0), M.Metal, chrome) -- side rails
+		D(parent, Vector3.new(3, 0.2, 0.9), bed * CFrame.new(s * 2.9, 0.1, 1.8) * CFrame.Angles(0, s * 0.25, 0), M.Leather, rgb(44, 48, 54)) -- arm boards
+		D(parent, Vector3.new(0.8, 0.12, 0.3), bed * CFrame.new(s * 3.3, 0.28, 1.8) * CFrame.Angles(0, s * 0.25, 0), M.Leather, rgb(96, 70, 44)) -- wrist strap
+	end
+	for _, z in { -3.6, -1.2, 1.6 } do -- restraint straps with buckles
+		D(parent, Vector3.new(3.3, 0.14, 0.44), bed * CFrame.new(0, 0.53, z), M.Leather, rgb(96, 70, 44))
+		D(parent, Vector3.new(0.4, 0.18, 0.5), bed * CFrame.new(1.2, 0.56, z), M.Metal, chrome, { Reflectance = 0.3 })
+	end
+	-- a twin-head surgical light: ceiling hub, jointed arms, round heads with
+	-- LED clusters and a handle in the middle
+	local hub = Vector3.new(-134, F + r.h - 0.4, 98)
+	drum(parent, hub, 2.2, 0.6, M.Metal, white, nil, true)
+	cyl(parent, hub, hub - Vector3.new(0, 3.2, 0), 0.5, M.Metal, white, nil, true)
+	for k, off in { Vector3.new(-3, -5.6, -1.6), Vector3.new(2.8, -5.2, 1.8) } do
+		local joint = hub - Vector3.new(0, 3.2, 0)
+		local elbow = joint + Vector3.new(off.X * 0.55, -0.6, off.Z * 0.55)
+		local head = hub + off
+		cyl(parent, joint, elbow, 0.34, M.Metal, white, nil, true)
+		ball(parent, elbow, 0.6, M.Metal, dark, nil, true)
+		cyl(parent, elbow, head + Vector3.new(0, 0.9, 0), 0.3, M.Metal, white, nil, true)
+		local aim = CFrame.lookAt(head, Vector3.new(-134, F + 4, 98)) * CFrame.Angles(math.rad(90), 0, 0) -- the head's down axis points at the table
+		D(parent, Vector3.new(2.9, 0.5, 2.9), aim * CFrame.new(0, 0.2, 0) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, white, { Shape = Enum.PartType.Cylinder })
+		D(parent, Vector3.new(0.1, 2.6, 2.6), aim * CFrame.new(0, -0.08, 0) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, rgb(30, 32, 36), { Shape = Enum.PartType.Cylinder })
+		for j = 0, 6 do -- LED cluster
+			local rr = j == 0 and 0 or 0.8
+			local ang = j / 6 * math.pi * 2
+			D(parent, Vector3.new(0.06, 0.62, 0.62), aim * CFrame.new(math.cos(ang) * rr, -0.14, math.sin(ang) * rr) * CFrame.Angles(0, 0, math.rad(90)), M.Neon, rgb(245, 250, 255), { Shape = Enum.PartType.Cylinder })
+		end
+		D(parent, Vector3.new(0.7, 0.3, 0.3), aim * CFrame.new(0, -0.4, 0) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, rgb(60, 140, 200), { Shape = Enum.PartType.Cylinder }) -- handle
+		local emit = D(parent, Vector3.new(0.2, 0.2, 0.2), aim * CFrame.new(0, -0.4, 0), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false })
+		spotDown(emit, 22, 2.4, rgb(245, 250, 255), 55, k == 1) -- down the head's axis
+	end
+	-- robot arms on turrets, each with an adamantium injector, and the
+	-- injection tanks feeding them
+	for _, s in { -1, 1 } do
+		local base = Vector3.new(-134 + s * 6.5, F, 98)
+		local orange = rgb(230, 120, 30)
+		drum(parent, base + Vector3.new(0, 0.3, 0), 3.2, 0.6, M.Metal, dark)
+		for k = 0, 7 do -- anchor bolts
+			local a = k / 8 * math.pi * 2
+			drum(parent, base + Vector3.new(math.cos(a) * 1.35, 0.66, math.sin(a) * 1.35), 0.24, 0.16, M.Metal, chrome, nil, true)
+		end
+		drum(parent, base + Vector3.new(0, 1.2, 0), 2.4, 1.2, M.Metal, white) -- turret
+		drum(parent, base + Vector3.new(0, 1.85, 0), 2.5, 0.14, M.Metal, orange, nil, true)
+		local sh = base + Vector3.new(0, 2.6, 0)
+		local el = base + Vector3.new(-s * 1.4, 6.6, -0.6)
+		local wr = base + Vector3.new(-s * 3.9, 6.8, -1.3)
+		local tipDir = (Vector3.new(-134, F + 5, 98) - wr).Unit
+		local function segment(a0, a1, w)
+			local len = (a1 - a0).Magnitude
+			D(parent, Vector3.new(w, w * 0.8, len), CFrame.lookAt((a0 + a1) / 2, a1), M.SmoothPlastic, white)
+			D(parent, Vector3.new(w + 0.04, 0.16, len * 0.5), CFrame.lookAt((a0 + a1) / 2, a1) * CFrame.new(0, w * 0.4, 0), M.SmoothPlastic, orange) -- stripe
+		end
+		local function joint(p, d)
+			D(parent, Vector3.new(d * 0.9, d, d), CFrame.new(p) * CFrame.Angles(0, math.rad(90), 0), M.Metal, dark, { Shape = Enum.PartType.Cylinder })
+		end
+		joint(sh, 1.5)
+		segment(sh, el, 1)
+		joint(el, 1.2)
+		segment(el, wr, 0.8)
+		joint(wr, 0.9)
+		-- the injector: a vial of glowing adamantium and a long needle
+		local inj = CFrame.lookAt(wr, wr + tipDir)
+		D(parent, Vector3.new(0.5, 0.5, 1.2), inj * CFrame.new(0, 0, -0.9), M.Metal, dark)
+		D(parent, Vector3.new(0.34, 0.34, 0.9), inj * CFrame.new(0, 0, -1.9), M.Glass, rgb(200, 220, 240), { Transparency = 0.4 })
+		D(parent, Vector3.new(0.2, 0.2, 0.8), inj * CFrame.new(0, 0, -1.9), M.Neon, rgb(200, 215, 235))
+		D(parent, Vector3.new(0.06, 0.06, 1.2), inj * CFrame.new(0, 0, -2.9), M.Metal, rgb(220, 224, 232), { Reflectance = 0.5 })
+		-- injection tank: steel caps with bolts, silver liquid behind glass,
+		-- a gauge and a warning label
 		local tank = Vector3.new(-134 + s * 12, F, 108)
-		drum(parent, tank + Vector3.new(0, 4, 0), 3.2, 8, M.Glass, rgb(210, 220, 230), { Transparency = 0.55 })
-		drum(parent, tank + Vector3.new(0, 3.2, 0), 2.8, 6, M.Metal, rgb(200, 204, 212), { Reflectance = 0.4 }, true)
-		drum(parent, tank + Vector3.new(0, 8.2, 0), 3.6, 0.6, M.Metal, rgb(60, 62, 66), nil, true)
-		cable(tank + Vector3.new(0, 8.4, 0), j2, 1.5, 0.25, rgb(30, 30, 32))
+		drum(parent, tank + Vector3.new(0, 0.5, 0), 4, 1, M.Metal, dark)
+		drum(parent, tank + Vector3.new(0, 4.5, 0), 3.2, 7, M.Glass, rgb(210, 220, 230), { Transparency = 0.6 })
+		drum(parent, tank + Vector3.new(0, 3.65, 0), 2.7, 5.2, M.Foil, rgb(196, 202, 212), { Reflectance = 0.35 }, true)
+		local glow = drum(parent, tank + Vector3.new(0, 6.3, 0), 2.72, 0.2, M.Neon, rgb(170, 200, 255), nil, true) -- the liquid's surface
+		pointLight(glow, 10, 0.6, rgb(170, 200, 255))
+		drum(parent, tank + Vector3.new(0, 8.4, 0), 3.8, 0.8, M.Metal, dark)
+		for k = 0, 5 do
+			local a = k / 6 * math.pi * 2
+			cyl(parent, tank + Vector3.new(math.cos(a) * 1.7, 1, math.sin(a) * 1.7), tank + Vector3.new(math.cos(a) * 1.7, 8, math.sin(a) * 1.7), 0.16, M.Metal, chrome, nil, true)
+		end
+		local gauge = D(parent, Vector3.new(0.9, 0.9, 0.12), CFrame.new(tank + Vector3.new(0, 1.2, -2.05)), M.Metal, rgb(230, 230, 226))
+		local gg = sgui(gauge, N.Front, 60)
+		fr(gg, { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 0.62), Size = UDim2.fromScale(0.05, 0.42), Rotation = 35, BackgroundColor3 = rgb(200, 30, 30) })
+		local warn = D(parent, Vector3.new(1.4, 0.6, 0.06), CFrame.new(tank + Vector3.new(0, 7.7, -1.9)), M.SmoothPlastic, rgb(230, 184, 36))
+		stencil(warn, N.Front, "ADAMANTIUM", rgb(20, 18, 14), 50)
+		cable(tank + Vector3.new(0, 8.8, 0), el, 1.5, 0.25, rgb(30, 30, 32))
 	end
 	-- observation windows are on the partition wall; x-ray light boxes
 	for i = 0, 2 do
@@ -2793,29 +3056,61 @@ local function buildSurgery(parent)
 		end
 		fr(g, { Position = UDim2.fromScale(0.25, 0.58), Size = UDim2.fromScale(0.5, 0.3), BackgroundColor3 = rgb(190, 205, 220) })
 	end
-	-- trays, IV stands, curtains
+	-- recovery bays: a gurney on castors with rails and bedding, an IV stand
+	-- with a drip bag, and a curtain on a ceiling track
 	for i = 0, 3 do
 		local p = Vector3.new(-156, F, 64 + i * 7)
-		P(parent, Vector3.new(3, 1, 6.4), CFrame.new(p + Vector3.new(0, 1.8, 0)), M.Metal, rgb(170, 176, 182))
-		D(parent, Vector3.new(2.8, 0.4, 6), CFrame.new(p + Vector3.new(0, 2.5, 0)), M.Fabric, rgb(220, 230, 235))
-		cyl(parent, p + Vector3.new(2.2, 0, -2), p + Vector3.new(2.2, 6.4, -2), 0.12, M.Metal, rgb(180, 184, 190), nil, true)
-		D(parent, Vector3.new(0.6, 1, 0.3), CFrame.new(p + Vector3.new(2.2, 5.6, -2)), M.Glass, rgb(200, 240, 255), { Transparency = 0.3 })
-		D(parent, Vector3.new(0.1, 8, 6.6), CFrame.new(p + Vector3.new(3.4, 5, 0)), M.Fabric, rgb(120, 170, 170), { Transparency = 0.1 })
+		local cf = CFrame.new(p) * CFrame.Angles(0, math.rad(90), 0)
+		local frame = rgb(176, 182, 190)
+		for _, x in { -2.6, 2.6 } do
+			for _, z in { -1.1, 1.1 } do
+				D(parent, Vector3.new(0.14, 1.5, 0.14), cf * CFrame.new(x, 1.05, z), M.Metal, frame)
+				D(parent, Vector3.new(0.3, 0.3, 0.3), cf * CFrame.new(x, 0.15, z), M.Rubber, rgb(30, 30, 32), { Shape = Enum.PartType.Ball })
+			end
+		end
+		P(parent, Vector3.new(6, 0.3, 2.6), cf * CFrame.new(0, 1.9, 0), M.Metal, frame)
+		D(parent, Vector3.new(5.8, 0.4, 2.4), cf * CFrame.new(0, 2.25, 0), M.Fabric, rgb(214, 226, 232))
+		D(parent, Vector3.new(1.2, 0.3, 1.8), cf * CFrame.new(2.2, 2.6, 0), M.Fabric, rgb(240, 242, 244))
+		D(parent, Vector3.new(3.4, 0.1, 2.5), cf * CFrame.new(-0.9, 2.5, 0), M.Fabric, rgb(120, 170, 190))
+		for _, z in { -1.35, 1.35 } do
+			D(parent, Vector3.new(4.6, 0.1, 0.1), cf * CFrame.new(0, 2.7, z), M.Metal, frame)
+		end
+		local iv = p + Vector3.new(2.2, 0, -2.4)
+		for k = 0, 4 do
+			local a = k / 5 * math.pi * 2
+			D(parent, Vector3.new(0.1, 0.1, 0.8), CFrame.new(iv) * CFrame.Angles(0, a, 0) * CFrame.new(0, 0.12, -0.4), M.Metal, frame)
+		end
+		cyl(parent, iv + Vector3.new(0, 0.1, 0), iv + Vector3.new(0, 6.6, 0), 0.1, M.Metal, frame, nil, true)
+		D(parent, Vector3.new(0.9, 0.08, 0.08), CFrame.new(iv + Vector3.new(0, 6.5, 0)), M.Metal, frame)
+		D(parent, Vector3.new(0.5, 0.9, 0.24), CFrame.new(iv + Vector3.new(0.35, 5.8, 0)), M.Glass, rgb(210, 240, 255), { Transparency = 0.35 })
+		cable(iv + Vector3.new(0.35, 5.3, 0), p + Vector3.new(1.4, 2.6, -0.8), 0.6, 0.05, rgb(220, 230, 235))
+		D(parent, Vector3.new(0.16, 0.16, 7), CFrame.new(p + Vector3.new(3.4, 9.2, 0)), M.Metal, rgb(160, 164, 172)) -- curtain track
+		for k = 0, 5 do -- a curtain in folds
+			D(parent, Vector3.new(0.12, 7.6, 1.2), CFrame.new(p + Vector3.new(3.4 + (k % 2) * 0.16, 5.2, -3 + k * 1.1)) * CFrame.Angles(0, (k % 2 == 0 and 0.18 or -0.18), 0), M.Fabric, rgb(120, 170, 170))
+		end
 	end
 	for i = 0, 3 do
 		toolChest(parent, CFrame.new(-156, F, 104 + i * 5) * CFrame.Angles(0, math.rad(-90), 0), rgb(200, 204, 210))
 	end
+	-- instrument trolleys: two shelves on castors, a steel tray of tools
 	for i = 0, 1 do
 		local cart = CFrame.new(-126 + i * 16, F, 124)
-		P(parent, Vector3.new(4, 0.2, 2.2), cart * CFrame.new(0, 3.2, 0), M.Metal, rgb(200, 204, 210))
-		D(parent, Vector3.new(4, 0.2, 2.2), cart * CFrame.new(0, 1.2, 0), M.Metal, rgb(200, 204, 210))
-		for _, x in { -1.8, 1.8 } do
-			for _, z in { -0.9, 0.9 } do
-				D(parent, Vector3.new(0.15, 3.2, 0.15), cart * CFrame.new(x, 1.6, z), M.Metal, rgb(150, 156, 162))
+		local frame = rgb(176, 182, 190)
+		P(parent, Vector3.new(4, 0.16, 2.2), cart * CFrame.new(0, 3.2, 0), M.Metal, frame)
+		D(parent, Vector3.new(4, 0.16, 2.2), cart * CFrame.new(0, 1.4, 0), M.Metal, frame)
+		for _, x in { -1.85, 1.85 } do
+			for _, z in { -0.95, 0.95 } do
+				D(parent, Vector3.new(0.12, 3.1, 0.12), cart * CFrame.new(x, 1.75, z), M.Metal, frame)
+				D(parent, Vector3.new(0.26, 0.26, 0.26), cart * CFrame.new(x, 0.13, z), M.Rubber, rgb(30, 30, 32), { Shape = Enum.PartType.Ball })
 			end
 		end
-		for k = 0, 3 do
-			D(parent, Vector3.new(0.12, 0.08, 1.4), cart * CFrame.new(-1.2 + k * 0.7, 3.35, 0) * CFrame.Angles(0, 0.2 * k, 0), M.Metal, rgb(210, 220, 230), { Reflectance = 0.4 })
+		D(parent, Vector3.new(0.1, 0.1, 2.2), cart * CFrame.new(2.15, 3.5, 0), M.Metal, frame) -- push handle
+		D(parent, Vector3.new(3.2, 0.1, 1.6), cart * CFrame.new(-0.2, 3.33, 0), M.Metal, rgb(200, 206, 214), { Reflectance = 0.3 }) -- tray
+		for k = 0, 4 do
+			D(parent, Vector3.new(0.1, 0.06, 1.1), cart * CFrame.new(-1.3 + k * 0.55, 3.42, 0) * CFrame.Angles(0, 0.15 * k - 0.3, 0), M.Metal, rgb(214, 222, 232), { Reflectance = 0.45 })
+		end
+		for k = 0, 2 do
+			D(parent, Vector3.new(0.9, 0.5, 0.7), cart * CFrame.new(-1.2 + k * 1.2, 1.73, 0), M.SmoothPlastic, rgb(220, 226, 232)) -- supply boxes
 		end
 	end
 	spawnAt(-120, 70)
