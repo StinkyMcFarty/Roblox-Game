@@ -10274,7 +10274,7 @@ function MapBuilder.BuildLobby()
 		South = { a = Vector3.new(-hx + 1, 0, hz - 1), n = Vector3.new(0, 0, -1), len = W - 2, band = southGaps, beam = {} },
 		North = { a = Vector3.new(hx - 1, 0, -hz + 1), n = Vector3.new(0, 0, 1), len = W - 2, band = { { 7.5, 20.5 } }, beam = { { 7.5, 20.5 }, { 26.3, 103.7 } } },
 		West = { a = Vector3.new(-hx + 1, 0, -hz + 1), n = Vector3.new(1, 0, 0), len = D - 2, band = {}, beam = {} },
-		East = { a = Vector3.new(hx - 1, 0, hz - 1), n = Vector3.new(-1, 0, 0), len = D - 2, band = {}, beam = {} },
+		East = { a = Vector3.new(hx - 1, 0, hz - 1), n = Vector3.new(-1, 0, 0), len = D - 2, band = {}, beam = { { 7.6, 80.4 } } }, -- the gallery marquee takes the ring beam's place
 	}
 	local function onWall(w, s, y, out)
 		local p = w.a + w.t * s + w.n * out + Vector3.new(0, Y + y, 0)
@@ -10361,7 +10361,7 @@ function MapBuilder.BuildLobby()
 		cagedLamp(lobby, onWall(walls[l[1]], l[2], 10.5, 0), l[3] and RED or AMBER, l[3])
 	end
 	-- knee braces from the walls up under the girder ends
-	for _, b in { { -1, -15 }, { -1, 0 }, { -1, 15 }, { -1, 30 }, { 1, -30 }, { 1, 30 } } do
+	for _, b in { { -1, -15 }, { -1, 0 }, { -1, 15 }, { -1, 30 } } do -- (none on the east wall: the gallery marquee is there)
 		local p0 = Vector3.new(b[1] * (hx - 1), Y + 22.2, b[2])
 		local p1 = Vector3.new(b[1] * (hx - 4.4), Y + H - 2.75, b[2])
 		local len = (p1 - p0).Magnitude
@@ -10637,9 +10637,36 @@ function MapBuilder.BuildLobby()
 	block(lobby, Vector3.new(20, 1, 70), CFrame.new(gx + 2, Y + 0.5, 0), M.Marble, rgb(26, 26, 30))
 	block(lobby, Vector3.new(0.3, 0.2, 69.6), CFrame.new(gx - 8, Y + 1.05, 0), M.Neon, rgb(255, 228, 196))
 	block(lobby, Vector3.new(3, 0.5, 70), CFrame.new(gx - 9.5, Y + 0.25, 0), M.Marble, rgb(34, 34, 38))
-	local galleryTitle = block(lobby, Vector3.new(30, 4, 0.3), CFrame.new(hx - 1.95, Y + 23, 0) * CFrame.Angles(0, math.rad(90), 0), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
-	local _, gt = surfaceText(galleryTitle, Enum.NormalId.Front, { Text = "SUIT GALLERY", Font = Enum.Font.LuckiestGuy, TextColor3 = rgb(255, 200, 30) })
-	make("UIStroke", gt, { Thickness = 6 })
+	-- a stadium-style marquee across the top of the gallery: a dark fascia
+	-- with glowing gold borders, marquee bulbs and the title, and light bars
+	-- down both ends framing the whole gallery like the pedestal rings
+	local GOLD = rgb(255, 206, 90)
+	local mf = CFrame.new(hx - 1.45, Y + 23.2, 0) * CFrame.Angles(0, math.rad(90), 0) -- X runs along the wall, -Z into the room
+	local fascia = block(lobby, Vector3.new(72, 5, 0.6), mf, M.Metal, rgb(16, 16, 22))
+	local fg = make("SurfaceGui", fascia, { Face = Enum.NormalId.Front, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 24, LightInfluence = 0 })
+	local fbg = make("Frame", fg, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = rgb(40, 31, 16), BorderSizePixel = 0 })
+	make("UIGradient", fbg, { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), rgb(90, 90, 90)) }) -- dark bronze fading to black
+	local gt = make("TextLabel", fbg, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.5, 0.74),
+		BackgroundTransparency = 1, Font = Enum.Font.LuckiestGuy, TextScaled = true, Text = "SUIT GALLERY", TextColor3 = rgb(255, 214, 80) })
+	make("UIStroke", gt, { Thickness = 6, Color = rgb(70, 34, 0) })
+	for _, x in { 0.2, 0.8 } do
+		make("TextLabel", fbg, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(x, 0.5), Size = UDim2.fromScale(0.05, 0.6),
+			BackgroundTransparency = 1, Font = Enum.Font.GothamBlack, TextScaled = true, Text = "★", TextColor3 = GOLD })
+	end
+	for _, y in { 2.45, -2.45 } do
+		block(lobby, Vector3.new(72, 0.22, 0.3), mf * CFrame.new(0, y, -0.4), M.Neon, GOLD)
+		for x = -35, 35, 1.75 do
+			block(lobby, Vector3.new(0.34, 0.34, 0.34), mf * CFrame.new(x, y * 0.86, -0.42), M.Neon, rgb(255, 236, 190), { Shape = Enum.PartType.Ball, CanCollide = false, CastShadow = false })
+		end
+	end
+	for _, s in { -1, 1 } do
+		block(lobby, Vector3.new(0.22, 5.2, 0.3), mf * CFrame.new(s * 36, 0, -0.4), M.Neon, GOLD)
+		block(lobby, Vector3.new(0.3, 19.6, 0.3), CFrame.new(hx - 1.85, Y + 10.9, s * 36), M.Neon, GOLD)
+		for y = 2, 19, 1.75 do
+			block(lobby, Vector3.new(0.3, 0.3, 0.3), CFrame.new(hx - 1.85, Y + y, s * 36.45), M.Neon, rgb(255, 236, 190), { Shape = Enum.PartType.Ball, CanCollide = false, CastShadow = false })
+		end
+		light(block(lobby, Vector3.new(0.4, 0.4, 0.4), CFrame.new(hx - 4, Y + 21, s * 30), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false }), { Range = 20, Brightness = 1, Color = GOLD })
+	end
 	-- a lighting bar along the gallery wall on brackets; two stage lights hang
 	-- from it over each suit (see the pedestals below)
 	local barX, barY = hx - 3.2, Y + 15.6
@@ -23196,7 +23223,7 @@ end
 -- Store window: four coin packs and the 2x Wolverine chance game pass
 ---------------------------------------------------------------------------
 
-local window = UIKit.Window(gui, Config.CoinName:gsub("s$", ""):upper() .. " STORE", UDim2.fromOffset(880, 400), K.Yellow)
+local window = UIKit.Window(gui, "BERSERKER STORE", UDim2.fromOffset(880, 400), K.Yellow)
 local w = window.Frame
 
 local row = new("Frame", { Position = UDim2.fromOffset(20, 72), Size = UDim2.new(1, -40, 0, 270), BackgroundTransparency = 1, ZIndex = 31 }, w)

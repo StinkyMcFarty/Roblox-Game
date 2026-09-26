@@ -32,7 +32,7 @@ end
 -- Store window: four coin packs and the 2x Wolverine chance game pass
 ---------------------------------------------------------------------------
 
-local window = UIKit.Window(gui, Config.CoinName:gsub("s$", ""):upper() .. " STORE", UDim2.fromOffset(880, 400), K.Yellow)
+local window = UIKit.Window(gui, "BERSERKER STORE", UDim2.fromOffset(880, 400), K.Yellow)
 local w = window.Frame
 
 local row = new("Frame", { Position = UDim2.fromOffset(20, 72), Size = UDim2.new(1, -40, 0, 270), BackgroundTransparency = 1, ZIndex = 31 }, w)
