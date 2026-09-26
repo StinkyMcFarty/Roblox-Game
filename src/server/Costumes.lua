@@ -750,7 +750,7 @@ local function loganGear(char)
 		local leg = char:FindFirstChild(n)
 		if leg then
 			local s = leg.Size
-			gear(char, leg, "JeansCuff", Vector3.new(s.X * 1.1, s.Y * 0.14, s.Z * 1.1), rgb(40, 56, 92), M.Fabric, CFrame.new(0, -s.Y * 0.3, 0))
+			gear(char, leg, "JeansCuff", Vector3.new(s.X * 1.1, s.Y * 0.14, s.Z * 1.1), rgb(40, 56, 92), M.Fabric, CFrame.new(0, -s.Y * 0.075, 0)) -- turned up over the boot top
 		end
 	end
 	boots(char, rgb(70, 46, 28), rgb(26, 20, 16))
@@ -772,7 +772,7 @@ local function loganGear(char)
 	local lower = char:FindFirstChild("LowerTorso")
 	if lower then
 		local s = lower.Size
-		gear(char, lower, "Belt", Vector3.new(s.X * 1.05, s.Y * 0.3, s.Z * 1.06), rgb(34, 26, 20), M.Leather, CFrame.new(0, s.Y * 0.3, 0))
+		gear(char, lower, "Belt", Vector3.new(s.X * 1.05, s.Y * 0.3, s.Z * 1.1), rgb(34, 26, 20), M.Leather, CFrame.new(0, s.Y * 0.3, 0))
 		local buckle = gear(char, lower, "Buckle", Vector3.new(s.X * 0.16, s.Y * 0.34, 0.06), rgb(170, 170, 176), M.Metal, CFrame.new(0, s.Y * 0.3, -s.Z * 0.56))
 		buckle.Reflectance = 0.25
 	end
@@ -825,7 +825,7 @@ local function oldManGear(char)
 				CFrame.new(side * s.X * 0.22, s.Y * 0.28, -(s.Z / 2 + t * 1.5)) * CFrame.Angles(0, 0, rad(side * 22)))
 		end
 		-- turned-up collar
-		gear(char, torso, "Collar", Vector3.new(s.X * 1.12, s.Y * 0.26, s.Z * 1.18), COAT2, M.Leather, CFrame.new(0, s.Y * 0.52, 0.05))
+		gear(char, torso, "Collar", Vector3.new(s.X * 1.12, s.Y * 0.26, s.Z * 1.22), COAT2, M.Leather, CFrame.new(0, s.Y * 0.52, 0.05))
 	end
 	for _, n in { "RightUpperArm", "LeftUpperArm", "RightLowerArm", "LeftLowerArm" } do
 		local arm = char:FindFirstChild(n)
@@ -1110,7 +1110,7 @@ function Costumes.ClawDisplay(parent, cframe, claw)
 	local glove = rgb(26, 24, 28)
 	local fist = p(Vector3.new(0.8, 0.9, 1.05), fistCf, glove, M.Leather)
 	for k = -1, 1 do -- knuckle ridge
-		p(Vector3.new(0.82, 0.18, 0.28), fistCf * CFrame.new(0, -0.4, k * 0.32), rgb(40, 38, 44), M.Leather)
+		p(Vector3.new(0.84, 0.18, 0.28), fistCf * CFrame.new(0, -0.4, k * 0.32), rgb(40, 38, 44), M.Leather)
 	end
 	p(Vector3.new(0.3, 0.5, 0.9), fistCf * CFrame.new(0.5, 0.05, 0), glove, M.Leather) -- thumb
 	p(Vector3.new(1.4, 0.7, 0.7), fistCf * CFrame.new(0, 0.8, 0) * CFrame.Angles(0, 0, rad(90)), rgb(34, 32, 36), M.Leather, { Shape = Enum.PartType.Cylinder })
@@ -1422,7 +1422,7 @@ function Costumes.DressSentinel(char, skinId)
 		if P.Verity then
 			Costumes.Smiley(faceplate, Enum.NormalId.Front)
 		end
-		g(head, "Brow", Vector3.new(hs.X * 0.88, hs.Y * 0.14, 0.26), FACE:Lerp(Color3.new(0, 0, 0), 0.3), M.Metal, CFrame.new(0, hs.Y * 0.22, -hs.Z * 0.6))
+		g(head, "Brow", Vector3.new(hs.X * 0.88, hs.Y * 0.14, 0.26), FACE:Lerp(Color3.new(0, 0, 0), 0.3), M.Metal, CFrame.new(0, hs.Y * 0.235, -hs.Z * 0.6))
 		if not P.Verity then
 			g(head, "Visor", Vector3.new(hs.X * 0.66, hs.Y * 0.12, 0.05), rgb(20, 14, 12), M.SmoothPlastic, CFrame.new(0, hs.Y * 0.08, -hs.Z * 0.65))
 		end
@@ -1463,7 +1463,7 @@ function Costumes.DressSentinel(char, skinId)
 		-- the chest disc: a gold core in a dark bezel with a soft halo
 		local core = g(torso, "Core", Vector3.new(0.14, s.X * 0.3, s.X * 0.3), P.Core, M.Neon, CFrame.new(0, s.Y * 0.26, -s.Z * 0.92) * CFrame.Angles(0, rad(90), 0), { Shape = Enum.PartType.Cylinder })
 		g(torso, "CoreRing", Vector3.new(0.14, s.X * 0.42, s.X * 0.42), MECH, M.Metal, CFrame.new(0, s.Y * 0.26, -s.Z * 0.88) * CFrame.Angles(0, rad(90), 0), { Shape = Enum.PartType.Cylinder })
-		g(torso, "CoreHalo", Vector3.new(0.1, s.X * 0.5, s.X * 0.5), P.Core, M.Neon, CFrame.new(0, s.Y * 0.26, -s.Z * 0.86) * CFrame.Angles(0, rad(90), 0), { Shape = Enum.PartType.Cylinder, Transparency = 0.7 })
+		g(torso, "CoreHalo", Vector3.new(0.1, s.X * 0.5, s.X * 0.5), P.Core, M.Neon, CFrame.new(0, s.Y * 0.26, -s.Z * 0.855) * CFrame.Angles(0, rad(90), 0), { Shape = Enum.PartType.Cylinder, Transparency = 0.7 })
 		glow(core, P.Core, 16, 3)
 		g(torso, "Abdomen", Vector3.new(s.X * 0.72, s.Y * 0.52, s.Z * 1.06), MECH, M.Metal, CFrame.new(0, -s.Y * 0.28, 0))
 		for i = 0, 2 do
@@ -1511,7 +1511,7 @@ function Costumes.DressSentinel(char, skinId)
 			local s = p.Size
 			local side = n:sub(1, 5) == "Right" and 1 or -1
 			round(p, "Pauldron", Vector3.new(s.X * 2.6, s.Y * 1.02, s.Z * 2.35), ARMOR, CFrame.new(side * s.X * 0.22, s.Y * 0.3, 0))
-			round(p, "PauldronCap", Vector3.new(s.X * 1.9, s.Y * 0.5, s.Z * 1.7), EDGE, CFrame.new(side * s.X * 0.28, s.Y * 0.56, 0))
+			round(p, "PauldronCap", Vector3.new(s.X * 1.9, s.Y * 0.5, s.Z * 1.7), EDGE, CFrame.new(side * s.X * 0.28, s.Y * 0.58, 0))
 			round(p, "PauldronRim", Vector3.new(s.X * 2.4, s.Y * 0.3, s.Z * 2.2), ARMOR2, CFrame.new(side * s.X * 0.22, s.Y * 0.0, 0))
 			g(p, "Bicep", Vector3.new(s.X * 1.4, s.Y * 0.64, s.Z * 1.4), LIMB, M.Metal, CFrame.new(0, -s.Y * 0.16, 0))
 		end
@@ -1534,8 +1534,8 @@ function Costumes.DressSentinel(char, skinId)
 		local p = char:FindFirstChild(n)
 		if p then
 			local s = p.Size
-			g(p, "Fist", s * Vector3.new(1.5, 1.5, 1.5), MECH, M.Metal, CFrame.new(0, -s.Y * 0.1, 0))
-			g(p, "Knuckles", Vector3.new(s.X * 1.5, s.Y * 0.5, 0.18), EDGE, M.Metal, CFrame.new(0, -s.Y * 0.2, -s.Z * 0.78))
+			g(p, "Fist", s * Vector3.new(1.5, 1.5, 1.46), MECH, M.Metal, CFrame.new(0, -s.Y * 0.1, 0))
+			g(p, "Knuckles", Vector3.new(s.X * 1.54, s.Y * 0.5, 0.18), EDGE, M.Metal, CFrame.new(0, -s.Y * 0.2, -s.Z * 0.78))
 		end
 	end
 
@@ -1543,9 +1543,13 @@ function Costumes.DressSentinel(char, skinId)
 	-- The legs touch in the middle, so each piece keeps its inner edge just
 	-- short of the centre line and carries its bulk outward (armour wider
 	-- than the leg used to cut into the other leg, standing or walking).
-	local function leg(p, width) -- size X and x offset for a piece `width` legs wide
+	-- size X and x offset for a piece `width` legs wide whose inner side sits
+	-- `inner` legs from the leg's centre (0.42 for the shells; plates tuck in
+	-- a little and bands stand out a little, so no two inner sides share a
+	-- plane and flicker)
+	local function leg(p, width, inner)
 		local side = p.Name:find("Right") and 1 or -1
-		return p.Size.X * width, side * p.Size.X * math.max(0, width / 2 - 0.42)
+		return p.Size.X * width, side * p.Size.X * math.max(0, width / 2 - (inner or 0.42))
 	end
 	for _, n in { "RightUpperLeg", "LeftUpperLeg" } do
 		local p = char:FindFirstChild(n)
@@ -1553,7 +1557,7 @@ function Costumes.DressSentinel(char, skinId)
 			local s = p.Size
 			local w, x = leg(p, 1.36)
 			g(p, "Thigh", Vector3.new(w, s.Y * 0.95, s.Z * 1.5), LIMB, M.Metal, CFrame.new(x, 0.02, 0))
-			w, x = leg(p, 1)
+			w, x = leg(p, 1, 0.38)
 			g(p, "ThighPlate", Vector3.new(w, s.Y * 0.62, 0.16), LIMB:Lerp(Color3.new(1, 1, 1), 0.1), M.Metal, CFrame.new(x, 0.05, -s.Z * 0.78))
 		end
 	end
@@ -1561,13 +1565,13 @@ function Costumes.DressSentinel(char, skinId)
 		local p = char:FindFirstChild(n)
 		if p then
 			local s = p.Size
-			local w, x = leg(p, 1.5)
+			local w, x = leg(p, 1.5, 0.445)
 			round(p, "Knee", Vector3.new(w, s.Y * 0.58, s.Z * 1.8), ARMOR, CFrame.new(x, s.Y * 0.44, -s.Z * 0.12))
 			w, x = leg(p, 1.52)
 			g(p, "Shin", Vector3.new(w, s.Y * 1.05, s.Z * 1.8), ARMOR, M.Metal, CFrame.new(x, -s.Y * 0.1, 0))
-			w, x = leg(p, 1.1)
+			w, x = leg(p, 1.1, 0.38)
 			g(p, "ShinPlate", Vector3.new(w, s.Y * 0.82, 0.16), EDGE, M.Metal, CFrame.new(x, -s.Y * 0.06, -s.Z * 0.93))
-			w, x = leg(p, 1.58)
+			w, x = leg(p, 1.58, 0.47)
 			g(p, "ShinRib", Vector3.new(w, s.Y * 0.06, s.Z * 1.85), ARMOR2, M.Metal, CFrame.new(x, s.Y * 0.18, 0))
 		end
 	end
@@ -1575,11 +1579,11 @@ function Costumes.DressSentinel(char, skinId)
 		local p = char:FindFirstChild(n)
 		if p then
 			local s = p.Size
-			local w, x = leg(p, 1.64)
+			local w, x = leg(p, 1.64, 0.445)
 			g(p, "Boot", Vector3.new(w, s.Y * 1.9, s.Z * 1.7), ARMOR2, M.Metal, CFrame.new(x, s.Y * 0.25, -s.Z * 0.12))
-			w, x = leg(p, 1.56)
+			w, x = leg(p, 1.56, 0.39)
 			g(p, "Toe", Vector3.new(w, s.Y * 1.05, s.Z * 0.55), ARMOR, M.Metal, CFrame.new(x, -s.Y * 0.03, -s.Z * 0.95))
-			w, x = leg(p, 1.3)
+			w, x = leg(p, 1.3, 0.395)
 			g(p, "Heel", Vector3.new(w, s.Y * 1.1, s.Z * 0.4), MECH, M.Metal, CFrame.new(x, -s.Y * 0.03, s.Z * 0.8))
 		end
 	end

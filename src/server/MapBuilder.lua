@@ -1654,8 +1654,11 @@ local function clawGouge(parent, origin, length, tilt)
 			block(parent, Vector3.new(w, sl, 0.34), cf * CFrame.new(0, 0, -0.02), M.Slate, rgb(8, 6, 6)) -- the void
 			block(parent, Vector3.new(w * 0.28, sl, 0.02), cf * CFrame.new(0, 0, -0.2), M.Neon, rgb(150, 20, 10), { CanCollide = false }) -- glow deep inside
 			local lip = u > 0.55 and HOT:Lerp(WARM, (1 - u) / 0.45) or WARM:Lerp(COOL, 1 - u / 0.55)
+			-- every other segment's lips stand a hair prouder, so the overlap
+			-- where two segments of different heat meet never flickers
+			local zo = k % 2 == 0 and 0 or 0.015
 			for _, s in { -1, 1 } do
-				block(parent, Vector3.new(0.15, sl, 0.4), cf * CFrame.new(s * (w / 2 + 0.03), 0, -0.04), M.Neon, lip, { CanCollide = false })
+				block(parent, Vector3.new(0.15, sl + 0.03, 0.4), cf * CFrame.new(s * (w / 2 + 0.03), 0, -0.04 - zo), M.Neon, lip, { CanCollide = false })
 				-- torn steel curling out of the cut
 				if (k + (s > 0 and 1 or 0)) % 2 == 0 and k > 0 and k < N - 1 then
 					local flap = rng:NextNumber(0.5, 0.9)
@@ -2090,10 +2093,11 @@ function MapBuilder.BuildLobby()
 		end
 		return list
 	end
-	local function run(w, gaps, y, h, depth, out, material, color)
+	local function run(w, gaps, y, h, depth, out, material, color, inset)
+		inset = inset or 0
 		for _, sp in spans(w, gaps) do
 			if sp[2] - sp[1] > 0.2 then
-				block(lobby, Vector3.new(sp[2] - sp[1], h, depth), onWall(w, (sp[1] + sp[2]) / 2, y, out), material, color)
+				block(lobby, Vector3.new(sp[2] - sp[1] - 2 * inset, h, depth), onWall(w, (sp[1] + sp[2]) / 2, y, out), material, color)
 			end
 		end
 	end
@@ -2106,7 +2110,7 @@ function MapBuilder.BuildLobby()
 		end
 		run(w, {}, 4.75, 0.3, 0.4, 0.2, M.Metal, rgb(96, 100, 108))
 		run(w, w.band, 12.6, 0.8, 0.16, 0.08, M.Concrete, rgb(140, 142, 148))
-		run(w, w.beam, 21.2, 1.6, 0.22, 0.62, M.Metal, rgb(56, 60, 68))
+		run(w, w.beam, 21.2, 1.5, 0.22, 0.62, M.Metal, rgb(56, 60, 68), 0.02) -- web: inside the flanges, not flush with them
 		run(w, w.beam, 20.5, 0.2, 0.75, 0.375, M.Metal, rgb(68, 72, 80))
 		run(w, w.beam, 21.9, 0.2, 0.75, 0.375, M.Metal, rgb(68, 72, 80))
 		for _, sp in spans(w, w.beam) do
@@ -2116,7 +2120,17 @@ function MapBuilder.BuildLobby()
 		end
 		run(w, {}, 25, 6, 0.1, 0.05, M.Metal, rgb(58, 62, 70))
 		for s = 1.9, w.len - 1.9, 1.25 do
-			block(lobby, Vector3.new(0.5, 6, 0.26), onWall(w, s, 25, 0.23), M.Metal, rgb(74, 78, 88))
+			local cf = onWall(w, s, 25, 0.23)
+			local onBeam = false
+			for _, z in { -30, -15, 0, 15, 30 } do -- the roof I-beams land here instead
+				if math.abs(w.n.Z) < 0.5 and math.abs(cf.Position.Z - z) < 0.95 then
+					onBeam = true
+				end
+			end
+			local inCorner = math.abs(cf.Position.X) > hx - 3.9 and math.abs(cf.Position.Z) > hz - 3.9 -- behind a corner column
+			if not onBeam and not inCorner then
+				block(lobby, Vector3.new(0.5, 6, 0.26), cf, M.Metal, rgb(74, 78, 88))
+			end
 		end
 	end
 	for _, sx in { -1, 1 } do -- corner columns
