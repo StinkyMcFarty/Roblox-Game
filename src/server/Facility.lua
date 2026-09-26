@@ -899,6 +899,8 @@ local FLOORS = {
 	Hangar = { Size = 8, Mat = M.Concrete, A = rgb(80, 84, 92), B = rgb(72, 76, 84), Seam = rgb(26, 27, 30), Gap = 0.22, Vary = 0.06, Wear = true },
 	-- clinical: pale terrazzo tiles
 	LabTile = { Size = 4, Mat = M.Marble, A = rgb(146, 154, 166), B = rgb(128, 136, 150), Seam = rgb(78, 84, 94), Gap = 0.1, Vary = 0.04, Refl = 0.05 },
+	-- medical: the same terrazzo, a few shades darker (the rooms are kept dim)
+	Clinic = { Size = 4, Mat = M.Marble, A = rgb(104, 112, 124), B = rgb(92, 100, 112), Seam = rgb(56, 60, 68), Gap = 0.1, Vary = 0.04, Refl = 0.06 },
 	-- canteen: cream and charcoal linoleum
 	Checker = { Size = 4, Mat = M.SmoothPlastic, A = rgb(198, 194, 182), B = rgb(62, 66, 74), Seam = rgb(40, 42, 46), Gap = 0.06, Vary = 0.04, Wear = true },
 	-- server core: raised access floor, every so often a perforated vent panel
@@ -969,7 +971,7 @@ local UPRIGHT = CFrame.Angles(0, 0, math.rad(90)) -- a cylinder standing on end
 -- A 2x4 ceiling troffer centred at pos (the ceiling's underside): a painted
 -- housing, a lipped bezel and a glowing diffuser behind a louvre grid. Every
 -- one is lit, and there are few of them.
-local function troffer(parent, pos, color, range)
+local function troffer(parent, pos, color, range, bright)
 	fit(parent, Vector3.new(3.6, 0.3, 7.6), CFrame.new(pos - Vector3.new(0, 0.2, 0)), M.SmoothPlastic, rgb(150, 156, 168))
 	local lens = fit(parent, Vector3.new(3, 0.06, 7), CFrame.new(pos - Vector3.new(0, 0.37, 0)), M.Neon, color)
 	for _, s in { -1, 1 } do -- the lip round the diffuser
@@ -982,7 +984,7 @@ local function troffer(parent, pos, color, range)
 	for k = 1, 5 do
 		fr(g, { Position = UDim2.new(0, 0, k / 6, -1), Size = UDim2.new(1, 0, 0, 2), BackgroundColor3 = louvre })
 	end
-	surfaceLight(lens, N.Bottom, range, 0.85, color, 125)
+	surfaceLight(lens, N.Bottom, range, bright or 0.85, color, 125)
 end
 
 -- An industrial high-bay hung from the roof at `top` with its lens at lensY:
@@ -1104,9 +1106,17 @@ local function ceiling(parent, r, kind)
 		end
 		-- troffers fill two cells of the grid, so the grid lines run clear of
 		-- their edges: one every 12 studs across and 16 along
+		-- (a room can ask for its own colour and strength, and for only every
+		-- other panel: r.LampColor, r.LampBright, r.Sparse)
+		local ix = 0
 		for x = r.x0 + band + 6, r.x1 - band - 4, 12 do
+			ix += 1
+			local iz = 0
 			for z = r.z0 + band + 8, r.z1 - band - 6, 16 do
-				troffer(parent, Vector3.new(x, y, z), rgb(168, 198, 255), r.h + 14) -- a cool, dim blue
+				iz += 1
+				if not r.Sparse or (ix + iz) % 2 == 0 then
+					troffer(parent, Vector3.new(x, y, z), r.LampColor or rgb(168, 198, 255), r.h + 14, r.LampBright) -- a cool, dim blue
+				end
 			end
 		end
 	elseif kind == "Grate" then
@@ -1963,9 +1973,10 @@ end
 
 local function buildFoundry(parent)
 	local r = ROOM.Foundry
-	-- cool white work floods overhead, so the only warm light is the molten
-	-- metal itself (it used to be orange lamps on rust: a flat red wash)
-	r.Warm = rgb(226, 234, 255)
+	-- dimmed orange lamps overhead, the glow of the molten metal below them
+	-- (the floor stays steel grey, so it's warm without going flat red)
+	r.Warm = rgb(255, 164, 88)
+	r.LampBright = 2.6
 	floorTiles(parent, r, "Grate")
 	ceiling(parent, r, "Truss")
 	-- molten channel across the hall, with grates and three bridges
@@ -2065,8 +2076,8 @@ end
 
 local function buildHangar(parent)
 	local r = ROOM.Hangar
-	r.Warm = rgb(130, 172, 255) -- a dim blue glow over the suits
-	r.LampBright = 2.4
+	r.Warm = rgb(196, 214, 255) -- a dim bluish-white glow over the suits
+	r.LampBright = 1.8
 	floorTiles(parent, r, "Hangar")
 	ceiling(parent, r, "Truss")
 	-- painted bay markings
@@ -2915,7 +2926,9 @@ end
 
 local function buildReception(parent)
 	local r = ROOM.Reception
-	floorTiles(parent, r, "LabTile")
+	-- dim, bluish-white light: every other panel, turned down
+	r.LampColor, r.LampBright, r.Sparse = rgb(206, 222, 255), 0.6, true
+	floorTiles(parent, r, "Clinic")
 	ceiling(parent, r, "Coffered")
 	-- reception counter
 	local c = CFrame.new(-82, F, 108)
@@ -2960,7 +2973,10 @@ end
 
 local function buildSurgery(parent)
 	local r = ROOM.Surgery
-	floorTiles(parent, r, "LabTile")
+	-- dim, bluish-white light (every other panel, turned down), so the
+	-- surgical lamp over the table is what lights the room
+	r.LampColor, r.LampBright, r.Sparse = rgb(206, 222, 255), 0.55, true
+	floorTiles(parent, r, "Clinic")
 	ceiling(parent, r, "Coffered")
 	-- the Weapon X operating table: a hydraulic column, a padded top in three
 	-- sections tilted up, arm boards and restraint straps with buckles
@@ -3009,7 +3025,7 @@ local function buildSurgery(parent)
 		end
 		D(parent, Vector3.new(0.7, 0.3, 0.3), aim * CFrame.new(0, -0.4, 0) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, rgb(60, 140, 200), { Shape = Enum.PartType.Cylinder }) -- handle
 		local emit = D(parent, Vector3.new(0.2, 0.2, 0.2), aim * CFrame.new(0, -0.4, 0), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false })
-		spotDown(emit, 22, 1.7, rgb(220, 234, 255), 55, k == 1) -- down the head's axis
+		spotDown(emit, 24, 2.8, rgb(226, 238, 255), 50, k == 1) -- down the head's axis: a bright pool on the table
 	end
 	-- robot arms on turrets, each with an adamantium injector, and the
 	-- injection tanks feeding them

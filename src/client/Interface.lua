@@ -685,7 +685,7 @@ RunService.RenderStepped:Connect(function(dt)
 
 	local total = ReplicatedStorage:GetAttribute("TerminalsTotal") or 0
 	if inRound and total > 0 then
-		terminalsLabel.Text = ReplicatedStorage:GetAttribute("SuitOnline") and "⚠ SENTINEL SUIT ONLINE — CONTAINER YARD"
+		terminalsLabel.Text = ReplicatedStorage:GetAttribute("SuitOnline") and "⚠ SENTINEL SUIT ONLINE — SENTINEL HANGAR"
 			or ("SENTINEL TERMINALS  %d / %d"):format(ReplicatedStorage:GetAttribute("Terminals") or 0, total)
 	else
 		terminalsLabel.Text = ""
