@@ -3344,6 +3344,29 @@ function Costumes.DressSentinel(char, skinId)
 	end
 end
 
+-- A spare Sentinel head (the suit's own helm, face, eyes and jaw) at cf,
+-- `scale` times a suit's head; used as a workshop prop.
+function Costumes.SentinelHead(parent, cf, scale, skinId)
+	local model = Instance.new("Model")
+	model.Name = "SentinelHead"
+	local head = Instance.new("Part")
+	head.Name = "Head"
+	head.Anchored = true
+	head.Size = Vector3.new(1.2, 1.2, 1.2) * scale
+	head.CFrame = cf
+	head.TopSurface = Enum.SurfaceType.Smooth
+	head.BottomSurface = Enum.SurfaceType.Smooth
+	head.Parent = model
+	Costumes.DressSentinel(model, skinId)
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.Anchored = true
+		end
+	end
+	model.Parent = parent
+	return model
+end
+
 -- A life-size Sentinel on display (anchored R15 frame wearing the suit).
 local STATUE = {
 	HumanoidRootPart = { Vector3.new(2, 2, 1), Vector3.new(0, 0, 0) },
@@ -3925,7 +3948,7 @@ local STYLES = {
 	-- offices: plaster over dark wood panelling
 	Office = { T = 1.2, Core = M.Plaster, Upper = rgb(170, 168, 160), Lower = rgb(84, 60, 42), LowerMat = M.WoodPlanks, Line = rgb(44, 32, 24), Cornice = rgb(58, 46, 36), Pil = rgb(96, 92, 86), LowerH = 3.4, Kind = "Office" },
 	-- labs, canteen and medical: white ceramic tile over a teal tiled band
-	Lab = { T = 1.2, Core = M.CeramicTiles, Upper = rgb(206, 212, 216), Lower = rgb(70, 128, 134), LowerMat = M.CeramicTiles, Line = rgb(38, 44, 48), Cornice = rgb(52, 58, 62), Pil = rgb(150, 158, 164), LowerH = 3.4, Kind = "Office" },
+	Lab = { T = 1.2, Core = M.CeramicTiles, Upper = rgb(160, 170, 182), Lower = rgb(52, 100, 110), LowerMat = M.CeramicTiles, Line = rgb(38, 44, 48), Cornice = rgb(52, 58, 62), Pil = rgb(150, 158, 164), LowerH = 3.4, Kind = "Office" },
 	-- command and servers: steel panels over a diamond-plate kick band
 	Dark = { T = 1.2, Core = M.Metal, Upper = rgb(70, 74, 84), Lower = rgb(36, 38, 44), LowerMat = M.DiamondPlate, Line = rgb(18, 20, 24), Cornice = rgb(24, 26, 30), Pil = rgb(44, 48, 56), LowerH = 3.4, Kind = "Office", Glow = rgb(60, 190, 255) },
 	-- bunker corridor: painted concrete, blue-grey dado, orange stripe, red pipe pilasters
@@ -4311,9 +4334,9 @@ local FLOORS = {
 	-- bunker corridor: polished concrete slabs with expansion joints
 	Corridor = { Size = 8, Mat = M.Concrete, A = rgb(124, 126, 128), B = rgb(114, 116, 119), Seam = rgb(44, 46, 50), Gap = 0.14, Vary = 0.05, Refl = 0.04, Wear = true },
 	-- hangar apron: heavy concrete slabs
-	Hangar = { Size = 8, Mat = M.Concrete, A = rgb(104, 106, 110), B = rgb(96, 98, 102), Seam = rgb(30, 31, 34), Gap = 0.22, Vary = 0.06, Wear = true },
+	Hangar = { Size = 8, Mat = M.Concrete, A = rgb(80, 84, 92), B = rgb(72, 76, 84), Seam = rgb(26, 27, 30), Gap = 0.22, Vary = 0.06, Wear = true },
 	-- clinical: pale terrazzo tiles
-	LabTile = { Size = 4, Mat = M.Marble, A = rgb(184, 190, 196), B = rgb(166, 172, 180), Seam = rgb(104, 108, 114), Gap = 0.1, Vary = 0.04, Refl = 0.05 },
+	LabTile = { Size = 4, Mat = M.Marble, A = rgb(146, 154, 166), B = rgb(128, 136, 150), Seam = rgb(78, 84, 94), Gap = 0.1, Vary = 0.04, Refl = 0.05 },
 	-- canteen: cream and charcoal linoleum
 	Checker = { Size = 4, Mat = M.SmoothPlastic, A = rgb(198, 194, 182), B = rgb(62, 66, 74), Seam = rgb(40, 42, 46), Gap = 0.06, Vary = 0.04, Wear = true },
 	-- server core: raised access floor, every so often a perforated vent panel
@@ -4385,7 +4408,7 @@ local UPRIGHT = CFrame.Angles(0, 0, math.rad(90)) -- a cylinder standing on end
 -- housing, a lipped bezel and a glowing diffuser behind a louvre grid. Every
 -- one is lit, and there are few of them.
 local function troffer(parent, pos, color, range)
-	fit(parent, Vector3.new(3.6, 0.3, 7.6), CFrame.new(pos - Vector3.new(0, 0.2, 0)), M.SmoothPlastic, rgb(206, 210, 216))
+	fit(parent, Vector3.new(3.6, 0.3, 7.6), CFrame.new(pos - Vector3.new(0, 0.2, 0)), M.SmoothPlastic, rgb(150, 156, 168))
 	local lens = fit(parent, Vector3.new(3, 0.06, 7), CFrame.new(pos - Vector3.new(0, 0.37, 0)), M.Neon, color)
 	for _, s in { -1, 1 } do -- the lip round the diffuser
 		fit(parent, Vector3.new(3.3, 0.08, 0.15), CFrame.new(pos + Vector3.new(0, -0.39, s * 3.575)), M.SmoothPlastic, rgb(186, 190, 198))
@@ -4397,13 +4420,14 @@ local function troffer(parent, pos, color, range)
 	for k = 1, 5 do
 		fr(g, { Position = UDim2.new(0, 0, k / 6, -1), Size = UDim2.new(1, 0, 0, 2), BackgroundColor3 = louvre })
 	end
-	surfaceLight(lens, N.Bottom, range, 1.5, color, 125)
+	surfaceLight(lens, N.Bottom, range, 0.85, color, 125)
 end
 
 -- An industrial high-bay hung from the roof at `top` with its lens at lensY:
 -- a rod, a finned driver, a stepped reflector and a glowing lens. A wide spot
 -- lights the floor under it and a soft fill lights the walls round it.
-local function highBay(parent, top, lensY, color, shadows)
+local function highBay(parent, top, lensY, color, shadows, bright)
+	bright = bright or 4.2
 	local lens = Vector3.new(top.X, lensY, top.Z)
 	local rod = top.Y - lensY - 1.9
 	if rod > 0.1 then
@@ -4420,8 +4444,8 @@ local function highBay(parent, top, lensY, color, shadows)
 	fit(parent, Vector3.new(0.08, 3.3, 3.3), CFrame.new(lens + Vector3.new(0, -0.07, 0)) * UPRIGHT, M.Neon, color, { Shape = Enum.PartType.Cylinder })
 	-- the light sits just under the lens, so nothing of the fitting is in its way
 	local emit = fit(parent, Vector3.new(0.4, 0.2, 0.4), CFrame.new(lens - Vector3.new(0, 0.3, 0)), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
-	spotDown(emit, 60, 4.2, color, 120, shadows)
-	pointLight(emit, 34, 0.7, color)
+	spotDown(emit, 60, bright, color, 120, shadows)
+	pointLight(emit, 34, 0.7 * bright / 4.2, color)
 end
 
 -- A canteen pendant: an enamel dome shade on a cord over the tables, a warm
@@ -4499,7 +4523,7 @@ local function ceiling(parent, r, kind)
 	if kind == "Coffered" then
 		-- dropped soffit around the room, recessed light grid inside
 		local band = 4
-		local c = rgb(182, 186, 190)
+		local c = rgb(116, 122, 134)
 		D(parent, Vector3.new(sx, 1.4, band), CFrame.new(cx, y - 0.7, r.z0 + band / 2), M.SmoothPlastic, c)
 		D(parent, Vector3.new(sx, 1.4, band), CFrame.new(cx, y - 0.7, r.z1 - band / 2), M.SmoothPlastic, c)
 		D(parent, Vector3.new(band, 1.4, sz - band * 2), CFrame.new(r.x0 + band / 2, y - 0.7, cz), M.SmoothPlastic, c)
@@ -4508,7 +4532,7 @@ local function ceiling(parent, r, kind)
 		for _, e in { { cx, r.z0 + band + 0.1, sx - band * 2, 0.15 }, { cx, r.z1 - band - 0.1, sx - band * 2, 0.15 } } do
 			D(parent, Vector3.new(e[3], 0.12, e[4]), CFrame.new(e[1], y - 1.3, e[2]), M.Neon, rgb(120, 140, 170))
 		end
-		D(parent, Vector3.new(sx - band * 2, 0.2, sz - band * 2), CFrame.new(cx, y - 0.1, cz), M.Plaster, rgb(200, 202, 204)) -- acoustic tiles
+		D(parent, Vector3.new(sx - band * 2, 0.2, sz - band * 2), CFrame.new(cx, y - 0.1, cz), M.Plaster, rgb(126, 132, 146)) -- acoustic tiles
 		-- ceiling tile grid
 		for x = r.x0 + band + 4, r.x1 - band - 1, 4 do
 			D(parent, Vector3.new(0.08, 0.06, sz - band * 2), CFrame.new(x, y - 0.23, cz), M.SmoothPlastic, rgb(128, 132, 138))
@@ -4520,7 +4544,7 @@ local function ceiling(parent, r, kind)
 		-- their edges: one every 12 studs across and 16 along
 		for x = r.x0 + band + 6, r.x1 - band - 4, 12 do
 			for z = r.z0 + band + 8, r.z1 - band - 6, 16 do
-				troffer(parent, Vector3.new(x, y, z), rgb(232, 238, 248), r.h + 14)
+				troffer(parent, Vector3.new(x, y, z), rgb(168, 198, 255), r.h + 14) -- a cool, dim blue
 			end
 		end
 	elseif kind == "Grate" then
@@ -4576,7 +4600,7 @@ local function ceiling(parent, r, kind)
 					if r.Lamp == "Dome" then
 						domePendant(parent, Vector3.new(x, y, z), y - 6.5, r.Warm or rgb(255, 204, 150))
 					else
-						highBay(parent, Vector3.new(x, y, z), y - 7.5, r.Warm or rgb(255, 232, 200), (i + j) % 2 == 0)
+						highBay(parent, Vector3.new(x, y, z), y - 7.5, r.Warm or rgb(255, 232, 200), (i + j) % 2 == 0, r.LampBright)
 					end
 				end
 			end
@@ -5479,7 +5503,8 @@ end
 
 local function buildHangar(parent)
 	local r = ROOM.Hangar
-	r.Warm = rgb(235, 225, 210)
+	r.Warm = rgb(130, 172, 255) -- a dim blue glow over the suits
+	r.LampBright = 2.4
 	floorTiles(parent, r, "Hangar")
 	ceiling(parent, r, "Truss")
 	-- painted bay markings
@@ -5578,12 +5603,28 @@ local function buildHangar(parent)
 		crate(parent, CFrame.new(46, F, 66 + i * 5.4) * CFrame.Angles(0, rng:NextNumber(-0.12, 0.12), 0), 4.4, i == 1 and "SENTINEL SPARES" or "TRASK IND.")
 	end
 	crate(parent, CFrame.new(46, F + 4.4, 71.4), 3.4, "HANDLE WITH CARE")
-	-- a spare Sentinel head on a stand
+	-- a spare Sentinel head on a maintenance stand: a steel pedestal with a
+	-- turned collar, the suit's own helm on top (Costumes.SentinelHead),
+	-- cables hanging out of its neck and a work lamp over it
 	local hp = Vector3.new(40, F, 90)
-	P(parent, Vector3.new(4, 3, 4), CFrame.new(hp + Vector3.new(0, 1.5, 0)), M.Metal, rgb(46, 44, 42))
-	D(parent, Vector3.new(5, 5.2, 5), CFrame.new(hp + Vector3.new(0, 5.6, 0)), M.Metal, rgb(112, 36, 150))
-	D(parent, Vector3.new(4, 0.9, 0.2), CFrame.new(hp + Vector3.new(0, 6.3, -2.55)), M.Neon, rgb(255, 210, 60))
-	D(parent, Vector3.new(5.2, 1.2, 5.2), CFrame.new(hp + Vector3.new(0, 8.6, 0)), M.Metal, rgb(40, 40, 46))
+	local steel, dark = rgb(70, 74, 82), rgb(34, 36, 40)
+	P(parent, Vector3.new(4.4, 0.4, 4.4), CFrame.new(hp + Vector3.new(0, 0.2, 0)), M.DiamondPlate, dark)
+	P(parent, Vector3.new(2.2, 2.6, 2.2), CFrame.new(hp + Vector3.new(0, 1.7, 0)), M.Metal, steel)
+	drum(parent, hp + Vector3.new(0, 3.1, 0), 3.2, 0.3, M.Metal, dark)
+	local headModel = Costumes.SentinelHead(parent, CFrame.lookAt(hp + Vector3.new(0, 5.2, 0), hp + Vector3.new(-1, 5.2, 0)), 2.6, "Default")
+	for _, d in headModel:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.CanQuery, d.CanTouch = false, false
+		end
+	end
+	for k = -1, 1 do
+		cable(hp + Vector3.new(k * 0.4, 3.3, 0.3), hp + Vector3.new(k * 1.6 + 2, 0.3, 1.8), 0.8, 0.18, k == 0 and rgb(160, 30, 30) or rgb(22, 22, 24))
+	end
+	cyl(parent, hp + Vector3.new(2.6, 0.4, 0), hp + Vector3.new(2.6, 9, 0), 0.2, M.Metal, dark, nil, true) -- work lamp stand
+	cyl(parent, hp + Vector3.new(2.6, 9, 0), hp + Vector3.new(0.8, 9.4, 0), 0.16, M.Metal, dark, nil, true)
+	local lamp = drum(parent, hp + Vector3.new(0.6, 9.2, 0), 1.2, 0.5, M.Metal, dark, nil, true)
+	spotDown(drum(parent, hp + Vector3.new(0.6, 8.94, 0), 0.9, 0.04, M.Neon, rgb(170, 200, 255), nil, true), 14, 1.6, rgb(170, 200, 255), 60)
+	_ = lamp
 	hidingSpot(CFrame.lookAt(Vector3.new(-48, F, 124), Vector3.new(0, F, 124)), "Crate")
 	scaffold(parent, Vector3.new(-30, F, 104), 6, 5, 16)
 	scaffold(parent, Vector3.new(30, F, 104), 6, 5, 16)
@@ -6397,7 +6438,7 @@ local function buildSurgery(parent)
 		ball(parent, elbow, 0.6, M.Metal, dark, nil, true)
 		cyl(parent, elbow, head + Vector3.new(0, 0.9, 0), 0.3, M.Metal, white, nil, true)
 		local aim = CFrame.lookAt(head, Vector3.new(-134, F + 4, 98)) * CFrame.Angles(math.rad(90), 0, 0) -- the head's down axis points at the table
-		D(parent, Vector3.new(2.9, 0.5, 2.9), aim * CFrame.new(0, 0.2, 0) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, white, { Shape = Enum.PartType.Cylinder })
+		D(parent, Vector3.new(0.5, 2.9, 2.9), aim * CFrame.new(0, 0.2, 0) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, white, { Shape = Enum.PartType.Cylinder })
 		D(parent, Vector3.new(0.1, 2.6, 2.6), aim * CFrame.new(0, -0.08, 0) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, rgb(30, 32, 36), { Shape = Enum.PartType.Cylinder })
 		for j = 0, 6 do -- LED cluster
 			local rr = j == 0 and 0 or 0.8
@@ -6406,7 +6447,7 @@ local function buildSurgery(parent)
 		end
 		D(parent, Vector3.new(0.7, 0.3, 0.3), aim * CFrame.new(0, -0.4, 0) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, rgb(60, 140, 200), { Shape = Enum.PartType.Cylinder }) -- handle
 		local emit = D(parent, Vector3.new(0.2, 0.2, 0.2), aim * CFrame.new(0, -0.4, 0), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false })
-		spotDown(emit, 22, 2.4, rgb(245, 250, 255), 55, k == 1) -- down the head's axis
+		spotDown(emit, 22, 1.7, rgb(220, 234, 255), 55, k == 1) -- down the head's axis
 	end
 	-- robot arms on turrets, each with an adamantium injector, and the
 	-- injection tanks feeding them
@@ -9467,8 +9508,8 @@ function MapBuilder.SetupLighting()
 	-- the facility is lit by its own lamps: a blue-grey ambient lets them (and
 	-- every glowing prop) shape the rooms, but is high enough that corners
 	-- between lamps stay readable (players tune it with the brightness setting)
-	Lighting.Ambient = rgb(110, 118, 138)
-	Lighting.OutdoorAmbient = rgb(126, 136, 166)
+	Lighting.Ambient = rgb(92, 102, 130)
+	Lighting.OutdoorAmbient = rgb(110, 122, 160)
 	pcall(function()
 		Lighting.LightingStyle = Enum.LightingStyle.Realistic
 	end)
@@ -9477,7 +9518,7 @@ function MapBuilder.SetupLighting()
 	Lighting.GlobalShadows = true
 	Lighting.ShadowSoftness = 1
 	Lighting.GeographicLatitude = 48
-	Lighting.ExposureCompensation = 0.3
+	Lighting.ExposureCompensation = 0.1
 	local customSky = Lighting:FindFirstChildOfClass("Sky") -- a sky set up in Studio is kept
 	for _, c in Lighting:GetChildren() do
 		if c:IsA("PostEffect") or c:IsA("Atmosphere") or (c:IsA("Sky") and c ~= customSky) then

@@ -1363,8 +1363,8 @@ function MapBuilder.SetupLighting()
 	-- the facility is lit by its own lamps: a blue-grey ambient lets them (and
 	-- every glowing prop) shape the rooms, but is high enough that corners
 	-- between lamps stay readable (players tune it with the brightness setting)
-	Lighting.Ambient = rgb(110, 118, 138)
-	Lighting.OutdoorAmbient = rgb(126, 136, 166)
+	Lighting.Ambient = rgb(92, 102, 130)
+	Lighting.OutdoorAmbient = rgb(110, 122, 160)
 	pcall(function()
 		Lighting.LightingStyle = Enum.LightingStyle.Realistic
 	end)
@@ -1373,7 +1373,7 @@ function MapBuilder.SetupLighting()
 	Lighting.GlobalShadows = true
 	Lighting.ShadowSoftness = 1
 	Lighting.GeographicLatitude = 48
-	Lighting.ExposureCompensation = 0.3
+	Lighting.ExposureCompensation = 0.1
 	local customSky = Lighting:FindFirstChildOfClass("Sky") -- a sky set up in Studio is kept
 	for _, c in Lighting:GetChildren() do
 		if c:IsA("PostEffect") or c:IsA("Atmosphere") or (c:IsA("Sky") and c ~= customSky) then

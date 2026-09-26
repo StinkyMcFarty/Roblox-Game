@@ -1589,6 +1589,29 @@ function Costumes.DressSentinel(char, skinId)
 	end
 end
 
+-- A spare Sentinel head (the suit's own helm, face, eyes and jaw) at cf,
+-- `scale` times a suit's head; used as a workshop prop.
+function Costumes.SentinelHead(parent, cf, scale, skinId)
+	local model = Instance.new("Model")
+	model.Name = "SentinelHead"
+	local head = Instance.new("Part")
+	head.Name = "Head"
+	head.Anchored = true
+	head.Size = Vector3.new(1.2, 1.2, 1.2) * scale
+	head.CFrame = cf
+	head.TopSurface = Enum.SurfaceType.Smooth
+	head.BottomSurface = Enum.SurfaceType.Smooth
+	head.Parent = model
+	Costumes.DressSentinel(model, skinId)
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.Anchored = true
+		end
+	end
+	model.Parent = parent
+	return model
+end
+
 -- A life-size Sentinel on display (anchored R15 frame wearing the suit).
 local STATUE = {
 	HumanoidRootPart = { Vector3.new(2, 2, 1), Vector3.new(0, 0, 0) },
