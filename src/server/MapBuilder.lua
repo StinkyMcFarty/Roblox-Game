@@ -1531,24 +1531,72 @@ local function boardSheet(parent, size, cf, paper)
 	return p, bg, col
 end
 
--- One control: a key cap and what it does
+-- A key as printed on the paperwork, drawn like the real thing: a darker
+-- skirt, a lighter dished top with a bevel highlight, the legend in the top
+-- left corner. Wide keys (SHIFT) are 2u. "M1"/"M2" draw a mouse with that
+-- button lit; "3x" draws a console with x3 stamped on it.
+local function keycap(row, key, style)
+	local function frame(parent, props)
+		props.BorderSizePixel = 0
+		return make("Frame", parent, props)
+	end
+	local function stroke(parent, color, thickness)
+		make("UIStroke", parent, { Color = color, Thickness = thickness, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
+	end
+	if key == "M1" or key == "M2" then
+		local w, h, r = 58, 80, 14
+		local bh = h * 0.42 -- the buttons' depth
+		local body = frame(row, { Position = UDim2.fromOffset(26, -10), Size = UDim2.fromOffset(w, h), BackgroundColor3 = style.Top })
+		make("UICorner", body, { CornerRadius = UDim.new(0, r) })
+		stroke(body, style.Line, 3)
+		-- the lit button: rounded only on its outer top corner, like the mouse
+		local left = key == "M1"
+		local x0 = left and 0 or w / 2
+		local lit = frame(body, { Position = UDim2.fromOffset(x0, 0), Size = UDim2.fromOffset(w / 2, bh), BackgroundColor3 = style.Hot })
+		make("UICorner", lit, { CornerRadius = UDim.new(0, r) })
+		frame(body, { Position = UDim2.fromOffset(left and w / 4 or w / 2, 0), Size = UDim2.fromOffset(w / 4, bh), BackgroundColor3 = style.Hot })
+		frame(body, { Position = UDim2.fromOffset(x0, bh / 2), Size = UDim2.fromOffset(w / 2, bh / 2), BackgroundColor3 = style.Hot })
+		frame(body, { Position = UDim2.fromOffset(w / 2 - 1.5, 0), Size = UDim2.fromOffset(3, bh), BackgroundColor3 = style.Line })
+		frame(body, { Position = UDim2.fromOffset(0, bh - 1.5), Size = UDim2.fromOffset(w, 3), BackgroundColor3 = style.Line })
+		local wheel = frame(body, { Position = UDim2.fromOffset(w / 2 - 5, 10), Size = UDim2.fromOffset(10, 18), BackgroundColor3 = style.Skirt })
+		make("UICorner", wheel, { CornerRadius = UDim.new(0.5, 0) })
+		stroke(wheel, style.Line, 2)
+		return
+	end
+	if key == "3x" then
+		local mon = frame(row, { Position = UDim2.fromOffset(8, 0), Size = UDim2.fromOffset(72, 48), BackgroundColor3 = style.Skirt })
+		make("UICorner", mon, { CornerRadius = UDim.new(0, 6) })
+		stroke(mon, style.Line, 3)
+		local screen = frame(mon, { Position = UDim2.fromOffset(6, 6), Size = UDim2.fromOffset(60, 32), BackgroundColor3 = rgb(22, 60, 40) })
+		make("TextLabel", screen, { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = ">_", Font = Enum.Font.RobotoMono, TextSize = 22, TextColor3 = rgb(90, 240, 140), TextXAlignment = Enum.TextXAlignment.Left })
+		frame(row, { Position = UDim2.fromOffset(36, 48), Size = UDim2.fromOffset(16, 8), BackgroundColor3 = style.Line })
+		frame(row, { Position = UDim2.fromOffset(26, 56), Size = UDim2.fromOffset(36, 5), BackgroundColor3 = style.Line })
+		local x3 = make("TextLabel", row, { Position = UDim2.fromOffset(64, 22), Size = UDim2.fromOffset(46, 38), Rotation = -8, BackgroundTransparency = 1, Text = "x3",
+			Font = Enum.Font.PermanentMarker, TextSize = 36, TextColor3 = style.Hot })
+		make("UIStroke", x3, { Color = style.Top, Thickness = 3 })
+		return
+	end
+	local w, h = #key > 2 and 110 or 58, 58
+	local skirt = frame(row, { Size = UDim2.fromOffset(w, h), BackgroundColor3 = style.Skirt })
+	make("UICorner", skirt, { CornerRadius = UDim.new(0, 10) })
+	stroke(skirt, style.Line, 2)
+	local top = frame(skirt, { Position = UDim2.fromOffset(6, 4), Size = UDim2.fromOffset(w - 12, h - 16), BackgroundColor3 = style.Top })
+	make("UICorner", top, { CornerRadius = UDim.new(0, 7) })
+	make("UIGradient", top, { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), rgb(205, 205, 205)) }) -- the dish
+	frame(top, { Position = UDim2.fromOffset(6, 1), Size = UDim2.new(1, -12, 0, 2), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.45 })
+	make("TextLabel", top, {
+		Position = UDim2.fromOffset(7, 3), Size = UDim2.new(1, -14, 0, 24), BackgroundTransparency = 1, Text = key,
+		Font = Enum.Font.GothamBold, TextSize = #key > 2 and 17 or 22, TextColor3 = style.Legend,
+		TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top,
+	})
+end
+
+-- One control: a key and what it does
 local function keyRow(col, order, key, text, style)
 	local row = make("Frame", col, { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = order })
-	local shadow = make("Frame", row, { Position = UDim2.fromOffset(0, 5), Size = UDim2.fromOffset(110, 52), BackgroundColor3 = Color3.new(), BorderSizePixel = 0 })
-	local cap = make("Frame", row, { Size = UDim2.fromOffset(110, 52), BackgroundColor3 = style.Cap, BorderSizePixel = 0 })
-	make("UICorner", shadow, { CornerRadius = UDim.new(0, 8) })
-	make("UICorner", cap, { CornerRadius = UDim.new(0, 8) })
-	boardText(cap, {
-		Size = UDim2.fromScale(1, 1),
-		Text = key,
-		Font = Enum.Font.RobotoMono,
-		TextSize = #key > 3 and 24 or 28,
-		TextColor3 = style.CapText,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		TextYAlignment = Enum.TextYAlignment.Center,
-	})
+	keycap(row, key, style)
 	boardText(row, {
-		Position = UDim2.fromOffset(128, 4),
+		Position = UDim2.fromOffset(128, 10),
 		Size = UDim2.new(1, -128, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Text = text,
@@ -1559,9 +1607,11 @@ local function keyRow(col, order, key, text, style)
 	return row
 end
 
--- A yellow sticky note with a scrawl on it
+-- A yellow sticky note with a scrawl on it. It stands well proud of the
+-- paper it's stuck over (a hair off it, it flickered) with a soft shadow.
 local function stickyNote(parent, cf, text)
-	local p = block(parent, Vector3.new(4.25, 4.25, 0.04), cf, M.SmoothPlastic, rgb(246, 221, 90), { CanCollide = false })
+	block(parent, Vector3.new(4.25, 4.25, 0.02), cf * CFrame.new(0.14, -0.16, 0.1), M.SmoothPlastic, Color3.new(), { Transparency = 0.72, CanCollide = false, CastShadow = false })
+	local p = block(parent, Vector3.new(4.25, 4.25, 0.06), cf, M.SmoothPlastic, rgb(246, 221, 90), { CanCollide = false })
 	local bg = boardGui(p, rgb(246, 221, 90))
 	make("UIGradient", bg, { Rotation = 90, Color = ColorSequence.new(rgb(255, 255, 255), rgb(225, 225, 225)) })
 	boardText(bg, {
@@ -2204,7 +2254,9 @@ function MapBuilder.BuildLobby()
 	})
 
 	local S = Config.Sentinel
-	local INK, TYPE = rgb(28, 27, 25), { Cap = rgb(29, 29, 32), CapText = Color3.new(1, 1, 1), Font = Enum.Font.SpecialElite, Size = 34, Ink = rgb(28, 27, 25) }
+	local INK = rgb(28, 27, 25)
+	local TYPE = { Skirt = rgb(62, 62, 66), Top = rgb(238, 236, 230), Legend = rgb(30, 30, 34), Line = rgb(20, 20, 22), Hot = rgb(200, 30, 30),
+		Font = Enum.Font.SpecialElite, Size = 34, Ink = INK }
 	local function header(col, text, color)
 		boardText(col, { Size = UDim2.new(1, 0, 0, 30), Text = text, Font = Enum.Font.RobotoMono, TextSize = 24, TextColor3 = color, LayoutOrder = 1 })
 	end
@@ -2280,7 +2332,9 @@ function MapBuilder.BuildLobby()
 
 	-- 3) the Sentinel pilot card: a blueprint
 	local BLUE = rgb(29, 74, 140)
-	local PRINT = { Cap = Color3.new(1, 1, 1), CapText = BLUE, Font = Enum.Font.RobotoMono, Size = 30, Ink = Color3.new(1, 1, 1) }
+	-- blueprint keys are line drawings: white lines on the blue
+	local PRINT = { Skirt = rgb(38, 88, 158), Top = rgb(52, 108, 178), Legend = Color3.new(1, 1, 1), Line = Color3.new(1, 1, 1), Hot = rgb(255, 206, 60),
+		Font = Enum.Font.RobotoMono, Size = 30, Ink = Color3.new(1, 1, 1) }
 	local _, card, cardCol = boardSheet(lobby, Vector3.new(21, 17.4, 0.04), onBoard(18, 10, 0.36, -0.8), BLUE)
 	for gx = 40, 800, 40 do
 		make("Frame", card, { Position = UDim2.fromOffset(gx, 0), Size = UDim2.new(0, 2, 1, 0), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.88, BorderSizePixel = 0 })
@@ -2310,9 +2364,9 @@ function MapBuilder.BuildLobby()
 	end
 
 	-- scrawled sticky notes, stuck where there was room
-	stickyNote(lobby, onBoard(-18, 11.5, 0.44, 6), "he can SMELL you")
-	stickyNote(lobby, onBoard(6, 13, 0.44, -7), "he heals.\nyou don't.")
-	stickyNote(lobby, onBoard(26.6, 3.8, 0.44, 5), "STAY TOGETHER!!")
+	stickyNote(lobby, onBoard(-18, 11.5, 0.6, 6), "he can SMELL you")
+	stickyNote(lobby, onBoard(6, 13, 0.6, -7), "he heals.\nyou don't.")
+	stickyNote(lobby, onBoard(26.6, 3.8, 0.6, 5), "STAY TOGETHER!!")
 
 	-- three work lamps hanging from the ceiling, aimed at the paperwork
 	for _, x in { -30, -6, 18 } do
