@@ -2962,7 +2962,7 @@ local function lifeAndWear(parent, keepClear)
 	-- where he's already been: gashes, debris, blood
 	local CONCRETE, OFFICE, STEEL = 0.32, 0.32, 0.45
 	for _, v in {
-		{ Vector3.new(-35, F + 5.5, -55.3), Vector3.new(0, 0, 1), CONCRETE, true }, -- Ring N
+		{ Vector3.new(-26, F + 5.5, -55.3), Vector3.new(0, 0, 1), CONCRETE, true }, -- Ring N
 		{ Vector3.new(18, F + 5.5, 55.3), Vector3.new(0, 0, -1), CONCRETE, true }, -- Ring S
 		{ Vector3.new(107.4, F + 5, 100), Vector3.new(-1, 0, 0), OFFICE, true }, -- Canteen
 		{ Vector3.new(-130, F + 5, -140), Vector3.new(0, 0, 1), OFFICE, false }, -- Archive
