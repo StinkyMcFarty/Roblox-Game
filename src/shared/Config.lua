@@ -282,6 +282,7 @@ Config.UploadedSounds = {
 	ClawFlesh = 137648114004971, -- his claws tearing through a survivor
 	SentinelSwing = 103865520255704, -- Sentinel punch wind-up (motor, hydraulic ram, the fist moving the air)
 	SentinelSmash = 93700336440724, -- Sentinel fist landing (on Wolverine or through a wall)
+	RageRoar = 0, -- his rage: a growl erupting into a torn scream, then ragged breaths (until uploaded: Roar pitched down)
 	SentinelWalk = 0, -- Sentinel walking: leg motor, then the steel foot clanking down (4 takes)
 	SentinelRun = 0, -- Sentinel running: the same, heavier (4 takes); until both are uploaded it's StepHeavy
 	TerminalHum = 0, -- terminals idling near you (8s loop); paste its ID here once uploaded
@@ -302,6 +303,7 @@ Config.Sounds.DeathRay = Config.Sounds.DeathRay or Config.Sounds.Laser
 Config.Sounds.Chase = Config.Sounds.Chase or ""
 Config.Sounds.TerminalHum = Config.Sounds.TerminalHum or "" -- silent until uploaded (beeps still play)
 Config.Sounds.Scream = Config.Sounds.Scream or Config.Sounds.Snarl
+Config.Sounds.RageRoar = Config.Sounds.RageRoar or Config.Sounds.Roar
 -- Footsteps: until Step is uploaded, walking keeps Roblox's default running sound.
 Config.Sounds.Step = Config.Sounds.Step or ""
 Config.Sounds.StepMetal = Config.Sounds.StepMetal or Config.Sounds.Step

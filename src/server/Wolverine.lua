@@ -1354,8 +1354,12 @@ updateRage = function(player, char, hum)
 				return
 			end
 			rageAura(char, true)
-			Util.Sound(Config.Sounds.Roar, root, { Volume = 3, Pitch = 0.8, Range = 500 })
-			Util.Sound(Config.Sounds.Roar, root, { Volume = 2, Pitch = 0.55, Range = 300 }) -- a low growl under it
+			if (Config.UploadedSounds.RageRoar or 0) ~= 0 then
+				Util.Sound(Config.Sounds.RageRoar, root, { Volume = 3, Range = 500, MinRange = 30 })
+			else
+				Util.Sound(Config.Sounds.Roar, root, { Volume = 3, Pitch = 0.8, Range = 500 })
+				Util.Sound(Config.Sounds.Roar, root, { Volume = 2, Pitch = 0.55, Range = 300 }) -- a low growl under it
+			end
 			VFX.Shockwave(root.Position - Vector3.new(0, 2.8, 0), 26, RAGE_RED)
 			Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 1.8, Radius = 120 })
 			Fx:FireAllClients("RageRoar", { Char = char })

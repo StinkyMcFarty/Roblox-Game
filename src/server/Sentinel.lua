@@ -764,7 +764,7 @@ local function pulse(player, char, root)
 	task.wait(0.28) -- slam frame
 	Fx:FireAllClients("PulseBlast", { Position = root.Position, Radius = cfg.Radius })
 	Util.Sound(Config.Sounds.PounceHit, root, { Volume = 3, Pitch = 0.4, Range = 300 })
-	Util.Sound(Config.Sounds.Roar, root, { Volume = 0.6, Pitch = 2.2, Range = 120 })
+	Util.Sound(Config.Sounds.SentinelSmash, root, { Volume = 1.6, Pitch = 0.7, Range = 220 })
 	Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 1.2, Radius = 70 })
 	local _, _, wRoot = wolverineParts()
 	if wRoot then

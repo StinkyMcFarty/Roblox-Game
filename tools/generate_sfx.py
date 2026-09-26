@@ -317,37 +317,77 @@ def scream():
     return finish(reverb(x, 0.9, 0.16), 0.95, 0.12)
 
 
-def roar():
-    """Transformation roar when he's unleashed: a low rumbling growl builds,
-    then a huge chest-to-throat 'RRRAAAAAAARRGH' with an octave-down beast
-    layer, cracking rasp at the peak, a cinematic sub hit and a long hall tail."""
-    dur = 2.9
+def film_master(x):
+    """Movie-trailer polish for a man's rage-yell: keep the chest (200-600 Hz),
+    push the throat's 2-4 kHz tear forward, drive it hard, no slapback."""
+    x = highpass(x, 80, 2)
+    x = x + bandpass(x, 180, 600, 2) * 0.8 + bandpass(x, 1800, 4200, 2) * 2.4
+    x = x / (np.max(np.abs(x)) + 1e-9)
+    return np.tanh(x * 2.2) / np.tanh(2.2)
+
+
+def rage_breath(dur=0.55, pitch=1.0):
+    """A ragged, heaving breath through a torn throat."""
     t = t_axis(dur)
-    pre = 0.55
+    air = bandpass(noise(dur), 500 * pitch, 3200 * pitch) * np.sin(np.pi * t / dur) ** 1.5
+    rasp = voice(dur, lambda tt: 95 * pitch + 20 * np.sin(np.pi * tt / dur), 1.8, vowels=[(0, V_HH), (1, V_UH)], drive=1.4)
+    return air * 0.5 + rasp * np.sin(np.pi * t / dur) ** 2 * 0.22
+
+
+def roar():
+    """His roar when he breaks out: no animal in it, a man's raw rage-yell. An
+    explosive, cracking "RAAAAAAGH" belted high in the chest, straining and
+    tearing into rasp at the peak, then clamping down into a guttural "RRGH",
+    with a big hall behind it."""
+    dur = 2.6
+    t = t_axis(dur)
 
     def contour(tt):
-        g = tt < pre
-        growl_f = 85 + 25 * (tt / pre)
-        rise = 150 + 95 * (1 - np.exp(-(tt - pre) / 0.12)) + 25 * np.clip((tt - pre - 0.2) / 0.8, 0, 1)
-        sag = 110 * np.clip((tt - 2.0) / 0.9, 0, 1) ** 1.3
-        wob = 7 * np.sin(2 * np.pi * 4.6 * tt) * (tt > pre + 0.3)
-        return np.where(g, growl_f, rise - sag + wob)
+        hit = 175 + 115 * (1 - np.exp(-tt / 0.06))  # the voice snaps up into a belt
+        climb = 45 * np.clip((tt - 0.15) / 0.9, 0, 1) ** 0.8
+        strain = 10 * np.sin(2 * np.pi * 5.8 * tt) * np.clip((tt - 0.4) / 0.4, 0, 1)
+        fall = 150 * np.clip((tt - 1.75) / 0.8, 0, 1) ** 1.3
+        return hit + climb + strain - fall
 
-    u = pre / dur
-    path = [(0.0, V_UH), (u * 0.9, V_RR), (u + 0.04, V_RA), (u + 0.14, V_AA), (0.66, V_AA), (0.76, V_RR), (0.95, V_UH)]
-    rough = [(0, 1.8), (u, 1.4), (u + 0.1, 1.0), (0.45, 1.6), (0.6, 2.0), (1.0, 1.8)]
-    body = yell(dur, contour, path, rough, layers=3, detune=0.005)
-    beast = yell(dur, lambda tt: contour(tt) * 0.5, [(0.0, (420, 820, 2100, 3000)), (1.0, (380, 760, 2000, 2900))],
-                 [(0, 2.0), (1, 2.0)], layers=1)
-    amp = np.where(t < pre, 0.35 * (t / pre) ** 1.5, 1.0) * (1 - np.clip((t - 2.15) / 0.75, 0, 1) ** 1.4)
+    path = [(0.0, V_HH), (0.03, V_RA), (0.12, V_AA), (0.66, V_AA), (0.76, V_RR), (0.94, V_UH)]
+    rough = [(0, 1.2), (0.15, 0.9), (0.35, 1.3), (0.5, 1.9), (0.7, 2.1), (1.0, 2.2)]
+    body = yell(dur, contour, path, rough, layers=3, detune=0.007, drive=1.5)
+    chest = yell(dur, lambda tt: contour(tt) * 0.5, path, [(0, 1.6), (1, 2.0)], layers=1, drive=1.2)
+    amp = np.clip(t / 0.03, 0, 1) * (1 + 0.1 * np.sin(2 * np.pi * 2.7 * t)) * (1 - np.clip((t - 1.85) / 0.75, 0, 1) ** 1.4)
     amp = lowpass(amp, 40, 2)
-    x = mix(body * amp, beast * amp * 0.55)
-    x = tv_master(x, 0.11)
-    ht = t_axis(1.3)
-    hit = np.sin(2 * np.pi * (60 - 28 * np.minimum(ht / 0.6, 1)) * ht) * env(1.3, 0.003, 0.5)
-    x = mix(x, pad(hit * 0.8, pre))
-    x = np.tanh(x / (np.max(np.abs(x)) + 1e-9) * 1.6)
-    return finish(reverb(reverb(x, 1.8, 0.26), 0.4, 0.14), 0.95, 0.3)
+    breath = bandpass(noise(dur), 1200, 6500) * amp * 0.1
+    x = film_master(mix(body * amp, chest * amp * 0.28, breath))
+    return finish(reverb(reverb(x, 2.2, 0.24), 0.35, 0.12), 0.88, 0.35)
+
+
+def rage_roar():
+    """Rage: a low growl through clenched teeth erupts into a longer, more torn
+    scream with his head thrown back, cracks, then he hunches over and heaves
+    two ragged breaths."""
+    dur = 3.4
+    t = t_axis(dur)
+    pre = 0.35
+
+    def contour(tt):
+        growl_f = 105 + 30 * (tt / pre)
+        burst = 200 + 130 * (1 - np.exp(-(tt - pre) / 0.07)) + 30 * np.clip((tt - pre - 0.3) / 0.8, 0, 1)
+        strain = 13 * np.sin(2 * np.pi * 6.4 * tt) * (tt > pre + 0.35)
+        fall = 170 * np.clip((tt - 1.95) / 0.6, 0, 1) ** 1.2
+        return np.where(tt < pre, growl_f, burst + strain - fall)
+
+    yd = 2.6
+    u = pre / yd
+    path = [(0.0, V_UH), (u * 0.8, V_RR), (u + 0.03, V_RA), (u + 0.12, V_AA), (0.72, V_AA), (0.82, V_RR), (0.98, V_UH)]
+    rough = [(0, 2.0), (u, 1.5), (u + 0.08, 1.2), (0.45, 2.0), (0.6, 2.4), (1.0, 2.4)]
+    yt = t_axis(yd)
+    body = yell(yd, contour, path, rough, layers=3, detune=0.008, drive=1.7)
+    chest = yell(yd, lambda tt: contour(tt) * 0.5, path, [(0, 2.0), (1, 2.2)], layers=1, drive=1.3)
+    amp = np.where(yt < pre, 0.4 * (yt / pre) ** 1.2, 1.0) * (1 - np.clip((yt - 2.0) / 0.6, 0, 1) ** 1.3)
+    amp = lowpass(amp, 40, 2)
+    x = mix(body * amp, chest * amp * 0.32, bandpass(noise(yd), 1200, 6500) * amp * 0.12)
+    x = mix(x, pad(rage_breath(0.6, 1.0) * 0.22, 2.55), pad(rage_breath(0.5, 1.1) * 0.17, 2.95))
+    x = film_master(x)
+    return finish(reverb(reverb(x, 1.9, 0.22), 0.35, 0.12), 0.95, 0.3)
 
 
 def snarl():
@@ -988,7 +1028,7 @@ SOUNDS = {
     "PounceLeap": pounce_leap, "Scream": scream, "Step": step, "StepMetal": step_metal, "StepHeavy": step_heavy,
     "StepWolverine": step_wolverine, "ClawDig": claw_dig, "ClawStone": claw_stone, "ClawFlesh": claw_flesh,
     "SentinelSwing": sentinel_swing, "SentinelSmash": sentinel_smash, "TerminalHum": terminal_hum,
-    "SentinelWalk": sentinel_walk, "SentinelRun": sentinel_run,
+    "SentinelWalk": sentinel_walk, "SentinelRun": sentinel_run, "RageRoar": rage_roar,
 }
 
 
