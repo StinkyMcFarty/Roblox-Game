@@ -15,3 +15,5 @@ tools/preview/scene.json
 tools/preview/*.png
 __pycache__/
 tools/preview/api.json
+tools/preview/hangar.json
+tools/preview/chars.json

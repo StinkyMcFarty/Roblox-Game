@@ -16,6 +16,12 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
   `render.js` draws it with three.js (clothing templates from `assets/textures/`). Serve the repo
   root on :8765, then `node tools/preview/shot.cjs out.png "scenes=wolverine:Comic/Adamantium&views=25,160"`.
   `npm i` in tools/preview and `pip install lupa pillow` first.
+- Thumbnail / icon (`assets/marketing/`): `tools/preview/thumb_scene.py` builds the Sentinel Hangar with
+  the real `Facility.Build` and poses characters (`ready`, `guard`, `charge` poses) into `hangar.json` /
+  `chars.json`; `thumb.html` renders them with cinematic lights, haze beams, sparks and bloom
+  (`node tools/preview/thumb_shot.cjs out.png "$(cat tools/preview/thumb_thumbnail.query)" 2560 1440`,
+  add `&depth=1` for the depth pass); `thumb_post.py raw depth out W H` adds background depth of
+  field, haze, a painterly Kuwahara pass, the grade, glow, vignette, fringing and grain.
 - **Before pushing server changes run `python3 tools/preview/smoke.py`**: it builds the lobby and the
   round map (`Facility.Build`), and dresses every suit/claw/Sentinel skin and the survivor outfit against a strict mock (Roblox API dump: unknown
   properties, bad enums and wrong value types throw like the engine). A throw in `BuildLobby`
