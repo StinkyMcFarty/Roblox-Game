@@ -563,16 +563,18 @@ local function decorate(core, st, at, w, y0, y1, full, idx)
 		band(8.1, 8.2, 0.14, st.Line)
 		band(8.2, 8.62, 0.14, st.Stripe, M.SmoothPlastic)
 		if full then
-			band(y1 - 0.4, y1, 0.3, st.Line)
+			-- (each style's top trim stops at its own height, so where two
+			-- styles meet at a corner their tops never share a plane)
+			band(y1 - 0.42, y1 - 0.02, 0.3, st.Line)
 		end
 	elseif st.Kind == "Industrial" then
 		band(0, st.LowerH, 0.6, st.Line, M.DiamondPlate)
 		band(7.2, 7.8, 0.64, st.Line, M.Metal)
 		if full then
-			band(y1 - 1, y1, 0.7, st.Line, M.Metal)
+			band(y1 - 1.04, y1 - 0.04, 0.7, st.Line, M.Metal)
 		end
 		-- vertical ribs
-		local top = full and y1 - 1 or y1
+		local top = full and y1 - 1.04 or y1
 		local bottom = math.max(y0, st.LowerH)
 		if top - bottom > 0.3 then
 			local n = math.max(1, math.floor(w / 1.0))
@@ -816,7 +818,14 @@ local function wallRun(parent, ax, az, bx, bz, H, styleName, openings, opts)
 						breakable(core)
 					end
 					decorate(core, st, at, w, sp[1], sp[2], sp[3], idx)
-					if sp[3] and not opts.Plain then
+					-- nothing hung where a door frame's trim would cut through it
+					local byFrame = false
+					for _, op in openings do
+						if math.abs(mid - op.At) < op.W / 2 + w / 2 + 2 then
+							byFrame = true
+						end
+					end
+					if sp[3] and not opts.Plain and not byFrame then
 						for _, side in { -1, 1 } do
 							local probe = (at(0) * CFrame.new(side * 3, 0, 0)).Position
 							if roomAt(probe.X, probe.Z) then
@@ -839,13 +848,13 @@ local function wallRun(parent, ax, az, bx, bz, H, styleName, openings, opts)
 		P(model, Vector3.new(T, uh, len), frame * CFrame.new(0, breakH + uh / 2, -len / 2), st.Core, st.Kind == "Industrial" and rgb(46, 44, 42) or st.Upper)
 		if st.Kind == "Industrial" then
 			for y = breakH + 6, H - 2, 8 do
-				D(model, Vector3.new(T + 1.2, 0.9, len), frame * CFrame.new(0, y, -len / 2), M.Metal, rgb(34, 33, 32))
+				D(model, Vector3.new(T + 1.2, 0.9, len - 0.1), frame * CFrame.new(0, y, -len / 2), M.Metal, rgb(34, 33, 32))
 			end
 			for z = 2, len - 1, 2 do
 				D(model, Vector3.new(T + 0.5, uh - 0.2, 0.4), frame * CFrame.new(0, breakH + uh / 2, -z), M.Metal, rgb(70, 66, 60))
 			end
 		elseif st.Kind == "Concrete" then
-			D(model, Vector3.new(T + 0.2, 0.4, len), frame * CFrame.new(0, breakH + 0.2, -len / 2), M.SmoothPlastic, st.Line)
+			D(model, Vector3.new(T + 0.2, 0.4, len - 0.1), frame * CFrame.new(0, breakH + 0.23, -len / 2), M.SmoothPlastic, st.Line)
 		end
 	end
 
@@ -873,12 +882,32 @@ end
 -- Floors & ceilings
 ---------------------------------------------------------------------------
 
--- One floor everywhere: 4-stud tiles with dark grout, two alternating greys,
--- per-tile shade variation, concrete grain, and the odd cracked or scuffed tile.
-local TILE = { Size = 4, Mat = M.Concrete, A = rgb(84, 87, 93), B = rgb(58, 61, 67), Seam = rgb(14, 15, 17) }
+-- Every kind of room has its own floor: tiles or slabs with dark grout, a
+-- checker of two shades keyed to world position (so tiles line up across
+-- rooms), per-tile shade variation, and on the hard floors the odd cracked,
+-- stained or scuffed tile.
+local FLOORS = {
+	-- steel deck: big diamond-plate panels on welded seams
+	Grate = { Size = 8, Mat = M.DiamondPlate, A = rgb(100, 104, 110), B = rgb(90, 94, 100), Seam = rgb(22, 23, 26), Gap = 0.18, Vary = 0.06, Wear = true },
+	-- bunker corridor: polished concrete slabs with expansion joints
+	Corridor = { Size = 8, Mat = M.Concrete, A = rgb(124, 126, 128), B = rgb(114, 116, 119), Seam = rgb(44, 46, 50), Gap = 0.14, Vary = 0.05, Refl = 0.04, Wear = true },
+	-- hangar apron: heavy concrete slabs
+	Hangar = { Size = 8, Mat = M.Concrete, A = rgb(104, 106, 110), B = rgb(96, 98, 102), Seam = rgb(30, 31, 34), Gap = 0.22, Vary = 0.06, Wear = true },
+	-- clinical: pale terrazzo tiles
+	LabTile = { Size = 4, Mat = M.Marble, A = rgb(184, 190, 196), B = rgb(166, 172, 180), Seam = rgb(104, 108, 114), Gap = 0.1, Vary = 0.04, Refl = 0.05 },
+	-- canteen: cream and charcoal linoleum
+	Checker = { Size = 4, Mat = M.SmoothPlastic, A = rgb(198, 194, 182), B = rgb(62, 66, 74), Seam = rgb(40, 42, 46), Gap = 0.06, Vary = 0.04, Wear = true },
+	-- server core: raised access floor, every so often a perforated vent panel
+	Rubber = { Size = 4, Mat = M.SmoothPlastic, A = rgb(72, 76, 84), B = rgb(66, 70, 78), Seam = rgb(14, 15, 18), Gap = 0.16, Vary = 0.04, Vents = true },
+	-- offices: carpet tiles, a slightly different shade each quarter-turn
+	Carpet = { Size = 4, Mat = M.Fabric, A = rgb(70, 78, 94), B = rgb(62, 70, 86), Seam = rgb(46, 52, 62), Gap = 0.05, Vary = 0.03 },
+	WarmCarpet = { Size = 4, Mat = M.Fabric, A = rgb(104, 90, 80), B = rgb(94, 81, 72), Seam = rgb(62, 54, 48), Gap = 0.05, Vary = 0.03 },
+	-- archive: dark slate
+	DarkTile = { Size = 4, Mat = M.Slate, A = rgb(84, 86, 92), B = rgb(70, 72, 78), Seam = rgb(18, 19, 22), Gap = 0.16, Vary = 0.06, Wear = true },
+}
 
-local function floorTiles(parent, r, _kind, x0, z0, x1, z1)
-	local f = TILE
+local function floorTiles(parent, r, kind, x0, z0, x1, z1)
+	local f = FLOORS[kind] or FLOORS.DarkTile
 	x0, z0, x1, z1 = x0 or r.x0, z0 or r.z0, x1 or r.x1, z1 or r.z1
 	local s = f.Size
 	local nx, nz = math.max(1, math.floor((x1 - x0) / s + 0.5)), math.max(1, math.floor((z1 - z0) / s + 0.5))
@@ -886,21 +915,24 @@ local function floorTiles(parent, r, _kind, x0, z0, x1, z1)
 	P(parent, Vector3.new(x1 - x0, 0.08, z1 - z0), CFrame.new((x0 + x1) / 2, F - 0.12, (z0 + z1) / 2), M.SmoothPlastic, f.Seam)
 	for i = 0, nx - 1 do
 		for j = 0, nz - 1 do
-			-- checker keyed to world position so tiles line up across rooms
 			local wx, wz = x0 + (i + 0.5) * sx, z0 + (j + 0.5) * sz
 			local even = (math.floor(wx / s) + math.floor(wz / s)) % 2 == 0
 			local roll = rng:NextNumber()
 			local base = even and f.A or f.B
-			if roll < 0.04 then
+			if f.Wear and roll < 0.04 then
 				base = base:Lerp(rgb(70, 66, 58), 0.35) -- stained
 			end
-			local tile = P(parent, Vector3.new(sx - 0.22, 0.12, sz - 0.22), CFrame.new(wx, F - 0.06, wz), f.Mat, vary(base, 0.1))
-			if roll > 0.965 then
+			local tile = P(parent, Vector3.new(sx - f.Gap, 0.12, sz - f.Gap), CFrame.new(wx, F - 0.06, wz), f.Mat, vary(base, f.Vary),
+				f.Refl and { Reflectance = f.Refl } or nil)
+			if f.Vents and roll > 0.84 then
+				-- perforated panel: cold air and a blue glow from the plenum
+				grille(tile, N.Top, (sx - f.Gap) * 24, false, rgb(8, 14, 22), rgb(96, 104, 114), 5)
+			elseif f.Wear and roll > 0.965 then
 				-- a hairline crack across the tile
 				local a = rng:NextNumber(-0.8, 0.8)
 				D(tile, Vector3.new(0.05, 0.02, sz * 0.8), CFrame.new(wx, F + 0.01, wz) * CFrame.Angles(0, a, 0), M.SmoothPlastic, rgb(40, 42, 46))
 				D(tile, Vector3.new(0.04, 0.02, sz * 0.35), CFrame.new(wx, F + 0.012, wz) * CFrame.Angles(0, a + 0.7, 0) * CFrame.new(0, 0, -sz * 0.2), M.SmoothPlastic, rgb(40, 42, 46))
-			elseif roll > 0.94 then
+			elseif f.Wear and roll > 0.94 then
 				-- boot scuff
 				D(tile, Vector3.new(rng:NextNumber(0.8, 1.8), 0.02, rng:NextNumber(0.2, 0.4)), CFrame.new(wx + rng:NextNumber(-1, 1), F + 0.01, wz + rng:NextNumber(-1, 1)) * CFrame.Angles(0, rng:NextNumber(0, 3), 0), M.SmoothPlastic, rgb(58, 60, 64), { Transparency = 0.35 })
 			end
@@ -915,7 +947,8 @@ local function floorLine(parent, a, b, width, color, lift)
 end
 
 local function floorText(parent, pos, yaw, w, h, text, color)
-	local p = D(parent, Vector3.new(w, 0.04, h), CFrame.new(pos + Vector3.new(0, 0.02, 0)) * CFrame.Angles(0, yaw, 0), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
+	-- a stencil sits over the painted lines (F+0.04 to F+0.055), under the stains (F+0.095)
+	local p = D(parent, Vector3.new(w, 0.04, h), CFrame.new(pos + Vector3.new(0, 0.046, 0)) * CFrame.Angles(0, yaw, 0), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
 	stencil(p, N.Top, text, color or rgb(226, 190, 40), 20, Enum.Font.GothamBlack)
 end
 
@@ -999,7 +1032,7 @@ local function ceiling(parent, r, kind)
 		for x = r.x0 + band + 6, r.x1 - band - 4, 12 do
 			for z = r.z0 + band + 6, r.z1 - band - 4, 12 do
 				k += 1
-				lightPanel(parent, Vector3.new(x, y - 0.3, z), 3.6, 3.6, rgb(206, 214, 228), k % 2 == 1, r.h + 6)
+				lightPanel(parent, Vector3.new(x, y - 0.3, z), 3.2, 3.2, rgb(206, 214, 228), k % 2 == 1, r.h + 6) -- housing clear of the grid lines
 			end
 		end
 	elseif kind == "Grate" then
@@ -1010,8 +1043,8 @@ local function ceiling(parent, r, kind)
 		local n = math.floor(L / 8)
 		for i = 0, n do
 			local t = (long and r.x0 or r.z0) + i * L / n
-			local pos = long and Vector3.new(t, y - 1, cz) or Vector3.new(cx, y - 1, t)
-			D(parent, long and Vector3.new(0.9, 2, Wd) or Vector3.new(Wd, 2, 0.9), CFrame.new(pos), M.Metal, rgb(150, 150, 152))
+			local pos = long and Vector3.new(t, y - 0.95, cz) or Vector3.new(cx, y - 0.95, t)
+			D(parent, long and Vector3.new(0.9, 1.9, Wd) or Vector3.new(Wd, 1.9, 0.9), CFrame.new(pos), M.Metal, rgb(150, 150, 152))
 			if i < n then
 				local mid = t + L / n / 2
 				local gp = long and Vector3.new(mid, y - 0.4, cz) or Vector3.new(cx, y - 0.4, mid)
@@ -1272,7 +1305,7 @@ local function console(parent, pos, facing, name)
 	D(model, Vector3.new(5.4, 0.3, 3), cf * CFrame.new(0, 3.5, -0.2) * CFrame.Angles(math.rad(14), 0, 0), M.Metal, rgb(28, 30, 34))
 	local keys = D(model, Vector3.new(3.6, 0.12, 1.2), cf * CFrame.new(0, 3.72, -0.6) * CFrame.Angles(math.rad(14), 0, 0), M.SmoothPlastic, rgb(18, 18, 20))
 	grille(keys, N.Top, 86, true, rgb(10, 10, 12), rgb(60, 62, 66), 7)
-	D(model, Vector3.new(5, 0.2, 0.2), cf * CFrame.new(0, 0.3, -1.25), M.Neon, rgb(255, 170, 40))
+	D(model, Vector3.new(4.9, 0.2, 0.2), cf * CFrame.new(0, 0.3, -1.25), M.Neon, rgb(255, 170, 40))
 	-- tilted display on a stand
 	D(model, Vector3.new(0.4, 2.2, 0.4), cf * CFrame.new(0, 4.6, 0.7), M.Metal, rgb(30, 30, 34))
 	D(model, Vector3.new(4.6, 3, 0.3), cf * CFrame.new(0, 6, 0.6) * CFrame.Angles(math.rad(-8), 0, 0), M.Metal, rgb(24, 25, 28))
@@ -1492,7 +1525,7 @@ local function buildAtrium(parent)
 	for i = 1, 14 do
 		local a = rng:NextNumber(0, math.pi * 2)
 		local d = rng:NextNumber(14, 19)
-		D(parent, Vector3.new(rng:NextNumber(0.3, 1.1), 0.05, rng:NextNumber(0.3, 1.1)), CFrame.new(math.cos(a) * d, y0 + 0.04, math.sin(a) * d) * CFrame.Angles(0, rng:NextNumber(0, 6), 0), M.Glass, rgb(170, 210, 220), { Transparency = 0.4 })
+		D(parent, Vector3.new(rng:NextNumber(0.3, 1.1), 0.05, rng:NextNumber(0.3, 1.1)), CFrame.new(math.cos(a) * d, y0 + 0.09, math.sin(a) * d) * CFrame.Angles(0, rng:NextNumber(0, 6), 0), M.Glass, rgb(170, 210, 220), { Transparency = 0.4 })
 	end
 	for i = 1, 9 do
 		D(parent, Vector3.new(rng:NextNumber(0.6, 1.8), 0.03, rng:NextNumber(0.6, 1.6)), CFrame.new(rng:NextNumber(-3, 3), y0 + 0.03, 15 + i * 2.6 + rng:NextNumber(-0.6, 0.6)) * CFrame.Angles(0, rng:NextNumber(0, 6), 0), M.SmoothPlastic, rgb(70, 6, 6))
@@ -1744,7 +1777,7 @@ local function buildFoundry(parent)
 	P(parent, Vector3.new(r.x1 - r.x0 - 16, 0.3, 5), CFrame.new(0, F + 0.15, cz), M.Metal, rgb(34, 32, 30))
 	local lava = D(parent, Vector3.new(r.x1 - r.x0 - 18, 0.1, 3), CFrame.new(0, F + 0.34, cz), M.Neon, rgb(255, 120, 26))
 	for _, s in { -1, 1 } do -- cooling crust along both edges
-		D(parent, Vector3.new(r.x1 - r.x0 - 18, 0.12, 0.7), CFrame.new(0, F + 0.35, cz + s * 1.25), M.CrackedLava, rgb(80, 36, 18))
+		D(parent, Vector3.new(r.x1 - r.x0 - 18.2, 0.12, 0.7), CFrame.new(0, F + 0.35, cz + s * 1.25), M.CrackedLava, rgb(80, 36, 18))
 	end
 	for x = r.x0 + 10, r.x1 - 10, 14 do
 		pointLight(D(parent, Vector3.new(0.2, 0.2, 0.2), CFrame.new(x, F + 1, cz), M.SmoothPlastic, Color3.new(), { Transparency = 1 }), 14, 1.3, rgb(255, 130, 50))
@@ -1917,7 +1950,7 @@ local function buildHangar(parent)
 		D(door, Vector3.new(0.6, 25, 1.8), CFrame.new(x, F + 13, 138.4), M.Metal, rgb(90, 86, 80))
 	end
 	for _, y in { 6, 13, 20 } do
-		D(door, Vector3.new(44, 1, 2), CFrame.new(0, F + y, 138.3), M.Metal, rgb(46, 44, 42))
+		D(door, Vector3.new(43.6, 1, 1.9), CFrame.new(0, F + y, 138.3), M.Metal, rgb(46, 44, 42))
 	end
 	local hz = D(door, Vector3.new(44, 2.4, 0.1), CFrame.new(0, F + 1.4, 137.15), M.SmoothPlastic, rgb(222, 170, 28))
 	hazard(hz, N.Front, 44, 10)
@@ -2008,7 +2041,7 @@ local function cryoPod(parent, pos, facing, specimen)
 	drum(parent, pos + Vector3.new(0, 1.25, 0), 3.8, 0.2, M.Neon, rgb(120, 210, 255), nil, true)
 	local glass = drum(parent, pos + Vector3.new(0, 5.2, 0), 3.8, 7.8, M.Glass, rgb(200, 235, 250), { Transparency = 0.55, Reflectance = 0.2 })
 	breakable(glass)
-	local fog = drum(glass, pos + Vector3.new(0, 5, 0), 3.5, 7.4, M.Neon, rgb(150, 220, 255), { Transparency = 0.78 }, true)
+	local fog = drum(glass, pos + Vector3.new(0, 5.05, 0), 3.5, 7.4, M.Neon, rgb(150, 220, 255), { Transparency = 0.78 }, true)
 	pointLight(fog, 9, 0.8, rgb(150, 220, 255))
 	if specimen then
 		-- a frozen silhouette inside
@@ -2137,7 +2170,7 @@ local function serverRack(parent, cf)
 	end
 	tag(front, "LiveScreen")
 	D(body, Vector3.new(2.9, 0.3, 4.7), cf * CFrame.new(0, 8.75, 0), M.Metal, rgb(40, 42, 46))
-	D(body, Vector3.new(0.12, 7.6, 0.2), cf * CFrame.new(1.2, 4.3, -2.4), M.Metal, rgb(120, 124, 130))
+	D(body, Vector3.new(0.12, 7.6, 0.2), cf * CFrame.new(1.12, 4.3, -2.4), M.Metal, rgb(120, 124, 130))
 	return body
 end
 
@@ -2309,8 +2342,15 @@ local function shelf(parent, cf, len)
 		local x = -len / 2 + 0.6
 		while x < len / 2 - 1 do
 			local w = rng:NextNumber(1.2, 2.2)
-			if rng:NextNumber() < 0.85 then
-				D(parent, Vector3.new(w - 0.1, rng:NextNumber(1.2, 2.1), 2.4), cf * CFrame.new(x + w / 2, y + 0.8, rng:NextNumber(-0.2, 0.2)), M.Cardboard, vary(rgb(150, 120, 86), 0.2))
+			local clear = true
+			for u = -len / 2, len / 2, len / 3 do
+				if math.abs(u - (x + w / 2)) < w / 2 + 0.15 then
+					clear = false -- would cut through an upright
+				end
+			end
+			if clear and rng:NextNumber() < 0.85 then
+				local h = rng:NextNumber(1.2, 2.1)
+				D(parent, Vector3.new(w - 0.1, h, 2.4), cf * CFrame.new(x + w / 2, y + 0.1 + h / 2, rng:NextNumber(-0.2, 0.2)), M.Cardboard, vary(rgb(150, 120, 86), 0.2))
 			end
 			x += w
 		end
@@ -2389,7 +2429,7 @@ end
 
 local function buildCanteen(parent)
 	local r = ROOM.Canteen
-	floorTiles(parent, r, "LabTile")
+	floorTiles(parent, r, "Checker")
 	ceiling(parent, r, "Truss")
 	for _, x in { 70, 84, 97 } do
 		for _, z in { 72, 88, 104, 120 } do
@@ -2421,7 +2461,7 @@ end
 
 local function buildQuarters(parent)
 	local r = ROOM.Quarters
-	floorTiles(parent, r, "Carpet")
+	floorTiles(parent, r, "WarmCarpet")
 	ceiling(parent, r, "Coffered")
 	-- bunk beds
 	for i = 0, 4 do
@@ -2430,7 +2470,7 @@ local function buildQuarters(parent)
 			P(parent, Vector3.new(7, 0.5, 3.2), cf * CFrame.new(0, y, 0), M.Metal, rgb(80, 84, 90))
 			D(parent, Vector3.new(6.6, 0.5, 2.9), cf * CFrame.new(0, y + 0.5, 0), M.Fabric, rgb(210, 214, 220))
 			D(parent, Vector3.new(4.4, 0.2, 3), cf * CFrame.new(0.9, y + 0.8, 0), M.Fabric, rgb(56, 70, 96))
-			D(parent, Vector3.new(1.2, 0.4, 2), cf * CFrame.new(-2.7, y + 0.9, 0), M.Fabric, rgb(236, 236, 236))
+			D(parent, Vector3.new(1.2, 0.4, 2), cf * CFrame.new(-2.65, y + 0.9, 0), M.Fabric, rgb(236, 236, 236))
 		end
 		for _, x in { -3.4, 3.4 } do
 			for _, z in { -1.5, 1.5 } do
@@ -2462,9 +2502,9 @@ local function buildQuarters(parent)
 		P(parent, Vector3.new(7, 0.5, 3.2), cf * CFrame.new(0, 1.6, 0), M.Metal, rgb(80, 84, 90))
 		D(parent, Vector3.new(6.6, 0.5, 2.9), cf * CFrame.new(0, 2.1, 0), M.Fabric, rgb(210, 214, 220))
 		D(parent, Vector3.new(4.4, 0.25, 3), cf * CFrame.new(0.9, 2.45, 0), M.Fabric, rgb(96, 40, 40))
-		D(parent, Vector3.new(1.2, 0.4, 2), cf * CFrame.new(-2.7, 2.5, 0), M.Fabric, rgb(236, 236, 236))
+		D(parent, Vector3.new(1.2, 0.4, 2), cf * CFrame.new(-2.65, 2.5, 0), M.Fabric, rgb(236, 236, 236))
 		for _, x in { -3.4, 3.4 } do
-			D(parent, Vector3.new(0.3, 2.2, 3.2), cf * CFrame.new(x, 1.1, 0), M.Metal, rgb(60, 64, 70))
+			D(parent, Vector3.new(0.3, 2.2, 3.26), cf * CFrame.new(x, 1.1, 0), M.Metal, rgb(60, 64, 70))
 		end
 	end
 	sofa(parent, CFrame.new(122, F, 112) * CFrame.Angles(0, math.rad(90), 0), 3, rgb(70, 40, 36))
@@ -2481,7 +2521,7 @@ end
 
 local function buildReception(parent)
 	local r = ROOM.Reception
-	floorTiles(parent, r, "DarkTile")
+	floorTiles(parent, r, "LabTile")
 	ceiling(parent, r, "Coffered")
 	-- reception counter
 	local c = CFrame.new(-82, F, 108)
@@ -2663,6 +2703,337 @@ local function buildWalls(parent)
 end
 
 ---------------------------------------------------------------------------
+-- LIFE & WEAR: what makes the facility feel lived in and torn up. Steam
+-- venting from floor grates, torn cables spitting sparks, big wall fans
+-- turning, leaks dripping into puddles, oil and grime on the floors, claw
+-- gashes, debris and blood where Subject X has already been, dropped
+-- paperwork, a few failing tubes and amber lockdown beacons sweeping the
+-- halls. client/MapLife animates the tagged parts. The floor layers sit at fixed heights so nothing is coplanar:
+-- painted lines F+0.04 (F+0.055 lifted), stencils F+0.066, the atrium's
+-- glowing floor ring F+0.08, stains F+0.095, paper F+0.13,
+-- grates and puddles F+0.16.
+---------------------------------------------------------------------------
+
+local SPARKLE = "rbxasset://textures/particles/sparkles_main.dds"
+local SMOKE = "rbxasset://textures/particles/smoke_main.dds"
+local function seq(a, b)
+	return NumberSequence.new({ NumberSequenceKeypoint.new(0, a), NumberSequenceKeypoint.new(1, b) })
+end
+
+-- a soft, irregular stain on the floor: a few overlapping round blobs. All
+-- stains share one height, so one that would overlap another is skipped.
+local stainsPlaced = {}
+local function stain(parent, x, z, w, d, yaw, color, alpha)
+	local rad = math.sqrt(w * w + d * d) / 2 -- the rotated rectangle's reach
+	if Vector2.new(x, z).Magnitude < 23 + rad then
+		return nil -- the atrium's layered floor discs already fill those heights
+	end
+	for _, o in stainsPlaced do
+		if (Vector2.new(x, z) - o[1]).Magnitude < rad + o[2] + 0.2 then
+			return nil
+		end
+	end
+	table.insert(stainsPlaced, { Vector2.new(x, z), rad })
+	local p = D(parent, Vector3.new(w, 0.02, d), CFrame.new(x, F + 0.085, z) * CFrame.Angles(0, yaw, 0), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false })
+	local g = sgui(p, N.Top, 12)
+	for _ = 1, 3 do
+		local b = fr(g, {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5 + rng:NextNumber(-0.16, 0.16), 0.5 + rng:NextNumber(-0.16, 0.16)),
+			Size = UDim2.fromScale(rng:NextNumber(0.55, 0.95), rng:NextNumber(0.55, 0.95)),
+			BackgroundColor3 = color,
+			BackgroundTransparency = alpha + rng:NextNumber(0, 0.12),
+		})
+		make("UICorner", b, { CornerRadius = UDim.new(0.5, 0) })
+	end
+	return p
+end
+
+-- a floor grate breathing steam, with a bigger hiss now and then
+local function steamVent(parent, x, z)
+	local g = D(parent, Vector3.new(2.6, 0.06, 2.6), CFrame.new(x, F + 0.13, z), M.Metal, rgb(40, 42, 46), { CanCollide = false })
+	grille(g, N.Top, 2.6 * 24, false, rgb(10, 10, 12), rgb(84, 88, 94), 6)
+	D(parent, Vector3.new(2.9, 0.04, 2.9), CFrame.new(x, F + 0.12, z), M.Metal, rgb(26, 27, 30), { CanCollide = false }) -- frame
+	local src = D(parent, Vector3.new(2.2, 0.2, 2.2), CFrame.new(x, F + 0.4, z), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false })
+	make("ParticleEmitter", src, {
+		Name = "Steam", Texture = SMOKE, Shape = Enum.ParticleEmitterShape.Box,
+		Color = ColorSequence.new(rgb(228, 232, 238)), LightEmission = 0.1, LightInfluence = 1,
+		Size = seq(1.2, 5.5), Transparency = seq(0.55, 1),
+		Lifetime = NumberRange.new(1.6, 2.8), Rate = 3, Speed = NumberRange.new(5, 9), SpreadAngle = Vector2.new(14, 14),
+		Acceleration = Vector3.new(0, 1.5, 0), Drag = 1.2, Rotation = NumberRange.new(0, 360), RotSpeed = NumberRange.new(-40, 40),
+		EmissionDirection = N.Top,
+	})
+	tag(src, "SteamBurst")
+end
+
+-- a cable torn out of the ceiling, frayed copper at its end spitting sparks
+local function tornCable(parent, x, z, top)
+	local a = Vector3.new(x, top, z)
+	local tip = Vector3.new(x + rng:NextNumber(-1.2, 1.2), top - rng:NextNumber(3.2, 4.6), z + rng:NextNumber(-1.2, 1.2))
+	D(parent, Vector3.new(1, 0.4, 1), CFrame.new(a + Vector3.new(0, 0.2, 0)), M.Metal, rgb(34, 36, 40), { CanCollide = false }) -- the ripped junction box
+	cable(a, tip, 0.4, 0.28, rgb(20, 20, 22))
+	cable(a + Vector3.new(0.3, 0, 0.2), tip + Vector3.new(0.35, 0.7, -0.2), 0.3, 0.2, rgb(150, 30, 24))
+	for _ = 1, 3 do
+		D(parent, Vector3.new(0.05, 0.4, 0.05), CFrame.new(tip) * CFrame.Angles(rng:NextNumber(-0.8, 0.8), 0, rng:NextNumber(-0.8, 0.8)) * CFrame.new(0, -0.18, 0), M.Metal, rgb(200, 120, 60), { CanCollide = false })
+	end
+	local spark = D(parent, Vector3.new(0.18, 0.18, 0.18), CFrame.new(tip), M.Neon, rgb(255, 170, 70), { CanCollide = false })
+	make("ParticleEmitter", spark, {
+		Name = "Sparks", Texture = SPARKLE,
+		Color = ColorSequence.new(rgb(255, 232, 150), rgb(255, 120, 30)), LightEmission = 1, LightInfluence = 0,
+		Size = seq(0.22, 0), Lifetime = NumberRange.new(0.4, 0.9), Rate = 0, Speed = NumberRange.new(4, 12),
+		SpreadAngle = Vector2.new(70, 70), Acceleration = Vector3.new(0, -40, 0), Drag = 1.5, EmissionDirection = N.Bottom,
+	})
+	pointLight(spark, 14, 0, rgb(170, 205, 255)) -- dark until MapLife flashes it
+	tag(spark, "Sparks")
+end
+
+-- A big extractor fan on a wall: a dark throat, a ring housing, a guard and
+-- five blades that turn (client/MapLife spins the "Spin" model).
+-- cf sits on the wall face, facing into the room (-Z out).
+local function wallFan(parent, cf, r)
+	local dark = rgb(34, 36, 40)
+	local out = CFrame.Angles(0, math.rad(90), 0) -- a cylinder along the fan's axis
+	D(parent, Vector3.new(0.12, r * 2 + 0.3, r * 2 + 0.3), cf * CFrame.new(0, 0, -0.08) * out, M.SmoothPlastic, rgb(10, 10, 12), { Shape = Enum.PartType.Cylinder })
+	for k = 0, 15 do -- the ring
+		local a = k / 16 * math.pi * 2
+		D(parent, Vector3.new(0.4, 2 * math.pi * (r + 0.2) / 16 * 1.12, 0.7), cf * CFrame.Angles(0, 0, a) * CFrame.new(r + 0.2, 0, -0.4), M.Metal, dark)
+	end
+	for _, a in { 0, 90 } do -- guard bars
+		D(parent, Vector3.new(r * 2 + 0.2, 0.1, 0.1), cf * CFrame.Angles(0, 0, math.rad(a + 45)) * CFrame.new(0, 0, -0.78), M.Metal, rgb(60, 62, 68), { CanCollide = false })
+	end
+	local blades = Instance.new("Model")
+	blades.Name = "FanBlades"
+	D(blades, Vector3.new(0.4, 0.9, 0.9), cf * CFrame.new(0, 0, -0.4) * out, M.Metal, rgb(70, 72, 78), { Shape = Enum.PartType.Cylinder, CanCollide = false })
+	for k = 0, 4 do
+		local a = k / 5 * math.pi * 2
+		D(blades, Vector3.new(0.9, r - 0.35, 0.06), cf * CFrame.new(0, 0, -0.42) * CFrame.Angles(0, 0, a) * CFrame.new(0, (r - 0.35) / 2 + 0.3, 0) * CFrame.Angles(0, math.rad(28), 0), M.Metal, rgb(92, 96, 104), { CanCollide = false })
+	end
+	blades.WorldPivot = cf * CFrame.new(0, 0, -0.4) -- turns about the fan's axis (its Z)
+	blades:SetAttribute("Speed", rng:NextNumber(5, 9))
+	blades.Parent = parent
+	tag(blades, "Spin")
+end
+
+-- a leak: water dripping from the ceiling into a puddle
+local function leak(parent, x, z, top, size)
+	D(parent, Vector3.new(0.04, size, size), CFrame.new(x, F + 0.14, z) * CFrame.Angles(0, 0, math.rad(90)), M.Glass, rgb(64, 78, 92),
+		{ Shape = Enum.PartType.Cylinder, Transparency = 0.3, Reflectance = 0.3, CanCollide = false })
+	local src = D(parent, Vector3.new(0.3, 0.1, 0.3), CFrame.new(x + 0.2, top - 0.4, z), M.Metal, rgb(90, 64, 40), { CanCollide = false }) -- the rusty seam it drips from
+	local h = top - 0.4 - F
+	make("ParticleEmitter", src, {
+		Name = "Drip", Texture = SPARKLE,
+		Color = ColorSequence.new(rgb(190, 215, 235)), LightEmission = 0.3, LightInfluence = 1,
+		Size = seq(0.12, 0.1), Transparency = seq(0.1, 0.3),
+		Lifetime = NumberRange.new(math.sqrt(2 * h / 60)), Rate = 1.6, Speed = NumberRange.new(0),
+		Acceleration = Vector3.new(0, -60, 0), EmissionDirection = N.Bottom,
+	})
+end
+
+-- Three claw gashes torn into a wall by Subject X. cf sits on the wall face
+-- facing into the room (-Z out); `out` clears that wall's trim.
+local function wallGashes(parent, cf, len, out)
+	for i = -1, 1 do
+		local base = cf * CFrame.Angles(0, 0, math.rad(-18)) * CFrame.new(i * 1.1, i == 0 and 0.3 or 0, -out)
+		local n = 6
+		for k = 0, n - 1 do
+			local t = (k + 0.5) / n
+			local w = 0.12 + 0.42 * math.sin(math.pi * t) ^ 0.7
+			local seg = base * CFrame.new(0.5 * 4 * t * (1 - t), (t - 0.5) * len, 0)
+			D(parent, Vector3.new(w, len / n + 0.04, 0.3), seg * CFrame.new(0, 0, 0.12), M.Slate, rgb(10, 9, 9), { CanCollide = false })
+			for _, s in { -1, 1 } do -- the torn bright edges
+				D(parent, Vector3.new(0.08, len / n + 0.04, 0.34), seg * CFrame.new(s * (w / 2 + 0.03), 0, 0.08), M.Metal, rgb(196, 198, 204), { CanCollide = false, Reflectance = 0.2 })
+			end
+		end
+	end
+	-- chunks knocked out of the wall
+	local foot = (cf * CFrame.new(0, 0, -1.4)).Position
+	for _ = 1, 6 do
+		local s = rng:NextNumber(0.3, 0.8)
+		D(parent, Vector3.new(s, s * 0.7, s), CFrame.new(foot.X + rng:NextNumber(-1.6, 1.6), F + s * 0.35, foot.Z + rng:NextNumber(-1.6, 1.6))
+			* CFrame.Angles(rng:NextNumber(0, 3), rng:NextNumber(0, 3), 0), M.Concrete, rgb(96, 96, 100), { CanCollide = false })
+	end
+end
+
+-- a failing fluorescent tube hanging off one chain, flickering
+local function brokenTube(parent, x, z, top, yaw)
+	local hang = CFrame.new(x, top - 1.8, z) * CFrame.Angles(0, yaw, math.rad(22))
+	D(parent, Vector3.new(4.2, 0.3, 0.6), hang * CFrame.new(0, 0.24, 0), M.Metal, rgb(52, 54, 58), { CanCollide = false })
+	local tube = D(parent, Vector3.new(3.9, 0.16, 0.16), hang, M.Neon, rgb(210, 226, 255), { CanCollide = false })
+	pointLight(tube, 16, 0.8, rgb(200, 220, 255))
+	tag(tube, "Flicker")
+	local hook = (hang * CFrame.new(-2, 0.35, 0)).Position
+	cable(Vector3.new(hook.X, top, hook.Z), hook, 0, 0.08, rgb(40, 40, 42))
+end
+
+-- A lockdown beacon hanging from the roof steel: an amber dome with a lamp
+-- and reflector turning inside it, sweeping a beam round the room
+-- (client/MapLife turns the "Spin" model about its Y axis). pos is the
+-- dome's centre, poleTop the underside of the steel it hangs from, tilt how
+-- far the beam dips (radians).
+local function beacon(parent, pos, poleTop, tilt, reach)
+	local dark, amber = rgb(30, 31, 34), rgb(255, 150, 40)
+	local y = Vector3.yAxis
+	cyl(parent, pos + y * 0.85, Vector3.new(pos.X, poleTop, pos.Z), 0.22, M.Metal, dark, nil, true)
+	D(parent, Vector3.new(1.2, 0.12, 1.2), CFrame.new(pos.X, poleTop - 0.1, pos.Z), M.Metal, dark) -- clamp plate
+	drum(parent, pos + y * 0.66, 1.4, 0.42, M.Metal, dark, nil, true)
+	drum(parent, pos, 1.1, 0.9, M.Glass, amber, { Transparency = 0.45, Reflectance = 0.1 }, true)
+	drum(parent, pos - y * 0.5, 0.8, 0.12, M.Metal, dark, nil, true)
+	for k = 0, 3 do -- guard cage
+		local a = k / 4 * math.pi * 2 + math.pi / 4
+		D(parent, Vector3.new(0.08, 1.04, 0.08), CFrame.new(pos + Vector3.new(math.cos(a) * 0.62, -0.02, math.sin(a) * 0.62)), M.Metal, dark)
+	end
+	local spin = Instance.new("Model")
+	spin.Name = "BeaconSpin"
+	local ghost = { CanCollide = false }
+	D(spin, Vector3.new(0.34, 0.34, 0.34), CFrame.new(pos), M.Neon, rgb(255, 204, 130), { Shape = Enum.PartType.Ball, CanCollide = false })
+	for k = -1, 1 do -- a curved reflector behind the lamp
+		D(spin, Vector3.new(0.26, 0.64, 0.05), CFrame.new(pos) * CFrame.Angles(0, k * 0.52, 0) * CFrame.new(0, 0, 0.34), M.Foil, rgb(255, 196, 120), ghost)
+	end
+	local head = D(spin, Vector3.new(0.2, 0.2, 0.2), CFrame.new(pos) * CFrame.Angles(-tilt, 0, 0), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false })
+	lightBudget += 1
+	make("SpotLight", head, { Face = N.Front, Range = 36, Brightness = 7, Color = amber, Angle = 34, Shadows = false })
+	-- the visible shaft of light, swept round with the lamp
+	local a0 = make("Attachment", head, { Position = Vector3.new(0, 0, -0.3) })
+	local a1 = make("Attachment", head, { Position = Vector3.new(0, 0, -reach) })
+	make("Beam", head, {
+		Attachment0 = a0, Attachment1 = a1, Width0 = 0.7, Width1 = reach * 0.55, FaceCamera = true, Segments = 1,
+		Color = ColorSequence.new(rgb(255, 176, 80)), LightEmission = 1, LightInfluence = 0,
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.55), NumberSequenceKeypoint.new(0.6, 0.86), NumberSequenceKeypoint.new(1, 1) }),
+	})
+	spin.WorldPivot = CFrame.new(pos)
+	spin:SetAttribute("Speed", 4.2)
+	spin:SetAttribute("Axis", "Y")
+	spin.Parent = parent
+	tag(spin, "Spin")
+end
+
+local function lifeAndWear(parent, keepClear)
+	stainsPlaced = {}
+	local function free(x, z, pad)
+		if not clearAt(x, z, pad) then
+			return false
+		end
+		for _, p in keepClear do
+			if (Vector3.new(x, 0, z) - Vector3.new(p.X, 0, p.Z)).Magnitude < pad + 5 then
+				return false
+			end
+		end
+		return true
+	end
+	local function top(x, z)
+		local r = roomAt(x, z)
+		return F + (r and r.h or 16) - 1.4
+	end
+
+	-- steam through floor grates
+	for _, v in {
+		{ -44, -74 }, { 40, -96 }, { -18, -128 }, { 12, -64 }, -- Foundry
+		{ 66, -66 }, { 150, -70 }, { 72, -130 }, { 150, -130 }, -- Reactor
+		{ -49, -49 }, { 49, -49 }, { -49, 49 }, { 49, 49 }, -- Ring corners
+		{ -50, 62 }, { 50, 134 }, -- Hangar
+	} do
+		if free(v[1], v[2], 2) then
+			steamVent(parent, v[1], v[2])
+		end
+	end
+	-- torn cables spitting sparks
+	for _, v in {
+		{ -20, -49 }, { 28, 49 }, { -49, -24 }, { 49, 26 }, { -134, 40 }, { -70, -44 },
+		{ 70, -44 }, { -120, -128 }, { 70, 132 }, { -150, 64 }, { 120, -62 },
+	} do
+		tornCable(parent, v[1], v[2], top(v[1], v[2]))
+	end
+	-- extractor fans high on the outer walls
+	for _, v in {
+		{ Vector3.new(160, F + 14, -110), Vector3.new(-1, 0, 0) }, { Vector3.new(160, F + 14, -84), Vector3.new(-1, 0, 0) }, -- Reactor
+		{ Vector3.new(-160, F + 12, -24), Vector3.new(1, 0, 0) }, { Vector3.new(-160, F + 12, 24), Vector3.new(1, 0, 0) }, -- Server core
+		{ Vector3.new(-30, F + 19, -140), Vector3.new(0, 0, 1) }, { Vector3.new(30, F + 19, -140), Vector3.new(0, 0, 1) }, -- Foundry
+	} do
+		wallFan(parent, CFrame.lookAt(v[1], v[1] + v[2]), 2.4)
+	end
+	-- leaks
+	local puddles = {}
+	for _, v in { { 120, -30, 3.4 }, { 150, 10, 2.6 }, { 128, 42, 3 }, { -30, 49, 3 }, { 49, -20, 2.4 }, { 84, 132, 2.8 }, { -150, 132, 2.6 }, { 150, 100, 2.4 } } do
+		if free(v[1], v[2], 2) then
+			leak(parent, v[1], v[2], top(v[1], v[2]) + 1.2, v[3])
+			table.insert(puddles, v)
+		end
+	end
+	-- where he's already been: gashes, debris, blood
+	local CONCRETE, OFFICE, STEEL = 0.32, 0.32, 0.45
+	for _, v in {
+		{ Vector3.new(-35, F + 5.5, -55.3), Vector3.new(0, 0, 1), CONCRETE, true }, -- Ring N
+		{ Vector3.new(18, F + 5.5, 55.3), Vector3.new(0, 0, -1), CONCRETE, true }, -- Ring S
+		{ Vector3.new(107.4, F + 5, 100), Vector3.new(-1, 0, 0), OFFICE, true }, -- Canteen
+		{ Vector3.new(-130, F + 5, -140), Vector3.new(0, 0, 1), OFFICE, false }, -- Archive
+		{ Vector3.new(-160, F + 5, 92), Vector3.new(1, 0, 0), OFFICE, true }, -- Surgery
+		{ Vector3.new(107.4, F + 5, -48), Vector3.new(-1, 0, 0), OFFICE, false }, -- Genetics
+		{ Vector3.new(-107.4, F + 5, 48), Vector3.new(1, 0, 0), OFFICE, true }, -- Command
+		{ Vector3.new(44, F + 6, -140), Vector3.new(0, 0, 1), STEEL, false }, -- Foundry
+	} do
+		wallGashes(parent, CFrame.lookAt(v[1], v[1] + v[2]), 7, v[3])
+		if v[4] then
+			local at = v[1] + v[2] * 3.2
+			stain(parent, at.X, at.Z, 3.2, 2.6, rng:NextNumber(0, 3), rgb(78, 6, 6), 0.2)
+			local drag = v[1] + v[2] * 9 + v[2]:Cross(Vector3.yAxis) * rng:NextNumber(-2, 2)
+			stain(parent, drag.X, drag.Z, 1.2, 6, math.atan2(v[2].X, v[2].Z) + rng:NextNumber(-0.4, 0.4), rgb(70, 6, 6), 0.35)
+		end
+	end
+	-- oil, rust and grime ground into the floors
+	for _, r in ROOMS do
+		local industrial = r.Id == "Foundry" or r.Id == "Reactor" or r.Id == "Hangar"
+		local n = math.floor((r.x1 - r.x0) * (r.z1 - r.z0) / 230)
+		for _ = 1, n do
+			local x, z = rng:NextNumber(r.x0 + 2, r.x1 - 2), rng:NextNumber(r.z0 + 2, r.z1 - 2)
+			local wet = false
+			for _, p in puddles do
+				if (Vector2.new(x, z) - Vector2.new(p[1], p[2])).Magnitude < p[3] + 3 then
+					wet = true
+				end
+			end
+			if not wet and clearAt(x, z, 0) then
+				local roll = rng:NextNumber()
+				local s = rng:NextNumber(1.6, industrial and 5.5 or 3.5)
+				if industrial and roll < 0.55 then
+					stain(parent, x, z, s, s * rng:NextNumber(0.5, 0.9), rng:NextNumber(0, 3), rgb(20, 16, 12), 0.42) -- oil
+				elseif industrial and roll < 0.75 then
+					stain(parent, x, z, s, s * 0.7, rng:NextNumber(0, 3), rgb(86, 48, 22), 0.6) -- rust
+				else
+					stain(parent, x, z, s, s * 0.8, rng:NextNumber(0, 3), rgb(26, 26, 30), 0.66) -- grime
+				end
+			end
+		end
+	end
+	-- paperwork everyone dropped running for it
+	for _, b in { { -156, -136, -60, -60, 32 }, { -104, -52, -60, 52, 14 }, { -104, 60, -60, 136, 12 } } do
+		for _ = 1, b[5] do
+			local x, z = rng:NextNumber(b[1], b[3]), rng:NextNumber(b[2], b[4])
+			if clearAt(x, z, 0) then
+				D(parent, Vector3.new(0.85, 0.02, 1.1), CFrame.new(x, F + 0.12, z) * CFrame.Angles(0, rng:NextNumber(0, 6.28), 0), M.SmoothPlastic,
+					rng:NextNumber() < 0.8 and rgb(232, 230, 222) or rgb(236, 220, 150), { CanCollide = false })
+			end
+		end
+	end
+	-- lockdown beacons: from the ring's cross beams and the big rooms' trusses
+	for _, v in { { -32, -49 }, { 32, -49 }, { -32, 49 }, { 32, 49 }, { -49, 0 }, { 49, 0 } } do
+		beacon(parent, Vector3.new(v[1], F + 12.6, v[2]), F + 14.1, math.rad(12), 6)
+	end
+	for _, v in {
+		{ -24, -103, "Foundry" }, { 24, -103, "Foundry" },
+		{ 56 + 104 / 6, -103, "Reactor" }, { 160 - 104 / 6, -103, "Reactor" },
+		{ -24, 93, "Hangar" }, { 24, 93, "Hangar" },
+		{ -23, 25.2, "Atrium" }, { 23, -25.2, "Atrium" },
+	} do
+		local h = ROOM[v[3]].h
+		beacon(parent, Vector3.new(v[1], F + h - 5.6, v[2]), F + h - 3.9, math.rad(30), 16)
+	end
+	-- failing tubes in the ring
+	for _, v in { { 10, -49, 0 }, { -49, 30, math.pi / 2 }, { -10, 49, 0 }, { 49, -30, math.pi / 2 } } do
+		brokenTube(parent, v[1], v[2], top(v[1], v[2]) + 1.2, v[3])
+	end
+end
+
+---------------------------------------------------------------------------
 -- Build
 ---------------------------------------------------------------------------
 
@@ -2733,6 +3104,11 @@ local function build()
 		local m = console(terminalsFolder, spot[2], spot[3], ("Terminal_%s_%d"):format(spot[1], i))
 		m:SetAttribute("Wing", spot[1])
 	end
+	local consoles = {}
+	for _, spot in TERMINAL_SPOTS do
+		table.insert(consoles, spot[2])
+	end
+	lifeAndWear(props, consoles)
 
 	-- Everything Wolverine or a Sentinel could reasonably wreck is breakable:
 	-- furniture, machines, screens, pods, pillars, door frames... Not the floor,
