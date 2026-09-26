@@ -1768,8 +1768,8 @@ end
 
 -- A little theatre stage light: a can on a yoke with a glowing lens and
 -- barn doors, hung from `top` and aimed at `target`, with a soft shaft of
--- light showing in the air.
-local function stageLight(parent, top, target, color)
+-- light showing in the air. `range`/`brightness` default to a display case.
+local function stageLight(parent, top, target, color, range, brightness)
 	local at = top - Vector3.new(0, 0.55, 0)
 	local cf = CFrame.lookAt(at, target)
 	local dark = rgb(26, 26, 30)
@@ -1786,7 +1786,7 @@ local function stageLight(parent, top, target, color)
 		fitting(parent, Vector3.new(0.72, 0.03, 0.34), cf * CFrame.new(0, s * 0.42, -0.52) * CFrame.Angles(math.rad(s * 38), 0, 0), M.Metal, dark)
 	end
 	local emit = fitting(parent, Vector3.new(0.2, 0.2, 0.2), cf * CFrame.new(0, 0, -0.46), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false })
-	make("SpotLight", emit, { Face = Enum.NormalId.Front, Range = 10, Angle = 48, Brightness = 4.5, Color = color })
+	make("SpotLight", emit, { Face = Enum.NormalId.Front, Range = range or 10, Angle = 48, Brightness = brightness or 4.5, Color = color })
 	local a0 = make("Attachment", emit, {})
 	local a1 = make("Attachment", emit, { Position = Vector3.new(0, 0, -(target - emit.Position).Magnitude) })
 	make("Beam", emit, {
@@ -1907,14 +1907,110 @@ end
 -- the facility's canteen stocks the same machines (Facility.lua)
 MapBuilder.VendingMachine = vendingMachine
 
+-- A button-tufted leather Chesterfield at cf (facing -Z, its back on +Z):
+-- turned wooden feet, a deep seat with three cushions and a rolled front
+-- edge, a tufted back, rolled arms and two throw pillows.
+local CYL_X = CFrame.Angles(0, 0, 0) -- a cylinder already lies along X
+local CYL_Z = CFrame.Angles(0, math.rad(90), 0)
+local CYL_Y = CFrame.Angles(0, 0, math.rad(90))
 local function couch(parent, cf, color)
-	block(parent, Vector3.new(10, 1.6, 4), cf * CFrame.new(0, 1.2, 0), M.Fabric, color)
-	block(parent, Vector3.new(10, 3, 1.2), cf * CFrame.new(0, 2.6, 1.6), M.Fabric, color)
-	for _, x in { -5.3, 5.3 } do
-		block(parent, Vector3.new(0.9, 2.4, 4.08), cf * CFrame.new(x, 1.81, 0), M.Fabric, color)
+	local seam, wood = color:Lerp(Color3.new(0, 0, 0), 0.35), rgb(46, 28, 18)
+	for _, x in { -4.6, 4.6 } do
+		for _, z in { -1.5, 1.5 } do -- turned feet
+			block(parent, Vector3.new(0.7, 0.5, 0.5), cf * CFrame.new(x, 0.35, z) * CYL_Y, M.Wood, wood, { Shape = Enum.PartType.Cylinder })
+			block(parent, Vector3.new(0.12, 0.66, 0.66), cf * CFrame.new(x, 0.62, z) * CYL_Y, M.Wood, wood, { Shape = Enum.PartType.Cylinder })
+		end
 	end
-	for _, x in { -3.3, 0, 3.3 } do
-		block(parent, Vector3.new(3.1, 0.6, 3.4), cf * CFrame.new(x, 2.2, -0.2), M.Fabric, vary(color, 0.15))
+	block(parent, Vector3.new(9.6, 1.1, 3.8), cf * CFrame.new(0, 1.25, 0.1), M.Leather, color) -- base
+	block(parent, Vector3.new(9.64, 0.12, 3.84), cf * CFrame.new(0, 0.74, 0.1), M.Leather, seam) -- welt
+	for _, x in { -2.9, 0, 2.9 } do -- seat cushions, each with a rolled front
+		block(parent, Vector3.new(2.84, 0.6, 3), cf * CFrame.new(x, 2.1, -0.15), M.Leather, vary(color, 0.05))
+		block(parent, Vector3.new(2.8, 0.66, 0.66), cf * CFrame.new(x, 2.08, -1.62) * CYL_X, M.Leather, vary(color, 0.05), { Shape = Enum.PartType.Cylinder })
+	end
+	local back = block(parent, Vector3.new(9.6, 2.9, 0.9), cf * CFrame.new(0, 3.1, 1.55), M.Leather, color)
+	for row = 0, 1 do -- tufting buttons across the back
+		for k = 0, 7 - row do
+			local x = -3.9 + k * 1.1 + row * 0.55
+			block(parent, Vector3.new(0.16, 0.16, 0.16), cf * CFrame.new(x, 3.5 + row * 0.8, 1.08), M.Leather, seam, { Shape = Enum.PartType.Ball })
+		end
+	end
+	block(parent, Vector3.new(9.64, 0.9, 0.9), cf * CFrame.new(0, 4.55, 1.55) * CYL_X, M.Leather, color, { Shape = Enum.PartType.Cylinder }) -- rolled top
+	_ = back
+	for _, x in { -5.05, 5.05 } do -- rolled arms
+		block(parent, Vector3.new(0.9, 2.2, 3.8), cf * CFrame.new(x, 1.9, 0.1), M.Leather, color)
+		block(parent, Vector3.new(3.86, 1.2, 1.2), cf * CFrame.new(x + (x > 0 and 0.08 or -0.08), 3.05, 0.1) * CYL_Z, M.Leather, color, { Shape = Enum.PartType.Cylinder })
+		block(parent, Vector3.new(0.14, 1, 1), cf * CFrame.new(x + (x > 0 and 0.08 or -0.08), 3.05, -1.9) * CYL_Z, M.Leather, seam, { Shape = Enum.PartType.Cylinder }) -- arm face
+	end
+	for i, x in { -3.9, 3.9 } do -- throw pillows, leaning in the corners
+		local c = i == 1 and rgb(150, 28, 32) or rgb(196, 150, 60)
+		block(parent, Vector3.new(1.7, 1.5, 0.45), cf * CFrame.new(x, 3, 0.75) * CFrame.Angles(math.rad(-16), math.rad(x > 0 and -18 or 18), 0), M.Fabric, c)
+	end
+end
+
+-- A lounge rug centred at pos: a deep red carpet with a gold border, a
+-- diamond medallion and a white fringe along its ends.
+local function loungeRug(parent, pos, w, d)
+	local red, gold, dark = rgb(118, 26, 30), rgb(196, 150, 70), rgb(58, 12, 16)
+	block(parent, Vector3.new(w, 0.06, d), CFrame.new(pos + Vector3.new(0, 0.03, 0)), M.Carpet, red)
+	for _, band in { { 1.1, 0.5, gold }, { 1.9, 0.9, dark } } do
+		local inset, bw, c = band[1], band[2], band[3]
+		for _, s in { -1, 1 } do
+			block(parent, Vector3.new(w - inset * 2, 0.09, bw), CFrame.new(pos + Vector3.new(0, 0.045, s * (d / 2 - inset))), M.Carpet, c)
+			block(parent, Vector3.new(bw, 0.09, d - inset * 2 - bw), CFrame.new(pos + Vector3.new(s * (w / 2 - inset), 0.045, 0)), M.Carpet, c)
+		end
+	end
+	block(parent, Vector3.new(6, 0.1, 6), CFrame.new(pos + Vector3.new(0, 0.05, 0)) * CFrame.Angles(0, math.rad(45), 0), M.Carpet, gold)
+	block(parent, Vector3.new(4.4, 0.12, 4.4), CFrame.new(pos + Vector3.new(0, 0.06, 0)) * CFrame.Angles(0, math.rad(45), 0), M.Carpet, dark)
+	block(parent, Vector3.new(1.8, 0.14, 1.8), CFrame.new(pos + Vector3.new(0, 0.07, 0)) * CFrame.Angles(0, math.rad(45), 0), M.Carpet, red)
+	for _, s in { -1, 1 } do -- fringe on the short ends
+		for x = -w / 2 + 0.4, w / 2 - 0.3, 0.45 do
+			block(parent, Vector3.new(0.12, 0.03, 0.55), CFrame.new(pos + Vector3.new(x, 0.015, s * (d / 2 + 0.25))), M.Fabric, rgb(226, 220, 204), { CanCollide = false })
+		end
+	end
+end
+
+-- A walnut coffee table at pos (long side along X): a thick top with an
+-- apron, tapered legs, a shelf of magazines, and on top a tray with two
+-- mugs of coffee, a stack of books and a little potted plant.
+local function coffeeTable(parent, pos)
+	local wood, dark = rgb(92, 58, 34), rgb(64, 40, 24)
+	local cf = CFrame.new(pos)
+	block(parent, Vector3.new(6.2, 0.3, 3.6), cf * CFrame.new(0, 2.05, 0), M.WoodPlanks, wood)
+	block(parent, Vector3.new(5.8, 0.4, 3.2), cf * CFrame.new(0, 1.72, 0), M.Wood, dark) -- apron
+	for _, x in { -2.7, 2.7 } do
+		for _, z in { -1.4, 1.4 } do
+			block(parent, Vector3.new(0.34, 1.7, 0.34), cf * CFrame.new(x, 0.85, z) * CFrame.Angles(math.rad(z > 0 and -4 or 4), 0, math.rad(x > 0 and 4 or -4)), M.Wood, dark)
+		end
+	end
+	block(parent, Vector3.new(5.4, 0.16, 2.8), cf * CFrame.new(0, 0.55, 0), M.WoodPlanks, wood) -- shelf
+	for k, c in { rgb(180, 40, 40), rgb(40, 90, 150), rgb(220, 200, 80) } do
+		block(parent, Vector3.new(1.4, 0.06, 1.9), cf * CFrame.new(-1.2 + k * 0.25, 0.66 + k * 0.06, 0) * CFrame.Angles(0, math.rad(k * 9 - 12), 0), M.SmoothPlastic, c)
+	end
+	-- tray and two mugs
+	local tray = cf * CFrame.new(-1.3, 2.23, 0.1) * CFrame.Angles(0, math.rad(8), 0)
+	block(parent, Vector3.new(2.4, 0.06, 1.5), tray, M.Metal, rgb(170, 172, 178), { Reflectance = 0.2 })
+	for _, s in { -1, 1 } do
+		-- rims straddle the tray's edges (never flush with them)
+		block(parent, Vector3.new(2.44, 0.16, 0.06), tray * CFrame.new(0, 0.08, s * 0.75), M.Metal, rgb(150, 152, 158))
+		block(parent, Vector3.new(0.06, 0.16, 1.54), tray * CFrame.new(s * 1.21, 0.08, 0), M.Metal, rgb(150, 152, 158))
+	end
+	for i, c in { rgb(200, 40, 40), rgb(236, 236, 230) } do
+		local mug = tray * CFrame.new(i == 1 and -0.5 or 0.55, 0.3, i == 1 and 0.1 or -0.15)
+		block(parent, Vector3.new(0.5, 0.46, 0.46), mug * CYL_Y, M.SmoothPlastic, c, { Shape = Enum.PartType.Cylinder })
+		block(parent, Vector3.new(0.02, 0.38, 0.38), mug * CFrame.new(0, 0.255, 0) * CYL_Y, M.SmoothPlastic, rgb(60, 34, 20), { Shape = Enum.PartType.Cylinder }) -- coffee
+		block(parent, Vector3.new(0.08, 0.3, 0.2), mug * CFrame.new(0.28, 0, 0), M.SmoothPlastic, c) -- handle
+	end
+	-- books
+	for k, c in { rgb(40, 60, 110), rgb(120, 30, 30), rgb(30, 80, 50) } do
+		block(parent, Vector3.new(1.3, 0.22, 0.95), cf * CFrame.new(1.4, 2.31 + (k - 1) * 0.22, -0.2) * CFrame.Angles(0, math.rad(k * 11 - 16), 0), M.SmoothPlastic, c)
+		block(parent, Vector3.new(1.22, 0.16, 0.05), cf * CFrame.new(1.4, 2.31 + (k - 1) * 0.22, -0.2) * CFrame.Angles(0, math.rad(k * 11 - 16), 0) * CFrame.new(0, 0, -0.47), M.SmoothPlastic, rgb(236, 230, 214)) -- page edges
+	end
+	-- a little potted plant
+	local pot = cf * CFrame.new(2.4, 2.45, 1)
+	block(parent, Vector3.new(0.6, 0.6, 0.6), pot * CYL_Y, M.SmoothPlastic, rgb(214, 210, 200), { Shape = Enum.PartType.Cylinder })
+	for k = 0, 4 do
+		local a = k / 5 * math.pi * 2
+		block(parent, Vector3.new(0.16, 0.7, 0.36), pot * CFrame.new(math.cos(a) * 0.12, 0.55, math.sin(a) * 0.12) * CFrame.Angles(math.cos(a) * 0.5, 0, math.sin(a) * 0.5), M.Grass, rgb(60, 130, 60))
 	end
 end
 
@@ -2440,9 +2536,13 @@ function MapBuilder.BuildLobby()
 	local galleryTitle = block(lobby, Vector3.new(30, 4, 0.3), CFrame.new(hx - 1.95, Y + 23, 0) * CFrame.Angles(0, math.rad(90), 0), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
 	local _, gt = surfaceText(galleryTitle, Enum.NormalId.Front, { Text = "SUIT GALLERY", Font = Enum.Font.LuckiestGuy, TextColor3 = rgb(255, 200, 30) })
 	make("UIStroke", gt, { Thickness = 6 })
-	for z = -30, 30, 6 do
-		block(lobby, Vector3.new(0.5, 16, 0.5), CFrame.new(hx - 1.2, Y + 10, z), M.Metal, rgb(30, 30, 34))
-		block(lobby, Vector3.new(0.2, 15, 0.2), CFrame.new(hx - 1.5, Y + 10, z), M.Neon, rgb(255, 226, 190))
+	-- a lighting bar along the gallery wall on brackets; two stage lights hang
+	-- from it over each suit (see the pedestals below)
+	local barX, barY = hx - 3.2, Y + 15.6
+	block(lobby, Vector3.new(62, 0.34, 0.34), CFrame.new(barX, barY, 0) * CFrame.Angles(0, math.rad(90), 0), M.Metal, rgb(34, 34, 38), { Shape = Enum.PartType.Cylinder })
+	for z = -30, 30, 12 do
+		block(lobby, Vector3.new(2.3, 0.3, 0.3), CFrame.new(hx - 2.1, barY + 0.3, z), M.Metal, rgb(40, 40, 46))
+		block(lobby, Vector3.new(0.2, 1.2, 0.6), CFrame.new(hx - 1.1, barY + 0.3, z), M.Metal, rgb(40, 40, 46))
 	end
 	local pedestals = Instance.new("Folder")
 	pedestals.Name = "Pedestals"
@@ -2459,6 +2559,9 @@ function MapBuilder.BuildLobby()
 		spot:SetAttribute("Skin", id)
 		local lamp = block(lobby, Vector3.new(1.6, 1, 1.6), CFrame.new(gx - 4, Y + H - 2, z), M.Metal, C.DarkMetal)
 		make("SpotLight", lamp, { Face = Enum.NormalId.Bottom, Range = 34, Angle = 40, Brightness = 5, Color = swatches[i]:Lerp(Color3.new(1, 1, 1), 0.6), Shadows = true })
+		for _, dz in { -3.2, 3.2 } do -- stage lights crossing on the suit
+			stageLight(lobby, Vector3.new(barX, barY - 0.17, z + dz), Vector3.new(gx + 3, Y + 6, z - dz * 0.3), swatches[i]:Lerp(Color3.new(1, 1, 1), 0.55), 18, 3.2)
+		end
 		local plaque = block(lobby, Vector3.new(6, 2.2, 0.3), CFrame.new(gx - 4, Y + 1.9, z) * CFrame.Angles(0, math.rad(90), 0) * CFrame.Angles(math.rad(25), 0, 0), M.Metal, rgb(24, 24, 28))
 		-- the suit's display name and price (Skins), scaled to fit the plaque
 		local suit = require(ReplicatedStorage.Shared.Skins).List[id]
@@ -2480,7 +2583,8 @@ function MapBuilder.BuildLobby()
 	surfaceText(rackTitle, Enum.NormalId.Back, { Text = "CLAW COLLECTION", Font = Enum.Font.LuckiestGuy, TextColor3 = rgb(210, 230, 255) })
 	for i, id in Skins.ClawOrder do
 		local item = Skins.Claws[id]
-		local x = 2 + (i - 1) * 6.2
+		-- centred under the CLAW COLLECTION sign, clear of the suit gallery
+		local x = 17.5 + (i - (#Skins.ClawOrder + 1) / 2) * 5.6
 		local base = CFrame.new(x, Y, cz)
 		block(lobby, Vector3.new(3.4, 3.2, 3.4), base * CFrame.new(0, 1.6, 0), M.Marble, rgb(30, 30, 34))
 		block(lobby, Vector3.new(3.6, 0.25, 3.6), base * CFrame.new(0, 3.3, 0), M.Metal, rgb(70, 72, 78), { Reflectance = 0.2 })
@@ -2563,18 +2667,11 @@ function MapBuilder.BuildLobby()
 
 	-- LOUNGE (west) ----------------------------------------------------
 	local lx = -hx + 14
-	block(lobby, Vector3.new(22, 0.08, 26), CFrame.new(lx, Y + 0.05, 8), M.Fabric, rgb(110, 20, 24))
-	block(lobby, Vector3.new(19, 0.1, 23), CFrame.new(lx, Y + 0.07, 8), M.Fabric, rgb(70, 12, 16))
+	loungeRug(lobby, Vector3.new(lx, Y, 8), 22, 26)
 	-- both sofas face the table and the fireplace (a couch's back is on its +Z)
-	couch(lobby, CFrame.new(lx + 2, Y, 18), rgb(60, 40, 30))
-	couch(lobby, CFrame.new(lx + 9, Y, 7) * CFrame.Angles(0, math.rad(90), 0), rgb(60, 40, 30))
-	block(lobby, Vector3.new(6, 0.5, 4), CFrame.new(lx + 1, Y + 1.9, 8), M.Wood, rgb(70, 45, 28))
-	for _, d in { Vector3.new(-2.6, 0, -1.6), Vector3.new(2.6, 0, -1.6), Vector3.new(-2.6, 0, 1.6), Vector3.new(2.6, 0, 1.6) } do
-		block(lobby, Vector3.new(0.4, 1.7, 0.4), CFrame.new(Vector3.new(lx + 1, Y + 0.85, 8) + d), M.Wood, rgb(50, 32, 20))
-	end
-	for i = 0, 1 do
-		block(lobby, Vector3.new(0.6, 0.8, 0.6), CFrame.new(lx + i * 1.6, Y + 2.55, 8), M.SmoothPlastic, i == 0 and rgb(200, 40, 40) or rgb(230, 230, 230), { Shape = Enum.PartType.Cylinder })
-	end
+	couch(lobby, CFrame.new(lx + 2, Y, 18), rgb(116, 62, 36))
+	couch(lobby, CFrame.new(lx + 9, Y, 7) * CFrame.Angles(0, math.rad(90), 0), rgb(116, 62, 36))
+	coffeeTable(lobby, Vector3.new(lx + 1, Y, 8))
 	-- stone fireplace on the west wall: an open firebox (sooty back wall,
 	-- pillars either side, stone over the opening) so the fire is on show, a
 	-- raised stone hearth in front, logs on a bed of glowing embers
@@ -2704,7 +2801,9 @@ function MapBuilder.BuildLobby()
 	end
 
 	-- LEADERBOARD (west wall, south end) ---------------------------------
-	local lb = block(lobby, Vector3.new(0.4, 11, 14), CFrame.new(-hx + 2.9, Y + 9, 36.5), M.SmoothPlastic, rgb(14, 14, 18)) -- south of the bookcase (the north end is the Sentinel bay)
+	-- south of the bookcase (the north end is the Sentinel bay), clear of the
+	-- corner column (z > hz - 3.6)
+	local lb = block(lobby, Vector3.new(0.4, 11, 12.4), CFrame.new(-hx + 2.9, Y + 9, 34.7), M.SmoothPlastic, rgb(14, 14, 18))
 	local lbGui = make("SurfaceGui", lb, { Name = "Leaderboard", Face = Enum.NormalId.Right, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 36, LightInfluence = 0 })
 	local lbBg = make("Frame", lbGui, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = rgb(16, 14, 18), BorderSizePixel = 0 })
 	make("UIStroke", lbBg, { Color = rgb(200, 30, 30), Thickness = 8, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
@@ -2727,7 +2826,7 @@ function MapBuilder.BuildLobby()
 	end
 	-- a red light bar along the top of the board (it used to hang in mid-air
 	-- over the Sentinel bay, where the board once was)
-	local lbLight = block(lobby, Vector3.new(0.3, 0.3, 14), CFrame.new(-hx + 3.25, Y + 14.7, 36.5), M.Neon, rgb(200, 30, 30))
+	local lbLight = block(lobby, Vector3.new(0.3, 0.3, 12.4), CFrame.new(-hx + 3.25, Y + 14.7, 34.7), M.Neon, rgb(200, 30, 30))
 	light(lbLight, { Range = 10, Brightness = 1, Color = rgb(255, 60, 40) })
 
 	-- STATUS TV: mounted on the chimney breast above the fireplace, facing

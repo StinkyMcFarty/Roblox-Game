@@ -49,10 +49,11 @@ end
 -- Tint (used by sniff + the Wolverine's hunting vision)
 ---------------------------------------------------------------------------
 
--- Lighting zones: bright snowy day in the lobby, dark night in the arena.
+-- Lighting zones: a moonlit snowy night outside the lobby (its own lamps and
+-- a soft indoor ambient keep the inside readable), dark night in the arena.
 local NIGHT, DAY = nil, {
-	ClockTime = 15.5, Brightness = 4, ExposureCompensation = -0.15,
-	Ambient = Color3.fromRGB(124, 155, 184), OutdoorAmbient = Color3.fromRGB(157, 178, 255),
+	ClockTime = 0.3, Brightness = 2.5, ExposureCompensation = 0.12,
+	Ambient = Color3.fromRGB(130, 138, 162), OutdoorAmbient = Color3.fromRGB(86, 98, 138),
 }
 local inLobby = nil
 -- the player's brightness setting (Config.Brightness), applied on top of the zone
@@ -81,7 +82,7 @@ local function applyZone(lobby, force)
 	end
 	local bloom = Lighting:FindFirstChildOfClass("BloomEffect")
 	if bloom then
-		-- the lobby is daylit: keep glow tight and subtle there
+		-- the lobby: keep glow tight and subtle there
 		TweenService:Create(bloom, TweenInfo.new(1.2), lobby and { Intensity = 0.35, Size = 56, Threshold = 1.6 } or { Intensity = 0.55, Size = 40, Threshold = 1.35 }):Play()
 	end
 	local atmo = Lighting:FindFirstChildOfClass("Atmosphere")
