@@ -15,6 +15,7 @@ local Status = require(script.Parent.Status)
 local Posture = require(script.Parent.Posture)
 local Wolverine = require(script.Parent.Wolverine)
 local Combat = require(script.Parent.Combat)
+local Block = require(script.Parent.Block)
 local Costumes = require(script.Parent.Costumes)
 local VFX = require(script.Parent.VFX)
 local PlayerData = require(script.Parent.PlayerData)
@@ -230,6 +231,7 @@ function Sentinel.Become(player)
 	end
 	player:SetAttribute("Role", "Sentinel")
 	player:SetAttribute("Armor", Config.Sentinel.Armor)
+	Block.Reset(player)
 	Status.Apply(player, "PursuitHold", Config.Sentinel.Pursuit.HitGrace) -- thrusters come online shortly
 	char:SetAttribute("Invisible", nil) -- no invisible suits
 	player:SetAttribute("SuitEnds", workspace:GetServerTimeNow() + Config.Sentinel.Duration)
@@ -267,6 +269,7 @@ function Sentinel.PowerDown(player, destroyed)
 	end
 	player:SetAttribute("Role", "Survivor")
 	player:SetAttribute("Armor", nil)
+	Block.Reset(player)
 	player:SetAttribute("SuitEnds", nil)
 	local folder = char:FindFirstChild("SentinelGear")
 	if folder then
@@ -413,23 +416,10 @@ RunService.Heartbeat:Connect(function()
 	end
 end)
 
--- The Inhibitor Blast's stun window, and the punches landed inside it
-local pulseStun = { Until = 0, Hits = 0 }
-
--- i-frames after a Sentinel blow lands, the same as a Sentinel gets when he
--- hits them. Inside an Inhibitor Blast stun he only gets them every
--- IFramesEvery-th hit.
-local function grantIFrames(w, wChar)
-	local grant = true
-	if os.clock() < pulseStun.Until then
-		pulseStun.Hits += 1
-		grant = pulseStun.Hits % Config.Sentinel.Pulse.IFramesEvery == 0
-	end
-	if grant then
-		Status.Apply(w, "Immune", Config.HitImmunity)
-		VFX.IFrames(wChar, Config.HitImmunity)
-	end
-end
+-- No i-frames between Wolverine and the suits (they block instead), so a
+-- stun from a suit can't land again within Config.Block.StunGrace seconds of
+-- the last one ending: two suits can't stun-lock him (their hits still hurt).
+local stunGraceUntil = 0
 
 local function stunWolverine(duration)
 	local w = Round.Wolverine
@@ -443,6 +433,10 @@ local function stunWolverine(duration)
 		Fx:FireAllClients("Stunned", { Name = w.Name, Duration = duration, Rage = true })
 		return
 	end
+	if os.clock() < stunGraceUntil then
+		return
+	end
+	stunGraceUntil = os.clock() + duration + Config.Block.StunGrace
 	Status.Apply(w, "Stunned", duration)
 	Fx:FireAllClients("Stunned", { Name = w.Name, Duration = duration })
 end
@@ -497,7 +491,10 @@ local function punch(player, char, root, side)
 		if Combat.BoxOverlap(box, Vector3.new(9, 11, cfg.Range + 1), bcf, bsize) then
 			hit = true
 			fist = CFrame.new(wRoot.Position)
-			if Combat.BreakShield(w) then
+			if Block.TryM1(w, player) then
+				-- it clashed off his claws (or broke his guard): no damage
+				fist = CFrame.new(Block.GuardPoint(w) or wRoot.Position)
+			elseif Combat.BreakShield(w) then
 				-- punched into his i-frames: they shatter and that's all this punch does
 				Fx:FireAllClients("Shake", { Position = wRoot.Position, Intensity = 0.5, Radius = 40 })
 			else
@@ -512,7 +509,6 @@ local function punch(player, char, root, side)
 				VFX.Shockwave(floorBelow(wRoot.Position, { char, wChar }) + Vector3.new(0, 0.2, 0), 11)
 				Fx:FireAllClients("Shake", { Position = wRoot.Position, Intensity = 1.4, Radius = 80 })
 				Fx:FireAllClients("HitStop", { Attacker = char, Victim = wChar, Duration = 0.15 })
-				grantIFrames(w, wChar)
 			end
 		end
 	end
@@ -564,6 +560,7 @@ local function slam(player, char, root)
 	if wRoot then
 		local off = wRoot.Position - center
 		if Vector3.new(off.X, 0, off.Z).Magnitude <= cfg.Radius and math.abs(off.Y) < 14 then
+			Block.Break(w) -- a slam is a block breaker
 			if Combat.BreakShield(w) then
 				Fx:FireAllClients("Shake", { Position = wRoot.Position, Intensity = 0.5, Radius = 40 })
 			else
@@ -576,7 +573,6 @@ local function slam(player, char, root)
 				Fx:FireClient(w, "Knock", { Velocity = Util.Flat(dir) * cfg.Knockback + Vector3.new(0, 45, 0) })
 				Util.Burst(wRoot, Util.SparkProps, 30, 1.5)
 				Fx:FireAllClients("HitStop", { Attacker = char, Victim = wChar, Duration = 0.18 })
-				grantIFrames(w, wChar)
 			end
 		end
 	end
@@ -604,8 +600,12 @@ local function laser(player, char, root, aim)
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	local burnedTotal = 0
-	local lastKnock, lastReveal = 0, 0
+	local lastKnock, lastReveal, lastSpark = 0, 0, 0
 	local bracing = false
+	-- his guard stops the beam only if it was already up, facing it, when the
+	-- beam reached him (and stays up): once it's burning him, blocking is too
+	-- late, and a beam from behind gets round it
+	local contact, shielded = false, false
 	local t0 = os.clock()
 	local last = os.clock()
 	player:SetAttribute("Beaming", true)
@@ -684,6 +684,32 @@ local function laser(player, char, root, aim)
 			end
 		end
 		if hitW then
+			local facing = Block.Facing(Round.Wolverine, origin)
+			if not contact then
+				contact = true
+				shielded = facing
+			elseif shielded and not facing then
+				shielded = false -- dropped his guard (or turned): it's through
+			end
+		else
+			contact, shielded = false, false
+		end
+		if hitW and shielded then
+			-- the beam splashes off his crossed claws: no burn, a lighter shove
+			endPos = Block.GuardPoint(Round.Wolverine) or endPos
+			if os.clock() - lastSpark > 0.25 then
+				lastSpark = os.clock()
+				Combat.MetalSparks(endPos, -dir)
+			end
+			if os.clock() - lastKnock > 0.3 then
+				lastKnock = os.clock()
+				Util.FireClient(Fx, Round.Wolverine, "Knock", { Velocity = Util.Flat(dir) * cfg.Push * 0.5, Duration = 0.15 })
+			end
+			if bracing and wChar then
+				bracing = false
+				VFX.StopAnim(wChar, "Brace")
+			end
+		elseif hitW then
 			Wolverine.Damage(cfg.DPS * dt * power(player), player)
 			Status.Apply(Round.Wolverine, "Slowed", cfg.Slow)
 			if os.clock() - lastReveal > 0.6 then
@@ -784,10 +810,9 @@ local function pulse(player, char, root)
 		local bcf, bsize = Combat.BodyBox(wRoot)
 		local near = (wRoot.Position - root.Position).Magnitude <= cfg.Radius
 		if near or Combat.BoxOverlap(CFrame.new(root.Position), Vector3.one * cfg.Radius * 1.4, bcf, bsize) then
+			Block.Break(Round.Wolverine) -- so is the blast
 			Wolverine.Damage(cfg.Damage * power(player), player)
 			stunWolverine(cfg.Stun)
-			pulseStun.Until = os.clock() + cfg.Stun
-			pulseStun.Hits = 0
 			Combat.BreakShield(Round.Wolverine) -- the blast shatters any i-frames he had
 			Wolverine.RevealSkeleton()
 		end
@@ -816,7 +841,11 @@ function Sentinel.Handle(player, ability, arg)
 	end
 	local char = player.Character
 	local root = Util.Root(char)
-	if not (root and Util.IsAlive(char)) or Status.Has(player, "Busy") or Status.Has(player, "Frozen") then
+	if ability == "Block" then
+		Block.Set(player, arg == true)
+		return
+	end
+	if not (root and Util.IsAlive(char)) or Status.Has(player, "Busy") or Status.Has(player, "Frozen") or Status.Has(player, "Stunned") then
 		return
 	end
 	if ability == "LaserAim" then
@@ -846,6 +875,7 @@ function Sentinel.Handle(player, ability, arg)
 		return
 	end
 	cd[ability] = os.clock() + cfg.Cooldown - 0.1
+	Block.Set(player, false) -- attacking lowers the guard
 
 	if ability == "Punch" then
 		perform(player, ability, punch, player, char, root, arg)

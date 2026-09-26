@@ -13,6 +13,7 @@ local Status = require(script.Parent.Status)
 local Posture = require(script.Parent.Posture)
 local Movement = require(script.Parent.Movement)
 local Combat = require(script.Parent.Combat)
+local Block = require(script.Parent.Block)
 local PlayerData = require(script.Parent.PlayerData)
 local Fart = require(script.Parent.Fart)
 local VFX = require(script.Parent.VFX)
@@ -1018,7 +1019,9 @@ local function slash(player, char, root)
 		local target = Combat.FindTargets(cf, Vector3.new(cfg.Width, 8, cfg.Range + 1))[1]
 		if target then
 			local sentinel = target.Player:GetAttribute("Role") == "Sentinel"
-			if Combat.Resolve(player, target.Player) then
+			if sentinel and Block.TryM1(target.Player, player) then
+				lockClaws(player, cfg.SentinelHitLock) -- claws clashed off its guard
+			elseif Combat.Resolve(player, target.Player) then
 				lockClaws(player, sentinel and cfg.SentinelHitLock or cfg.HitLock)
 			end
 		end
@@ -1036,6 +1039,7 @@ end
 -- Mid-dive contact: both claws slam into them and drive them back.
 local function pounceStrike(player, char, root, target)
 	local victim = target.Player
+	Block.Break(victim) -- a pounce is a block breaker
 	Combat.PullOut(victim)
 	VFX.Anim(char, "PounceStrike")
 	local dir = Util.Flat(target.Root.Position - root.Position)
@@ -1154,6 +1158,7 @@ local function stab(player, char, root)
 	end
 
 	local victim = target.Player
+	Block.Break(victim) -- so is an impale
 	Combat.PullOut(victim)
 	local vChar, vRoot = target.Char, target.Root
 	-- a Sentinel is too heavy for one arm: both claws go in and he heaves it
@@ -1317,6 +1322,10 @@ function Wolverine.Handle(player, ability, arg)
 		Movement.SetInput(player, "Feral", arg == true)
 		return
 	end
+	if ability == "Block" then
+		Block.Set(player, arg == true)
+		return
+	end
 	if ability == "Resist" then
 		-- mashing F under a death ray (see Wolverine.ResistLevel)
 		local now = os.clock()
@@ -1349,6 +1358,7 @@ function Wolverine.Handle(player, ability, arg)
 		return -- he can only pounce out of an all-fours sprint
 	end
 	cd[ability] = os.clock() + cfg.Cooldown * rageScale(player, ability) - 0.1 -- small latency allowance
+	Block.Set(player, false) -- attacking lowers the guard
 
 	if ability == "Slash" then
 		slash(player, char, root)

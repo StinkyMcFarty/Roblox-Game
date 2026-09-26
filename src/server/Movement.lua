@@ -145,6 +145,9 @@ RunService.Heartbeat:Connect(function(dt)
 			if Status.Has(player, "Gassed") then
 				speed *= Config.Fart.GasSlow
 			end
+			if player:GetAttribute("Blocking") then
+				speed *= Config.Block.Walk -- guard up: a slow shuffle
+			end
 			if Status.Has(player, "Stunned") or Status.Has(player, "Frozen") then
 				speed = 0
 			end

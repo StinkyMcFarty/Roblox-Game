@@ -600,7 +600,10 @@ function Combat.Wound(killer, victim, opts)
 		Combat.FleshTear(Util.Torso(char) or root)
 	end
 	Util.Sound(Config.Sounds.Impact, root, { Pitch = 0.95 + math.random() * 0.1, Volume = 1.1 })
-	Status.Apply(victim, "Immune", Config.HitImmunity)
+	local sentinel = victim:GetAttribute("Role") == "Sentinel"
+	if not sentinel then
+		Status.Apply(victim, "Immune", Config.HitImmunity) -- suits get no i-frames: they block
+	end
 	Status.Apply(victim, "Boost", Config.HitImmunity + Config.AdrenalineTime)
 	Status.Apply(killer, "Busy", Config.WolverineHitRecovery)
 
@@ -609,8 +612,9 @@ function Combat.Wound(killer, victim, opts)
 	local kChar = killer and killer.Character
 	VFX.Impact(torso.Position, kChar and kChar:GetAttribute("ClawGlow") or Color3.fromRGB(255, 60, 50), 1, char, true)
 	VFX.WoundMarks(char)
-	VFX.IFrames(char, Config.HitImmunity)
-	local sentinel = victim:GetAttribute("Role") == "Sentinel"
+	if not sentinel then
+		VFX.IFrames(char, Config.HitImmunity)
+	end
 	if not sentinel then
 		VFX.ThrowTrail(char, Config.Throw.Tumble + 0.3)
 	end

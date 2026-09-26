@@ -2184,7 +2184,7 @@ local function buildHangar(parent)
 			cable(c + Vector3.new(s * 3.2, shoulderY + 2, 0.9), c + Vector3.new(s * 3.6, 22.4, 1.4), 0.5, 0.18, rgb(30, 30, 32))
 		end
 		-- the charging pad under its boots, and a light shining up at it
-		local pad = D(pod, Vector3.new(0.12, 6.5, 6.5), CFrame.new(c + Vector3.new(0, 0.1, -0.6)) * CFrame.Angles(0, 0, math.rad(90)), M.Neon, rgb(170, 70, 230), { Shape = Enum.PartType.Cylinder, Transparency = 0.45 })
+		local pad = D(pod, Vector3.new(0.12, 6.5, 6.5), CFrame.new(c + Vector3.new(0, 0.38, -0.6)) * CFrame.Angles(0, 0, math.rad(90)), M.Neon, rgb(170, 70, 230), { Shape = Enum.PartType.Cylinder, Transparency = 0.45 })
 		local up = Instance.new("SpotLight")
 		up.Face = Enum.NormalId.Right -- the cylinder's axis points up
 		up.Angle = 50
@@ -2209,9 +2209,11 @@ local function buildHangar(parent)
 			cable(c + Vector3.new(k * 2, 22.4, 1), c + Vector3.new(k * 1.2, 14, -0.5), 1.4, 0.35, rgb(24, 24, 26))
 		end
 		screen(pod, CFrame.new(c + Vector3.new(7.4, 5, -1)) * CFrame.Angles(0, math.rad(20), 0), 3, 2, "bars", rgb(200, 120, 255))
+		-- a raised deck plate inside a hazard-striped border (well clear of the
+		-- stripes: they're painted on the plate under it)
 		local ring = D(pod, Vector3.new(13, 0.06, 13), CFrame.new(c + Vector3.new(0, 0.04, -1)), M.SmoothPlastic, rgb(222, 170, 28))
 		hazard(ring, N.Top, 13, 10)
-		D(pod, Vector3.new(12, 0.08, 12), CFrame.new(c + Vector3.new(0, 0.06, -1)), M.DiamondPlate, rgb(56, 54, 52))
+		D(pod, Vector3.new(12, 0.3, 12), CFrame.new(c + Vector3.new(0, 0.2, -1)), M.DiamondPlate, rgb(56, 54, 52))
 	end
 	dummy.Parent = pod
 	-- central control podium

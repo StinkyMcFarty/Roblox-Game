@@ -120,9 +120,23 @@ Config.Sentinel = {
 		-- Wolverine mashing F while beamed: Presses/sec for full resist; past
 		-- Threshold he braces and walks into the beam at Walk x speed
 		Resist = { Presses = 7, Threshold = 0.5, Walk = 0.38 }, Recover = 3 },
-	-- Inhibitor Blast: while he's stunned by it, a punch only gives him i-frames
-	-- every IFramesEvery-th hit, so the suits get a real damage window.
-	Pulse = { Cooldown = 18, Charge = 2, Radius = 30, Stun = 3, Damage = 12, CancelCooldown = 3, IFramesEvery = 2 },
+	-- Inhibitor Blast: a 2s charge, then a shockwave that stuns him for 3s.
+	Pulse = { Cooldown = 18, Charge = 2, Radius = 30, Stun = 3, Damage = 12, CancelCooldown = 3 },
+}
+
+-- Block (hold F / L1): Wolverine and the Sentinels. It stops M1s (his
+-- slashes, their punches) coming from in front (within Arc: the dot of his
+-- facing and the way to the attacker); everything else breaks it. A guard
+-- holds Guard hits and the one that uses it up breaks the block: stunned
+-- BreakStun seconds. Held at most MaxHold seconds; the guard refills Refill
+-- seconds after letting go (BrokenRefill after a break). Blocking walks at
+-- Walk x speed. A blocked hit clashes: sparks off the guard and both are
+-- shoved Push studs/s apart. Wolverine blocks the death ray only if he was
+-- already blocking, facing it, when it reached him. With no i-frames between
+-- them, a Sentinel stun can't land again within StunGrace s of the last one.
+Config.Block = {
+	MaxHold = 3, Refill = 10, BrokenRefill = 15, BreakStun = 2, Arc = 0.2, Walk = 0.5, Push = 16, StunGrace = 1.5,
+	Guard = { Wolverine = 4, Sentinel = 2 },
 }
 
 -- Survivor upgrades (bought once with coins, kept forever; client/Upgrades).

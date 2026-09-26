@@ -20,6 +20,7 @@ require(script.Parent:WaitForChild("SentinelTracker"))
 require(script.Parent:WaitForChild("TerminalSounds"))
 require(script.Parent:WaitForChild("Minimap"))
 require(script.Parent:WaitForChild("Objectives"))
+require(script.Parent:WaitForChild("GuardMeter"))
 require(script.Parent:WaitForChild("Upgrades"))
 require(script.Parent:WaitForChild("Vanish"))
 require(script.Parent:WaitForChild("VerityTrail"))
@@ -76,10 +77,12 @@ local ROLE_HOLDS = {
 	Wolverine = {
 		{ Name = "SprintHold", Label = "Sprint", Desc = "Run into walls to tear through", Icon = "💨", KeyText = "SHIFT", Attr = "Sprinting", Color = YELLOW },
 		{ Name = "FeralHold", Label = "All Fours", Desc = "Fastest. Burns stamina", Icon = "🐺", KeyText = "C", Attr = "Feral", Color = Color3.fromRGB(255, 140, 30) },
+		{ Name = "BlockHold", Label = "Block", Desc = ("Hold: stops %d punches from the front (and a death ray if it's already up)"):format(Config.Block.Guard.Wolverine), Icon = "🛡️", KeyText = "F", Attr = "Blocking", Color = Color3.fromRGB(200, 205, 220) },
 	},
 	Sentinel = {
 		{ Name = "LinkHold", Label = "Twin Link", Desc = "Beside the other suit: " .. S.LinkedMultiplier .. "x. Apart: " .. S.SoloMultiplier .. "x", Icon = "🔗", KeyText = "30m", Attr = "Linked", Color = Color3.fromRGB(190, 140, 255) },
 		{ Name = "PursuitHold", Label = "Pursuit", Desc = "Thrusters kick in when he hasn't hit you for " .. S.Pursuit.HitGrace .. "s", Icon = "🚀", KeyText = "AUTO", Attr = "Pursuit", Color = Color3.fromRGB(255, 120, 60) },
+		{ Name = "BlockHold", Label = "Block", Desc = ("Hold: stops %d slashes from the front"):format(Config.Block.Guard.Sentinel), Icon = "🛡️", KeyText = "F", Attr = "Blocking", Color = Color3.fromRGB(200, 205, 220) },
 	},
 	Survivor = {
 		{ Name = "SprintHold", Label = "Sprint", Desc = "Run for your life", Icon = "🏃", KeyText = "SHIFT", Attr = "Sprinting", Color = Color3.fromRGB(80, 170, 255) },
@@ -94,8 +97,8 @@ local ROLE_TITLE = {
 }
 
 local HINTS = {
-	Wolverine = "Shift: sprint   C / Ctrl: run on all fours\nClaw (M1) or pounce through walls. Hit anyone 3 times to rip them in half.",
-	Sentinel = "MUTANT-HUNTER ONLINE. M1 Hydraulic Smash · M2 Ground Slam · Q Death Ray · E Inhibitor Blast.\nLinked: " .. S.LinkedMultiplier .. "x power. Apart: " .. S.SoloMultiplier .. "x. Last suit standing: 1x. Core burns out in " .. S.Duration .. "s.",
+	Wolverine = "Shift: sprint   C / Ctrl: run on all fours   F: block\nClaw (M1) or pounce through walls. Hit anyone 3 times to rip them in half.",
+	Sentinel = "MUTANT-HUNTER ONLINE. M1 Hydraulic Smash · M2 Ground Slam · Q Death Ray · E Inhibitor Blast · F Block.\nLinked: " .. S.LinkedMultiplier .. "x power. Apart: " .. S.SoloMultiplier .. "x. Last suit standing: 1x. Core burns out in " .. S.Duration .. "s.",
 	Survivor = "Subject X is loose. Reboot the 3 Sentinel Protocol consoles (Foundry, Genetics Lab, Command Centre), then suit up in the Hangar.\nShift: sprint. G: fart (hides your scent). He tears through walls — keep moving.",
 	Lobby = "Waiting for the next round.",
 	Dead = "You were torn apart. Wait for the next round.",
@@ -216,6 +219,7 @@ local function unbindAll()
 	end
 	ContextActionService:UnbindAction("Feral")
 	ContextActionService:UnbindAction("Resist")
+	ContextActionService:UnbindAction("Block")
 	currentKit = {}
 end
 
@@ -260,6 +264,12 @@ local function applyRole(role, quiet)
 		end, true, a.Key)
 		ContextActionService:SetTitle("Ability_" .. a.Name, a.Label)
 		ContextActionService:SetPosition("Ability_" .. a.Name, UDim2.new(1, -70 - ((i - 1) % 2) * 70, 1, -200 - math.floor((i - 1) / 2) * 70))
+	end
+	if role == "Wolverine" or role == "Sentinel" then
+		-- hold F (L1) to block (Config.Block). Bound before Wolverine's
+		-- Resist, which takes F first while a death ray is on him.
+		holdAction("Block", "Block", { Enum.KeyCode.F, Enum.KeyCode.ButtonL1 }, "Block")
+		ContextActionService:SetPosition("Block", UDim2.new(1, -280, 1, -130))
 	end
 	if role == "Wolverine" then
 		holdAction("Feral", "Feral", { Enum.KeyCode.C, Enum.KeyCode.LeftControl, Enum.KeyCode.ButtonL2 }, "Feral")

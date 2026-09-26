@@ -649,6 +649,60 @@ Clips.Pulse = {
 }
 
 ---------------------------------------------------------------------------
+-- Block (hold F): Wolverine crosses his forearms in front of his face, the
+-- claws making an X he looks over, low in a staggered stance. A Sentinel
+-- raises both forearm guards like a boxer. The legs still walk (a slow
+-- shuffle). GuardBreak: the guard is knocked wide open, the body thrown
+-- back, then it sags, dazed, for the stun.
+---------------------------------------------------------------------------
+Clips.BlockX = {
+	Hold = true,
+	LegsWhenMoving = true,
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.1, Ease = "Out", Pose = {
+			Root = { -6, 0, 0, 0, -0.35, 0 }, Waist = { -6, 0, 0 }, Neck = { 10, 0, 0 },
+			RShoulder = { 82, 0, -30 }, RElbow = { 96, 0, 0 },
+			LShoulder = { 82, 0, 30 }, LElbow = { 96, 0, 0 },
+			RHip = { 30, 0, 6 }, RKnee = { -40, 0, 0 }, LHip = { -8, 0, -6 }, LKnee = { -24, 0, 0 },
+		} },
+	},
+}
+
+Clips.GuardUp = {
+	Hold = true,
+	LegsWhenMoving = true,
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.14, Ease = "Out", Pose = {
+			Root = { -4, 0, 0, 0, -0.4, 0 }, Waist = { -8, 0, 0 }, Neck = { 6, 0, 0 },
+			RShoulder = { 70, 0, -12 }, RElbow = { 122, 0, 0 },
+			LShoulder = { 70, 0, 12 }, LElbow = { 122, 0, 0 },
+			RHip = { 26, 0, 8 }, RKnee = { -36, 0, 0 }, LHip = { -6, 0, -8 }, LKnee = { -22, 0, 0 },
+		} },
+	},
+}
+
+local DAZED = {
+	Root = { -10, 0, 0, 0, -0.5, 0 }, Waist = { -22, 0, 0 }, Neck = { -18, 0, 0 },
+	RShoulder = { 10, 0, 20 }, LShoulder = { 10, 0, -20 }, RElbow = { 30, 0, 0 }, LElbow = { 30, 0, 0 },
+	RHip = { 28, 0, 0 }, LHip = { 28, 0, 0 }, RKnee = { -50, 0, 0 }, LKnee = { -50, 0, 0 },
+}
+Clips.GuardBreak = {
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.1, Ease = "Out", Pose = {
+			Root = { 12, 0, 0, 0, -0.1, 0.5 }, Waist = { 20, 0, 0 }, Neck = { 28, 0, 0 },
+			RShoulder = { 30, 0, 75 }, LShoulder = { 30, 0, -75 }, RElbow = { 25, 0, 0 }, LElbow = { 25, 0, 0 },
+			RHip = { -15, 0, 0 }, LHip = { 25, 0, 0 }, RKnee = { -10, 0, 0 }, LKnee = { -40, 0, 0 },
+		} },
+		{ T = 0.5, Ease = "InOut", Pose = DAZED },
+		{ T = 1.7, Pose = DAZED },
+		{ T = 2.1, Ease = "InOut", Pose = REST },
+	},
+}
+
+---------------------------------------------------------------------------
 -- Mirroring (makes SlashL from SlashR)
 ---------------------------------------------------------------------------
 local SWAP = {

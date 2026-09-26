@@ -47,8 +47,16 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
 
 - Cooldowns (`Config.Abilities`): Pounce 15s, Impale 15s. A landed M1 locks slash/pounce/impale
   for 3s on a survivor, 1s on a Sentinel (`lockClaws` in `Wolverine.lua`, client via Fx `ClawLock`).
-- I-frames: an M1 just breaks them; pounce/impale break them, miss, and still go on cooldown.
-  Wolverine gets 2s of i-frames when a Sentinel punch lands.
+- I-frames (survivors only): an M1 just breaks them; pounce/impale break them, miss, and still go
+  on cooldown. Wolverine and the Sentinels get none from each other; they block instead.
+- Block (`src/server/Block.lua`, `Config.Block`, hold F / L1, Wolverine + Sentinels): stops M1s
+  from in front (Arc); Wolverine's guard takes 4 punches, a suit's 2 slashes, and the hit that uses
+  it up breaks it (stunned 2s). Pounce, impale, slam and blast are block breakers (`Block.Break`).
+  Held 3s max; the guard refills 10s after letting go, 15s after a break. Blocked hits clash
+  (`Block.Clash`: sparks off the guard, both shoved apart). Death ray: blocked only if the guard was
+  already up and facing it when the beam reached him (a beam from behind still burns). A suit's
+  stun can't re-land within `StunGrace` of the last (no stun-lock). Client: `GuardMeter.lua`,
+  clips `BlockX` / `GuardUp` / `GuardBreak`.
 - Rage (`Config.Rage`, `updateRage` in `Wolverine.lua`): below 40% HP, at most twice a round (once
   per dip), 15s of red aura, slashes 1.35x faster, hits count 1.3x (`Combat.Hit` amount; Hits/Armor
   can be fractional), other cooldowns x0.75. Client reads the `Rage` attribute for its timers.

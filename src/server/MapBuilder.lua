@@ -2445,6 +2445,7 @@ function MapBuilder.BuildLobby()
 	keyRow(fileCol, 6, "E", "IMPALE. Both claws in. Lift.", TYPE)
 	keyRow(fileCol, 7, "R", "SNIFF. Smell every scent.", TYPE)
 	keyRow(fileCol, 8, "C", "ALL FOURS. Fastest.", TYPE)
+	keyRow(fileCol, 9, "F", ("BLOCK. Takes %d punches."):format(Config.Block.Guard.Wolverine), TYPE)
 	boardText(fileCol, {
 		Size = UDim2.new(0, 520, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
@@ -2452,7 +2453,7 @@ function MapBuilder.BuildLobby()
 		Font = Enum.Font.SpecialElite,
 		TextSize = 34,
 		TextColor3 = INK,
-		LayoutOrder = 9,
+		LayoutOrder = 10,
 	})
 	-- his mugshot: three claw marks where a face should be
 	local photo = make("Frame", file, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -40, 1, -40), Size = UDim2.fromOffset(170, 210), BackgroundColor3 = rgb(21, 21, 26), BorderSizePixel = 0 })
@@ -2493,15 +2494,16 @@ function MapBuilder.BuildLobby()
 	keyRow(cardCol, 5, "M2", ("GROUND SLAM. Hits him within %d studs."):format(S.Slam.Radius), PRINT)
 	keyRow(cardCol, 6, "Q", "DEATH RAY. Melts through walls.", PRINT)
 	keyRow(cardCol, 7, "E", ("INHIBITOR BLAST. Stuns him %gs."):format(S.Pulse.Stun), PRINT)
+	keyRow(cardCol, 8, "F", ("BLOCK. Takes %d slashes."):format(Config.Block.Guard.Sentinel), PRINT)
 	boardText(cardCol, {
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Text = ("LINKED (%d studs) %gx\nAPART %gx · LAST SUIT 1x\nCORE BURNS OUT IN %ds"):format(S.LinkRange, S.LinkedMultiplier, S.SoloMultiplier, S.Duration),
 		Font = Enum.Font.RobotoMono,
-		TextSize = 30,
-		LineHeight = 1.15,
+		TextSize = 28, -- a touch smaller, to fit the Block row above it
+		LineHeight = 1.1,
 		TextColor3 = Color3.new(1, 1, 1),
-		LayoutOrder = 8,
+		LayoutOrder = 9,
 	})
 	for _, side in { -1, 1 } do -- taped up
 		block(lobby, Vector3.new(3.5, 1, 0.03), onBoard(18 + side * 9.8, 18.5, 0.42, side * -30), M.SmoothPlastic, rgb(228, 218, 184), { Transparency = 0.3, CanCollide = false })

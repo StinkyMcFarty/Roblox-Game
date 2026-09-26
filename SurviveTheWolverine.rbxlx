@@ -163,9 +163,23 @@ Config.Sentinel = {
 		-- Wolverine mashing F while beamed: Presses/sec for full resist; past
 		-- Threshold he braces and walks into the beam at Walk x speed
 		Resist = { Presses = 7, Threshold = 0.5, Walk = 0.38 }, Recover = 3 },
-	-- Inhibitor Blast: while he's stunned by it, a punch only gives him i-frames
-	-- every IFramesEvery-th hit, so the suits get a real damage window.
-	Pulse = { Cooldown = 18, Charge = 2, Radius = 30, Stun = 3, Damage = 12, CancelCooldown = 3, IFramesEvery = 2 },
+	-- Inhibitor Blast: a 2s charge, then a shockwave that stuns him for 3s.
+	Pulse = { Cooldown = 18, Charge = 2, Radius = 30, Stun = 3, Damage = 12, CancelCooldown = 3 },
+}
+
+-- Block (hold F / L1): Wolverine and the Sentinels. It stops M1s (his
+-- slashes, their punches) coming from in front (within Arc: the dot of his
+-- facing and the way to the attacker); everything else breaks it. A guard
+-- holds Guard hits and the one that uses it up breaks the block: stunned
+-- BreakStun seconds. Held at most MaxHold seconds; the guard refills Refill
+-- seconds after letting go (BrokenRefill after a break). Blocking walks at
+-- Walk x speed. A blocked hit clashes: sparks off the guard and both are
+-- shoved Push studs/s apart. Wolverine blocks the death ray only if he was
+-- already blocking, facing it, when it reached him. With no i-frames between
+-- them, a Sentinel stun can't land again within StunGrace s of the last one.
+Config.Block = {
+	MaxHold = 3, Refill = 10, BrokenRefill = 15, BreakStun = 2, Arc = 0.2, Walk = 0.5, Push = 16, StunGrace = 1.5,
+	Guard = { Wolverine = 4, Sentinel = 2 },
 }
 
 -- Survivor upgrades (bought once with coins, kept forever; client/Upgrades).
@@ -724,6 +738,227 @@ return Util
       </Properties>
       <Item class="ModuleScript" referent="13">
         <Properties>
+          <string name="Name">Block</string>
+          <string name="Source"><![CDATA[-- Blocking (hold F / L1): Wolverine and the Sentinels (Config.Block).
+-- A guard stops M1s from in front and clashes them off in sparks; the hit
+-- that uses up the guard breaks it and stuns. Every other attack is a block
+-- breaker (Block.Break). Attributes for the client: Blocking, Guard,
+-- GuardMax and GuardRefill (server time the guard comes back).
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Util = require(ReplicatedStorage.Shared.Util)
+local Status = require(script.Parent.Status)
+local VFX = require(script.Parent.VFX)
+local Combat = require(script.Parent.Combat)
+
+local Fx = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Fx")
+
+local Block = {}
+local state = setmetatable({}, { __mode = "k" })
+
+local function clipFor(role)
+	return role == "Sentinel" and "GuardUp" or "BlockX"
+end
+
+local function get(player)
+	local role = player:GetAttribute("Role")
+	local s = state[player]
+	if not s or s.Role ~= role then
+		s = { Role = role, Up = false, Guard = Config.Block.Guard[role] or 0, Token = 0 }
+		state[player] = s
+	end
+	return s
+end
+
+local function publish(player, s)
+	player:SetAttribute("Blocking", s.Up or nil)
+	player:SetAttribute("Guard", s.Guard)
+	player:SetAttribute("GuardMax", Config.Block.Guard[s.Role])
+	player:SetAttribute("GuardRefill", s.RefillAt and workspace:GetServerTimeNow() + (s.RefillAt - os.clock()) or nil)
+end
+
+-- the guard comes back `seconds` after letting go (raising it again first
+-- puts the refill off until the next time it's lowered)
+local function refillLater(player, s, seconds)
+	s.Token += 1
+	local token = s.Token
+	s.RefillAt = os.clock() + seconds
+	task.delay(seconds, function()
+		if s.Token == token and not s.Up then
+			s.Guard = Config.Block.Guard[s.Role] or 0
+			s.RefillAt = nil
+			if player.Parent then
+				publish(player, s)
+			end
+		end
+	end)
+end
+
+local function lower(player, s, refill)
+	s.Up = false
+	if player.Character then
+		VFX.StopAnim(player.Character, clipFor(s.Role))
+	end
+	refillLater(player, s, refill)
+	publish(player, s)
+end
+
+local function stun(player, seconds)
+	if player:GetAttribute("Role") == "Wolverine" and player:GetAttribute("Rage") then
+		-- berserk: he shrugs stuns off and is only slowed
+		Status.Apply(player, "Slowed", seconds)
+		Fx:FireAllClients("Stunned", { Name = player.Name, Duration = seconds, Rage = true })
+		return
+	end
+	Status.Apply(player, "Stunned", seconds)
+	Fx:FireAllClients("Stunned", { Name = player.Name, Duration = seconds })
+end
+
+-- where the guard is: his crossed claws / the suit's raised forearms
+local function guardPoint(player)
+	local root = Util.Root(player.Character)
+	if not root then
+		return nil
+	end
+	local k = root.Size.Y / 2 -- 1 at normal size, 1.8 for a suit
+	return root.Position + root.CFrame.LookVector * 1.4 * k + Vector3.new(0, 1.2 * k, 0)
+end
+Block.GuardPoint = guardPoint
+
+function Block.Set(player, on)
+	local role = player:GetAttribute("Role")
+	if role ~= "Wolverine" and role ~= "Sentinel" then
+		return
+	end
+	local s = get(player)
+	if not on then
+		if s.Up then
+			lower(player, s, Config.Block.Refill)
+		end
+		return
+	end
+	local char = player.Character
+	if s.Up or not Util.IsAlive(char) or s.Guard <= 0 then
+		return -- already up, or the guard hasn't come back yet
+	end
+	if Status.Has(player, "Stunned") or Status.Has(player, "Frozen") or Status.Has(player, "Busy") then
+		return
+	end
+	s.Up = true
+	s.Token += 1 -- a pending refill waits for the next time it's lowered
+	s.RefillAt = nil
+	local token = s.Token
+	VFX.Anim(char, clipFor(role))
+	publish(player, s)
+	task.delay(Config.Block.MaxHold, function()
+		if s.Token == token and s.Up then
+			lower(player, s, Config.Block.Refill) -- arms give out: can't hold it forever
+		end
+	end)
+end
+
+function Block.IsUp(player)
+	local s = state[player]
+	return s ~= nil and s.Up
+end
+
+-- Is the guard up and turned toward `from`?
+function Block.Facing(player, from)
+	if not Block.IsUp(player) then
+		return false
+	end
+	local root = Util.Root(player.Character)
+	if not root then
+		return false
+	end
+	local to = Vector3.new(from.X - root.Position.X, 0, from.Z - root.Position.Z)
+	if to.Magnitude < 0.01 then
+		return true
+	end
+	return Util.Flat(root.CFrame.LookVector):Dot(to.Unit) >= Config.Block.Arc
+end
+
+-- steel on steel: sparks fly off the guard back at the attacker, a clang,
+-- and the two are shoved apart
+function Block.Clash(defender, attacker)
+	local dRoot, aRoot = Util.Root(defender.Character), Util.Root(attacker.Character)
+	local at = guardPoint(defender)
+	if not (dRoot and aRoot and at) then
+		return
+	end
+	local dir = Util.Flat(aRoot.Position - dRoot.Position)
+	Combat.MetalSparks(at, dir)
+	Util.SoundAt(Config.Sounds.Punch, at, { Volume = 1.6, Pitch = 1.45 + math.random() * 0.15, Range = 180 })
+	Fx:FireAllClients("HitStop", { Attacker = attacker.Character, Victim = defender.Character, Duration = 0.09 })
+	Fx:FireAllClients("Shake", { Position = at, Intensity = 0.6, Radius = 50 })
+	Util.FireClient(Fx, defender, "Knock", { Velocity = -dir * Config.Block.Push, Duration = 0.15 })
+	Util.FireClient(Fx, attacker, "Knock", { Velocity = dir * Config.Block.Push * 0.6, Duration = 0.12 })
+end
+
+-- The block gives out: the guard's gone, stunned, and it takes
+-- BrokenRefill seconds to come back. Every non-M1 attack does this to a
+-- raised guard (before landing as usual). Returns whether it was up.
+function Block.Break(player)
+	local s = state[player]
+	if not (s and s.Up) then
+		return false
+	end
+	s.Up = false
+	s.Guard = 0
+	local char = player.Character
+	local at = guardPoint(player)
+	if char then
+		VFX.StopAnim(char, clipFor(s.Role))
+		VFX.Anim(char, "GuardBreak")
+	end
+	if at then
+		VFX.Impact(at, Color3.fromRGB(255, 220, 120), 1.4, char)
+		Util.SoundAt(Config.Sounds.Break, at, { Volume = 1.8, Pitch = 1.3, Range = 220 })
+		Util.SoundAt(Config.Sounds.Punch, at, { Volume = 1.8, Pitch = 0.8, Range = 220 })
+	end
+	refillLater(player, s, Config.Block.BrokenRefill)
+	publish(player, s)
+	stun(player, Config.Block.BreakStun)
+	Util.FireClient(Fx, player, "Announce", { Text = "GUARD BROKEN", Color = Color3.fromRGB(255, 90, 60), Duration = 1.5 })
+	return true
+end
+
+-- An M1 (his slash, a suit's punch) from attacker reaching defender.
+-- nil: not blocked, resolve it as usual. "blocked": it clashed off the guard
+-- (no damage). "broken": it used up the guard, which breaks (no damage, but
+-- they're stunned).
+function Block.TryM1(defender, attacker)
+	local aRoot = Util.Root(attacker.Character)
+	if not (aRoot and Block.Facing(defender, aRoot.Position)) then
+		return nil
+	end
+	local s = state[defender]
+	s.Guard -= 1
+	Block.Clash(defender, attacker)
+	if s.Guard <= 0 then
+		Block.Break(defender)
+		return "broken"
+	end
+	publish(defender, s)
+	return "blocked"
+end
+
+-- new round / out of a suit: guard down and full
+function Block.Reset(player)
+	state[player] = nil
+	player:SetAttribute("Blocking", nil)
+	player:SetAttribute("Guard", nil)
+	player:SetAttribute("GuardMax", nil)
+	player:SetAttribute("GuardRefill", nil)
+end
+
+return Block
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="14">
+        <Properties>
           <string name="Name">Bots</string>
           <string name="Source"><![CDATA[-- Bot survivors so a round is playable with only 1-2 real players.
 -- A bot is a small table that looks enough like a Player for the rest of
@@ -919,7 +1154,7 @@ return Bots
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="14">
+      <Item class="ModuleScript" referent="15">
         <Properties>
           <string name="Name">Combat</string>
           <string name="Source"><![CDATA[-- Hits, wounds, wall shredding and the rip-in-half finisher.
@@ -1524,7 +1759,10 @@ function Combat.Wound(killer, victim, opts)
 		Combat.FleshTear(Util.Torso(char) or root)
 	end
 	Util.Sound(Config.Sounds.Impact, root, { Pitch = 0.95 + math.random() * 0.1, Volume = 1.1 })
-	Status.Apply(victim, "Immune", Config.HitImmunity)
+	local sentinel = victim:GetAttribute("Role") == "Sentinel"
+	if not sentinel then
+		Status.Apply(victim, "Immune", Config.HitImmunity) -- suits get no i-frames: they block
+	end
 	Status.Apply(victim, "Boost", Config.HitImmunity + Config.AdrenalineTime)
 	Status.Apply(killer, "Busy", Config.WolverineHitRecovery)
 
@@ -1533,8 +1771,9 @@ function Combat.Wound(killer, victim, opts)
 	local kChar = killer and killer.Character
 	VFX.Impact(torso.Position, kChar and kChar:GetAttribute("ClawGlow") or Color3.fromRGB(255, 60, 50), 1, char, true)
 	VFX.WoundMarks(char)
-	VFX.IFrames(char, Config.HitImmunity)
-	local sentinel = victim:GetAttribute("Role") == "Sentinel"
+	if not sentinel then
+		VFX.IFrames(char, Config.HitImmunity)
+	end
 	if not sentinel then
 		VFX.ThrowTrail(char, Config.Throw.Tumble + 0.3)
 	end
@@ -1769,7 +2008,7 @@ return Combat
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="15">
+      <Item class="ModuleScript" referent="16">
         <Properties>
           <string name="Name">Costumes</string>
           <string name="Source"><![CDATA[-- Everything that makes characters look good: Wolverine suits (textures +
@@ -3452,7 +3691,7 @@ return Costumes
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="16">
+      <Item class="ModuleScript" referent="17">
         <Properties>
           <string name="Name">Facility</string>
           <string name="Source"><![CDATA[-- The arena: one huge Weapon X facility, built entirely from code.
@@ -5641,7 +5880,7 @@ local function buildHangar(parent)
 			cable(c + Vector3.new(s * 3.2, shoulderY + 2, 0.9), c + Vector3.new(s * 3.6, 22.4, 1.4), 0.5, 0.18, rgb(30, 30, 32))
 		end
 		-- the charging pad under its boots, and a light shining up at it
-		local pad = D(pod, Vector3.new(0.12, 6.5, 6.5), CFrame.new(c + Vector3.new(0, 0.1, -0.6)) * CFrame.Angles(0, 0, math.rad(90)), M.Neon, rgb(170, 70, 230), { Shape = Enum.PartType.Cylinder, Transparency = 0.45 })
+		local pad = D(pod, Vector3.new(0.12, 6.5, 6.5), CFrame.new(c + Vector3.new(0, 0.38, -0.6)) * CFrame.Angles(0, 0, math.rad(90)), M.Neon, rgb(170, 70, 230), { Shape = Enum.PartType.Cylinder, Transparency = 0.45 })
 		local up = Instance.new("SpotLight")
 		up.Face = Enum.NormalId.Right -- the cylinder's axis points up
 		up.Angle = 50
@@ -5666,9 +5905,11 @@ local function buildHangar(parent)
 			cable(c + Vector3.new(k * 2, 22.4, 1), c + Vector3.new(k * 1.2, 14, -0.5), 1.4, 0.35, rgb(24, 24, 26))
 		end
 		screen(pod, CFrame.new(c + Vector3.new(7.4, 5, -1)) * CFrame.Angles(0, math.rad(20), 0), 3, 2, "bars", rgb(200, 120, 255))
+		-- a raised deck plate inside a hazard-striped border (well clear of the
+		-- stripes: they're painted on the plate under it)
 		local ring = D(pod, Vector3.new(13, 0.06, 13), CFrame.new(c + Vector3.new(0, 0.04, -1)), M.SmoothPlastic, rgb(222, 170, 28))
 		hazard(ring, N.Top, 13, 10)
-		D(pod, Vector3.new(12, 0.08, 12), CFrame.new(c + Vector3.new(0, 0.06, -1)), M.DiamondPlate, rgb(56, 54, 52))
+		D(pod, Vector3.new(12, 0.3, 12), CFrame.new(c + Vector3.new(0, 0.2, -1)), M.DiamondPlate, rgb(56, 54, 52))
 	end
 	dummy.Parent = pod
 	-- central control podium
@@ -7322,7 +7563,7 @@ return Facility
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="17">
+      <Item class="ModuleScript" referent="18">
         <Properties>
           <string name="Name">Fart</string>
           <string name="Source"><![CDATA[-- Survivor counter to Wolverine's Sniff: a green gas cloud out the back.
@@ -7599,7 +7840,7 @@ return Fart
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Script" referent="18">
+      <Item class="Script" referent="19">
         <Properties>
           <string name="Name">GameManager</string>
           <token name="RunContext">0</token>
@@ -7619,6 +7860,7 @@ local Costumes = require(Server.Costumes)
 local Wolverine = require(Server.Wolverine)
 local Sentinel = require(Server.Sentinel)
 local PlayerData = require(Server.PlayerData)
+local Block = require(Server.Block)
 local Fart = require(Server.Fart)
 local Hiding = require(Server.Hiding)
 local Bots = require(Server.Bots)
@@ -7928,6 +8170,7 @@ local function runRound()
 
 	for _, p in list do
 		Status.Reset(p)
+		Block.Reset(p)
 		Movement.Reset(p)
 		Fart.Reset(p)
 		p:SetAttribute("Hits", 0)
@@ -8083,6 +8326,7 @@ local function runRound()
 		p:SetAttribute("Armor", nil)
 		p:SetAttribute("SuitEnds", nil)
 		Status.Reset(p)
+		Block.Reset(p)
 		Movement.Reset(p)
 		task.spawn(function()
 			loadBlocky(p)
@@ -8128,7 +8372,7 @@ end
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="19">
+      <Item class="ModuleScript" referent="20">
         <Properties>
           <string name="Name">Hiding</string>
           <string name="Source"><![CDATA[-- Hiding spots (lockers, wardrobes, dumpsters, freezer). Hidden survivors are
@@ -8280,7 +8524,7 @@ return Hiding
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="20">
+      <Item class="ModuleScript" referent="21">
         <Properties>
           <string name="Name">MapBuilder</string>
           <string name="Source"><![CDATA[-- Builds the whole map from code: a snowed-in Weapon X compound at night.
@@ -10730,6 +10974,7 @@ function MapBuilder.BuildLobby()
 	keyRow(fileCol, 6, "E", "IMPALE. Both claws in. Lift.", TYPE)
 	keyRow(fileCol, 7, "R", "SNIFF. Smell every scent.", TYPE)
 	keyRow(fileCol, 8, "C", "ALL FOURS. Fastest.", TYPE)
+	keyRow(fileCol, 9, "F", ("BLOCK. Takes %d punches."):format(Config.Block.Guard.Wolverine), TYPE)
 	boardText(fileCol, {
 		Size = UDim2.new(0, 520, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
@@ -10737,7 +10982,7 @@ function MapBuilder.BuildLobby()
 		Font = Enum.Font.SpecialElite,
 		TextSize = 34,
 		TextColor3 = INK,
-		LayoutOrder = 9,
+		LayoutOrder = 10,
 	})
 	-- his mugshot: three claw marks where a face should be
 	local photo = make("Frame", file, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -40, 1, -40), Size = UDim2.fromOffset(170, 210), BackgroundColor3 = rgb(21, 21, 26), BorderSizePixel = 0 })
@@ -10778,15 +11023,16 @@ function MapBuilder.BuildLobby()
 	keyRow(cardCol, 5, "M2", ("GROUND SLAM. Hits him within %d studs."):format(S.Slam.Radius), PRINT)
 	keyRow(cardCol, 6, "Q", "DEATH RAY. Melts through walls.", PRINT)
 	keyRow(cardCol, 7, "E", ("INHIBITOR BLAST. Stuns him %gs."):format(S.Pulse.Stun), PRINT)
+	keyRow(cardCol, 8, "F", ("BLOCK. Takes %d slashes."):format(Config.Block.Guard.Sentinel), PRINT)
 	boardText(cardCol, {
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Text = ("LINKED (%d studs) %gx\nAPART %gx · LAST SUIT 1x\nCORE BURNS OUT IN %ds"):format(S.LinkRange, S.LinkedMultiplier, S.SoloMultiplier, S.Duration),
 		Font = Enum.Font.RobotoMono,
-		TextSize = 30,
-		LineHeight = 1.15,
+		TextSize = 28, -- a touch smaller, to fit the Block row above it
+		LineHeight = 1.1,
 		TextColor3 = Color3.new(1, 1, 1),
-		LayoutOrder = 8,
+		LayoutOrder = 9,
 	})
 	for _, side in { -1, 1 } do -- taped up
 		block(lobby, Vector3.new(3.5, 1, 0.03), onBoard(18 + side * 9.8, 18.5, 0.42, side * -30), M.SmoothPlastic, rgb(228, 218, 184), { Transparency = 0.3, CanCollide = false })
@@ -11266,7 +11512,7 @@ return MapBuilder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="21">
+      <Item class="ModuleScript" referent="22">
         <Properties>
           <string name="Name">Movement</string>
           <string name="Source"><![CDATA[-- Server-authoritative walk speeds, sprint/feral stamina and status slowdowns.
@@ -11416,6 +11662,9 @@ RunService.Heartbeat:Connect(function(dt)
 			if Status.Has(player, "Gassed") then
 				speed *= Config.Fart.GasSlow
 			end
+			if player:GetAttribute("Blocking") then
+				speed *= Config.Block.Walk -- guard up: a slow shuffle
+			end
 			if Status.Has(player, "Stunned") or Status.Has(player, "Frozen") then
 				speed = 0
 			end
@@ -11463,7 +11712,7 @@ return Movement
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="22">
+      <Item class="ModuleScript" referent="23">
         <Properties>
           <string name="Name">PlayerData</string>
           <string name="Source"><![CDATA[-- Saved player data: coins, skins, daily challenges, login streak and
@@ -12341,7 +12590,7 @@ return PlayerData
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="23">
+      <Item class="ModuleScript" referent="24">
         <Properties>
           <string name="Name">Posture</string>
           <string name="Source"><![CDATA[-- Code-driven "animations": offsets Motor6D.C0 on R15 rigs so no animation
@@ -12470,7 +12719,7 @@ return Posture
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="24">
+      <Item class="ModuleScript" referent="25">
         <Properties>
           <string name="Name">Round</string>
           <string name="Source"><![CDATA[-- Shared round state used by every server module.
@@ -12497,7 +12746,7 @@ return Round
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="25">
+      <Item class="ModuleScript" referent="26">
         <Properties>
           <string name="Name">Sentinel</string>
           <string name="Source"><![CDATA[-- The counter (like the Hulkbuster): survivors reboot 3 Sentinel terminals,
@@ -12517,6 +12766,7 @@ local Status = require(script.Parent.Status)
 local Posture = require(script.Parent.Posture)
 local Wolverine = require(script.Parent.Wolverine)
 local Combat = require(script.Parent.Combat)
+local Block = require(script.Parent.Block)
 local Costumes = require(script.Parent.Costumes)
 local VFX = require(script.Parent.VFX)
 local PlayerData = require(script.Parent.PlayerData)
@@ -12732,6 +12982,7 @@ function Sentinel.Become(player)
 	end
 	player:SetAttribute("Role", "Sentinel")
 	player:SetAttribute("Armor", Config.Sentinel.Armor)
+	Block.Reset(player)
 	Status.Apply(player, "PursuitHold", Config.Sentinel.Pursuit.HitGrace) -- thrusters come online shortly
 	char:SetAttribute("Invisible", nil) -- no invisible suits
 	player:SetAttribute("SuitEnds", workspace:GetServerTimeNow() + Config.Sentinel.Duration)
@@ -12769,6 +13020,7 @@ function Sentinel.PowerDown(player, destroyed)
 	end
 	player:SetAttribute("Role", "Survivor")
 	player:SetAttribute("Armor", nil)
+	Block.Reset(player)
 	player:SetAttribute("SuitEnds", nil)
 	local folder = char:FindFirstChild("SentinelGear")
 	if folder then
@@ -12915,23 +13167,10 @@ RunService.Heartbeat:Connect(function()
 	end
 end)
 
--- The Inhibitor Blast's stun window, and the punches landed inside it
-local pulseStun = { Until = 0, Hits = 0 }
-
--- i-frames after a Sentinel blow lands, the same as a Sentinel gets when he
--- hits them. Inside an Inhibitor Blast stun he only gets them every
--- IFramesEvery-th hit.
-local function grantIFrames(w, wChar)
-	local grant = true
-	if os.clock() < pulseStun.Until then
-		pulseStun.Hits += 1
-		grant = pulseStun.Hits % Config.Sentinel.Pulse.IFramesEvery == 0
-	end
-	if grant then
-		Status.Apply(w, "Immune", Config.HitImmunity)
-		VFX.IFrames(wChar, Config.HitImmunity)
-	end
-end
+-- No i-frames between Wolverine and the suits (they block instead), so a
+-- stun from a suit can't land again within Config.Block.StunGrace seconds of
+-- the last one ending: two suits can't stun-lock him (their hits still hurt).
+local stunGraceUntil = 0
 
 local function stunWolverine(duration)
 	local w = Round.Wolverine
@@ -12945,6 +13184,10 @@ local function stunWolverine(duration)
 		Fx:FireAllClients("Stunned", { Name = w.Name, Duration = duration, Rage = true })
 		return
 	end
+	if os.clock() < stunGraceUntil then
+		return
+	end
+	stunGraceUntil = os.clock() + duration + Config.Block.StunGrace
 	Status.Apply(w, "Stunned", duration)
 	Fx:FireAllClients("Stunned", { Name = w.Name, Duration = duration })
 end
@@ -12999,7 +13242,10 @@ local function punch(player, char, root, side)
 		if Combat.BoxOverlap(box, Vector3.new(9, 11, cfg.Range + 1), bcf, bsize) then
 			hit = true
 			fist = CFrame.new(wRoot.Position)
-			if Combat.BreakShield(w) then
+			if Block.TryM1(w, player) then
+				-- it clashed off his claws (or broke his guard): no damage
+				fist = CFrame.new(Block.GuardPoint(w) or wRoot.Position)
+			elseif Combat.BreakShield(w) then
 				-- punched into his i-frames: they shatter and that's all this punch does
 				Fx:FireAllClients("Shake", { Position = wRoot.Position, Intensity = 0.5, Radius = 40 })
 			else
@@ -13014,7 +13260,6 @@ local function punch(player, char, root, side)
 				VFX.Shockwave(floorBelow(wRoot.Position, { char, wChar }) + Vector3.new(0, 0.2, 0), 11)
 				Fx:FireAllClients("Shake", { Position = wRoot.Position, Intensity = 1.4, Radius = 80 })
 				Fx:FireAllClients("HitStop", { Attacker = char, Victim = wChar, Duration = 0.15 })
-				grantIFrames(w, wChar)
 			end
 		end
 	end
@@ -13066,6 +13311,7 @@ local function slam(player, char, root)
 	if wRoot then
 		local off = wRoot.Position - center
 		if Vector3.new(off.X, 0, off.Z).Magnitude <= cfg.Radius and math.abs(off.Y) < 14 then
+			Block.Break(w) -- a slam is a block breaker
 			if Combat.BreakShield(w) then
 				Fx:FireAllClients("Shake", { Position = wRoot.Position, Intensity = 0.5, Radius = 40 })
 			else
@@ -13078,7 +13324,6 @@ local function slam(player, char, root)
 				Fx:FireClient(w, "Knock", { Velocity = Util.Flat(dir) * cfg.Knockback + Vector3.new(0, 45, 0) })
 				Util.Burst(wRoot, Util.SparkProps, 30, 1.5)
 				Fx:FireAllClients("HitStop", { Attacker = char, Victim = wChar, Duration = 0.18 })
-				grantIFrames(w, wChar)
 			end
 		end
 	end
@@ -13106,8 +13351,12 @@ local function laser(player, char, root, aim)
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	local burnedTotal = 0
-	local lastKnock, lastReveal = 0, 0
+	local lastKnock, lastReveal, lastSpark = 0, 0, 0
 	local bracing = false
+	-- his guard stops the beam only if it was already up, facing it, when the
+	-- beam reached him (and stays up): once it's burning him, blocking is too
+	-- late, and a beam from behind gets round it
+	local contact, shielded = false, false
 	local t0 = os.clock()
 	local last = os.clock()
 	player:SetAttribute("Beaming", true)
@@ -13186,6 +13435,32 @@ local function laser(player, char, root, aim)
 			end
 		end
 		if hitW then
+			local facing = Block.Facing(Round.Wolverine, origin)
+			if not contact then
+				contact = true
+				shielded = facing
+			elseif shielded and not facing then
+				shielded = false -- dropped his guard (or turned): it's through
+			end
+		else
+			contact, shielded = false, false
+		end
+		if hitW and shielded then
+			-- the beam splashes off his crossed claws: no burn, a lighter shove
+			endPos = Block.GuardPoint(Round.Wolverine) or endPos
+			if os.clock() - lastSpark > 0.25 then
+				lastSpark = os.clock()
+				Combat.MetalSparks(endPos, -dir)
+			end
+			if os.clock() - lastKnock > 0.3 then
+				lastKnock = os.clock()
+				Util.FireClient(Fx, Round.Wolverine, "Knock", { Velocity = Util.Flat(dir) * cfg.Push * 0.5, Duration = 0.15 })
+			end
+			if bracing and wChar then
+				bracing = false
+				VFX.StopAnim(wChar, "Brace")
+			end
+		elseif hitW then
 			Wolverine.Damage(cfg.DPS * dt * power(player), player)
 			Status.Apply(Round.Wolverine, "Slowed", cfg.Slow)
 			if os.clock() - lastReveal > 0.6 then
@@ -13286,10 +13561,9 @@ local function pulse(player, char, root)
 		local bcf, bsize = Combat.BodyBox(wRoot)
 		local near = (wRoot.Position - root.Position).Magnitude <= cfg.Radius
 		if near or Combat.BoxOverlap(CFrame.new(root.Position), Vector3.one * cfg.Radius * 1.4, bcf, bsize) then
+			Block.Break(Round.Wolverine) -- so is the blast
 			Wolverine.Damage(cfg.Damage * power(player), player)
 			stunWolverine(cfg.Stun)
-			pulseStun.Until = os.clock() + cfg.Stun
-			pulseStun.Hits = 0
 			Combat.BreakShield(Round.Wolverine) -- the blast shatters any i-frames he had
 			Wolverine.RevealSkeleton()
 		end
@@ -13318,7 +13592,11 @@ function Sentinel.Handle(player, ability, arg)
 	end
 	local char = player.Character
 	local root = Util.Root(char)
-	if not (root and Util.IsAlive(char)) or Status.Has(player, "Busy") or Status.Has(player, "Frozen") then
+	if ability == "Block" then
+		Block.Set(player, arg == true)
+		return
+	end
+	if not (root and Util.IsAlive(char)) or Status.Has(player, "Busy") or Status.Has(player, "Frozen") or Status.Has(player, "Stunned") then
 		return
 	end
 	if ability == "LaserAim" then
@@ -13348,6 +13626,7 @@ function Sentinel.Handle(player, ability, arg)
 		return
 	end
 	cd[ability] = os.clock() + cfg.Cooldown - 0.1
+	Block.Set(player, false) -- attacking lowers the guard
 
 	if ability == "Punch" then
 		perform(player, ability, punch, player, char, root, arg)
@@ -13364,7 +13643,7 @@ return Sentinel
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="26">
+      <Item class="ModuleScript" referent="27">
         <Properties>
           <string name="Name">Status</string>
           <string name="Source"><![CDATA[-- Timed status effects: Stunned, Slowed, Frozen, Busy, Immune, Boost.
@@ -13402,7 +13681,7 @@ return Status
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="27">
+      <Item class="ModuleScript" referent="28">
         <Properties>
           <string name="Name">VFX</string>
           <string name="Source"><![CDATA[-- Crisp combat visuals, created on the server so everyone sees them.
@@ -13606,7 +13885,7 @@ return VFX
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="28">
+      <Item class="ModuleScript" referent="29">
         <Properties>
           <string name="Name">Wolverine</string>
           <string name="Source"><![CDATA[-- Wolverine: transformation, intro (SNIKT + roar), abilities, healing factor
@@ -13624,6 +13903,7 @@ local Status = require(script.Parent.Status)
 local Posture = require(script.Parent.Posture)
 local Movement = require(script.Parent.Movement)
 local Combat = require(script.Parent.Combat)
+local Block = require(script.Parent.Block)
 local PlayerData = require(script.Parent.PlayerData)
 local Fart = require(script.Parent.Fart)
 local VFX = require(script.Parent.VFX)
@@ -14629,7 +14909,9 @@ local function slash(player, char, root)
 		local target = Combat.FindTargets(cf, Vector3.new(cfg.Width, 8, cfg.Range + 1))[1]
 		if target then
 			local sentinel = target.Player:GetAttribute("Role") == "Sentinel"
-			if Combat.Resolve(player, target.Player) then
+			if sentinel and Block.TryM1(target.Player, player) then
+				lockClaws(player, cfg.SentinelHitLock) -- claws clashed off its guard
+			elseif Combat.Resolve(player, target.Player) then
 				lockClaws(player, sentinel and cfg.SentinelHitLock or cfg.HitLock)
 			end
 		end
@@ -14647,6 +14929,7 @@ end
 -- Mid-dive contact: both claws slam into them and drive them back.
 local function pounceStrike(player, char, root, target)
 	local victim = target.Player
+	Block.Break(victim) -- a pounce is a block breaker
 	Combat.PullOut(victim)
 	VFX.Anim(char, "PounceStrike")
 	local dir = Util.Flat(target.Root.Position - root.Position)
@@ -14765,6 +15048,7 @@ local function stab(player, char, root)
 	end
 
 	local victim = target.Player
+	Block.Break(victim) -- so is an impale
 	Combat.PullOut(victim)
 	local vChar, vRoot = target.Char, target.Root
 	-- a Sentinel is too heavy for one arm: both claws go in and he heaves it
@@ -14928,6 +15212,10 @@ function Wolverine.Handle(player, ability, arg)
 		Movement.SetInput(player, "Feral", arg == true)
 		return
 	end
+	if ability == "Block" then
+		Block.Set(player, arg == true)
+		return
+	end
 	if ability == "Resist" then
 		-- mashing F under a death ray (see Wolverine.ResistLevel)
 		local now = os.clock()
@@ -14960,6 +15248,7 @@ function Wolverine.Handle(player, ability, arg)
 		return -- he can only pounce out of an all-fours sprint
 	end
 	cd[ability] = os.clock() + cfg.Cooldown * rageScale(player, ability) - 0.1 -- small latency allowance
+	Block.Set(player, false) -- attacking lowers the guard
 
 	if ability == "Slash" then
 		slash(player, char, root)
@@ -15179,18 +15468,18 @@ return Wolverine
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="29">
+  <Item class="StarterPlayer" referent="30">
     <Properties>
       <string name="Name">StarterPlayer</string>
       <token name="AvatarJointUpgrade">1</token>
       <bool name="EnableMouseLockOption">false</bool>
       <token name="GameSettingsAvatar">1</token>
     </Properties>
-    <Item class="StarterCharacterScripts" referent="30">
+    <Item class="StarterCharacterScripts" referent="31">
       <Properties>
         <string name="Name">StarterCharacterScripts</string>
       </Properties>
-      <Item class="Script" referent="31">
+      <Item class="Script" referent="32">
         <Properties>
           <string name="Name">Health</string>
           <token name="RunContext">0</token>
@@ -15201,11 +15490,11 @@ return Wolverine
         </Properties>
       </Item>
     </Item>
-    <Item class="StarterPlayerScripts" referent="32">
+    <Item class="StarterPlayerScripts" referent="33">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="33">
+      <Item class="LocalScript" referent="34">
         <Properties>
           <string name="Name">CharacterOutline</string>
           <string name="Source"><![CDATA[local Player = game.Players.LocalPlayer
@@ -15223,11 +15512,11 @@ end)
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="34">
+      <Item class="Folder" referent="35">
         <Properties>
           <string name="Name">Client</string>
         </Properties>
-        <Item class="ModuleScript" referent="35">
+        <Item class="ModuleScript" referent="36">
           <Properties>
             <string name="Name">AnimClips</string>
             <string name="Source"><![CDATA[-- Keyframed animation clips (R15). Poses are joint rotations in degrees:
@@ -15881,6 +16170,60 @@ Clips.Pulse = {
 }
 
 ---------------------------------------------------------------------------
+-- Block (hold F): Wolverine crosses his forearms in front of his face, the
+-- claws making an X he looks over, low in a staggered stance. A Sentinel
+-- raises both forearm guards like a boxer. The legs still walk (a slow
+-- shuffle). GuardBreak: the guard is knocked wide open, the body thrown
+-- back, then it sags, dazed, for the stun.
+---------------------------------------------------------------------------
+Clips.BlockX = {
+	Hold = true,
+	LegsWhenMoving = true,
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.1, Ease = "Out", Pose = {
+			Root = { -6, 0, 0, 0, -0.35, 0 }, Waist = { -6, 0, 0 }, Neck = { 10, 0, 0 },
+			RShoulder = { 82, 0, -30 }, RElbow = { 96, 0, 0 },
+			LShoulder = { 82, 0, 30 }, LElbow = { 96, 0, 0 },
+			RHip = { 30, 0, 6 }, RKnee = { -40, 0, 0 }, LHip = { -8, 0, -6 }, LKnee = { -24, 0, 0 },
+		} },
+	},
+}
+
+Clips.GuardUp = {
+	Hold = true,
+	LegsWhenMoving = true,
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.14, Ease = "Out", Pose = {
+			Root = { -4, 0, 0, 0, -0.4, 0 }, Waist = { -8, 0, 0 }, Neck = { 6, 0, 0 },
+			RShoulder = { 70, 0, -12 }, RElbow = { 122, 0, 0 },
+			LShoulder = { 70, 0, 12 }, LElbow = { 122, 0, 0 },
+			RHip = { 26, 0, 8 }, RKnee = { -36, 0, 0 }, LHip = { -6, 0, -8 }, LKnee = { -22, 0, 0 },
+		} },
+	},
+}
+
+local DAZED = {
+	Root = { -10, 0, 0, 0, -0.5, 0 }, Waist = { -22, 0, 0 }, Neck = { -18, 0, 0 },
+	RShoulder = { 10, 0, 20 }, LShoulder = { 10, 0, -20 }, RElbow = { 30, 0, 0 }, LElbow = { 30, 0, 0 },
+	RHip = { 28, 0, 0 }, LHip = { 28, 0, 0 }, RKnee = { -50, 0, 0 }, LKnee = { -50, 0, 0 },
+}
+Clips.GuardBreak = {
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.1, Ease = "Out", Pose = {
+			Root = { 12, 0, 0, 0, -0.1, 0.5 }, Waist = { 20, 0, 0 }, Neck = { 28, 0, 0 },
+			RShoulder = { 30, 0, 75 }, LShoulder = { 30, 0, -75 }, RElbow = { 25, 0, 0 }, LElbow = { 25, 0, 0 },
+			RHip = { -15, 0, 0 }, LHip = { 25, 0, 0 }, RKnee = { -10, 0, 0 }, LKnee = { -40, 0, 0 },
+		} },
+		{ T = 0.5, Ease = "InOut", Pose = DAZED },
+		{ T = 1.7, Pose = DAZED },
+		{ T = 2.1, Ease = "InOut", Pose = REST },
+	},
+}
+
+---------------------------------------------------------------------------
 -- Mirroring (makes SlashL from SlashR)
 ---------------------------------------------------------------------------
 local SWAP = {
@@ -15909,7 +16252,7 @@ return Clips
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="36">
+        <Item class="ModuleScript" referent="37">
           <Properties>
             <string name="Name">Anims</string>
             <string name="Source"><![CDATA[-- Client animation engine. Runs on every client for every character, so all
@@ -16978,7 +17321,7 @@ return Anims
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="37">
+        <Item class="ModuleScript" referent="38">
           <Properties>
             <string name="Name">Brightness</string>
             <string name="Source"><![CDATA[-- Map brightness setting: a light-bulb button (top left, above the minimap;
@@ -17179,7 +17522,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="LocalScript" referent="38">
+        <Item class="LocalScript" referent="39">
           <Properties>
             <string name="Name">ClientMain</string>
             <string name="Source"><![CDATA[-- Input + role handling. PC keys, gamepad and mobile touch buttons.
@@ -17204,6 +17547,7 @@ require(script.Parent:WaitForChild("SentinelTracker"))
 require(script.Parent:WaitForChild("TerminalSounds"))
 require(script.Parent:WaitForChild("Minimap"))
 require(script.Parent:WaitForChild("Objectives"))
+require(script.Parent:WaitForChild("GuardMeter"))
 require(script.Parent:WaitForChild("Upgrades"))
 require(script.Parent:WaitForChild("Vanish"))
 require(script.Parent:WaitForChild("VerityTrail"))
@@ -17260,10 +17604,12 @@ local ROLE_HOLDS = {
 	Wolverine = {
 		{ Name = "SprintHold", Label = "Sprint", Desc = "Run into walls to tear through", Icon = "💨", KeyText = "SHIFT", Attr = "Sprinting", Color = YELLOW },
 		{ Name = "FeralHold", Label = "All Fours", Desc = "Fastest. Burns stamina", Icon = "🐺", KeyText = "C", Attr = "Feral", Color = Color3.fromRGB(255, 140, 30) },
+		{ Name = "BlockHold", Label = "Block", Desc = ("Hold: stops %d punches from the front (and a death ray if it's already up)"):format(Config.Block.Guard.Wolverine), Icon = "🛡️", KeyText = "F", Attr = "Blocking", Color = Color3.fromRGB(200, 205, 220) },
 	},
 	Sentinel = {
 		{ Name = "LinkHold", Label = "Twin Link", Desc = "Beside the other suit: " .. S.LinkedMultiplier .. "x. Apart: " .. S.SoloMultiplier .. "x", Icon = "🔗", KeyText = "30m", Attr = "Linked", Color = Color3.fromRGB(190, 140, 255) },
 		{ Name = "PursuitHold", Label = "Pursuit", Desc = "Thrusters kick in when he hasn't hit you for " .. S.Pursuit.HitGrace .. "s", Icon = "🚀", KeyText = "AUTO", Attr = "Pursuit", Color = Color3.fromRGB(255, 120, 60) },
+		{ Name = "BlockHold", Label = "Block", Desc = ("Hold: stops %d slashes from the front"):format(Config.Block.Guard.Sentinel), Icon = "🛡️", KeyText = "F", Attr = "Blocking", Color = Color3.fromRGB(200, 205, 220) },
 	},
 	Survivor = {
 		{ Name = "SprintHold", Label = "Sprint", Desc = "Run for your life", Icon = "🏃", KeyText = "SHIFT", Attr = "Sprinting", Color = Color3.fromRGB(80, 170, 255) },
@@ -17278,8 +17624,8 @@ local ROLE_TITLE = {
 }
 
 local HINTS = {
-	Wolverine = "Shift: sprint   C / Ctrl: run on all fours\nClaw (M1) or pounce through walls. Hit anyone 3 times to rip them in half.",
-	Sentinel = "MUTANT-HUNTER ONLINE. M1 Hydraulic Smash · M2 Ground Slam · Q Death Ray · E Inhibitor Blast.\nLinked: " .. S.LinkedMultiplier .. "x power. Apart: " .. S.SoloMultiplier .. "x. Last suit standing: 1x. Core burns out in " .. S.Duration .. "s.",
+	Wolverine = "Shift: sprint   C / Ctrl: run on all fours   F: block\nClaw (M1) or pounce through walls. Hit anyone 3 times to rip them in half.",
+	Sentinel = "MUTANT-HUNTER ONLINE. M1 Hydraulic Smash · M2 Ground Slam · Q Death Ray · E Inhibitor Blast · F Block.\nLinked: " .. S.LinkedMultiplier .. "x power. Apart: " .. S.SoloMultiplier .. "x. Last suit standing: 1x. Core burns out in " .. S.Duration .. "s.",
 	Survivor = "Subject X is loose. Reboot the 3 Sentinel Protocol consoles (Foundry, Genetics Lab, Command Centre), then suit up in the Hangar.\nShift: sprint. G: fart (hides your scent). He tears through walls — keep moving.",
 	Lobby = "Waiting for the next round.",
 	Dead = "You were torn apart. Wait for the next round.",
@@ -17400,6 +17746,7 @@ local function unbindAll()
 	end
 	ContextActionService:UnbindAction("Feral")
 	ContextActionService:UnbindAction("Resist")
+	ContextActionService:UnbindAction("Block")
 	currentKit = {}
 end
 
@@ -17444,6 +17791,12 @@ local function applyRole(role, quiet)
 		end, true, a.Key)
 		ContextActionService:SetTitle("Ability_" .. a.Name, a.Label)
 		ContextActionService:SetPosition("Ability_" .. a.Name, UDim2.new(1, -70 - ((i - 1) % 2) * 70, 1, -200 - math.floor((i - 1) / 2) * 70))
+	end
+	if role == "Wolverine" or role == "Sentinel" then
+		-- hold F (L1) to block (Config.Block). Bound before Wolverine's
+		-- Resist, which takes F first while a death ray is on him.
+		holdAction("Block", "Block", { Enum.KeyCode.F, Enum.KeyCode.ButtonL1 }, "Block")
+		ContextActionService:SetPosition("Block", UDim2.new(1, -280, 1, -130))
 	end
 	if role == "Wolverine" then
 		holdAction("Feral", "Feral", { Enum.KeyCode.C, Enum.KeyCode.LeftControl, Enum.KeyCode.ButtonL2 }, "Feral")
@@ -17821,7 +18174,7 @@ end)
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="39">
+        <Item class="ModuleScript" referent="40">
           <Properties>
             <string name="Name">Daily</string>
             <string name="Source"><![CDATA[-- Daily challenges, login streak, Wolverine odds and Become Wolverine.
@@ -18167,7 +18520,7 @@ return Daily
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="40">
+        <Item class="ModuleScript" referent="41">
           <Properties>
             <string name="Name">Effects</string>
             <string name="Source"><![CDATA[-- Client-only atmosphere: camera shake, snowfall, flickering lights,
@@ -19034,7 +19387,100 @@ return Effects
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="41">
+        <Item class="ModuleScript" referent="42">
+          <Properties>
+            <string name="Name">GuardMeter</string>
+            <string name="Source"><![CDATA[-- Guard meter for Wolverine and the Sentinels (Config.Block): one pip per
+-- hit the guard can take, lit gold while the block is up, and a countdown
+-- while it refills. Reads the player's Guard, GuardMax, Blocking and
+-- GuardRefill attributes (server/Block.lua).
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local UIKit = require(script.Parent:WaitForChild("UIKit"))
+local new, corner, stroke = UIKit.new, UIKit.Corner, UIKit.Stroke
+local K = UIKit.Colors
+
+local player = Players.LocalPlayer
+local GOLD = Color3.fromRGB(255, 205, 60)
+local EMPTY = Color3.fromRGB(46, 46, 56)
+
+local gui = new("ScreenGui", { Name = "GuardMeter", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 4 }, player:WaitForChild("PlayerGui"))
+local box = new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 1, -66), -- just above the stamina bar
+	Size = UDim2.fromOffset(210, 26),
+	BackgroundColor3 = K.Ink,
+	BackgroundTransparency = 0.25,
+	Visible = false,
+}, gui)
+corner(box, 8)
+local boxStroke = stroke(box, Color3.fromRGB(70, 70, 84), 1.5)
+local label = new("TextLabel", {
+	Position = UDim2.fromOffset(10, 0),
+	Size = UDim2.new(0, 70, 1, 0),
+	BackgroundTransparency = 1,
+	Font = Enum.Font.GothamBlack,
+	TextSize = 13,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextColor3 = K.White,
+	Text = "GUARD  F",
+}, box)
+local pipRow = new("Frame", { Position = UDim2.fromOffset(82, 6), Size = UDim2.new(1, -92, 0, 14), BackgroundTransparency = 1 }, box)
+new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 5), VerticalAlignment = Enum.VerticalAlignment.Center }, pipRow)
+local refill = new("TextLabel", {
+	Position = UDim2.fromOffset(82, 0),
+	Size = UDim2.new(1, -92, 1, 0),
+	BackgroundTransparency = 1,
+	Font = Enum.Font.GothamBold,
+	TextSize = 13,
+	TextXAlignment = Enum.TextXAlignment.Right,
+	TextColor3 = Color3.fromRGB(190, 190, 205),
+	Text = "",
+}, box)
+
+local pips = {}
+local function setPips(n)
+	while #pips < n do
+		local pip = new("Frame", { Size = UDim2.fromOffset(18, 10), BackgroundColor3 = EMPTY }, pipRow)
+		corner(pip, 3)
+		table.insert(pips, pip)
+	end
+	for i, pip in pips do
+		pip.Visible = i <= n
+	end
+end
+
+RunService.RenderStepped:Connect(function()
+	local role = player:GetAttribute("Role")
+	local max = player:GetAttribute("GuardMax")
+	if not (role == "Wolverine" or role == "Sentinel") or not ReplicatedStorage:GetAttribute("InRound") or not max then
+		box.Visible = false
+		return
+	end
+	box.Visible = true
+	setPips(max)
+	local guard = player:GetAttribute("Guard") or max
+	local up = player:GetAttribute("Blocking") == true
+	for i = 1, max do
+		pips[i].BackgroundColor3 = i <= guard and (up and GOLD or K.White) or EMPTY
+	end
+	boxStroke.Color = up and GOLD or Color3.fromRGB(70, 70, 84)
+	local back = player:GetAttribute("GuardRefill")
+	local left = back and back - workspace:GetServerTimeNow() or 0
+	if left > 0 and guard < max then
+		refill.Text = ("%ds"):format(math.ceil(left))
+	else
+		refill.Text = ""
+	end
+end)
+
+return {}
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="43">
           <Properties>
             <string name="Name">HideGlow</string>
             <string name="Source"><![CDATA[-- A soft white glow on the hiding spots near you, so survivors can spot
@@ -19117,7 +19563,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="42">
+        <Item class="ModuleScript" referent="44">
           <Properties>
             <string name="Name">Interface</string>
             <string name="Source"><![CDATA[-- HUD built entirely from code.
@@ -19991,7 +20437,7 @@ return Interface
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="43">
+        <Item class="ModuleScript" referent="45">
           <Properties>
             <string name="Name">MapLife</string>
             <string name="Source"><![CDATA[-- The facility's moving parts, animated on each client (only near the camera):
@@ -20089,7 +20535,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="44">
+        <Item class="ModuleScript" referent="46">
           <Properties>
             <string name="Name">Minigame</string>
             <string name="Source"><![CDATA[-- Sentinel console repair minigames. Each console this round has its own
@@ -20605,7 +21051,7 @@ return Minigame
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="45">
+        <Item class="ModuleScript" referent="47">
           <Properties>
             <string name="Name">Minimap</string>
             <string name="Source"><![CDATA[-- A small north-up map of the facility (top left) with a dot for you that
@@ -20838,7 +21284,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="46">
+        <Item class="ModuleScript" referent="48">
           <Properties>
             <string name="Name">Objectives</string>
             <string name="Source"><![CDATA[-- Round objectives, down the left of the screen under the minimap, so a new
@@ -21007,7 +21453,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="47">
+        <Item class="ModuleScript" referent="49">
           <Properties>
             <string name="Name">SentinelTracker</string>
             <string name="Source"><![CDATA[-- Sentinel targeting: while you pilot a Sentinel and Wolverine is more than
@@ -21054,7 +21500,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="48">
+        <Item class="ModuleScript" referent="50">
           <Properties>
             <string name="Name">Shop</string>
             <string name="Source"><![CDATA[-- Wolverine shop: suits + claws, and the left-side menu dock.
@@ -21489,7 +21935,7 @@ return Shop
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="49">
+        <Item class="ModuleScript" referent="51">
           <Properties>
             <string name="Name">SlashFX</string>
             <string name="Source"><![CDATA[-- Crisp anime-style slash VFX, drawn on each client every frame so they stay smooth.
@@ -23534,7 +23980,7 @@ return SlashFX
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="50">
+        <Item class="ModuleScript" referent="52">
           <Properties>
             <string name="Name">SoundCheck</string>
             <string name="Source"><![CDATA[-- Checks every uploaded sound once when you join. Roblox refuses to play an
@@ -23606,7 +24052,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="51">
+        <Item class="ModuleScript" referent="53">
           <Properties>
             <string name="Name">Spectate</string>
             <string name="Source"><![CDATA[-- Spectate: once you're out of the round (killed, or waiting in the lobby) you
@@ -23847,7 +24293,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="52">
+        <Item class="ModuleScript" referent="54">
           <Properties>
             <string name="Name">Store</string>
             <string name="Source"><![CDATA[-- Lobby dock: STORE (coin packs and the 2x chance pass, bought with Robux)
@@ -24187,7 +24633,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="53">
+        <Item class="ModuleScript" referent="55">
           <Properties>
             <string name="Name">TerminalSounds</string>
             <string name="Source"><![CDATA[-- Terminals sound alive when you're near one: a looping console hum
@@ -24286,7 +24732,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="54">
+        <Item class="ModuleScript" referent="56">
           <Properties>
             <string name="Name">UIKit</string>
             <string name="Source"><![CDATA[-- Shared UI building blocks: animated buttons, panels, gradients.
@@ -24696,7 +25142,7 @@ return UIKit
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="55">
+        <Item class="ModuleScript" referent="57">
           <Properties>
             <string name="Name">Upgrades</string>
             <string name="Source"><![CDATA[-- Survivor upgrades window (lobby dock "UPGRADES"): one card per upgrade in
@@ -24845,7 +25291,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="56">
+        <Item class="ModuleScript" referent="58">
           <Properties>
             <string name="Name">Vanish</string>
             <string name="Source"><![CDATA[-- Invisibility power (Config.Upgrades.Invisible). While a character has the
@@ -24995,7 +25441,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="57">
+        <Item class="ModuleScript" referent="59">
           <Properties>
             <string name="Name">VerityTrail</string>
             <string name="Source"><![CDATA[-- Verity claws: running with them out sheds a trail of tiny grinning faces
@@ -25151,7 +25597,7 @@ return {}
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="58">
+  <Item class="Workspace" referent="60">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>
