@@ -250,6 +250,8 @@ ShopRemote.OnServerInvoke = function(player, action, id)
 		return PlayerData.BuyUpgrade(player, id)
 	elseif action == "EquipUpgrade" then
 		return PlayerData.EquipUpgrade(player, id)
+	elseif action == "Brightness" then
+		return PlayerData.SetBrightness(player, tonumber(id))
 	end
 	return false, "Bad request"
 end

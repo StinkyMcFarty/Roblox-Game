@@ -1360,9 +1360,10 @@ end
 function MapBuilder.SetupLighting()
 	Lighting.ClockTime = 0.4
 	Lighting.Brightness = 4
-	-- the facility is lit by its own lamps: a low blue-grey ambient lets them
-	-- (and every glowing prop) shape the rooms instead of flattening them
-	Lighting.Ambient = rgb(78, 88, 108)
+	-- the facility is lit by its own lamps: a blue-grey ambient lets them (and
+	-- every glowing prop) shape the rooms, but is high enough that corners
+	-- between lamps stay readable (players tune it with the brightness setting)
+	Lighting.Ambient = rgb(96, 106, 128)
 	Lighting.OutdoorAmbient = rgb(118, 128, 160)
 	pcall(function()
 		Lighting.LightingStyle = Enum.LightingStyle.Realistic

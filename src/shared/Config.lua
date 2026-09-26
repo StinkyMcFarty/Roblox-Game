@@ -172,6 +172,21 @@ Config.GuaranteedWolverineProductId = 3714579231
 -- priced 250 Robux, then paste its ID here.
 Config.DoubleChanceGamepassId = 1995650487
 
+-- Map brightness: every player picks their own with the sun button (top
+-- left), saved with their data. Exposure is added to the lighting's exposure
+-- and Ambient scales the ambient light, so shadowed corners lift too. Level 3
+-- is the map as built.
+Config.Brightness = {
+	Default = 3,
+	Levels = {
+		{ Name = "DARKEST", Exposure = -0.5, Ambient = 0.75 },
+		{ Name = "DARK", Exposure = -0.25, Ambient = 0.88 },
+		{ Name = "NORMAL", Exposure = 0, Ambient = 1 },
+		{ Name = "BRIGHT", Exposure = 0.45, Ambient = 1.35 },
+		{ Name = "BRIGHTEST", Exposure = 0.9, Ambient = 1.75 },
+	},
+}
+
 -- What the in-game currency is called on screen (saves still store it as Coins).
 Config.CoinName = "Berserker Coins"
 

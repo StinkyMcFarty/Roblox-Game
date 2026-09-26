@@ -68,6 +68,7 @@ local function publish(player)
 	end
 	player:SetAttribute("Upgrades", table.concat(ups, ","))
 	player:SetAttribute("Power", d.Power)
+	player:SetAttribute("Brightness", d.Brightness)
 	player:SetAttribute("GuaranteedTokens", d.Tokens)
 	player:SetAttribute("LoginStreak", d.Streak)
 	player:SetAttribute("Challenges", HttpService:JSONEncode(d.Daily))
@@ -116,6 +117,7 @@ function PlayerData.Save(player)
 				return list
 			end)(),
 			Power = d.Power,
+			Brightness = d.Brightness,
 			Tokens = d.Tokens,
 			LastLogin = d.LastLogin,
 			LastClaim = d.LastClaim,
@@ -154,6 +156,7 @@ function PlayerData.Load(player)
 		SentinelSkin = Skins.DefaultSentinel,
 		Upgrades = {}, -- [id] = true, survivor upgrades (Config.Upgrades)
 		Power = "", -- the one upgrade equipped on G ("" = the plain fart)
+		Brightness = Config.Brightness.Default, -- map brightness setting (Config.Brightness)
 		Tokens = 0,
 		TokenRound = 0, -- Become Wolverine queue (this server only; see queueOf)
 		TokenTie = math.random(),
@@ -210,6 +213,10 @@ function PlayerData.Load(player)
 				end
 			elseif data.Upgrades.TurboFart then
 				data.Power = "TurboFart" -- bought before powers had to be picked
+			end
+			local level = tonumber(saved.Brightness)
+			if level and Config.Brightness.Levels[level] then
+				data.Brightness = level
 			end
 			data.Tokens = tonumber(saved.Tokens) or 0
 			if type(saved.Receipts) == "table" then
@@ -359,6 +366,17 @@ end
 function PlayerData.HasUpgrade(player, id)
 	local d = cache[player]
 	return d ~= nil and d.Upgrades[id] == true
+end
+
+-- Map brightness setting (index into Config.Brightness.Levels), any time.
+function PlayerData.SetBrightness(player, level)
+	local d = cache[player]
+	if not (d and Config.Brightness.Levels[level]) then
+		return false, "Bad level"
+	end
+	d.Brightness = level
+	player:SetAttribute("Brightness", level)
+	return true
 end
 
 -- The upgrade this survivor has equipped on G ("" = none, the plain fart).

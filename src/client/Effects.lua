@@ -55,8 +55,13 @@ local NIGHT, DAY = nil, {
 	Ambient = Color3.fromRGB(124, 155, 184), OutdoorAmbient = Color3.fromRGB(157, 178, 255),
 }
 local inLobby = nil
-local function applyZone(lobby)
-	if inLobby == lobby then
+-- the player's brightness setting (Config.Brightness), applied on top of the zone
+local brightness = Config.Brightness.Levels[Config.Brightness.Default]
+local function scaled(c, k)
+	return Color3.new(math.min(1, c.R * k), math.min(1, c.G * k), math.min(1, c.B * k))
+end
+local function applyZone(lobby, force)
+	if inLobby == lobby and not force then
 		return
 	end
 	inLobby = lobby
@@ -66,8 +71,14 @@ local function applyZone(lobby)
 			NIGHT[k] = Lighting[k]
 		end
 	end
-	local target = lobby and DAY or NIGHT
-	TweenService:Create(Lighting, TweenInfo.new(1.2), target):Play()
+	local target = table.clone(lobby and DAY or NIGHT)
+	target.ExposureCompensation += brightness.Exposure
+	target.Ambient = scaled(target.Ambient, brightness.Ambient)
+	target.OutdoorAmbient = scaled(target.OutdoorAmbient, brightness.Ambient)
+	TweenService:Create(Lighting, TweenInfo.new(force and 0.4 or 1.2), target):Play()
+	if force then
+		return
+	end
 	local bloom = Lighting:FindFirstChildOfClass("BloomEffect")
 	if bloom then
 		-- the lobby is daylit: keep glow tight and subtle there
@@ -81,6 +92,23 @@ end
 RunService.Heartbeat:Connect(function()
 	applyZone(workspace.CurrentCamera.CFrame.Position.Y > 300)
 end)
+
+-- Brightness setting (1..#Config.Brightness.Levels): the sun button calls this
+-- straight away; the saved level arrives as the "Brightness" attribute.
+function Effects.SetBrightness(level)
+	local l = Config.Brightness.Levels[tonumber(level) or 0]
+	if not l or l == brightness then
+		return
+	end
+	brightness = l
+	if inLobby ~= nil then
+		applyZone(inLobby, true)
+	end
+end
+player:GetAttributeChangedSignal("Brightness"):Connect(function()
+	Effects.SetBrightness(player:GetAttribute("Brightness"))
+end)
+Effects.SetBrightness(player:GetAttribute("Brightness"))
 
 local tint = Instance.new("ColorCorrectionEffect")
 tint.Name = "LocalTint"

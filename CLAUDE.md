@@ -117,6 +117,12 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
   or mechanics change.
 - No resetting in a round: ClientMain `syncReset` sets `ResetButtonCallback` false while the
   role is Survivor/Wolverine/Sentinel (true in the lobby or dead).
+- Map brightness setting (`Config.Brightness`, five levels, 3 = as built): sun button top left
+  (`src/client/Brightness.lua`), applied in `Effects.lua` on top of the lobby/arena lighting zone
+  (`Effects.SetBrightness`: exposure offset + ambient scale), saved as `Brightness` in
+  PlayerData (Shop remote action "Brightness").
+- Auto-AFK (`Config.AutoAfk`, `Store.lua`): Roblox's `Idled` marks you AFK only while in the
+  lobby, and any input clears it; the AFK button's own AFK stays on.
 - Currency is shown as "Berserker Coins" (`Config.CoinName`); saves still use the key `Coins`.
 - Lighting (`MapBuilder.SetupLighting`): gentle grade (contrast 0.15, saturation 0.08), bloom
   0.55/40/1.35 (client arena zone matches), low blue-grey ambient so lamps shape the rooms.
