@@ -465,9 +465,16 @@ local function floorBelow(position, exclude)
 	return hit and hit.Position or position - Vector3.new(0, 3, 0)
 end
 
-local function punch(player, char, root)
+-- which arm each suit threw last (a punch without a side from the client alternates)
+local lastArm = setmetatable({}, { __mode = "k" })
+
+local function punch(player, char, root, side)
 	local cfg = Config.Sentinel.Punch
-	VFX.Anim(char, "Punch")
+	if side ~= "R" and side ~= "L" then
+		side = lastArm[player] == "R" and "L" or "R"
+	end
+	lastArm[player] = side
+	VFX.Anim(char, side == "R" and "PunchR" or "PunchL")
 	if Config.UploadedSounds.SentinelSwing ~= 0 then
 		Util.Sound(Config.Sounds.SentinelSwing, root, { Volume = 1.8, Range = 200 })
 	end
@@ -482,7 +489,7 @@ local function punch(player, char, root)
 		return
 	end
 	local w, wChar, wRoot = wolverineParts()
-	local fist = root.CFrame * CFrame.new(0, 0.5, -3.2)
+	local fist = root.CFrame * CFrame.new(side == "R" and 0.9 or -0.9, 0.5, -3.2)
 	local hit = false
 	if wRoot then
 		local box = root.CFrame * CFrame.new(0, 0, -cfg.Range / 2 + 0.5)
@@ -828,7 +835,7 @@ function Sentinel.Handle(player, ability, arg)
 	cd[ability] = os.clock() + cfg.Cooldown - 0.1
 
 	if ability == "Punch" then
-		perform(player, ability, punch, player, char, root)
+		perform(player, ability, punch, player, char, root, arg)
 	elseif ability == "Laser" then
 		perform(player, ability, laser, player, char, root, arg)
 	elseif ability == "Pulse" then

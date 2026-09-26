@@ -101,6 +101,7 @@ local HINTS = {
 
 local readyAt = {}
 local slashSide = 0
+local punchSide = 0 -- Sentinel M1 alternates arms (sent to the server so its echo matches)
 local lastPredictedSlash = -1
 local PREDICT = { Pounce = "Pounce", Stab = "Impale", Sniff = "Sniff", Punch = "Punch", Laser = "DeathRay", Pulse = "PulseCharge", Fart = "Fart", Slam = "Slam", Dodge = "Dodge" }
 local currentKit = {}
@@ -172,6 +173,9 @@ local function activate(name)
 	if name == "Slash" then
 		slashSide = slashSide % 2 + 1
 		predict = slashSide == 1 and "SlashR" or "SlashL"
+	elseif name == "Punch" then
+		punchSide = punchSide % 2 + 1
+		predict = punchSide == 1 and "PunchR" or "PunchL"
 	end
 	if predict then
 		Anims.Play(char, predict)
@@ -198,6 +202,8 @@ local function activate(name)
 	local arg = nil
 	if name == "Laser" then
 		arg = aimPoint()
+	elseif name == "Punch" then
+		arg = punchSide == 1 and "R" or "L"
 	end
 	Ability:FireServer(name, arg)
 end

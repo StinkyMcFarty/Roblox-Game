@@ -668,5 +668,9 @@ local function mirror(clip)
 	return out
 end
 Clips.SlashL = mirror(Clips.SlashR)
+-- Sentinel punches alternate arms (M1): right, then left
+Clips.Punch.Group = "Punch"
+Clips.PunchR = Clips.Punch
+Clips.PunchL = mirror(Clips.Punch)
 
 return Clips
