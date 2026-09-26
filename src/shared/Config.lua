@@ -164,10 +164,8 @@ Config.Fart = {
 -- Monetization ----------------------------------------------------------
 -- Create a Developer Product (29 Robux) in the Creator Dashboard under
 -- your experience > Monetization > Developer Products, then paste its ID here.
--- The button shows the dashboard's real price once it loads; this is the
--- fallback label.
+-- The button shows no price: Roblox's purchase prompt shows the dashboard's.
 Config.GuaranteedWolverineProductId = 3714579231
-Config.GuaranteedWolverinePrice = 29
 
 -- Game Pass: doubles your chance of being picked as Wolverine every round.
 -- Creator Dashboard > your experience > Monetization > Passes: create a pass

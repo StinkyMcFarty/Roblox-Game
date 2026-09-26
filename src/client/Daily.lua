@@ -20,7 +20,8 @@ local gui = new("ScreenGui", { Name = "DailyUI", ResetOnSpawn = false, ZIndexBeh
 local dailyButton = Shop.DockButton("DAILY", "🎁", K.Green, 2)
 local buyButton, buyLabel = Shop.DockButton("BECOME WOLVERINE", "👑", K.Red, 3)
 local passButton, passLabel = Shop.DockButton("2X CHANCE  R$250", "🎲", K.Purple, 4)
-local BUY_TEXT = "BECOME WOLVERINE  R$" .. Config.GuaranteedWolverinePrice
+-- no price on the button: Roblox's purchase prompt shows the real one
+local BUY_TEXT = "BECOME WOLVERINE"
 buyLabel.Text = BUY_TEXT
 
 -- Wolverine odds pill
@@ -202,18 +203,6 @@ buyButton.Activated:Connect(function()
 		return
 	end
 	MarketplaceService:PromptProductPurchase(player, Config.GuaranteedWolverineProductId)
-end)
-task.spawn(function()
-	-- the real price from the Creator Dashboard, if the product exists
-	if Config.GuaranteedWolverineProductId ~= 0 then
-		local ok, info = pcall(function()
-			return MarketplaceService:GetProductInfo(Config.GuaranteedWolverineProductId, Enum.InfoType.Product)
-		end)
-		if ok and info and info.PriceInRobux then
-			BUY_TEXT = "BECOME WOLVERINE  R$" .. info.PriceInRobux
-			buyLabel.Text = BUY_TEXT
-		end
-	end
 end)
 
 -- 2x Wolverine chance game pass

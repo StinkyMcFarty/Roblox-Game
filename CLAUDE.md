@@ -131,7 +131,7 @@ The user is re-creating these on a new experience; the IDs need replacing once m
 | Item | Price | Config |
 | --- | --- | --- |
 | 2x Wolverine Chance (Game Pass) | R$250 | `DoubleChanceGamepassId` |
-| Become Wolverine | R$29 | `GuaranteedWolverineProductId` (label fallback `GuaranteedWolverinePrice`) |
+| Become Wolverine | R$29 | `GuaranteedWolverineProductId` (the button shows no price; the Roblox prompt does) |
 
 Become Wolverine tokens queue (`queueOf` in `PlayerData.lua`): earlier rounds first, same-round
 buyers in random order; the rest keep their token for later rounds (attribute `WolverineQueue`).
