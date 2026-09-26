@@ -8,7 +8,9 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
 - Rebuild the place after code edits: `rojo build -o SurviveTheWolverine.rbxlx`.
 - The user live-syncs with `rojo serve` + the Studio Rojo plugin into their own place file,
   **Berserker Rage** (Windows, repo cloned with GitHub Desktop). They are new to Rojo and git;
-  give them short, click-by-click steps.
+  give them short, click-by-click steps. They start the server by double-clicking
+  `Start Rojo.bat` (runs `rojo.exe` from the repo folder, which git ignores; the Studio plugin is
+  Rojo 7.7.0), then press Connect in the plugin.
 - Sounds are synthesised by `tools/generate_sfx.py` (`python3 tools/generate_sfx.py <Name>` writes
   only that sound); store icons by `tools/generate_icons.py` into `assets/icons/`.
 - `tools/preview/` renders suits offline: `run.py` runs the real `Costumes.lua` (Luau shimmed to Lua
