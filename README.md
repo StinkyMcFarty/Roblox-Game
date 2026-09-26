@@ -123,6 +123,9 @@ A Weapon X holding hangar on a snowy mountain ledge:
 - a claw collection display case
 - a fireplace lounge with a live "Top Hunters" leaderboard
 - a hanging screen showing the round timer
+- steel-panelled blockwork walls with I-beam columns, a bolted ring beam and ribbed cladding; a roof of girders, ducts, cable trays and a sprinkler main
+- six high-bay lamps light the hall, with caged amber lamps on the walls (two red ones flicker)
+- a cola machine and a snack machine in the south-east corner
 
 ## Map: the Weapon X facility
 

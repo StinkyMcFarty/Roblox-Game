@@ -188,7 +188,16 @@ Color3.fromHSV = function(h, s, v)
 end
 Col.__index = {
   Lerp = function(a, b, t) return c3(a.R + (b.R-a.R)*t, a.G + (b.G-a.G)*t, a.B + (b.B-a.B)*t) end,
-  ToHSV = function(a) local mx, mn = math.max(a.R,a.G,a.B), math.min(a.R,a.G,a.B); return 0, mx == 0 and 0 or (mx-mn)/mx, mx end,
+  ToHSV = function(a)
+    local r, g, b = a.R, a.G, a.B
+    local mx, mn = math.max(r, g, b), math.min(r, g, b)
+    local d, h = mx - mn, 0
+    if d > 0 then
+      if mx == r then h = ((g - b) / d) % 6 elseif mx == g then h = (b - r) / d + 2 else h = (r - g) / d + 4 end
+      h = h / 6
+    end
+    return h, mx == 0 and 0 or d / mx, mx
+  end,
 }
 Col.__eq = function(a, b) return a.R == b.R and a.G == b.G and a.B == b.B end
 

@@ -124,6 +124,13 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
 - Auto-AFK (`Config.AutoAfk`, `Store.lua`): Roblox's `Idled` marks you AFK only while in the
   lobby, and any input clears it; the AFK button's own AFK stays on.
 - Currency is shown as "Berserker Coins" (`Config.CoinName`); saves still use the key `Coins`.
+- Lobby shell (`BuildLobby` in `MapBuilder.lua`): walls are dressed per wall (`walls` table, `onWall`
+  places parts along each inner face; `gaps` keep the band/ring beam off the windows, notice board
+  and claw gouges). Light fittings use `fitting()` (CastShadow = false): a shadowed lamp whose own
+  bulb or shade is in front of it shadows the floor it lights (the old hanging lamps did). Nothing
+  goes across the south windows; the claw and WEAPON X signs hang above them.
+- Lobby preview: the preview mock can build the lobby (`MapBuilder.BuildLobby`); `Color3:ToHSV` in
+  `prelude.lua` returns real hues (the lobby softens its neon through HSV).
 - Lighting (`MapBuilder.SetupLighting`): gentle grade (contrast 0.15, saturation 0.08), bloom
   0.55/40/1.35 (client arena zone matches), low blue-grey ambient so lamps shape the rooms.
   Foundry: cool work floods, forged-steel crucibles (one pouring into a mould).
