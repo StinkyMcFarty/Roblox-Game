@@ -2436,31 +2436,103 @@ function MapBuilder.BuildLobby()
 	block(lobby, Vector3.new(3.4, 0.8, 13), CFrame.new(-hx + 2.8, Y + 12.2, fz), M.Wood, rgb(60, 38, 24)) -- mantel
 	block(lobby, Vector3.new(2, 0.3, 6), CFrame.new(-hx + 3, Y + 0.15, fz), M.Slate, rgb(26, 22, 20)) -- firebox floor
 	block(lobby, Vector3.new(1.8, 0.4, 9), CFrame.new(-hx + 4.9, Y + 0.2, fz), M.Slate, rgb(58, 54, 52)) -- hearth
-	block(lobby, Vector3.new(1.3, 0.2, 3.6), CFrame.new(-hx + 3, Y + 0.38, fz), M.Neon, rgb(255, 90, 20)) -- embers
-	for i = 0, 2 do
-		block(lobby, Vector3.new(0.8, 0.8, 3.4), CFrame.new(-hx + 3 + (i - 1) * 0.3, Y + 0.75 + i * 0.12, fz) * CFrame.Angles(0, math.rad(i * 40), 0), M.Wood, rgb(60, 40, 24), { Shape = Enum.PartType.Cylinder })
+	-- the fire: an iron grate on an ash bed, a stacked log pile with glowing
+	-- cracks, embers scattered round it, and layered flames, sparks and smoke
+	local fx0 = -hx + 3 -- middle of the firebox
+	block(lobby, Vector3.new(1.9, 0.1, 5.4), CFrame.new(fx0, Y + 0.35, fz), M.Slate, rgb(62, 58, 56)) -- ash bed
+	block(lobby, Vector3.new(1, 0.05, 3), CFrame.new(fx0, Y + 0.42, fz), M.Neon, rgb(200, 60, 15), { CanCollide = false }) -- glowing bed under the logs
+	local IRON = rgb(30, 28, 28)
+	for _, x in { -0.6, 0, 0.6 } do -- grate
+		block(lobby, Vector3.new(0.12, 0.12, 4.2), CFrame.new(fx0 + x, Y + 0.72, fz), M.Metal, IRON)
 	end
-	local hearth = block(lobby, Vector3.new(1, 1, 1), CFrame.new(-hx + 3, Y + 1.2, fz), M.SmoothPlastic, rgb(0, 0, 0), { Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false })
+	for _, z in { -1.8, 1.8 } do
+		block(lobby, Vector3.new(1.6, 0.14, 0.14), CFrame.new(fx0, Y + 0.64, fz + z), M.Metal, IRON)
+		for _, x in { -0.7, 0.7 } do
+			block(lobby, Vector3.new(0.12, 0.3, 0.12), CFrame.new(fx0 + x, Y + 0.49, fz + z), M.Metal, IRON)
+		end
+	end
+	for _, z in { -2.2, 2.2 } do -- andirons
+		block(lobby, Vector3.new(0.16, 1.3, 0.16), CFrame.new(fx0 + 0.85, Y + 0.95, fz + z), M.Metal, IRON)
+		block(lobby, Vector3.new(0.3, 0.3, 0.3), CFrame.new(fx0 + 0.85, Y + 1.7, fz + z), M.Metal, IRON, { Shape = Enum.PartType.Ball })
+	end
+	local EMBER = rgb(255, 110, 30)
+	local alongZ = CFrame.Angles(0, math.rad(90), 0) -- a cylinder lying along the firebox
+	local function log(cf, len, dia, color, cracks)
+		block(lobby, Vector3.new(len, dia, dia), cf, M.Wood, color, { Shape = Enum.PartType.Cylinder })
+		block(lobby, Vector3.new(len * 0.7, 0.08, 0.12), cf * CFrame.new(0, -dia * 0.44, 0), M.Neon, EMBER, { CanCollide = false })
+		for _, c in cracks or {} do -- glowing splits on the side facing the room
+			block(lobby, Vector3.new(c[2], 0.06, 0.06), cf * CFrame.new(c[1], c[3] * dia, dia * 0.47) * CFrame.Angles(math.rad(c[4] or 0), 0, 0), M.Neon, EMBER, { CanCollide = false })
+		end
+	end
+	log(CFrame.new(fx0 - 0.45, Y + 1.12, fz) * alongZ * CFrame.Angles(0, math.rad(4), 0), 3.6, 0.66, rgb(78, 52, 32))
+	log(CFrame.new(fx0 + 0.4, Y + 1.1, fz + 0.1) * alongZ * CFrame.Angles(0, math.rad(-5), 0), 3.4, 0.62, rgb(72, 48, 30), { { -0.6, 0.9, 0.05 }, { 0.5, 0.6, -0.12 }, { 1.1, 0.4, 0.15 } })
+	log(CFrame.new(fx0, Y + 1.69, fz - 1.1) * CFrame.Angles(0, math.rad(8), 0), 1.9, 0.5, rgb(54, 36, 24))
+	log(CFrame.new(fx0 - 0.05, Y + 1.67, fz + 1.2) * CFrame.Angles(0, math.rad(-6), 0), 1.9, 0.5, rgb(58, 38, 26))
+	log(CFrame.new(fx0 - 0.1, Y + 2.19, fz) * alongZ * CFrame.Angles(math.rad(6), 0, 0), 2.8, 0.5, rgb(40, 28, 20), { { -0.4, 0.7, 0.1 }, { 0.6, 0.5, -0.1 } })
+	for _ = 1, 22 do -- embers and char round the grate
+		local glowing = rng:NextNumber() < 0.6
+		local sz = rng:NextNumber(0.14, 0.34)
+		block(lobby, Vector3.new(sz, sz * 0.7, sz), CFrame.new(fx0 + rng:NextNumber(-0.85, 0.85), Y + 0.42 + sz * 0.3, fz + rng:NextNumber(-2.4, 2.4)) * CFrame.Angles(rng:NextNumber(0, 3), rng:NextNumber(0, 3), 0),
+			glowing and M.Neon or M.Slate, glowing and (rng:NextNumber() < 0.5 and EMBER or rgb(220, 50, 20)) or rgb(40, 22, 16), { CanCollide = false })
+	end
+	-- flames lick up out of the logs: a hot core, a wider orange body,
+	-- sparks and a little smoke drawn up the flue
+	local hearth = block(lobby, Vector3.new(1.2, 0.3, 3), CFrame.new(fx0, Y + 1.35, fz), M.SmoothPlastic, rgb(0, 0, 0), { Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false })
 	hearth.Name = "FireplaceFire"
-	make("Fire", hearth, { Size = 4, Heat = 7, Color = rgb(255, 150, 50), SecondaryColor = rgb(255, 70, 20) })
+	local NS, NK, CS, CK = NumberSequence.new, NumberSequenceKeypoint.new, ColorSequence.new, ColorSequenceKeypoint.new
+	local FIRE_TEX = "rbxasset://textures/particles/fire_main.dds"
 	make("ParticleEmitter", hearth, {
-		Name = "Flames",
-		Texture = "rbxasset://textures/particles/fire_main.dds",
-		Color = ColorSequence.new(rgb(255, 190, 90), rgb(255, 70, 20)),
-		LightEmission = 1,
-		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.8), NumberSequenceKeypoint.new(1, 0.3) }),
-		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) }),
-		Lifetime = NumberRange.new(0.5, 0.9),
-		Rate = 45,
-		Speed = NumberRange.new(2, 4),
-		SpreadAngle = Vector2.new(12, 12),
-		Acceleration = Vector3.new(0, 4, 0),
-		Rotation = NumberRange.new(0, 360),
-		RotSpeed = NumberRange.new(-60, 60),
+		Name = "FlameCore", Texture = FIRE_TEX, Shape = Enum.ParticleEmitterShape.Box,
+		Color = CS({ CK(0, rgb(255, 244, 200)), CK(0.3, rgb(255, 196, 80)), CK(1, rgb(255, 90, 20)) }),
+		LightEmission = 1, LightInfluence = 0,
+		Size = NS({ NK(0, 0.9), NK(0.35, 1.2), NK(1, 0.1) }),
+		Transparency = NS({ NK(0, 0.35), NK(0.2, 0.05), NK(0.75, 0.4), NK(1, 1) }),
+		Lifetime = NumberRange.new(0.45, 0.75), Rate = 60,
+		Speed = NumberRange.new(2.2, 4), SpreadAngle = Vector2.new(6, 6),
+		Acceleration = Vector3.new(0, 5, 0), Drag = 1,
+		Rotation = NumberRange.new(-20, 20), RotSpeed = NumberRange.new(-50, 50),
+		EmissionDirection = Enum.NormalId.Top, ZOffset = 0.3,
+	})
+	make("ParticleEmitter", hearth, {
+		Name = "FlameOuter", Texture = FIRE_TEX, Shape = Enum.ParticleEmitterShape.Box,
+		Color = CS({ CK(0, rgb(255, 150, 40)), CK(0.5, rgb(240, 80, 20)), CK(1, rgb(150, 30, 10)) }),
+		LightEmission = 0.9, LightInfluence = 0,
+		Size = NS({ NK(0, 1.4), NK(0.4, 1.9), NK(1, 0.3) }),
+		Transparency = NS({ NK(0, 0.6), NK(0.25, 0.35), NK(1, 1) }),
+		Lifetime = NumberRange.new(0.7, 1.1), Rate = 28,
+		Speed = NumberRange.new(1.8, 3.2), SpreadAngle = Vector2.new(10, 10),
+		Acceleration = Vector3.new(0, 4, 0), Drag = 0.8,
+		Rotation = NumberRange.new(0, 360), RotSpeed = NumberRange.new(-40, 40),
+		EmissionDirection = Enum.NormalId.Top, ZOffset = 0.1,
+	})
+	make("ParticleEmitter", hearth, {
+		Name = "Sparks", Texture = "rbxasset://textures/particles/sparkles_main.dds", Shape = Enum.ParticleEmitterShape.Box,
+		Color = CS(rgb(255, 220, 120), rgb(255, 110, 30)),
+		LightEmission = 1, LightInfluence = 0,
+		Size = NS({ NK(0, 0.14), NK(1, 0.02) }),
+		Transparency = NS({ NK(0, 0), NK(0.8, 0.2), NK(1, 1) }),
+		Lifetime = NumberRange.new(0.9, 1.8), Rate = 7,
+		Speed = NumberRange.new(3, 7), SpreadAngle = Vector2.new(30, 30),
+		Acceleration = Vector3.new(0, 1.5, 0), Drag = 1.6,
 		EmissionDirection = Enum.NormalId.Top,
 	})
-	light(hearth, { Range = 26, Brightness = 2.5, Color = rgb(255, 150, 70), Shadows = true })
-	CollectionService:AddTag(hearth, "FireLight")
+	make("ParticleEmitter", hearth, {
+		Name = "Smoke", Texture = "rbxasset://textures/particles/smoke_main.dds", Shape = Enum.ParticleEmitterShape.Box,
+		Color = CS(rgb(60, 54, 50), rgb(110, 106, 104)),
+		LightEmission = 0, LightInfluence = 1,
+		Size = NS({ NK(0, 0.8), NK(1, 3.2) }),
+		Transparency = NS({ NK(0, 1), NK(0.25, 0.8), NK(1, 1) }),
+		Lifetime = NumberRange.new(2.2, 3.2), Rate = 6,
+		Speed = NumberRange.new(2.4, 3.4), SpreadAngle = Vector2.new(8, 8),
+		Acceleration = Vector3.new(0, 1, 0), Drag = 0.4,
+		Rotation = NumberRange.new(0, 360), RotSpeed = NumberRange.new(-15, 15),
+		EmissionDirection = Enum.NormalId.Top,
+	})
+	-- the firelight hangs above the logs, so they don't shadow the hearth
+	local glow = block(lobby, Vector3.new(0.4, 0.4, 0.4), CFrame.new(fx0 + 0.3, Y + 2.6, fz), M.SmoothPlastic, rgb(0, 0, 0), { Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false })
+	glow.Name = "FireGlow"
+	light(glow, { Range = 26, Brightness = 2.5, Color = rgb(255, 150, 70), Shadows = true })
+	CollectionService:AddTag(glow, "FireLight")
 	-- mounted claws trophy above the fireplace
 	for b = -1, 1 do
 		block(lobby, Vector3.new(0.15, 4, 0.4), CFrame.new(-hx + 1.6, Y + 15.5, fz + b * 0.9) * CFrame.Angles(math.rad(b * 8), 0, 0), M.Metal, rgb(210, 214, 222), { Reflectance = 0.4 })
