@@ -879,7 +879,20 @@ function Costumes.Dress(char, skinId)
 	local skin = Skins.List[skinId] or Skins.List[Skins.Default]
 	local tex = skin.Textures or {}
 	local head = char:FindFirstChild("Head")
-	local skinTone = head and head.Color or rgb(226, 176, 140)
+	-- always his own natural skin tone, whatever colour the player's avatar is
+	local skinTone = Skins.SkinTone
+	if head then
+		head.Color = skinTone
+		local sa = head:FindFirstChildOfClass("SurfaceAppearance")
+		if sa then
+			sa:Destroy()
+		end
+		if head:IsA("MeshPart") then
+			pcall(function()
+				head.TextureID = ""
+			end)
+		end
+	end
 	local hasShirt, hasPants = asset(tex.Shirt), asset(tex.Pants)
 
 	for _, d in char:GetChildren() do

@@ -1,5 +1,6 @@
 -- Wolverine skins. Prices are in Coins (earned by playing).
--- "Skin" in a colour slot means "keep the player's own skin tone".
+-- "Skin" in a colour slot means Wolverine's own skin tone (Skins.SkinTone),
+-- never the player's avatar colour.
 --
 -- REALISTIC TEXTURES: the painted suit textures live in assets/textures/.
 -- Upload them in Studio (View > Asset Manager > Bulk Import), right-click
@@ -15,6 +16,9 @@ local DENIM = rgb(48, 66, 104)
 local BOOT = rgb(55, 38, 26)
 
 local Skins = {}
+
+-- Wolverine's natural skin tone: his face, bare arms and chest in every suit
+Skins.SkinTone = rgb(226, 176, 140)
 
 Skins.Order = { "Logan", "Comic", "WeaponX", "OldManLogan" }
 
