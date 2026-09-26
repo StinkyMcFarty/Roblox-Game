@@ -338,9 +338,9 @@ local stamText = new("TextLabel", {
 	Size = UDim2.fromScale(1, 1),
 	BackgroundTransparency = 1,
 	Font = TITLE,
-	TextSize = 13,
+	TextSize = 15,
 	TextColor3 = K.White,
-	Text = "STAMINA",
+	Text = "100",
 	ZIndex = 4,
 }, track)
 new("UIStroke", { Thickness = 1.5, Transparency = 0.2 }, stamText)
@@ -716,14 +716,14 @@ RunService.RenderStepped:Connect(function(dt)
 	if wolverine then
 		fillGrad.Color = ColorSequence.new(Color3.fromRGB(255, 190, 60), Color3.fromRGB(230, 60, 20))
 		stamIcon.Text = "🐺"
-		stamText.Text = exhausted and "EXHAUSTED" or "FERAL"
 		stamIconStroke.Color = Color3.fromRGB(255, 150, 40)
 	else
 		fillGrad.Color = ColorSequence.new(Color3.fromRGB(90, 220, 255), Color3.fromRGB(30, 110, 230))
 		stamIcon.Text = "⚡"
-		stamText.Text = exhausted and "EXHAUSTED" or "STAMINA"
 		stamIconStroke.Color = K.Blue
 	end
+	-- just the number: 100 when rested, ticking down as you run
+	stamText.Text = tostring(math.floor(shownStamina * 100 + 0.5))
 	if exhausted then
 		local blink = (math.sin(os.clock() * 12) + 1) / 2
 		trackStroke.Color = Color3.fromRGB(255, 40, 40):Lerp(Color3.fromRGB(80, 10, 10), blink)
