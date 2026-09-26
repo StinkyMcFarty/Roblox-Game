@@ -845,13 +845,15 @@ local function oldManGear(char)
 				CFrame.new(k * s.X * 0.2, -s.Y * 3.2, s.Z * 0.62) * CFrame.Angles(rad(8), 0, rad(k * 7)), { Class = "WedgePart" })
 		end
 	end
-	-- a thick grey beard jutting out under the chin
+	-- a thick grey beard jutting out under the chin. Its front stands well
+	-- clear of the face (a hair's breadth off it flickered against the drawn
+	-- beard), and the tip is set back behind it.
 	local head = char:FindFirstChild("Head")
 	if head then
 		local hs = head.Size
-		gear(char, head, "Beard", Vector3.new(hs.X * 0.86, hs.Y * 0.34, hs.Z * 0.36), rgb(184, 182, 176), M.Fabric, CFrame.new(0, -hs.Y * 0.5, -hs.Z * 0.34))
+		gear(char, head, "Beard", Vector3.new(hs.X * 0.86, hs.Y * 0.34, hs.Z * 0.4), rgb(184, 182, 176), M.Fabric, CFrame.new(0, -hs.Y * 0.5, -hs.Z * 0.38))
 		gear(char, head, "BeardTip", Vector3.new(hs.X * 0.5, hs.Y * 0.24, hs.Z * 0.26), rgb(170, 168, 162), M.Fabric,
-			CFrame.new(0, -hs.Y * 0.68, -hs.Z * 0.4) * CFrame.Angles(rad(180), 0, 0), { Class = "WedgePart" })
+			CFrame.new(0, -hs.Y * 0.68, -hs.Z * 0.34) * CFrame.Angles(rad(180), 0, 0), { Class = "WedgePart" })
 	end
 	boots(char, rgb(48, 36, 28), rgb(24, 20, 16))
 	-- heavy, rounded shoulders on the duster
