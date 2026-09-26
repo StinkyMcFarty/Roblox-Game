@@ -761,6 +761,19 @@ end
 -- A wall from (ax,az) to (bx,bz). Openings: { At = centre distance from a,
 -- W, Top, Bottom (windows) }. opts.Solid = unbreakable (outer shell).
 local wallCount = 0
+-- every breakable wall column, so flat decor painted on a wall can be hung
+-- on the column behind it (and go, and grow back, with it)
+local wallCores = {}
+local function coreAt(point)
+	for _, core in wallCores do
+		local l = core.CFrame:PointToObjectSpace(point)
+		local h = core.Size / 2
+		if math.abs(l.X) <= h.X and math.abs(l.Y) <= h.Y and math.abs(l.Z) <= h.Z then
+			return core
+		end
+	end
+	return nil
+end
 local function wallRun(parent, ax, az, bx, bz, H, styleName, openings, opts)
 	opts = opts or {}
 	local st = STYLES[styleName]
@@ -831,6 +844,7 @@ local function wallRun(parent, ax, az, bx, bz, H, styleName, openings, opts)
 					core:SetAttribute("Surface", st.Core == M.Metal and "Metal" or "Stone")
 					if not opts.Solid then
 						breakable(core)
+						table.insert(wallCores, core)
 					end
 					decorate(core, st, at, w, sp[1], sp[2], sp[3], idx)
 					-- nothing hung where a door frame's trim would cut through it
@@ -3364,31 +3378,51 @@ end
 -- wall face facing into the room (-Z out); `out` clears that wall's trim.
 local function wallGashes(parent, cf, len, out)
 	local W, H, PPS = 8, len + 2, 30
-	local plate = D(parent, Vector3.new(W, H, 0.05), cf * CFrame.new(0, 0, -out), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false })
-	local g = sgui(plate, N.Front, PPS)
+	-- cut the plate into one slice per wall column behind it, each hung on
+	-- its column, so breaking a column takes just that part of the gashes
+	-- with it (and it grows back with the wall)
+	local slices = {}
+	local x = -W / 2
+	while x < W / 2 - 1e-3 do
+		local core = coreAt((cf * CFrame.new(x + 0.125, 0, 0.3)).Position)
+		local last = slices[#slices]
+		if last and last.Core == core then
+			last.X1 = x + 0.25
+		else
+			table.insert(slices, { Core = core, X0 = x, X1 = x + 0.25 })
+		end
+		x += 0.25
+	end
 	local tilt = math.rad(-18)
-	local function gui(x, y) -- wall studs (X along cf's right, Y up) to canvas pixels
-		local X = x * math.cos(tilt) - y * math.sin(tilt)
-		local Y = x * math.sin(tilt) + y * math.cos(tilt)
+	local function gui(gx, gy) -- wall studs (X along cf's right, Y up) to canvas pixels
+		local X = gx * math.cos(tilt) - gy * math.sin(tilt)
+		local Y = gx * math.sin(tilt) + gy * math.cos(tilt)
 		return (W / 2 - X) * PPS, (H / 2 - Y) * PPS
 	end
-	for i = -1, 1 do
-		local n = 8
-		local function at(t)
-			return i * 1.1 + 2 * t * (1 - t), (t - 0.5) * len + (i == 0 and 0.3 or 0)
-		end
-		for k = 0, n - 1 do
-			local t0, t1 = k / n, (k + 1) / n
-			local ax, ay = gui(at(t0))
-			local bx, by = gui(at(t1))
-			local w = (0.12 + 0.42 * math.sin(math.pi * (t0 + t1) / 2) ^ 0.7) * PPS
-			local seg = math.sqrt((bx - ax) ^ 2 + (by - ay) ^ 2) + 6 -- overlap, so the cut runs smooth
-			local rot = math.deg(math.atan2(-(bx - ax), by - ay))
-			for layer, c in { { w + 5, rgb(190, 192, 198) }, { w, rgb(12, 10, 10) } } do
-				fr(g, {
-					AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset((ax + bx) / 2, (ay + by) / 2),
-					Size = UDim2.fromOffset(c[1], seg + (layer == 1 and 2 or 0)), Rotation = rot, BackgroundColor3 = c[2], ZIndex = layer,
-				})
+	for _, slice in slices do
+		local sw = slice.X1 - slice.X0
+		local plate = D(slice.Core or parent, Vector3.new(sw, H, 0.05), cf * CFrame.new((slice.X0 + slice.X1) / 2, 0, -out), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false })
+		local g = sgui(plate, N.Front, PPS)
+		-- the whole drawing, shifted so this slice shows its own part of it
+		local canvas = fr(g, { Position = UDim2.fromOffset(-(W / 2 - slice.X1) * PPS, 0), Size = UDim2.fromOffset(W * PPS, H * PPS), BackgroundTransparency = 1 })
+		for i = -1, 1 do
+			local n = 8
+			local function at(t)
+				return i * 1.1 + 2 * t * (1 - t), (t - 0.5) * len + (i == 0 and 0.3 or 0)
+			end
+			for k = 0, n - 1 do
+				local t0, t1 = k / n, (k + 1) / n
+				local ax, ay = gui(at(t0))
+				local bx, by = gui(at(t1))
+				local w = (0.12 + 0.42 * math.sin(math.pi * (t0 + t1) / 2) ^ 0.7) * PPS
+				local seg = math.sqrt((bx - ax) ^ 2 + (by - ay) ^ 2) + 6 -- overlap, so the cut runs smooth
+				local rot = math.deg(math.atan2(-(bx - ax), by - ay))
+				for layer, c in { { w + 5, rgb(190, 192, 198) }, { w, rgb(12, 10, 10) } } do
+					fr(canvas, {
+						AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset((ax + bx) / 2, (ay + by) / 2),
+						Size = UDim2.fromOffset(c[1], seg + (layer == 1 and 2 or 0)), Rotation = rot, BackgroundColor3 = c[2], ZIndex = layer,
+					})
+				end
 			end
 		end
 	end
@@ -3589,6 +3623,7 @@ local function build()
 	Facility.DoorBoxes = {}
 	spawnPoints = {}
 	wallCount = 0
+	wallCores = {}
 	lightBudget = 0
 
 	local map = Instance.new("Model")
