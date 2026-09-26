@@ -152,13 +152,23 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
   plucks him off the other suit's back.
 - Intro: when the claws pop in the X after the breakout, the containment cell's panes and posts
   in a cone ahead of him burst out of their frame.
-- Lobby how-to-play board (`RULES WALL` in `MapBuilder.lua`, north wall): a notice board with
-  pinned paperwork (staff memo = survivors, Subject X file = Wolverine, blueprint pilot card =
-  Sentinels), key caps, sticky notes. Numbers come from `Config`; update the copy when controls
-  or mechanics change.
+- Lobby rules screen (north wall): `MapBuilder` builds the hardware (glass part `RulesScreen`);
+  `src/client/RulesScreen.lua` draws three clickable tabs on it from a SurfaceGui in PlayerGui
+  (How to play / The Berserker / Sentinels; pages turn by themselves until a tab is clicked).
+  Numbers come from `Config`; update `PAGES` when controls or mechanics change.
+- TOP HUNTERS (west wall): same display hardware; GameManager fills `Rows.RowN` labels
+  `Player` / `Kills` / `Wins` (no emoji).
+- Exhibit plaques (suits, claws, Sentinel suits) use `plaque()` in `BuildLobby`; wall titles use
+  `titlePlate()`; display plinths `plinth()`; ceiling spots `downlight()`. Vending brands:
+  `vendingBrand` (badge, maker over product, ribbon; the sides are printed, not lit).
+- Statues: the Humanoid rebuilds the rig's joints just after `ScaleTo`, which wiped the pose live;
+  `MakeStatue` re-strikes it for ~1s and then anchors every part.
+- When all terminals are done (`SuitOnline`), `src/client/SuitBeacon.lua` outlines the docked
+  suits through walls for 8s for everyone but Wolverine.
 - No resetting in a round: ClientMain `syncReset` sets `ResetButtonCallback` false while the
   role is Survivor/Wolverine/Sentinel (true in the lobby or dead).
-- Map brightness setting (`Config.Brightness`, five levels, 3 = as built): sun button top left
+- Map brightness setting (`Config.Brightness`, five levels, 3 = as built; the arena's built
+  lighting in `SetupLighting` is what the old DARKEST level looked like, by request): sun button top left
   (`src/client/Brightness.lua`), applied in `Effects.lua` on top of the lobby/arena lighting zone
   (`Effects.SetBrightness`: exposure offset + ambient scale), saved as `Brightness` in
   PlayerData (Shop remote action "Brightness").
@@ -207,6 +217,16 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
   (spinning amber lamp + Beam shaft). `src/client/MapLife.lua` animates tags `Spin` (Model about
   its pivot's Z, or Y with attribute `Axis = "Y"`), `Sparks` and `SteamBurst` near the camera.
   Floor layers have fixed heights (see the section comment); keep new floor decals off them.
+- Facility walls: the top trim of each style also runs over doorways (`decorate`'s `top` flag), so
+  it never stops and restarts. `PLAIN_WALLS` rooms (Foundry) get no random wall features.
+  Molten metal is `molten()` (a lit SurfaceGui with crust) and the crucible pour is Beams, not
+  Neon. Foundry steam only rises off the molten channel (5 spots). Grate ceilings carry one
+  steel service run (no red pipes); the ring has no red floor lines. Server-room cable trays
+  hang on trapeze hangers; the canteen heat lamps and sneeze guard sit on a gantry.
+  Hangar docks: round charging pads, box-section columns, I-beam header, docking collar and
+  shoulder clamps; `scaffold()` is a tube-and-coupler tower with decks, guardrails and a ladder.
+- AFK banner (`Store.lua`) lives in its own inset-ignoring ScreenGui at y 248, under the status
+  plate and the Wolverine health bar.
 - Z-fighting: `python3 tools/preview/zfight.py <dump.json> --detail --floor <floorY>` lists
   coplanar overlapping faces/SurfaceGuis that are visible and look different, with the gap.
   Dumps: `run.py` (suits), `thumb_scene.py` with `FULLMAP=1 ROOMFILE=map.json` (whole facility).

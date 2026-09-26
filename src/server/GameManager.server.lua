@@ -80,7 +80,12 @@ task.spawn(function()
 				local row = rows:FindFirstChild("Row" .. i)
 				local e = list[i]
 				if row then
-					row.Text = e and ("%d.  %s   🩸%d  🏆%d"):format(i, e.Name, e.Kills, e.Wins) or ""
+					for key, text in { Player = e and e.Name or "", Kills = e and tostring(e.Kills) or "", Wins = e and tostring(e.Wins) or "" } do
+						local l = row:FindFirstChild(key)
+						if l then
+							l.Text = text
+						end
+					end
 				end
 			end
 		end

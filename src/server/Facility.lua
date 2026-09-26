@@ -546,8 +546,8 @@ local STYLES = {
 	Lab = { T = 1.2, Core = M.CeramicTiles, Upper = rgb(160, 170, 182), Lower = rgb(52, 100, 110), LowerMat = M.CeramicTiles, Line = rgb(38, 44, 48), Cornice = rgb(52, 58, 62), Pil = rgb(150, 158, 164), LowerH = 3.4, Kind = "Office" },
 	-- command and servers: steel panels over a diamond-plate kick band
 	Dark = { T = 1.2, Core = M.Metal, Upper = rgb(70, 74, 84), Lower = rgb(36, 38, 44), LowerMat = M.DiamondPlate, Line = rgb(18, 20, 24), Cornice = rgb(24, 26, 30), Pil = rgb(44, 48, 56), LowerH = 3.4, Kind = "Office", Glow = rgb(60, 190, 255) },
-	-- bunker corridor: painted concrete, blue-grey dado, orange stripe, red pipe pilasters
-	Concrete = { T = 1.4, Core = M.Concrete, Upper = rgb(176, 178, 180), Lower = rgb(64, 76, 90), Line = rgb(40, 44, 50), Stripe = rgb(226, 118, 32), Pil = rgb(142, 26, 22), LowerH = 2.6, Kind = "Concrete" },
+	-- bunker corridor: painted concrete, blue-grey dado, orange stripe, steel pipe pilasters
+	Concrete = { T = 1.4, Core = M.Concrete, Upper = rgb(176, 178, 180), Lower = rgb(64, 76, 90), Line = rgb(40, 44, 50), Stripe = rgb(226, 118, 32), Pil = rgb(86, 92, 102), LowerH = 2.6, Kind = "Concrete" },
 	-- heavy industrial: ribbed steel, amber light bars, I-beam columns
 	Industrial = { T = 1.4, Core = M.Metal, Upper = rgb(62, 58, 54), Rib = rgb(88, 82, 74), Line = rgb(34, 32, 30), Pil = rgb(40, 38, 36), LowerH = 1.3, Kind = "Industrial", LightBar = rgb(255, 212, 160) },
 }
@@ -573,8 +573,12 @@ end
 -- faces (both rooms share the style). With side = -1 / 1 only that face is
 -- dressed, over a thin skin of the style's wall finish: a wall between two
 -- different rooms gets each room's own style on its own face.
-local function decorate(core, st, at, w, y0, y1, full, idx, T, side)
+-- full = a whole column (floor to the top of the breakable band); top = the
+-- column reaches the top of the band (so its top trim runs on unbroken over
+-- doorways, instead of stopping at each one)
+local function decorate(core, st, at, w, y0, y1, full, idx, T, side, top)
 	T = T or st.T
+	top = full or top
 	-- a trim standing `out` studs proud of the face (through the wall, or
 	-- on the one face)
 	local function slab(out, sy, sz, cf, mat, color, extra)
@@ -617,8 +621,10 @@ local function decorate(core, st, at, w, y0, y1, full, idx, T, side)
 				lit(g, st.Glow)
 			end
 		end
-		if full then
+		if top then
 			band(y1 - 0.55, y1, 0.36, st.Cornice)
+		end
+		if full then
 			-- subtle panel seam
 			slab(side and 0.06 or 0.02, y1 - st.LowerH - 1.2, 0.07, at((st.LowerH + y1 - 0.6) / 2) * CFrame.new(0, 0, w / 2 - 0.03), M.SmoothPlastic, st.Line, { Transparency = 0.4 })
 		end
@@ -628,7 +634,7 @@ local function decorate(core, st, at, w, y0, y1, full, idx, T, side)
 		band(st.LowerH, st.LowerH + 0.12, 0.2, st.Line)
 		band(8.1, 8.2, 0.14, st.Line)
 		band(8.2, 8.62, 0.14, st.Stripe, M.SmoothPlastic)
-		if full then
+		if top then
 			-- (each style's top trim stops at its own height, so where two
 			-- styles meet at a corner their tops never share a plane)
 			band(y1 - 0.42, y1 - 0.02, 0.3, st.Line)
@@ -636,17 +642,17 @@ local function decorate(core, st, at, w, y0, y1, full, idx, T, side)
 	elseif st.Kind == "Industrial" then
 		band(0, st.LowerH, 0.6, st.Line, M.DiamondPlate)
 		band(7.2, 7.8, 0.64, st.Line, M.Metal)
-		if full then
+		if top then
 			band(y1 - 1.04, y1 - 0.04, 0.7, st.Line, M.Metal)
 		end
 		-- vertical ribs
-		local top = full and y1 - 1.04 or y1
+		local ribTop = top and y1 - 1.04 or y1
 		local bottom = math.max(y0, st.LowerH)
-		if top - bottom > 0.3 then
+		if ribTop - bottom > 0.3 then
 			local n = math.max(1, math.floor(w / 1.0))
 			for i = 0, n - 1 do
 				local z = -w / 2 + (i + 0.5) * w / n
-				local ya, yb = bottom, top
+				local ya, yb = bottom, ribTop
 				-- ribs broken by the mid band
 				for _, span in { { ya, math.min(yb, 7.2) }, { math.max(ya, 7.8), yb } } do
 					if span[2] - span[1] > 0.3 then
@@ -668,6 +674,9 @@ end
 
 -- Features that break up long runs: stencils, vents, wall TVs, fire points...
 local STENCIL_CODES = { "WX-01", "WX-04", "B-07", "SEC 3", "HAZ-2", "E-12", "WX-10", "K-09" }
+-- rooms whose walls keep to their one pattern: no stencils, vents or odd
+-- fittings dotted along them
+local PLAIN_WALLS = { Foundry = true }
 -- wall spots kept bare for big fittings the rooms hang later: { centre, radius }
 local FEATURE_CLEAR = {
 	{ Vector3.new(108, 0, -57), 9 }, -- the Reactor's big power display
@@ -935,7 +944,7 @@ local function wallRun(parent, ax, az, bx, bz, H, styleName, openings, opts)
 						table.insert(spans, { 0, o.Bottom, false })
 					end
 					if o.Top < breakH then
-						table.insert(spans, { o.Top, breakH, false })
+						table.insert(spans, { o.Top, breakH, false, true })
 					end
 				else
 					spans = { { 0, breakH, true } }
@@ -954,10 +963,10 @@ local function wallRun(parent, ax, az, bx, bz, H, styleName, openings, opts)
 						table.insert(wallCores, core)
 					end
 					if split then
-						decorate(core, L, at, w, sp[1], sp[2], sp[3], idx, T, -1)
-						decorate(core, R, at, w, sp[1], sp[2], sp[3], idx, T, 1)
+						decorate(core, L, at, w, sp[1], sp[2], sp[3], idx, T, -1, sp[4])
+						decorate(core, R, at, w, sp[1], sp[2], sp[3], idx, T, 1, sp[4])
 					else
-						decorate(core, L, at, w, sp[1], sp[2], sp[3], idx, T)
+						decorate(core, L, at, w, sp[1], sp[2], sp[3], idx, T, nil, sp[4])
 					end
 					-- nothing hung where a door frame's trim would cut through it
 					local byFrame = false
@@ -969,7 +978,8 @@ local function wallRun(parent, ax, az, bx, bz, H, styleName, openings, opts)
 					if sp[3] and not opts.Plain and not byFrame then
 						for _, side in { -1, 1 } do
 							local probe = (at(0) * CFrame.new(side * 3, 0, 0)).Position
-							if roomAt(probe.X, probe.Z) then
+							local room = roomAt(probe.X, probe.Z)
+							if room and not PLAIN_WALLS[room.Id] then
 								feature(core, side < 0 and L or R, at, w, side, idx * 2 + side, breakH, T)
 							end
 						end
@@ -1329,12 +1339,12 @@ local function ceiling(parent, r, kind)
 				end
 			end
 		end
-		-- twin red service pipes along both sides
-		for _, s in { -1, 1 } do
+		-- one service run along one side: a steel main and a lagged line
+		for _, s in { 1 } do
 			local off = s * (Wd / 2 - 1.6)
 			local a = long and Vector3.new(r.x0 + 1, y - 2.6, cz + off) or Vector3.new(cx + off, y - 2.6, r.z0 + 1)
 			local b = long and Vector3.new(r.x1 - 1, y - 2.6, cz + off) or Vector3.new(cx + off, y - 2.6, r.z1 - 1)
-			pipe(parent, { a, b }, 0.9, rgb(142, 26, 22), M.SmoothPlastic)
+			pipe(parent, { a, b }, 0.9, rgb(78, 84, 92), M.SmoothPlastic)
 			local a2 = a + (long and Vector3.new(0, 0.3, -s * 1.2) or Vector3.new(-s * 1.2, 0.3, 0))
 			local b2 = b + (long and Vector3.new(0, 0.3, -s * 1.2) or Vector3.new(-s * 1.2, 0.3, 0))
 			pipe(parent, { a2, b2 }, 0.5, rgb(170, 172, 176), M.Foil)
@@ -1567,18 +1577,73 @@ local function cableReel(parent, pos, yaw)
 	cyl(parent, (cf * CFrame.new(-0.9, 2, 0)).Position, (cf * CFrame.new(0.9, 2, 0)).Position, 3, M.Rubber, rgb(26, 26, 28), { CanCollide = true })
 end
 
+-- A tube-and-coupler scaffold tower: standards on screw jacks and base
+-- plates, ledgers at every 2-stud lift, a zig-zag brace up two faces,
+-- steel-board decks with yellow toe boards and double guardrails on the
+-- working lifts, couplers at the joints and a ladder up one side.
 local function scaffold(parent, base, w, d, h)
-	local c = rgb(200, 150, 30)
-	for _, x in { -w / 2, w / 2 } do
-		for _, z in { -d / 2, d / 2 } do
-			cyl(parent, base + Vector3.new(x, 0, z), base + Vector3.new(x, h, z), 0.3, M.Metal, c, { CanCollide = true })
+	local tube, dark, board, toe = rgb(150, 154, 162), rgb(52, 54, 60), rgb(92, 96, 104), rgb(222, 170, 28)
+	local hw, hd = w / 2, d / 2
+	local function at(x, y, z)
+		return base + Vector3.new(x, y, z)
+	end
+	local function coupler(x, y, z)
+		D(parent, Vector3.new(0.42, 0.28, 0.42), CFrame.new(at(x, y, z)), M.Metal, dark)
+	end
+	for _, x in { -hw, hw } do
+		for _, z in { -hd, hd } do
+			P(parent, Vector3.new(1.1, 0.12, 1.1), CFrame.new(at(x, 0.06, z)), M.Metal, dark) -- base plate
+			D(parent, Vector3.new(0.34, 0.5, 0.34), CFrame.new(at(x, 0.37, z)), M.Metal, rgb(120, 110, 60)) -- screw jack
+			cyl(parent, at(x, 0.6, z), at(x, h + 3.4, z), 0.26, M.Metal, tube, { CanCollide = true })
+			D(parent, Vector3.new(0.3, 0.06, 0.3), CFrame.new(at(x, h + 3.43, z)), M.Metal, dark) -- end cap
 		end
 	end
-	for y = 4, h, 4 do
-		D(parent, Vector3.new(w, 0.3, d), CFrame.new(base + Vector3.new(0, y, 0)), M.DiamondPlate, rgb(70, 70, 66), { CanCollide = true })
-		for _, z in { -d / 2, d / 2 } do
-			cyl(parent, base + Vector3.new(-w / 2, y - 4, z), base + Vector3.new(w / 2, y, z), 0.18, M.Metal, c, nil, true)
+	local decks = {}
+	for y = 2, h, 2 do
+		for _, z in { -hd, hd } do
+			cyl(parent, at(-hw - 0.25, y, z), at(hw + 0.25, y, z), 0.2, M.Metal, tube, nil, true) -- ledgers
 		end
+		for _, x in { -hw, hw } do
+			cyl(parent, at(x, y + 0.22, -hd - 0.25), at(x, y + 0.22, hd + 0.25), 0.2, M.Metal, tube, nil, true) -- transoms
+			for _, z in { -hd, hd } do
+				coupler(x, y + 0.1, z)
+			end
+		end
+		if y % 8 == 0 then
+			table.insert(decks, y)
+		end
+	end
+	-- a zig-zag brace up the two long faces
+	for _, z in { -hd - 0.2, hd + 0.2 } do
+		for y = 0.8, h - 2, 4 do
+			local flip = (y // 4) % 2 == 0 and 1 or -1
+			cyl(parent, at(-flip * hw, y, z), at(flip * hw, y + 4, z), 0.16, M.Metal, tube, nil, true)
+		end
+	end
+	for _, y in decks do
+		for k = -1, 1 do -- three steel boards with gaps
+			P(parent, Vector3.new(w - 0.1, 0.16, d / 3 - 0.12), CFrame.new(at(0, y + 0.42, k * d / 3)), M.Metal, board, { CanCollide = true })
+		end
+		for _, z in { -hd, hd } do -- toe boards
+			D(parent, Vector3.new(w, 0.5, 0.08), CFrame.new(at(0, y + 0.75, z - math.sign(z) * 0.1)), M.Metal, toe)
+		end
+		for _, x in { -hw, hw } do
+			D(parent, Vector3.new(0.08, 0.5, d), CFrame.new(at(x - math.sign(x) * 0.1, y + 0.75, 0)), M.Metal, toe)
+		end
+		for _, ry in { 1.8, 3.4 } do -- mid and top guardrails
+			for _, z in { -hd, hd } do
+				cyl(parent, at(-hw, y + ry, z), at(hw, y + ry, z), 0.16, M.Metal, tube, nil, true)
+			end
+			cyl(parent, at(hw, y + ry, -hd), at(hw, y + ry, hd), 0.16, M.Metal, tube, nil, true)
+		end
+	end
+	-- a ladder up the open (-x) end, clear of the guardrail
+	local lx = -hw - 0.5
+	for _, z in { -0.7, 0.7 } do
+		cyl(parent, at(lx, 0.1, z), at(lx, h + 3.2, z), 0.14, M.Metal, toe, nil, true)
+	end
+	for y = 0.9, h + 2.6, 1 do
+		cyl(parent, at(lx, y, -0.7), at(lx, y, 0.7), 0.1, M.Metal, dark, nil, true)
 	end
 end
 
@@ -2046,16 +2111,6 @@ local function buildRing(parent)
 		local r = ROOM[id]
 		floorTiles(parent, r, "Corridor")
 		ceiling(parent, r, "Grate")
-		local long = (r.x1 - r.x0) > (r.z1 - r.z0)
-		local cx, cz = (r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2
-		-- twin red lines down the corridor
-		for _, off in { -4.4, -3.8 } do
-			if long then
-				floorLine(parent, Vector3.new(r.x0 + 1, F, cz + off), Vector3.new(r.x1 - 1, F, cz + off), 0.22, rgb(170, 30, 26))
-			else
-				floorLine(parent, Vector3.new(cx + off, F, r.z0 + 1), Vector3.new(cx + off, F, r.z1 - 1), 0.22, rgb(170, 30, 26))
-			end
-		end
 	end
 	-- benches, bins, wall-mounted monitors and crates along the ring
 	for _, b in {
@@ -2085,6 +2140,28 @@ end
 -- FOUNDRY
 ---------------------------------------------------------------------------
 
+-- Molten metal on a face: a glow that ignores the room's light, white-yellow
+-- in the middle cooling to orange and red at the edges, with dark crust
+-- floating on it (not a Neon slab). round = a disc (a cylinder's end cap).
+local function molten(part, face, round, seed)
+	local g = make("SurfaceGui", part, { Face = face, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 20, LightInfluence = 0, Brightness = 1.3, ClipsDescendants = true })
+	local bg = fr(g, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), ClipsDescendants = true })
+	if round then
+		make("UICorner", bg, { CornerRadius = UDim.new(0.5, 0) })
+	end
+	make("UIGradient", bg, { Rotation = 90, Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, rgb(214, 70, 18)), ColorSequenceKeypoint.new(0.3, rgb(255, 150, 44)),
+		ColorSequenceKeypoint.new(0.5, rgb(255, 222, 140)), ColorSequenceKeypoint.new(0.7, rgb(255, 150, 44)), ColorSequenceKeypoint.new(1, rgb(214, 70, 18)) }) })
+	local r = Random.new(seed or 5)
+	for _ = 1, 9 do -- crust rafts
+		local w, h = r:NextNumber(0.08, 0.26), r:NextNumber(0.1, 0.3)
+		local blot = fr(bg, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(r:NextNumber(0.1, 0.9), r:NextNumber(0.1, 0.9)), Size = UDim2.fromScale(w, h),
+			Rotation = r:NextNumber(0, 180), BackgroundColor3 = r:NextNumber() < 0.5 and rgb(70, 26, 14) or rgb(120, 44, 16), BackgroundTransparency = r:NextNumber(0.1, 0.4) })
+		make("UICorner", blot, { CornerRadius = UDim.new(0.45, 0) })
+	end
+	return g
+end
+
 -- A forged-steel crucible on four legs: riveted bands, seams glowing with the
 -- heat inside, a cracked crust round a white-hot pool, embers rising. One of
 -- them (pouring) tips a stream of molten adamantium into an ingot mould.
@@ -2107,14 +2184,13 @@ local function crucible(parent, pos, pouring)
 			ball(parent, pos + Vector3.new(math.cos(a) * 6.28, y, math.sin(a) * 6.28), 0.34, M.Metal, rgb(96, 98, 104), nil, true)
 		end
 	end
-	for _, y in { 15.5, 18.5 } do -- seams glowing between the plates
-		drum(parent, pos + Vector3.new(0, y, 0), 12.08, 0.12, M.Neon, hot, { Transparency = 0.15 }, true)
-	end
-	drum(parent, pos + Vector3.new(0, 21.3, 0), 12.8, 0.6, M.Metal, dark, nil, true)
-	drum(parent, pos + Vector3.new(0, 21.28, 0), 10.8, 0.3, M.CrackedLava, rgb(80, 36, 18), nil, true) -- crust
-	local molten = drum(parent, pos + Vector3.new(0, 21.36, 0), 7.2, 0.3, M.Neon, rgb(255, 150, 50), nil, true)
-	pointLight(molten, 26, 1.8, rgb(255, 140, 60), true)
-	make("ParticleEmitter", molten, {
+	_ = hot
+	drum(parent, pos + Vector3.new(0, 21.225, 0), 12.8, 0.45, M.Metal, dark, nil, true) -- rim
+	drum(parent, pos + Vector3.new(0, 21.525, 0), 10.8, 0.15, M.SmoothPlastic, rgb(58, 26, 16), nil, true) -- cooled crust
+	local melt = drum(parent, pos + Vector3.new(0, 21.58, 0), 7.2, 0.16, M.SmoothPlastic, rgb(255, 150, 50), nil, true)
+	molten(melt, N.Right, true, math.floor(pos.X))
+	pointLight(melt, 26, 1.8, rgb(255, 140, 60), true)
+	make("ParticleEmitter", melt, {
 		Name = "Embers",
 		Texture = "rbxasset://textures/particles/sparkles_main.dds",
 		Rate = 14,
@@ -2127,28 +2203,34 @@ local function crucible(parent, pos, pouring)
 		Color = ColorSequence.new(rgb(255, 200, 90), rgb(255, 80, 20)),
 		LightEmission = 1,
 	})
-	make("ParticleEmitter", molten, {
-		Name = "Heat",
-		Rate = 4,
-		Lifetime = NumberRange.new(4, 6),
-		Speed = NumberRange.new(2, 4),
-		EmissionDirection = N.Right,
-		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 3), NumberSequenceKeypoint.new(1, 9) }),
-		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.82), NumberSequenceKeypoint.new(1, 1) }),
-		Color = ColorSequence.new(rgb(150, 140, 130)),
-		RotSpeed = NumberRange.new(-20, 20),
-	})
 	-- pour spout
 	wedge(parent, Vector3.new(3, 2, 4), CFrame.new(pos + Vector3.new(0, 20.6, -7.4)) * CFrame.Angles(0, math.pi, 0), M.Metal, dark)
 	local label = D(parent, Vector3.new(6, 1.4, 0.1), CFrame.new(pos + Vector3.new(0, 16.4, -6.05)), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
 	stencil(label, N.Front, "ADAMANTIUM", rgb(230, 220, 200), 30)
 	if pouring then
 		-- a glowing stream from the spout down into an ingot mould
+		-- the stream: a camera-facing ribbon of light that pours off the lip
+		-- white-hot, necks down as it falls and cools to orange, with a
+		-- brighter core inside it (Beams, so it glows without a Neon rod)
 		local lip = pos + Vector3.new(0, 20.2, -9.2)
-		local bottom = pos + Vector3.new(0, 1.6, -9.2)
-		cyl(parent, lip, bottom, 0.55, M.Neon, rgb(255, 160, 60), nil, true)
+		local bottom = pos + Vector3.new(0, 1.5, -9.2)
+		local holder = D(parent, Vector3.new(0.2, 0.2, 0.2), CFrame.new(lip), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
+		local a0 = make("Attachment", holder, {})
+		local a1 = make("Attachment", holder, { Position = bottom - lip + Vector3.new(0.12, 0, 0) })
+		local mid = make("Attachment", holder, { Position = (bottom - lip) * 0.18 + Vector3.new(0.05, 0, 0.06) })
+		for _, b in { { a0, mid, 0.9, 0.62 }, { mid, a1, 0.62, 0.44 } } do
+			make("Beam", holder, { Attachment0 = b[1], Attachment1 = b[2], Width0 = b[3], Width1 = b[4], FaceCamera = true, Segments = 6,
+				LightEmission = 1, LightInfluence = 0, Transparency = NumberSequence.new(0.05),
+				Color = ColorSequence.new(rgb(255, 214, 120), rgb(255, 130, 36)) })
+			make("Beam", holder, { Attachment0 = b[1], Attachment1 = b[2], Width0 = b[3] * 0.45, Width1 = b[4] * 0.45, FaceCamera = true, Segments = 6,
+				LightEmission = 1, LightInfluence = 0, Transparency = NumberSequence.new(0), ZOffset = 0.1,
+				Color = ColorSequence.new(rgb(255, 250, 220), rgb(255, 196, 96)) })
+		end
+		pointLight(D(parent, Vector3.new(0.2, 0.2, 0.2), CFrame.new(lip:Lerp(bottom, 0.5) + Vector3.new(0, 0, -1)), M.SmoothPlastic, Color3.new(), { Transparency = 1 }), 18, 1.4, rgb(255, 140, 50))
 		P(parent, Vector3.new(4.4, 1.4, 3.2), CFrame.new(pos + Vector3.new(0, 0.7, -9.2)), M.Metal, dark) -- ingot mould
-		local pool = D(parent, Vector3.new(3.6, 0.1, 2.4), CFrame.new(pos + Vector3.new(0, 1.42, -9.2)), M.Neon, rgb(255, 140, 40))
+		D(parent, Vector3.new(4.6, 0.2, 3.4), CFrame.new(pos + Vector3.new(0, 1.3, -9.2)), M.Metal, rgb(46, 46, 50)) -- mould lip
+		local pool = D(parent, Vector3.new(3.6, 0.1, 2.4), CFrame.new(pos + Vector3.new(0, 1.45, -9.2)), M.SmoothPlastic, rgb(255, 140, 40))
+		molten(pool, N.Top, false, 3)
 		pointLight(pool, 16, 1.6, rgb(255, 130, 50))
 		make("ParticleEmitter", pool, {
 			Name = "Splash",
@@ -2176,12 +2258,28 @@ local function buildFoundry(parent)
 	-- molten channel across the hall, with grates and three bridges
 	local cz = -94
 	P(parent, Vector3.new(r.x1 - r.x0 - 16, 0.3, 5), CFrame.new(0, F + 0.15, cz), M.Metal, rgb(34, 32, 30))
-	local lava = D(parent, Vector3.new(r.x1 - r.x0 - 18, 0.1, 3), CFrame.new(0, F + 0.34, cz), M.Neon, rgb(255, 120, 26))
+	local lava = D(parent, Vector3.new(r.x1 - r.x0 - 18, 0.1, 3), CFrame.new(0, F + 0.34, cz), M.SmoothPlastic, rgb(255, 120, 26))
+	molten(lava, N.Top, false, 11)
 	for _, s in { -1, 1 } do -- cooling crust along both edges
 		D(parent, Vector3.new(r.x1 - r.x0 - 18.2, 0.12, 0.7), CFrame.new(0, F + 0.35, cz + s * 1.25), M.CrackedLava, rgb(80, 36, 18))
 	end
 	for x = r.x0 + 10, r.x1 - 10, 14 do
 		pointLight(D(parent, Vector3.new(0.2, 0.2, 0.2), CFrame.new(x, F + 1, cz), M.SmoothPlastic, Color3.new(), { Transparency = 1 }), 14, 1.3, rgb(255, 130, 50))
+	end
+	-- steam rolls up off the metal through the grate in a few places (not
+	-- all along it), lit orange from below, with a bigger hiss now and then
+	for _, x in { -43, -17, 12, 19, 42 } do
+		local src = D(parent, Vector3.new(2.4, 0.2, 2.6), CFrame.new(x, F + 0.7, cz), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
+		make("ParticleEmitter", src, {
+			Name = "Steam", Texture = "rbxasset://textures/particles/smoke_main.dds", Shape = Enum.ParticleEmitterShape.Box,
+			Color = ColorSequence.new(rgb(240, 226, 214)), LightEmission = 0.15, LightInfluence = 1,
+			Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.4), NumberSequenceKeypoint.new(1, 6) }),
+			Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.6), NumberSequenceKeypoint.new(1, 1) }),
+			Lifetime = NumberRange.new(1.8, 3), Rate = 3, Speed = NumberRange.new(3, 6), SpreadAngle = Vector2.new(12, 12),
+			Acceleration = Vector3.new(0, 1.5, 0), Drag = 1, Rotation = NumberRange.new(0, 360), RotSpeed = NumberRange.new(-30, 30),
+			EmissionDirection = N.Top,
+		})
+		tag(src, "SteamBurst")
 	end
 	local cover = P(parent, Vector3.new(r.x1 - r.x0 - 18, 0.12, 3.2), CFrame.new(0, F + 0.46, cz), M.Metal, rgb(20, 20, 20), { Transparency = 0.9 })
 	for x = r.x0 + 10, r.x1 - 10, 0.9 do
@@ -2229,7 +2327,8 @@ local function buildFoundry(parent)
 	local hz = D(parent, Vector3.new(8.2, 1, 7.2), press * CFrame.new(0, 2.6, 0), M.SmoothPlastic, rgb(222, 170, 28))
 	hazard(hz, N.Front, 8.2, 16)
 	hazard(hz, N.Back, 8.2, 16)
-	local glow = D(parent, Vector3.new(4, 0.2, 4), press * CFrame.new(0, 3.1, 0), M.Neon, rgb(255, 130, 40))
+	local glow = D(parent, Vector3.new(4, 0.2, 4), press * CFrame.new(0, 3.1, 0), M.SmoothPlastic, rgb(255, 130, 40))
+	molten(glow, N.Top, false, 7)
 	pointLight(glow, 12, 1.5, rgb(255, 130, 40))
 	for x = -40, 40, 16 do
 		cable(Vector3.new(x, F + 24, -60), Vector3.new(x + 6, F + 24, -66), 6, 0.3, rgb(40, 38, 36))
@@ -2288,58 +2387,97 @@ local function buildHangar(parent)
 	-- the Sentinel pod: two docked suits in cradles
 	local pod = Instance.new("Model")
 	pod.Name = "SentinelPod"
-	local base = P(pod, Vector3.new(44, 0.8, 30), CFrame.new(0, F + 0.4, 116), M.DiamondPlate, rgb(60, 58, 56))
+	local base = P(pod, Vector3.new(44, 0.8, 30), CFrame.new(0, F + 0.4, 116), M.Metal, rgb(56, 58, 62))
 	local podLight = pointLight(base, 16, 1, rgb(160, 60, 220))
 	podLight.Name = "PodLight"
 	local dummy = Instance.new("Model")
 	dummy.Name = "Dummy"
 	for _, x in { -16, 16 } do
 		local c = Vector3.new(x, F + 0.8, 118)
-		-- the suit hangs in its cradle, boots just clear of the deck, held by a
-		-- harness bar, shoulder clamps and cables from the gantry
+		-- the suit hangs in its docking cradle, boots just clear of a round
+		-- charging pad: two box-section columns on bolted feet, braced behind,
+		-- a yellow I-beam header with the hoist cables, a docking collar
+		-- behind its back on two arms, and hydraulic clamps on its shoulders
 		local hang = 1.4
 		Costumes.SentinelStatue(dummy, CFrame.new(c + Vector3.new(0, hang, 0)), Config.Sentinel.Scale)
 		local sc = Config.Sentinel.Scale
 		local shoulderY = hang + (3.25 + 1.35) * sc
-		D(pod, Vector3.new(8.4, 0.9, 1.4), CFrame.new(c + Vector3.new(0, shoulderY + 1.6, 0.9)), M.Metal, rgb(58, 56, 54)) -- harness bar
-		for s = -1, 1, 2 do
-			-- clamp arms from the bar down onto each pauldron
-			D(pod, Vector3.new(0.7, 1.9, 0.7), CFrame.new(c + Vector3.new(s * 2.9, shoulderY + 0.7, 0.5)), M.Metal, rgb(70, 68, 64))
-			D(pod, Vector3.new(1.4, 0.5, 1.6), CFrame.new(c + Vector3.new(s * 2.9, shoulderY - 0.2, 0.2)), M.Metal, rgb(222, 170, 28))
-			-- hoist cables up to the gantry
-			cable(c + Vector3.new(s * 3.2, shoulderY + 2, 0.9), c + Vector3.new(s * 3.6, 22.4, 1.4), 0.5, 0.18, rgb(30, 30, 32))
+		local STEEL, DARK, YELLOW, PAD = rgb(70, 74, 82), rgb(40, 42, 48), rgb(222, 170, 28), rgb(176, 120, 255)
+		local function at(x, y, z)
+			return c + Vector3.new(x, y, z)
 		end
-		-- the charging pad under its boots, and a light shining up at it
-		local pad = D(pod, Vector3.new(0.12, 6.5, 6.5), CFrame.new(c + Vector3.new(0, 0.38, -0.6)) * CFrame.Angles(0, 0, math.rad(90)), M.Neon, rgb(170, 70, 230), { Shape = Enum.PartType.Cylinder, Transparency = 0.45 })
-		local up = Instance.new("SpotLight")
-		up.Face = Enum.NormalId.Right -- the cylinder's axis points up
-		up.Angle = 50
-		up.Range = 26
-		up.Brightness = 2.2
-		up.Color = rgb(200, 150, 255)
-		up.Parent = pad
-		-- light strips up the back frame
-		for s = -1, 1, 2 do
-			D(pod, Vector3.new(0.3, 18, 0.2), CFrame.new(c + Vector3.new(s * 3.8, 11, 3.7)), M.Neon, rgb(170, 90, 255))
+		-- the charging pad: a stepped disc with a lit ring round it
+		drum(pod, at(0, 0.12, -0.6), 9.6, 0.24, M.Metal, DARK, nil, true)
+		drum(pod, at(0, 0.34, -0.6), 8, 0.2, M.Metal, STEEL, nil, true)
+		drum(pod, at(0, 0.46, -0.6), 5.6, 0.04, M.SmoothPlastic, rgb(30, 30, 36), nil, true)
+		for k = 0, 17 do
+			local seg = D(pod, Vector3.new(1.34, 0.14, 0.06), CFrame.new(at(0, 0.3, -0.6)) * CFrame.Angles(0, k / 18 * math.pi * 2, 0) * CFrame.new(0, 0, -4.84), M.SmoothPlastic, PAD)
+			glowFace(seg, N.Front, PAD)
 		end
-		-- cradle: back frame, clamps, umbilicals, gantry
-		D(pod, Vector3.new(10, 22, 1.2), CFrame.new(c + Vector3.new(0, 11, 4.4)), M.Metal, rgb(46, 44, 42))
-		for _, cx in { -4.6, 4.6 } do
-			P(pod, Vector3.new(1.4, 24, 1.4), CFrame.new(c + Vector3.new(cx, 12, 3)), M.Metal, rgb(222, 170, 28))
-			for _, y in { 6, 12, 17 } do
-				D(pod, Vector3.new(2.6, 0.8, 3), CFrame.new(c + Vector3.new(cx * 0.8, y, 1.8)), M.Metal, rgb(70, 68, 64))
+		for k = 0, 7 do -- bolt ring
+			D(pod, Vector3.new(0.06, 0.22, 0.22), CFrame.new(at(0, 0.45, -0.6)) * CFrame.Angles(0, k / 8 * math.pi * 2, 0) * CFrame.new(0, 0, -3.6) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, rgb(130, 134, 140), { Shape = Enum.PartType.Cylinder })
+		end
+		local emit = D(pod, Vector3.new(0.4, 0.1, 0.4), CFrame.new(at(0, 0.6, -0.6)), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
+		make("SpotLight", emit, { Face = N.Top, Angle = 50, Range = 26, Brightness = 2, Color = rgb(200, 160, 255) })
+		-- the columns: box sections with a face plate, a hazard band at the foot,
+		-- bolted feet and lamps down their inner faces
+		for _, s in { -1, 1 } do
+			local x = s * 5
+			P(pod, Vector3.new(1.4, 24, 1.4), CFrame.new(at(x, 12, 3.2)), M.Metal, DARK)
+			D(pod, Vector3.new(0.9, 21.6, 0.12), CFrame.new(at(x, 13, 2.44)), M.Metal, STEEL)
+			local band = D(pod, Vector3.new(1.44, 2, 1.44), CFrame.new(at(x, 1, 3.2)), M.SmoothPlastic, YELLOW)
+			hazard(band, N.Front, 1.44, 20)
+			P(pod, Vector3.new(2.6, 0.3, 2.6), CFrame.new(at(x, 0.15, 3.2)), M.Metal, STEEL)
+			for _, bx in { -0.95, 0.95 } do
+				for _, bz in { -0.95, 0.95 } do
+					D(pod, Vector3.new(0.3, 0.2, 0.3), CFrame.new(at(x + bx, 0.4, 3.2 + bz)), M.Metal, rgb(130, 134, 140))
+				end
+			end
+			for _, y in { 5, 11, 17 } do
+				D(pod, Vector3.new(0.14, 1.4, 0.8), CFrame.new(at(x - s * 0.76, y, 3.2)), M.Metal, rgb(24, 25, 28))
+				glowFace(D(pod, Vector3.new(0.04, 1.1, 0.5), CFrame.new(at(x - s * 0.84, y, 3.2)), M.SmoothPlastic, PAD), s > 0 and N.Left or N.Right, PAD)
+			end
+			-- the collar arm, from the column in to the docking collar
+			cyl(pod, at(x - s * 0.7, shoulderY - 1, 3.2), at(s * 2.6, shoulderY - 1, 2.4), 0.5, M.Metal, STEEL, nil, true)
+		end
+		-- braced behind: an X in each half
+		for _, y in { { 2, 12 }, { 12, 22 } } do
+			cyl(pod, at(-5, y[1], 3.95), at(5, y[2], 3.95), 0.3, M.Metal, STEEL, nil, true)
+			cyl(pod, at(5, y[1], 3.95), at(-5, y[2], 3.95), 0.3, M.Metal, STEEL, nil, true)
+		end
+		-- the header: a yellow I-beam with a hoist trolley
+		for _, y in { 23.35, 24.85 } do
+			D(pod, Vector3.new(12, 0.3, 1.8), CFrame.new(at(0, y, 3.2)), M.Metal, YELLOW)
+		end
+		D(pod, Vector3.new(12, 1.2, 0.3), CFrame.new(at(0, 24.1, 3.2)), M.Metal, YELLOW)
+		D(pod, Vector3.new(2.4, 1.2, 2.4), CFrame.new(at(0, 22.6, 2)), M.Metal, DARK)
+		local downlight = D(pod, Vector3.new(1.2, 0.3, 1.2), CFrame.new(at(0, 21.9, 1.6)), M.Metal, rgb(24, 25, 28))
+		glowFace(downlight, N.Bottom, rgb(220, 226, 255))
+		spotDown(downlight, 26, 1.6, rgb(220, 226, 255), 55, true)
+		-- the docking collar behind its back, bolted, with the umbilicals in
+		D(pod, Vector3.new(5.6, 4, 0.7), CFrame.new(at(0, shoulderY - 1, 2.35)), M.Metal, DARK)
+		D(pod, Vector3.new(4.6, 3, 0.2), CFrame.new(at(0, shoulderY - 1, 1.95)), M.Metal, STEEL)
+		for _, bx in { -2.5, 2.5 } do
+			for _, by in { -1.7, 1.7 } do
+				D(pod, Vector3.new(0.3, 0.3, 0.1), CFrame.new(at(bx, shoulderY - 1 + by, 1.96)), M.Metal, rgb(130, 134, 140))
 			end
 		end
-		D(pod, Vector3.new(12, 1.6, 6), CFrame.new(c + Vector3.new(0, 23.2, 2)), M.Metal, rgb(222, 170, 28))
 		for k = -1, 1 do
-			cable(c + Vector3.new(k * 2, 22.4, 1), c + Vector3.new(k * 1.2, 14, -0.5), 1.4, 0.35, rgb(24, 24, 26))
+			cable(at(k * 1.4, 23.2, 2.4), at(k * 1.2, shoulderY + 0.9, 2.1), 1.2, 0.35, rgb(24, 24, 26))
 		end
-		screen(pod, CFrame.new(c + Vector3.new(7.4, 5, -1)) * CFrame.Angles(0, math.rad(20), 0), 3, 2, "bars", rgb(200, 120, 255))
-		-- a raised deck plate inside a hazard-striped border (well clear of the
-		-- stripes: they're painted on the plate under it)
-		local ring = D(pod, Vector3.new(13, 0.06, 13), CFrame.new(c + Vector3.new(0, 0.04, -1)), M.SmoothPlastic, rgb(222, 170, 28))
-		hazard(ring, N.Top, 13, 10)
-		D(pod, Vector3.new(12, 0.3, 11.8), CFrame.new(c + Vector3.new(0, 0.2, -1.1)), M.DiamondPlate, rgb(56, 54, 52))
+		-- hydraulic shoulder clamps: a ram off the collar down onto each pauldron
+		for _, s in { -1, 1 } do
+			local top = at(s * 2.4, shoulderY + 1.1, 2.1)
+			local jaw = at(s * 2.9, shoulderY + 0.1, 0.3)
+			cyl(pod, top, top:Lerp(jaw, 0.55), 0.5, M.Metal, STEEL, nil, true) -- sleeve
+			cyl(pod, top:Lerp(jaw, 0.5), jaw, 0.26, M.Metal, rgb(196, 200, 206), nil, true) -- ram
+			D(pod, Vector3.new(1.4, 0.45, 1.6), CFrame.new(jaw), M.Metal, YELLOW)
+			D(pod, Vector3.new(0.3, 0.8, 1.6), CFrame.new(jaw + Vector3.new(s * 0.6, -0.4, 0)), M.Metal, YELLOW)
+			drum(pod, jaw + Vector3.new(0, 0.3, 0), 0.5, 0.3, M.Metal, DARK, nil, true)
+		end
+		-- its status screen on a post beside the cradle
+		cyl(pod, at(7.4, 0, -1), at(7.4, 3.8, -1), 0.3, M.Metal, DARK, nil, true)
+		screen(pod, CFrame.new(at(7.4, 5, -1)) * CFrame.Angles(0, math.rad(20), 0), 3, 2, "bars", rgb(200, 120, 255))
 	end
 	dummy.Parent = pod
 	-- central control podium
@@ -2604,18 +2742,36 @@ local function buildServers(parent)
 				local facing = (x == -150 or x == -130) and 1 or -1
 				serverRack(parent, CFrame.new(x, F, z + 1.5) * CFrame.Angles(0, facing > 0 and math.rad(-90) or math.rad(90), 0))
 			end
-			-- overhead cable tray
-			D(parent, Vector3.new(2.4, 0.3, zr[2] - zr[1]), CFrame.new(x, F + 10.2, (zr[1] + zr[2]) / 2), M.Metal, rgb(90, 94, 100))
+			-- overhead ladder tray: two side rails and rungs, cable bundles lying
+			-- in it, hung from the ceiling on trapeze hangers (threaded rods and
+			-- a strut under the tray) every 9 studs, so it never floats even
+			-- when the racks under it are smashed
+			local len, mid, ty = zr[2] - zr[1], (zr[1] + zr[2]) / 2, F + 10.2
+			local STEEL, ROD = rgb(96, 100, 108), rgb(70, 72, 78)
+			for _, s in { -1, 1 } do
+				D(parent, Vector3.new(0.12, 0.5, len), CFrame.new(x + s * 1.2, ty + 0.2, mid), M.Metal, STEEL)
+			end
+			for z = zr[1] + 0.75, zr[2] - 0.5, 1.5 do
+				D(parent, Vector3.new(2.3, 0.1, 0.2), CFrame.new(x, ty, z), M.Metal, STEEL)
+			end
 			for k = -1, 1 do
-				D(parent, Vector3.new(0.3, 0.3, zr[2] - zr[1]), CFrame.new(x + k * 0.6, F + 10.5, (zr[1] + zr[2]) / 2), M.Rubber, ({ rgb(30, 90, 200), rgb(220, 180, 30), rgb(30, 30, 32) })[k + 2])
+				D(parent, Vector3.new(len - 0.4, 0.36, 0.36), CFrame.new(x + k * 0.62, ty + 0.23, mid) * CFrame.Angles(0, math.rad(90), 0), M.Rubber,
+					({ rgb(30, 90, 200), rgb(220, 180, 30), rgb(30, 30, 32) })[k + 2], { Shape = Enum.PartType.Cylinder })
+			end
+			for z = zr[1] + 2, zr[2] - 1, 9 do
+				D(parent, Vector3.new(3, 0.2, 0.24), CFrame.new(x, ty - 0.15, z), M.Metal, ROD) -- strut
+				for _, s in { -1, 1 } do
+					cyl(parent, Vector3.new(x + s * 1.38, ty - 0.3, z), Vector3.new(x + s * 1.38, F + r.h, z), 0.12, M.Metal, ROD, nil, true)
+					D(parent, Vector3.new(0.24, 0.14, 0.24), CFrame.new(x + s * 1.38, ty - 0.3, z), M.Metal, ROD) -- nut
+				end
 			end
 		end
 	end
 	-- cold aisle floor light strips
 	for _, x in { -145, -125 } do
 		for _, zr in { { -44, -8 }, { 8, 44 } } do
-			local strip = D(parent, Vector3.new(0.3, 0.05, zr[2] - zr[1]), CFrame.new(x, F + 0.03, (zr[1] + zr[2]) / 2), M.Neon, rgb(60, 170, 255))
-			_ = strip
+			local strip = D(parent, Vector3.new(0.3, 0.05, zr[2] - zr[1]), CFrame.new(x, F + 0.03, (zr[1] + zr[2]) / 2), M.SmoothPlastic, rgb(60, 170, 255))
+			glowFace(strip, N.Top, rgb(60, 170, 255))
 		end
 		pointLight(D(parent, Vector3.one * 0.2, CFrame.new(x, F + 1, 0), M.SmoothPlastic, Color3.new(), { Transparency = 1 }), 22, 0.6, rgb(60, 170, 255))
 	end
@@ -2788,7 +2944,8 @@ local function buildReactor(parent)
 			cyl(parent, Vector3.new(p0.X, F, p0.Z) + (p0 - c).Unit * 2, p0 + (p0 - c).Unit * 2, 0.4, M.Metal, rgb(40, 40, 42), nil, true)
 		end
 	end
-	hidingSpot(CFrame.lookAt(Vector3.new(154, F, -134), Vector3.new(108, F, -98)), "Locker")
+	-- (against the north wall, clear of the first transformer at z -130)
+	hidingSpot(CFrame.lookAt(Vector3.new(144, F, -137.4), Vector3.new(144, F, 0)), "Locker")
 	spawnAt(138, -76)
 	spawnAt(128, -118)
 end
@@ -2953,10 +3110,26 @@ local function buildCanteen(parent)
 	for x = -17, 17, 3.6 do
 		D(parent, Vector3.new(3, 0.2, 2.4), line * CFrame.new(x, 3.62, 0), M.Metal, rgb(30, 30, 32))
 	end
-	D(parent, Vector3.new(38, 2.4, 0.2), line * CFrame.new(0, 5.6, -1.2), M.Glass, rgb(200, 220, 230), { Transparency = 0.6 })
-	for x = -15, 15, 10 do
-		local lamp = D(parent, Vector3.new(4, 0.2, 1.2), line * CFrame.new(x, 7.4, 0), M.Neon, rgb(255, 214, 160))
-		surfaceLight(lamp, N.Bottom, 10, 1, rgb(255, 214, 160))
+	-- the gantry over it: steel posts off the counter carry the sneeze guard
+	-- (glass held between a bottom and a top rail) and a box-beam canopy with
+	-- the heat lamps slung under it
+	local STEEL, DARK, HEAT = rgb(170, 174, 180), rgb(70, 74, 80), rgb(255, 208, 150)
+	for x = -18.8, 18.8, 9.4 do
+		D(parent, Vector3.new(0.3, 4.6, 0.3), line * CFrame.new(x, 3.6 + 2.3, -1.2), M.Metal, STEEL)
+		D(parent, Vector3.new(0.6, 0.12, 0.6), line * CFrame.new(x, 3.66, -1.2), M.Metal, DARK) -- foot plate
+		D(parent, Vector3.new(0.26, 0.3, 1.9), line * CFrame.new(x, 8.05, -0.4), M.Metal, STEEL) -- canopy bracket
+	end
+	D(parent, Vector3.new(37.8, 0.16, 0.34), line * CFrame.new(0, 4.62, -1.2), M.Metal, STEEL) -- bottom rail
+	D(parent, Vector3.new(37.8, 0.16, 0.34), line * CFrame.new(0, 7.02, -1.2), M.Metal, STEEL) -- top rail
+	D(parent, Vector3.new(37.6, 2.24, 0.1), line * CFrame.new(0, 5.82, -1.2), M.Glass, rgb(200, 220, 230), { Transparency = 0.6 })
+	D(parent, Vector3.new(38.2, 0.5, 2), line * CFrame.new(0, 8.45, -0.4), M.Metal, STEEL) -- canopy
+	D(parent, Vector3.new(38.2, 0.12, 2.04), line * CFrame.new(0, 8.72, -0.4), M.Metal, DARK)
+	for x = -14.1, 14.1, 9.4 do
+		local housing = D(parent, Vector3.new(4.2, 0.4, 1.3), line * CFrame.new(x, 8, -0.2), M.Metal, DARK)
+		_ = housing
+		local lamp = D(parent, Vector3.new(3.8, 0.06, 1.0), line * CFrame.new(x, 7.78, -0.2), M.SmoothPlastic, HEAT)
+		glowFace(lamp, N.Bottom, HEAT)
+		surfaceLight(lamp, N.Bottom, 10, 1, HEAT)
 	end
 	vending(parent, CFrame.new(106, F, 90) * CFrame.Angles(0, math.rad(90), 0), "Cola")
 	vending(parent, CFrame.new(106, F, 94.2) * CFrame.Angles(0, math.rad(90), 0), "Snacks")
@@ -3459,10 +3632,23 @@ local function stain(parent, x, z, w, d, yaw, color, alpha)
 end
 
 -- a floor grate breathing steam, with a bigger hiss now and then
+-- (modelled: a bolted frame round a dark well with angled louvre slats
+-- across it, so the steam comes up between real slats, not a painted plate)
 local function steamVent(parent, x, z)
-	local g = D(parent, Vector3.new(2.6, 0.06, 2.6), CFrame.new(x, F + 0.13, z), M.Metal, rgb(40, 42, 46), { CanCollide = false })
-	grille(g, N.Top, 2.6 * 24, false, rgb(10, 10, 12), rgb(84, 88, 94), 6)
-	D(parent, Vector3.new(2.9, 0.04, 2.9), CFrame.new(x, F + 0.12, z), M.Metal, rgb(26, 27, 30), { CanCollide = false }) -- frame
+	local frameC, slatC = rgb(58, 62, 68), rgb(84, 88, 96)
+	D(parent, Vector3.new(2.5, 0.02, 2.5), CFrame.new(x, F + 0.02, z), M.SmoothPlastic, rgb(8, 8, 10), { CanCollide = false }) -- the well
+	for _, s in { -1, 1 } do -- frame, its bars lapped at the corners
+		D(parent, Vector3.new(3, 0.14, 0.26), CFrame.new(x, F + 0.07, z + s * 1.37), M.Metal, frameC, { CanCollide = false })
+		D(parent, Vector3.new(0.26, 0.12, 2.5), CFrame.new(x + s * 1.37, F + 0.065, z), M.Metal, frameC, { CanCollide = false })
+	end
+	for k = -3, 3 do -- louvres
+		D(parent, Vector3.new(2.5, 0.09, 0.2), CFrame.new(x, F + 0.075, z + k * 0.34) * CFrame.Angles(math.rad(35), 0, 0), M.Metal, slatC, { CanCollide = false })
+	end
+	for _, bx in { -1.37, 1.37 } do
+		for _, bz in { -1.37, 1.37 } do
+			D(parent, Vector3.new(0.04, 0.18, 0.18), CFrame.new(x + bx, F + 0.15, z + bz) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, rgb(130, 134, 140), { CanCollide = false, Shape = Enum.PartType.Cylinder })
+		end
+	end
 	local src = D(parent, Vector3.new(2.2, 0.2, 2.2), CFrame.new(x, F + 0.4, z), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false })
 	make("ParticleEmitter", src, {
 		Name = "Steam", Texture = SMOKE, Shape = Enum.ParticleEmitterShape.Box,
@@ -3674,7 +3860,7 @@ local function lifeAndWear(parent, keepClear)
 
 	-- steam through floor grates
 	for _, v in {
-		{ -44, -74 }, { 40, -96 }, { -18, -128 }, { 12, -64 }, -- Foundry
+		-- (none in the Foundry: its steam comes off the molten channel)
 		{ 66, -66 }, { 150, -70 }, { 72, -130 }, { 150, -130 }, -- Reactor
 		{ -49, -49 }, { 49, -49 }, { -49, 49 }, { 49, 49 }, -- Ring corners
 		{ -50, 62 }, { 50, 134 }, -- Hangar

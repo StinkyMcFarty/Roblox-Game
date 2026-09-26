@@ -53,7 +53,7 @@ end
 -- a soft indoor ambient keep the inside readable), dark night in the arena.
 local NIGHT, DAY = nil, {
 	ClockTime = 0.3, Brightness = 2.5, ExposureCompensation = 0.12,
-	Ambient = Color3.fromRGB(130, 138, 162), OutdoorAmbient = Color3.fromRGB(86, 98, 138),
+	Ambient = Color3.fromRGB(122, 134, 168), OutdoorAmbient = Color3.fromRGB(86, 98, 138), -- cool, calm blue-grey
 }
 local inLobby = nil
 -- the player's brightness setting (Config.Brightness), applied on top of the zone

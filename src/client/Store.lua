@@ -261,9 +261,14 @@ end)
 
 local afkButton, afkLabel = Shop.DockButton("AFK: OFF", "💤", Color3.fromRGB(120, 124, 140), 6)
 
+-- the banner sits under the top status plate and the Wolverine health bar
+-- (Interface.lua: TOP_Y 88, drawn 1.5x, so they reach down to ~236 px from
+-- the very top of the screen); its own ScreenGui ignores the top-bar inset
+-- so it lines up with them on every device
+local bannerGui = new("ScreenGui", { Name = "AfkBanner", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 5 }, player:WaitForChild("PlayerGui"))
 local banner = new("TextLabel", {
 	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 58),
+	Position = UDim2.new(0.5, 0, 0, 248),
 	Size = UDim2.fromOffset(460, 34),
 	BackgroundColor3 = Color3.fromRGB(20, 22, 30),
 	BackgroundTransparency = 0.15,
@@ -272,7 +277,7 @@ local banner = new("TextLabel", {
 	TextColor3 = Color3.fromRGB(170, 200, 255),
 	Text = "YOU'RE AFK — sitting out matches. Press AFK to play again.",
 	Visible = false,
-}, gui)
+}, bannerGui)
 corner(banner, 10)
 stroke(banner, Color3.fromRGB(90, 120, 200), 1.5)
 new("UIPadding", { PaddingTop = UDim.new(0, 7), PaddingBottom = UDim.new(0, 7), PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, banner)

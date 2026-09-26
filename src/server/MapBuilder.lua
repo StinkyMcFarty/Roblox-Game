@@ -1367,9 +1367,11 @@ function MapBuilder.SetupLighting()
 	Lighting.Brightness = 4
 	-- the facility is lit by its own lamps: a blue-grey ambient lets them (and
 	-- every glowing prop) shape the rooms, but is high enough that corners
-	-- between lamps stay readable (players tune it with the brightness setting)
-	Lighting.Ambient = rgb(92, 102, 130)
-	Lighting.OutdoorAmbient = rgb(110, 122, 160)
+	-- between lamps stay readable (players tune it with the brightness setting).
+	-- This is what the old DARKEST setting looked like (exposure -0.5 and
+	-- ambient x0.75 on the old base): players liked it best, so it's normal now.
+	Lighting.Ambient = rgb(69, 77, 98)
+	Lighting.OutdoorAmbient = rgb(83, 92, 120)
 	pcall(function()
 		Lighting.LightingStyle = Enum.LightingStyle.Realistic
 	end)
@@ -1378,7 +1380,7 @@ function MapBuilder.SetupLighting()
 	Lighting.GlobalShadows = true
 	Lighting.ShadowSoftness = 1
 	Lighting.GeographicLatitude = 48
-	Lighting.ExposureCompensation = 0.1
+	Lighting.ExposureCompensation = -0.4
 	local customSky = Lighting:FindFirstChildOfClass("Sky") -- a sky set up in Studio is kept
 	for _, c in Lighting:GetChildren() do
 		if c:IsA("PostEffect") or c:IsA("Atmosphere") or (c:IsA("Sky") and c ~= customSky) then
@@ -1502,135 +1504,9 @@ local function surfaceText(p, face, props)
 	return gui, label
 end
 
--- Rules board pieces (lobby, north wall): printed sheets, key caps, sticky
--- notes. Every SurfaceGui here is 40 px per stud.
+-- Lobby lettering: Oswald, the house typeface for signs and plaques
 local OSWALD = Font.new("rbxasset://fonts/families/Oswald.json", Enum.FontWeight.Bold)
-
-local function boardGui(p, bgColor)
-	local gui = make("SurfaceGui", p, { Face = Enum.NormalId.Front, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 40, LightInfluence = 0.35, ZIndexBehavior = Enum.ZIndexBehavior.Sibling })
-	local bg = make("Frame", gui, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = bgColor, BorderSizePixel = 0 })
-	return bg
-end
-
-local function boardText(parent, props)
-	local label = make("TextLabel", parent, {
-		BackgroundTransparency = 1,
-		TextWrapped = true,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextYAlignment = Enum.TextYAlignment.Top,
-	})
-	for k, v in props do
-		label[k] = v
-	end
-	return label
-end
-
--- A printed sheet: its own column of lines (UIListLayout, top to bottom)
-local function boardSheet(parent, size, cf, paper)
-	local p = block(parent, size, cf, M.SmoothPlastic, paper, { CanCollide = false })
-	local bg = boardGui(p, paper)
-	-- a little yellowing towards the bottom edge
-	make("UIGradient", bg, { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), rgb(218, 214, 204)) })
-	local col = make("Frame", bg, { Position = UDim2.fromOffset(36, 28), Size = UDim2.new(1, -72, 1, -56), BackgroundTransparency = 1 })
-	make("UIListLayout", col, { Padding = UDim.new(0, 12), SortOrder = Enum.SortOrder.LayoutOrder })
-	return p, bg, col
-end
-
--- A key as printed on the paperwork, drawn like the real thing: a darker
--- skirt, a lighter dished top with a bevel highlight, the legend in the top
--- left corner. Wide keys (SHIFT) are 2u. "M1"/"M2" draw a mouse with that
--- button lit; "3x" draws a console with x3 stamped on it.
-local function keycap(row, key, style)
-	local function frame(parent, props)
-		props.BorderSizePixel = 0
-		return make("Frame", parent, props)
-	end
-	local function stroke(parent, color, thickness)
-		make("UIStroke", parent, { Color = color, Thickness = thickness, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
-	end
-	if key == "M1" or key == "M2" then
-		local w, h, r = 58, 80, 14
-		local bh = h * 0.42 -- the buttons' depth
-		local body = frame(row, { Position = UDim2.fromOffset(26, -10), Size = UDim2.fromOffset(w, h), BackgroundColor3 = style.Top })
-		make("UICorner", body, { CornerRadius = UDim.new(0, r) })
-		stroke(body, style.Line, 3)
-		-- the lit button: rounded only on its outer top corner, like the mouse
-		local left = key == "M1"
-		local x0 = left and 0 or w / 2
-		local lit = frame(body, { Position = UDim2.fromOffset(x0, 0), Size = UDim2.fromOffset(w / 2, bh), BackgroundColor3 = style.Hot })
-		make("UICorner", lit, { CornerRadius = UDim.new(0, r) })
-		frame(body, { Position = UDim2.fromOffset(left and w / 4 or w / 2, 0), Size = UDim2.fromOffset(w / 4, bh), BackgroundColor3 = style.Hot })
-		frame(body, { Position = UDim2.fromOffset(x0, bh / 2), Size = UDim2.fromOffset(w / 2, bh / 2), BackgroundColor3 = style.Hot })
-		frame(body, { Position = UDim2.fromOffset(w / 2 - 1.5, 0), Size = UDim2.fromOffset(3, bh), BackgroundColor3 = style.Line })
-		frame(body, { Position = UDim2.fromOffset(0, bh - 1.5), Size = UDim2.fromOffset(w, 3), BackgroundColor3 = style.Line })
-		local wheel = frame(body, { Position = UDim2.fromOffset(w / 2 - 5, 10), Size = UDim2.fromOffset(10, 18), BackgroundColor3 = style.Skirt })
-		make("UICorner", wheel, { CornerRadius = UDim.new(0.5, 0) })
-		stroke(wheel, style.Line, 2)
-		return
-	end
-	if key == "3x" then
-		local mon = frame(row, { Position = UDim2.fromOffset(8, 0), Size = UDim2.fromOffset(72, 48), BackgroundColor3 = style.Skirt })
-		make("UICorner", mon, { CornerRadius = UDim.new(0, 6) })
-		stroke(mon, style.Line, 3)
-		local screen = frame(mon, { Position = UDim2.fromOffset(6, 6), Size = UDim2.fromOffset(60, 32), BackgroundColor3 = rgb(22, 60, 40) })
-		make("TextLabel", screen, { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = ">_", Font = Enum.Font.RobotoMono, TextSize = 22, TextColor3 = rgb(90, 240, 140), TextXAlignment = Enum.TextXAlignment.Left })
-		frame(row, { Position = UDim2.fromOffset(36, 48), Size = UDim2.fromOffset(16, 8), BackgroundColor3 = style.Line })
-		frame(row, { Position = UDim2.fromOffset(26, 56), Size = UDim2.fromOffset(36, 5), BackgroundColor3 = style.Line })
-		local x3 = make("TextLabel", row, { Position = UDim2.fromOffset(64, 22), Size = UDim2.fromOffset(46, 38), Rotation = -8, BackgroundTransparency = 1, Text = "x3",
-			Font = Enum.Font.PermanentMarker, TextSize = 36, TextColor3 = style.Hot })
-		make("UIStroke", x3, { Color = style.Top, Thickness = 3 })
-		return
-	end
-	local w, h = #key > 2 and 110 or 58, 58
-	local skirt = frame(row, { Size = UDim2.fromOffset(w, h), BackgroundColor3 = style.Skirt })
-	make("UICorner", skirt, { CornerRadius = UDim.new(0, 10) })
-	stroke(skirt, style.Line, 2)
-	local top = frame(skirt, { Position = UDim2.fromOffset(6, 4), Size = UDim2.fromOffset(w - 12, h - 16), BackgroundColor3 = style.Top })
-	make("UICorner", top, { CornerRadius = UDim.new(0, 7) })
-	make("UIGradient", top, { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), rgb(205, 205, 205)) }) -- the dish
-	frame(top, { Position = UDim2.fromOffset(6, 1), Size = UDim2.new(1, -12, 0, 2), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.45 })
-	make("TextLabel", top, {
-		Position = UDim2.fromOffset(7, 3), Size = UDim2.new(1, -14, 0, 24), BackgroundTransparency = 1, Text = key,
-		Font = Enum.Font.GothamBold, TextSize = #key > 2 and 17 or 22, TextColor3 = style.Legend,
-		TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top,
-	})
-end
-
--- One control: a key and what it does
-local function keyRow(col, order, key, text, style)
-	local row = make("Frame", col, { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = order })
-	keycap(row, key, style)
-	boardText(row, {
-		Position = UDim2.fromOffset(128, 10),
-		Size = UDim2.new(1, -128, 0, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		Text = text,
-		Font = style.Font,
-		TextSize = style.Size,
-		TextColor3 = style.Ink,
-	})
-	return row
-end
-
--- A yellow sticky note with a scrawl on it. It stands well proud of the
--- paper it's stuck over (a hair off it, it flickered) with a soft shadow.
-local function stickyNote(parent, cf, text)
-	block(parent, Vector3.new(4.25, 4.25, 0.02), cf * CFrame.new(0.14, -0.16, 0.1), M.SmoothPlastic, Color3.new(), { Transparency = 0.72, CanCollide = false, CastShadow = false })
-	local p = block(parent, Vector3.new(4.25, 4.25, 0.06), cf, M.SmoothPlastic, rgb(246, 221, 90), { CanCollide = false })
-	local bg = boardGui(p, rgb(246, 221, 90))
-	make("UIGradient", bg, { Rotation = 90, Color = ColorSequence.new(rgb(255, 255, 255), rgb(225, 225, 225)) })
-	boardText(bg, {
-		Position = UDim2.fromOffset(14, 14),
-		Size = UDim2.new(1, -28, 1, -28),
-		Text = text,
-		Font = Enum.Font.PermanentMarker,
-		TextScaled = true,
-		TextColor3 = rgb(32, 36, 44),
-		TextXAlignment = Enum.TextXAlignment.Center,
-		TextYAlignment = Enum.TextYAlignment.Center,
-	})
-	return p
-end
+local OSWALD_LIGHT = Font.new("rbxasset://fonts/families/Oswald.json", Enum.FontWeight.Regular)
 
 -- Three claw gashes ripped through a steel wall. Each is a tapered, slightly
 -- curved tear: a dark void with a red glow deep inside, molten lips glowing
@@ -1725,7 +1601,7 @@ end
 -- Industrial high-bay lamp hung from the roof at `top`, its lens `drop` studs
 -- below: a finned driver, a stepped reflector and a glowing lens. One strong
 -- shadowed spot lights the floor and a soft fill lights the walls and roof.
-local HIGH_BAY = rgb(255, 232, 200)
+local HIGH_BAY = rgb(204, 222, 255) -- a cool blue-white: calm, not stark
 local function highBay(parent, top, drop)
 	local lens = top - Vector3.new(0, drop, 0)
 	local up = CFrame.Angles(0, 0, math.rad(90)) -- a cylinder standing upright
@@ -1779,18 +1655,43 @@ local function stageLight(parent, top, target, color, range, brightness)
 	})
 end
 
+-- A vending brand lockup drawn into a frame: a round badge with three claw
+-- slashes, the maker's name small over the product name big, and a ribbon
+-- sweeping under them. `printed` = the side wrap (a shade off the body,
+-- ink not lit).
+local function vendingBrand(parent, st, printed)
+	local ink = printed and st.Body:Lerp(Color3.new(1, 1, 1), 0.28) or st.Ink
+	local ribbon = make("Frame", parent, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.86), Size = UDim2.fromScale(1.3, 0.1),
+		Rotation = -3, BackgroundColor3 = printed and ink or st.Ink, BackgroundTransparency = printed and 0.2 or 0, BorderSizePixel = 0 })
+	make("UICorner", ribbon, { CornerRadius = UDim.new(1, 0) })
+	local badge = make("Frame", parent, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0.05, 0.46), Size = UDim2.fromScale(0.62, 0.62),
+		BackgroundColor3 = printed and ink or st.Badge, BorderSizePixel = 0 })
+	make("UIAspectRatioConstraint", badge, { AspectRatio = 1, DominantAxis = Enum.DominantAxis.Height })
+	make("UICorner", badge, { CornerRadius = UDim.new(1, 0) })
+	for k = -1, 1 do
+		make("Frame", badge, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5 + k * 0.2, 0.5), Size = UDim2.fromScale(0.09, 0.66),
+			Rotation = 18, BackgroundColor3 = printed and st.Body or st.Mark, BorderSizePixel = 0 })
+	end
+	make("TextLabel", parent, { Position = UDim2.fromScale(0.3, 0.1), Size = UDim2.fromScale(0.66, 0.24), BackgroundTransparency = 1, Text = st.Maker,
+		FontFace = OSWALD_LIGHT, TextScaled = true, TextColor3 = ink, TextXAlignment = Enum.TextXAlignment.Left })
+	make("TextLabel", parent, { Position = UDim2.fromScale(0.29, 0.28), Size = UDim2.fromScale(0.68, 0.52), BackgroundTransparency = 1, Text = st.Product,
+		FontFace = OSWALD, TextScaled = true, TextColor3 = ink, TextXAlignment = Enum.TextXAlignment.Left })
+end
+
 -- A drinks or snacks machine standing at cf (facing -Z, back on the wall):
 -- a lit glass front with four shelves of stock, a keypad column with a
 -- display and coin slots, a delivery flap, a glowing brand header and the
 -- brand down both sides.
 local VENDING = {
 	Cola = {
-		Name = "BERSERKER COLA", Body = rgb(168, 22, 30), Glow = rgb(255, 205, 70),
+		Name = "BERSERKER COLA", Maker = "BERSERKER", Product = "COLA",
+		Body = rgb(168, 22, 30), Glow = rgb(255, 205, 70), Ink = rgb(250, 244, 232), Badge = rgb(250, 244, 232), Mark = rgb(168, 22, 30),
 		Rows = { "can", "can", "bottle", "bottle" },
 		Stock = { rgb(200, 20, 30), rgb(225, 228, 234), rgb(255, 150, 20), rgb(36, 36, 40) },
 	},
 	Snacks = {
-		Name = "SNIKT SNACKS", Body = rgb(22, 64, 150), Glow = rgb(110, 210, 255),
+		Name = "SNIKT SNACKS", Maker = "SNIKT", Product = "SNACKS",
+		Body = rgb(22, 64, 150), Glow = rgb(110, 210, 255), Ink = rgb(255, 214, 60), Badge = rgb(255, 214, 60), Mark = rgb(22, 64, 150),
 		Rows = { "chips", "candy", "chips", "candy" },
 		Stock = { rgb(250, 200, 30), rgb(220, 50, 40), rgb(60, 170, 70), rgb(150, 70, 200), rgb(250, 130, 30) },
 	},
@@ -1805,12 +1706,14 @@ local function vendingMachine(parent, cf, kind)
 	local cab = block(parent, Vector3.new(3.4, 6.2, 2.3), at(0, 3.3, 0.15), M.Metal, st.Body)
 	block(parent, Vector3.new(3.52, 0.16, 2.72), at(0, 6.48, 0), M.Metal, dark)
 	-- the front frame: header, base panel, a stile and the keypad column
+	-- the backlit brand panel: the machine's own colour, a cap-shaped badge
+	-- with three claw slashes, the brand lockup (maker small over the product
+	-- big) and a ribbon sweeping under it, like the print on a real machine
 	local header = block(parent, Vector3.new(3.4, 1, 0.3), at(0, 5.9, -1.15), M.SmoothPlastic, st.Body)
-	local hg = make("SurfaceGui", header, { Face = Enum.NormalId.Front, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 60, LightInfluence = 0 })
-	local hbg = make("Frame", hg, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0 })
-	make("UIGradient", hbg, { Rotation = 90, Color = ColorSequence.new(st.Glow, st.Body) })
-	local ht = make("TextLabel", hbg, { Position = UDim2.fromScale(0.04, 0.12), Size = UDim2.fromScale(0.92, 0.76), BackgroundTransparency = 1, Font = Enum.Font.LuckiestGuy, TextScaled = true, TextColor3 = Color3.new(1, 1, 1), Text = st.Name })
-	make("UIStroke", ht, { Thickness = 3 })
+	local hg = make("SurfaceGui", header, { Face = Enum.NormalId.Front, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 80, LightInfluence = 0, ClipsDescendants = true })
+	local hbg = make("Frame", hg, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, ClipsDescendants = true })
+	make("UIGradient", hbg, { Rotation = 90, Color = ColorSequence.new(st.Body:Lerp(Color3.new(1, 1, 1), 0.12), st.Body:Lerp(Color3.new(), 0.35)) })
+	vendingBrand(hbg, st, false)
 	block(parent, Vector3.new(3.4, 1.4, 0.3), at(0, 0.9, -1.15), M.Metal, st.Body)
 	block(parent, Vector3.new(2, 0.62, 0.04), at(-0.3, 0.9, -1.31), M.SmoothPlastic, rgb(8, 8, 10))
 	block(parent, Vector3.new(1.9, 0.5, 0.03), at(-0.3, 0.92, -1.335), M.SmoothPlastic, rgb(46, 50, 58))
@@ -1843,7 +1746,10 @@ local function vendingMachine(parent, cf, kind)
 	end
 	block(parent, Vector3.new(2.15, 3.8, 0.05), at(-0.375, 3.5, -1.29), M.Glass, rgb(200, 220, 235), { Transparency = 0.78, Reflectance = 0.15 })
 	-- keypad column: display, keys, coin and note slots, coin return
-	block(parent, Vector3.new(0.78, 0.34, 0.04), at(1.2, 5, -1.32), M.Neon, rgb(60, 220, 140))
+	local display = block(parent, Vector3.new(0.78, 0.34, 0.04), at(1.2, 5, -1.32), M.SmoothPlastic, rgb(20, 40, 30))
+	local dg = make("SurfaceGui", display, { Face = Enum.NormalId.Front, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 100, LightInfluence = 0 })
+	make("Frame", dg, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = rgb(12, 30, 20), BorderSizePixel = 0 })
+	make("TextLabel", dg, { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "SELECT", FontFace = Font.new("rbxasset://fonts/families/RobotoMono.json"), TextScaled = true, TextColor3 = rgb(90, 255, 150) })
 	local keys = block(parent, Vector3.new(0.74, 1, 0.04), at(1.2, 4.1, -1.32), M.SmoothPlastic, rgb(18, 18, 22))
 	local kg = make("SurfaceGui", keys, { Face = Enum.NormalId.Front, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 100 })
 	for r = 0, 3 do
@@ -1855,15 +1761,16 @@ local function vendingMachine(parent, cf, kind)
 	block(parent, Vector3.new(0.1, 0.36, 0.05), at(0.95, 3.3, -1.32), M.Metal, chrome, { Reflectance = 0.3 })
 	block(parent, Vector3.new(0.46, 0.1, 0.05), at(1.3, 3.3, -1.32), M.SmoothPlastic, rgb(10, 10, 12))
 	block(parent, Vector3.new(0.44, 0.36, 0.06), at(1.2, 2.2, -1.33), M.Metal, rgb(12, 12, 14))
-	-- the brand down both sides
+	-- the side wrap: printed, not lit. The ribbon runs up the front edge and
+	-- the lockup reads up the side, a shade off the body colour
 	for _, face in { Enum.NormalId.Left, Enum.NormalId.Right } do
-		local g = make("SurfaceGui", cab, { Face = face, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 40 })
-		make("Frame", g, { Position = UDim2.fromScale(0.1, 0), Size = UDim2.fromScale(0.12, 1), BackgroundColor3 = st.Glow, BorderSizePixel = 0 })
-		local t = make("TextLabel", g, {
-			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.58, 0.5), Size = UDim2.fromOffset(6.2 * 40 * 0.9, 2.3 * 40 * 0.55),
-			Rotation = -90, BackgroundTransparency = 1, Font = Enum.Font.LuckiestGuy, TextScaled = true, TextColor3 = Color3.new(1, 1, 1), Text = st.Name,
-		})
-		make("UIStroke", t, { Thickness = 3 })
+		local g = make("SurfaceGui", cab, { Face = face, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 40, ClipsDescendants = true })
+		local front = face == Enum.NormalId.Left and 0 or 1 -- which edge of this face is the machine's front (-Z)
+		make("Frame", g, { AnchorPoint = Vector2.new(front, 0), Position = UDim2.fromScale(front, 0), Size = UDim2.new(0, 12, 1, 0), BackgroundColor3 = st.Ink, BorderSizePixel = 0 })
+		make("Frame", g, { AnchorPoint = Vector2.new(front, 0), Position = UDim2.new(front, front == 1 and -18 or 18, 0, 0), Size = UDim2.new(0, 4, 1, 0), BackgroundColor3 = st.Ink, BorderSizePixel = 0 })
+		local wrap = make("Frame", g, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.52), Size = UDim2.fromOffset(6.2 * 40 * 0.82, 2.3 * 40 * 0.62),
+			Rotation = -90, BackgroundTransparency = 1 })
+		vendingBrand(wrap, st, true)
 	end
 	return cab
 end
@@ -1998,7 +1905,7 @@ function MapBuilder.BuildLobby()
 		SteelDark = rgb(34, 36, 42), Steel = rgb(54, 58, 66), SteelLight = rgb(84, 89, 98), Bolt = rgb(118, 122, 130),
 		Concrete = rgb(122, 118, 110), ConcreteLight = rgb(132, 128, 119), ConcreteDark = rgb(78, 77, 74), Seam = rgb(22, 23, 26),
 		Slab = rgb(82, 82, 85), SlabB = rgb(76, 76, 79), Runner = rgb(40, 42, 48),
-		Warm = rgb(255, 214, 160), Amber = rgb(255, 176, 70),
+		Lamp = rgb(212, 226, 255), Amber = rgb(255, 176, 70),
 	}
 	local OUT = CFrame.Angles(0, math.rad(90), 0) -- a cylinder pointing out of a wall
 
@@ -2074,10 +1981,10 @@ function MapBuilder.BuildLobby()
 		fitting(lobby, Vector3.new(0.16, 2.6, 0.16), CFrame.new(top - Vector3.new(0, 1.3, 0)), M.SmoothPlastic, F7.SteelDark)
 		fitting(lobby, Vector3.new(1.3, 1.1, 1.1), CFrame.new(at) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, F7.Steel, { Shape = Enum.PartType.Cylinder })
 		fitting(lobby, Vector3.new(0.14, 1.28, 1.28), CFrame.new(at - Vector3.new(0, 0.62, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, F7.SteelDark, { Shape = Enum.PartType.Cylinder })
-		local lens = fitting(lobby, Vector3.new(0.04, 0.9, 0.9), CFrame.new(at - Vector3.new(0, 0.7, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, F7.Warm, { Shape = Enum.PartType.Cylinder })
-		glowFace(lens, Enum.NormalId.Left, F7.Warm, true)
+		local lens = fitting(lobby, Vector3.new(0.04, 0.9, 0.9), CFrame.new(at - Vector3.new(0, 0.7, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, F7.Lamp, { Shape = Enum.PartType.Cylinder })
+		glowFace(lens, Enum.NormalId.Left, F7.Lamp, true)
 		local emit = fitting(lobby, Vector3.new(0.3, 0.2, 0.3), CFrame.new(at - Vector3.new(0, 0.95, 0)), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false })
-		make("SpotLight", emit, { Face = Enum.NormalId.Bottom, Range = 36, Angle = 45, Brightness = 2.5, Color = rgb(255, 225, 160), Shadows = true })
+		make("SpotLight", emit, { Face = Enum.NormalId.Bottom, Range = 36, Angle = 45, Brightness = 1.8, Color = rgb(226, 234, 255), Shadows = true })
 	end
 	make("SpawnLocation", lobby, {
 		Size = Vector3.new(12, 0.2, 12),
@@ -2099,10 +2006,10 @@ function MapBuilder.BuildLobby()
 	-- Stepped steel pilasters split the walls into ~6-stud bays; every
 	-- other one carries an up/down sconce. Each wall runs from `a` along
 	-- t = n x up (n points into the room), s along it. Gaps (in s):
-	--   solid: nothing below the cornice (rules board, chimney breast)
+	--   solid: nothing below the cornice (the chimney breast)
 	--   posts: no pilaster or sconce (things standing against the wall)
 	--   rail:  the chair rail and pilasters stop (the claw gouges)
-	--   beam:  the cornice stops (board, gouges, gallery marquee, chimney)
+	--   beam:  the cornice stops (the claw gouges, the chimney)
 	for _, seg in {
 		{ Vector3.new(0, 0, -hz + 0.5), Vector3.new(W + 2, H, 1) },
 		{ Vector3.new(0, 0, hz - 0.5), Vector3.new(W + 2, H, 1) },
@@ -2116,11 +2023,11 @@ function MapBuilder.BuildLobby()
 		South = { a = Vector3.new(-hx + 1, 0, hz - 1), n = Vector3.new(0, 0, -1), len = W - 2,
 			solid = {}, posts = { { 109.6, 115.6 } }, rail = {}, beam = {} },
 		North = { a = Vector3.new(hx - 1, 0, -hz + 1), n = Vector3.new(0, 0, 1), len = W - 2,
-			solid = { { 25.9, 104.1 } }, posts = {}, rail = { { 8, 20 } }, beam = { { 7.5, 20.5 }, { 25.9, 104.1 } } },
+			solid = {}, posts = { { 38.2, 91.8 } }, rail = { { 8, 20 } }, beam = { { 7.5, 20.5 } } },
 		West = { a = Vector3.new(-hx + 1, 0, -hz + 1), n = Vector3.new(1, 0, 0), len = D - 2,
 			solid = { { 45.3, 58.7 } }, posts = { { 30.4, 41.6 }, { 61.4, 72.6 }, { 72.6, 86 } }, rail = {}, beam = { { 45.3, 58.7 } } },
 		East = { a = Vector3.new(hx - 1, 0, hz - 1), n = Vector3.new(-1, 0, 0), len = D - 2,
-			solid = {}, posts = { { 3, 8.6 }, { 7, 81 } }, rail = {}, beam = { { 7.6, 80.4 } } },
+			solid = {}, posts = { { 3, 8.6 }, { 7, 81 } }, rail = {}, beam = {} },
 	}
 	local function onWall(w, s, y, out)
 		local p = w.a + w.t * s + w.n * out + Vector3.new(0, Y + y, 0)
@@ -2185,15 +2092,15 @@ function MapBuilder.BuildLobby()
 		fitting(lobby, Vector3.new(1.3, 2.8, 0.62), body, M.SmoothPlastic, F7.Steel) -- housing
 		fitting(lobby, Vector3.new(1.42, 0.16, 0.72), body * CFrame.new(0, 1.4, 0), M.SmoothPlastic, F7.SteelDark) -- top bezel
 		fitting(lobby, Vector3.new(1.42, 0.16, 0.72), body * CFrame.new(0, -1.4, 0), M.SmoothPlastic, F7.SteelDark) -- bottom bezel
-		local slot = fitting(lobby, Vector3.new(0.4, 2.1, 0.04), body * CFrame.new(0, 0, -0.32), M.SmoothPlastic, F7.Warm) -- frosted front slot
-		glowFace(slot, Enum.NormalId.Front, F7.Warm)
+		local slot = fitting(lobby, Vector3.new(0.4, 2.1, 0.04), body * CFrame.new(0, 0, -0.32), M.SmoothPlastic, F7.Lamp) -- frosted front slot
+		glowFace(slot, Enum.NormalId.Front, F7.Lamp)
 		for _, y in { 1.49, -1.49 } do -- the lenses in the bezels
-			local lens = fitting(lobby, Vector3.new(1.1, 0.02, 0.5), body * CFrame.new(0, y, 0), M.SmoothPlastic, F7.Warm)
-			glowFace(lens, y > 0 and Enum.NormalId.Top or Enum.NormalId.Bottom, F7.Warm)
+			local lens = fitting(lobby, Vector3.new(1.1, 0.02, 0.5), body * CFrame.new(0, y, 0), M.SmoothPlastic, F7.Lamp)
+			glowFace(lens, y > 0 and Enum.NormalId.Top or Enum.NormalId.Bottom, F7.Lamp)
 		end
 		for _, dir in { 1, -1 } do -- wall washes up and down, off the fitting itself
 			local emit = fitting(lobby, Vector3.new(0.3, 0.1, 0.3), body * CFrame.new(0, dir * 1.62, 0), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false })
-			make("SpotLight", emit, { Face = dir > 0 and Enum.NormalId.Top or Enum.NormalId.Bottom, Range = dir > 0 and 13 or 17, Angle = 70, Brightness = dir > 0 and 1.1 or 1.7, Color = F7.Warm })
+			make("SpotLight", emit, { Face = dir > 0 and Enum.NormalId.Top or Enum.NormalId.Bottom, Range = dir > 0 and 13 or 17, Angle = 70, Brightness = dir > 0 and 1.1 or 1.7, Color = F7.Lamp })
 		end
 	end
 
@@ -2380,199 +2287,82 @@ function MapBuilder.BuildLobby()
 		end
 	end
 
-	-- RULES WALL (north) -----------------------------------------------
-	-- A facility notice board, not a poster: a steel plate with a stencilled
-	-- banner, and the how-to-play pinned up as real paperwork (a staff memo,
-	-- Subject X's file, a Sentinel pilot card) with sticky notes scrawled on.
-	local rz = -hz + 1.3
-	local face = CFrame.Angles(0, math.pi, 0) -- fronts face into the room
-	local function onBoard(x, y, z, tilt)
-		return CFrame.new(x, Y + y, rz + z) * face * CFrame.Angles(0, 0, math.rad(tilt or 0))
+	-- The house style for exhibit plaques (suits, claws, Sentinel suits): a
+	-- dark plate in a light steel frame, the name in cream Oswald over a
+	-- short rule in the exhibit's colour, the price in amber under it.
+	-- cf is the plate's centre, facing the reader.
+	local function priceText(price)
+		if price <= 0 then
+			return "FREE"
+		end
+		local n = tostring(math.floor(price))
+		n = n:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
+		return n .. " " .. Config.CoinName:upper()
 	end
-	block(lobby, Vector3.new(76, 23.6, 0.6), onBoard(-6, 12.4, 0), M.DiamondPlate, rgb(34, 34, 38))
-	local trim = rgb(58, 60, 66)
-	for _, y in { 0.6, 24.2 } do
-		block(lobby, Vector3.new(77.2, 0.7, 0.5), onBoard(-6, y, 0.2), M.Metal, trim)
+	local function plaque(cf, w, h, name, price, accent)
+		block(lobby, Vector3.new(w + 0.24, h + 0.24, 0.16), cf * CFrame.new(0, 0, 0.05), M.SmoothPlastic, F7.SteelLight)
+		local face = block(lobby, Vector3.new(w, h, 0.1), cf * CFrame.new(0, 0, -0.03), M.SmoothPlastic, rgb(22, 23, 27))
+		local g = make("SurfaceGui", face, { Name = "Plaque", Face = Enum.NormalId.Front, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 60, LightInfluence = 0 })
+		local f = make("Frame", g, { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1 })
+		make("TextLabel", f, { Name = "PlaqueText", Position = UDim2.fromScale(0.07, 0.1), Size = UDim2.fromScale(0.86, 0.44), BackgroundTransparency = 1,
+			FontFace = OSWALD, TextScaled = true, Text = string.upper(name), TextColor3 = rgb(236, 230, 216) })
+		make("Frame", f, { Position = UDim2.fromScale(0.34, 0.6), Size = UDim2.fromScale(0.32, 0.03), BackgroundColor3 = accent, BorderSizePixel = 0 })
+		make("TextLabel", f, { Name = "PriceText", Position = UDim2.fromScale(0.07, 0.68), Size = UDim2.fromScale(0.86, 0.22), BackgroundTransparency = 1,
+			FontFace = OSWALD_LIGHT, TextScaled = true, Text = priceText(price), TextColor3 = F7.Amber })
+		return face
 	end
-	for _, x in { -44, 32 } do
-		block(lobby, Vector3.new(0.7, 24.3, 0.5), onBoard(x, 12.4, 0.2), M.Metal, trim)
-		for _, y in { 0.6, 12.4, 24.2 } do -- bolt heads
-			block(lobby, Vector3.new(0.35, 0.45, 0.45), onBoard(x, y, 0.5) * CFrame.Angles(0, math.rad(90), 0), M.Metal, rgb(120, 122, 128), { Shape = Enum.PartType.Cylinder })
+
+	-- A ceiling downlight on a drop rod: a steel can with a lit lens and a
+	-- shadowed spot aimed straight down.
+	local function downlight(x, z, color, range, angle, brightness)
+		local at = Vector3.new(x, Y + H - 2.4, z)
+		fitting(lobby, Vector3.new(0.14, 1.6, 0.14), CFrame.new(Vector3.new(x, Y + H - 0.8, z)), M.SmoothPlastic, F7.SteelDark)
+		fitting(lobby, Vector3.new(1.2, 1.3, 1.3), CFrame.new(at) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, F7.Steel, { Shape = Enum.PartType.Cylinder })
+		fitting(lobby, Vector3.new(0.14, 1.46, 1.46), CFrame.new(at - Vector3.new(0, 0.58, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, F7.SteelDark, { Shape = Enum.PartType.Cylinder })
+		local lens = fitting(lobby, Vector3.new(0.04, 1.02, 1.02), CFrame.new(at - Vector3.new(0, 0.66, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, color, { Shape = Enum.PartType.Cylinder })
+		glowFace(lens, Enum.NormalId.Left, color, true)
+		local emit = fitting(lobby, Vector3.new(0.3, 0.1, 0.3), CFrame.new(at - Vector3.new(0, 0.85, 0)), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false })
+		make("SpotLight", emit, { Face = Enum.NormalId.Bottom, Range = range, Angle = angle, Brightness = brightness, Color = color, Shadows = true })
+	end
+
+	-- A display plinth: a stepped steel drum with a band in the exhibit's
+	-- colour (paint, not a glowing ring)
+	local function plinth(pos, dia, h, accent)
+		local up = CFrame.Angles(0, 0, math.rad(90))
+		block(lobby, Vector3.new(0.3, dia + 0.8, dia + 0.8), CFrame.new(pos + Vector3.new(0, 0.15, 0)) * up, M.SmoothPlastic, F7.SteelDark, { Shape = Enum.PartType.Cylinder })
+		block(lobby, Vector3.new(h - 0.3, dia, dia), CFrame.new(pos + Vector3.new(0, 0.3 + (h - 0.3) / 2, 0)) * up, M.SmoothPlastic, F7.Steel, { Shape = Enum.PartType.Cylinder })
+		block(lobby, Vector3.new(0.16, dia + 0.08, dia + 0.08), CFrame.new(pos + Vector3.new(0, 0.3 + (h - 0.3) * 0.45, 0)) * up, M.SmoothPlastic, accent, { Shape = Enum.PartType.Cylinder })
+		block(lobby, Vector3.new(0.2, dia + 0.3, dia + 0.3), CFrame.new(pos + Vector3.new(0, h - 0.1, 0)) * up, M.SmoothPlastic, F7.SteelLight, { Shape = Enum.PartType.Cylinder })
+		block(lobby, Vector3.new(0.06, dia - 0.4, dia - 0.4), CFrame.new(pos + Vector3.new(0, h + 0.02, 0)) * up, M.SmoothPlastic, rgb(28, 29, 33), { Shape = Enum.PartType.Cylinder })
+	end
+
+	-- RULES SCREEN (north wall) -----------------------------------------
+	-- One wall display with three tabs: how to play, the Berserker, the
+	-- Sentinels. This is the hardware; each player's client draws the pages
+	-- on the glass ("RulesScreen", src/client/RulesScreen.lua) so everyone
+	-- can click through the tabs on their own.
+	local rz = -hz + 1 -- the wall face
+	local SW, SH, SY, SX = 50, 16.6, 10.8, -6 -- glass width, height, centre height, centre x
+	local function onNorth(x, y, out)
+		local p = Vector3.new(x, Y + y, rz + out)
+		return CFrame.lookAt(p, p + Vector3.zAxis)
+	end
+	block(lobby, Vector3.new(SW + 1.6, SH + 1.6, 0.6), onNorth(SX, SY, 0.3), M.SmoothPlastic, F7.SteelDark) -- housing
+	block(lobby, Vector3.new(SW + 0.7, SH + 0.7, 0.14), onNorth(SX, SY, 0.67), M.SmoothPlastic, F7.Steel) -- bezel
+	local glass = block(lobby, Vector3.new(SW, SH, 0.06), onNorth(SX, SY, 0.76), M.SmoothPlastic, rgb(8, 10, 14))
+	glass.Name = "RulesScreen"
+	make("SurfaceLight", glass, { Face = Enum.NormalId.Front, Range = 12, Angle = 80, Brightness = 0.5, Color = rgb(176, 204, 255) })
+	for _, x in { -1, 1 } do
+		for _, y in { -1, 1 } do
+			bolt(onNorth(SX + x * (SW / 2 + 0.45), SY + y * (SH / 2 + 0.45), 0.6))
 		end
 	end
+	-- a maker's plate and a power LED on the housing's bottom rail
+	local maker = block(lobby, Vector3.new(6, 0.5, 0.04), onNorth(SX - SW / 2 + 4, SY - SH / 2 - 0.4, 0.62), M.SmoothPlastic, F7.SteelLight)
+	surfaceText(maker, Enum.NormalId.Front, { Text = "WEAPON X  ·  BRIEFING DISPLAY  ·  UNIT 07", FontFace = OSWALD, TextColor3 = rgb(40, 42, 48) })
+	local led = fitting(lobby, Vector3.new(0.18, 0.18, 0.05), onNorth(SX + SW / 2 - 1, SY - SH / 2 - 0.4, 0.62), M.SmoothPlastic, rgb(90, 255, 140))
+	glowFace(led, Enum.NormalId.Front, rgb(90, 255, 140), true)
 
-	-- the banner: hazard stripes, the name stencilled in yellow, and the
-	-- incident counter nobody ever gets to reset
-	block(lobby, Vector3.new(72, 4, 0.2), onBoard(-6, 21.7, 0.4), M.Metal, rgb(20, 20, 22))
-	local hazard = block(lobby, Vector3.new(5, 4, 0.05), onBoard(-39.5, 21.7, 0.52), M.SmoothPlastic, rgb(232, 184, 40), { CanCollide = false })
-	local stripes = {}
-	for i = 0, 9 do
-		local col = i % 2 == 0 and rgb(232, 184, 40) or rgb(17, 17, 17)
-		table.insert(stripes, ColorSequenceKeypoint.new(i == 0 and 0 or i / 10 + 0.002, col))
-		table.insert(stripes, ColorSequenceKeypoint.new((i + 1) / 10, col))
-	end
-	make("UIGradient", boardGui(hazard, Color3.new(1, 1, 1)), { Rotation = 45, Color = ColorSequence.new(stripes) })
-	local nameplate = block(lobby, Vector3.new(48, 2.8, 0.05), onBoard(-12.25, 22.2, 0.52), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false })
-	surfaceText(nameplate, Enum.NormalId.Front, {
-		Text = "SURVIVE THE WOLVERINE",
-		FontFace = OSWALD,
-		TextColor3 = rgb(232, 186, 40),
-		TextTransparency = 0.06,
-		TextXAlignment = Enum.TextXAlignment.Left,
-	})
-	local strap = block(lobby, Vector3.new(48, 0.72, 0.05), onBoard(-12.25, 20.45, 0.52), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false })
-	surfaceText(strap, Enum.NormalId.Front, {
-		Text = "WEAPON X  ·  FACILITY 7  ·  CONTAINMENT BREACH PROTOCOL  —  READ BEFORE ENTERING",
-		Font = Enum.Font.RobotoMono,
-		TextColor3 = rgb(154, 154, 162),
-		TextXAlignment = Enum.TextXAlignment.Left,
-	})
-	local counter = block(lobby, Vector3.new(10.5, 3.1, 0.06), onBoard(24.15, 21.7, 0.53), M.SmoothPlastic, rgb(233, 230, 220), { CanCollide = false })
-	local cbg = boardGui(counter, rgb(233, 230, 220))
-	boardText(cbg, {
-		Position = UDim2.fromOffset(16, 12),
-		Size = UDim2.new(1, -170, 1, -24),
-		Text = "DAYS WITHOUT AN INCIDENT",
-		FontFace = OSWALD,
-		TextScaled = true,
-		TextColor3 = rgb(27, 27, 27),
-	})
-	local digit = make("Frame", cbg, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -14, 0.5, 0), Size = UDim2.fromOffset(124, 100), BackgroundColor3 = rgb(17, 17, 17), BorderSizePixel = 0 })
-	boardText(digit, {
-		Size = UDim2.fromScale(1, 1),
-		Text = "0",
-		FontFace = OSWALD,
-		TextScaled = true,
-		TextColor3 = rgb(255, 51, 38),
-		TextXAlignment = Enum.TextXAlignment.Center,
-		TextYAlignment = Enum.TextYAlignment.Center,
-	})
-
-	local S = Config.Sentinel
-	local INK = rgb(28, 27, 25)
-	local TYPE = { Skirt = rgb(62, 62, 66), Top = rgb(238, 236, 230), Legend = rgb(30, 30, 34), Line = rgb(20, 20, 22), Hot = rgb(200, 30, 30),
-		Font = Enum.Font.SpecialElite, Size = 34, Ink = INK }
-	local function header(col, text, color)
-		boardText(col, { Size = UDim2.new(1, 0, 0, 30), Text = text, Font = Enum.Font.RobotoMono, TextSize = 24, TextColor3 = color, LayoutOrder = 1 })
-	end
-	local function heading(col, text, props)
-		local h = boardText(col, { Size = UDim2.new(1, 0, 0, 64), Text = text, Font = Enum.Font.SpecialElite, TextSize = 58, TextColor3 = INK, LayoutOrder = 2 })
-		for k, v in props or {} do
-			h[k] = v
-		end
-		make("Frame", col, { Size = UDim2.new(1, 0, 0, 3), BackgroundColor3 = h.TextColor3, BorderSizePixel = 0, LayoutOrder = 3 })
-	end
-	local function pin(x, y)
-		block(lobby, Vector3.new(0.55, 0.55, 0.55), onBoard(x, y, 0.62), M.SmoothPlastic, rgb(194, 34, 28), { Shape = Enum.PartType.Ball, CanCollide = false })
-	end
-
-	-- 1) the staff memo: what survivors do
-	local _, memo, memoCol = boardSheet(lobby, Vector3.new(21, 17.4, 0.04), onBoard(-30, 10, 0.36, -1.5), rgb(233, 227, 210))
-	header(memoCol, "WEAPON X // FACILITY 7 // MEMO 0419", rgb(109, 102, 90))
-	heading(memoCol, "SUBJECT X IS LOOSE.")
-	keyRow(memoCol, 4, "SHIFT", "RUN. He is faster. Break his line of sight.", TYPE)
-	keyRow(memoCol, 5, "E", "HIDE in anything that glows white.", TYPE)
-	keyRow(memoCol, 6, "G", "FART to hide your scent. Or: Turbo Fart, Dodge, Invisibility.", TYPE)
-	keyRow(memoCol, 7, "M", "MAP. Only you are on it.", TYPE)
-	keyRow(memoCol, 8, "3x", "REBOOT the 3 consoles, then suit up in the Hangar.", TYPE)
-	boardText(memo, {
-		Position = UDim2.fromOffset(300, 600),
-		Size = UDim2.fromOffset(500, 60),
-		Rotation = -4,
-		Text = Config.HitsToKill .. " hits = torn in half",
-		Font = Enum.Font.PermanentMarker,
-		TextSize = 44,
-		TextColor3 = rgb(200, 21, 27),
-		TextXAlignment = Enum.TextXAlignment.Right,
-	})
-	pin(-30, 18.3)
-
-	-- 2) Subject X's file: what he does
-	local _, file, fileCol = boardSheet(lobby, Vector3.new(21, 17.4, 0.04), onBoard(-6, 10, 0.36, 1), rgb(239, 236, 228))
-	header(fileCol, "PERSONNEL FILE // SUBJECT X", rgb(109, 102, 90))
-	heading(fileCol, "IF YOU ARE HIM")
-	keyRow(fileCol, 4, "M1", "CLAW. Through people. Through walls.", TYPE)
-	keyRow(fileCol, 5, "Q", "POUNCE from all fours.", TYPE)
-	keyRow(fileCol, 6, "E", "IMPALE. Both claws in. Lift.", TYPE)
-	keyRow(fileCol, 7, "R", "SNIFF. Smell every scent.", TYPE)
-	keyRow(fileCol, 8, "C", "ALL FOURS. Fastest.", TYPE)
-	keyRow(fileCol, 9, "F", ("BLOCK. Takes %d punches."):format(Config.Block.Guard.Wolverine), TYPE)
-	boardText(fileCol, {
-		Size = UDim2.new(0, 520, 0, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		Text = ("Every kill: +%d seconds.\nUnder %d%% health: RAGE."):format(Config.KillTimeBonus, Config.Rage.Threshold * 100),
-		Font = Enum.Font.SpecialElite,
-		TextSize = 34,
-		TextColor3 = INK,
-		LayoutOrder = 10,
-	})
-	-- his mugshot: three claw marks where a face should be
-	local photo = make("Frame", file, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -40, 1, -40), Size = UDim2.fromOffset(170, 210), BackgroundColor3 = rgb(21, 21, 26), BorderSizePixel = 0 })
-	make("UIStroke", photo, { Color = Color3.new(1, 1, 1), Thickness = 6, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
-	for i = 0, 2 do
-		make("Frame", photo, { Position = UDim2.fromOffset(50 + i * 30, 20), Size = UDim2.fromOffset(10, 170), Rotation = 18, BackgroundColor3 = rgb(210, 30, 30), BorderSizePixel = 0 })
-	end
-	local stamp = make("Frame", file, { Position = UDim2.fromOffset(420, 560), Size = UDim2.fromOffset(300, 80), Rotation = -12, BackgroundTransparency = 1 })
-	make("UIStroke", stamp, { Color = rgb(200, 21, 27), Thickness = 6, Transparency = 0.15, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
-	boardText(stamp, {
-		Size = UDim2.fromScale(1, 1),
-		Text = "CLASSIFIED",
-		FontFace = OSWALD,
-		TextSize = 52,
-		TextColor3 = rgb(200, 21, 27),
-		TextTransparency = 0.15,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		TextYAlignment = Enum.TextYAlignment.Center,
-	})
-	pin(-6, 18.4)
-
-	-- 3) the Sentinel pilot card: a blueprint
-	local BLUE = rgb(29, 74, 140)
-	-- blueprint keys are line drawings: white lines on the blue
-	local PRINT = { Skirt = rgb(38, 88, 158), Top = rgb(52, 108, 178), Legend = Color3.new(1, 1, 1), Line = Color3.new(1, 1, 1), Hot = rgb(255, 206, 60),
-		Font = Enum.Font.RobotoMono, Size = 30, Ink = Color3.new(1, 1, 1) }
-	local _, card, cardCol = boardSheet(lobby, Vector3.new(21, 17.4, 0.04), onBoard(18, 10, 0.36, -0.8), BLUE)
-	for gx = 40, 800, 40 do
-		make("Frame", card, { Position = UDim2.fromOffset(gx, 0), Size = UDim2.new(0, 2, 1, 0), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.88, BorderSizePixel = 0 })
-	end
-	for gy = 40, 680, 40 do
-		make("Frame", card, { Position = UDim2.fromOffset(0, gy), Size = UDim2.new(1, 0, 0, 2), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.88, BorderSizePixel = 0 })
-	end
-	cardCol.ZIndex = 2 -- the text sits over the grid
-	header(cardCol, "SENTINEL MK I // PILOT CARD", rgb(185, 208, 240))
-	heading(cardCol, "SUIT UP.", { FontFace = OSWALD, TextSize = 64, TextColor3 = Color3.new(1, 1, 1) })
-	keyRow(cardCol, 4, "M1", "HYDRAULIC SMASH. Stuns and launches him.", PRINT)
-	keyRow(cardCol, 5, "M2", ("GROUND SLAM. Hits him within %d studs."):format(S.Slam.Radius), PRINT)
-	keyRow(cardCol, 6, "Q", "DEATH RAY. Melts through walls.", PRINT)
-	keyRow(cardCol, 7, "E", ("INHIBITOR BLAST. Stuns him %gs."):format(S.Pulse.Stun), PRINT)
-	keyRow(cardCol, 8, "F", ("BLOCK. Takes %d slashes."):format(Config.Block.Guard.Sentinel), PRINT)
-	boardText(cardCol, {
-		Size = UDim2.new(1, 0, 0, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		Text = ("LINKED (%d studs) %gx\nAPART %gx · LAST SUIT 1x\nCORE BURNS OUT IN %ds"):format(S.LinkRange, S.LinkedMultiplier, S.SoloMultiplier, S.Duration),
-		Font = Enum.Font.RobotoMono,
-		TextSize = 28, -- a touch smaller, to fit the Block row above it
-		LineHeight = 1.1,
-		TextColor3 = Color3.new(1, 1, 1),
-		LayoutOrder = 9,
-	})
-	for _, side in { -1, 1 } do -- taped up
-		block(lobby, Vector3.new(3.5, 1, 0.03), onBoard(18 + side * 9.8, 18.5, 0.42, side * -30), M.SmoothPlastic, rgb(228, 218, 184), { Transparency = 0.3, CanCollide = false })
-	end
-
-	-- scrawled sticky notes, stuck where there was room
-	stickyNote(lobby, onBoard(-18, 11.5, 0.6, 6), "he can SMELL you")
-	stickyNote(lobby, onBoard(6, 13, 0.6, -7), "he heals.\nyou don't.")
-	stickyNote(lobby, onBoard(26.6, 3.8, 0.6, 5), "STAY TOGETHER!!")
-
-	-- three work lamps hanging from the ceiling, aimed at the paperwork
-	for _, x in { -30, -6, 18 } do
-		local headPos = Vector3.new(x, Y + 25.2, rz + 4.2)
-		block(lobby, Vector3.new(0.2, H - 25.6, 0.2), CFrame.new(x, Y + (H + 25.6) / 2, rz + 4.2), M.Metal, rgb(40, 40, 44))
-		local lamp = block(lobby, Vector3.new(1.4, 0.9, 1.6), CFrame.lookAt(headPos, Vector3.new(x, Y + 11, rz)), M.Metal, rgb(36, 36, 40))
-		glowFace(block(lobby, Vector3.new(1.1, 0.6, 0.05), lamp.CFrame * CFrame.new(0, 0, -0.81), M.SmoothPlastic, rgb(255, 236, 200)), Enum.NormalId.Front, rgb(255, 236, 200))
-		make("SpotLight", lamp, { Face = Enum.NormalId.Front, Range = 22, Angle = 62, Brightness = 2.6, Color = rgb(255, 236, 210) })
-	end
 	-- He clawed through the wall next to the board
 	clawGouge(lobby, CFrame.new(45, Y + 14, rz + 0.1) * CFrame.Angles(0, math.pi, 0), 20, 22)
 	for _ = 1, 10 do
@@ -2582,47 +2372,26 @@ function MapBuilder.BuildLobby()
 	end
 
 	-- SUIT GALLERY (east) -----------------------------------------------
+	-- a low stage with a steel nosing and step lights, the title plate on the
+	-- wall above a lighting bar, and each suit on a plinth under a downlight
+	-- with two stage lights crossing on it
 	local gx = hx - 12
-	block(lobby, Vector3.new(20, 1, 70), CFrame.new(gx + 2, Y + 0.5, 0), M.Marble, rgb(26, 26, 30))
-	block(lobby, Vector3.new(0.3, 0.2, 69.6), CFrame.new(gx - 8, Y + 1.05, 0), M.Neon, rgb(255, 228, 196))
-	block(lobby, Vector3.new(3, 0.5, 70), CFrame.new(gx - 9.5, Y + 0.25, 0), M.Marble, rgb(34, 34, 38))
-	-- a stadium-style marquee across the top of the gallery: a dark fascia
-	-- with glowing gold borders, marquee bulbs and the title, and light bars
-	-- down both ends framing the whole gallery like the pedestal rings
-	local GOLD = rgb(255, 206, 90)
-	local mf = CFrame.new(hx - 1.45, Y + 23.2, 0) * CFrame.Angles(0, math.rad(90), 0) -- X runs along the wall, -Z into the room
-	local fascia = block(lobby, Vector3.new(72, 5, 0.6), mf, M.Metal, rgb(16, 16, 22))
-	local fg = make("SurfaceGui", fascia, { Face = Enum.NormalId.Front, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 24, LightInfluence = 0 })
-	local fbg = make("Frame", fg, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = rgb(40, 31, 16), BorderSizePixel = 0 })
-	make("UIGradient", fbg, { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), rgb(90, 90, 90)) }) -- dark bronze fading to black
-	local gt = make("TextLabel", fbg, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.5, 0.74),
-		BackgroundTransparency = 1, Font = Enum.Font.LuckiestGuy, TextScaled = true, Text = "SUIT GALLERY", TextColor3 = rgb(255, 214, 80) })
-	make("UIStroke", gt, { Thickness = 6, Color = rgb(70, 34, 0) })
-	for _, x in { 0.2, 0.8 } do
-		make("TextLabel", fbg, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(x, 0.5), Size = UDim2.fromScale(0.05, 0.6),
-			BackgroundTransparency = 1, Font = Enum.Font.GothamBlack, TextScaled = true, Text = "★", TextColor3 = GOLD })
+	block(lobby, Vector3.new(20, 1, 70), CFrame.new(gx + 2, Y + 0.5, 0), M.SmoothPlastic, rgb(30, 31, 36))
+	block(lobby, Vector3.new(0.3, 0.14, 70.2), CFrame.new(gx - 7.95, Y + 0.99, 0), M.SmoothPlastic, F7.SteelLight) -- nosing
+	block(lobby, Vector3.new(3, 0.5, 70), CFrame.new(gx - 9.5, Y + 0.25, 0), M.SmoothPlastic, rgb(38, 40, 45)) -- step
+	block(lobby, Vector3.new(0.3, 0.1, 70.2), CFrame.new(gx - 10.95, Y + 0.47, 0), M.SmoothPlastic, F7.SteelLight)
+	for z = -32, 32, 8 do -- step lights in the riser
+		fitting(lobby, Vector3.new(0.06, 0.24, 0.9), CFrame.new(gx - 8.03, Y + 0.72, z), M.SmoothPlastic, F7.SteelDark)
+		glowFace(fitting(lobby, Vector3.new(0.04, 0.12, 0.7), CFrame.new(gx - 8.07, Y + 0.72, z), M.SmoothPlastic, F7.Lamp), Enum.NormalId.Left, F7.Lamp)
 	end
-	for _, y in { 2.45, -2.45 } do
-		block(lobby, Vector3.new(72, 0.22, 0.3), mf * CFrame.new(0, y, -0.4), M.Neon, GOLD)
-		for x = -35, 35, 1.75 do
-			block(lobby, Vector3.new(0.34, 0.34, 0.34), mf * CFrame.new(x, y * 0.86, -0.42), M.Neon, rgb(255, 236, 190), { Shape = Enum.PartType.Ball, CanCollide = false, CastShadow = false })
-		end
-	end
-	for _, s in { -1, 1 } do
-		block(lobby, Vector3.new(0.22, 5.2, 0.3), mf * CFrame.new(s * 36, 0, -0.4), M.Neon, GOLD)
-		block(lobby, Vector3.new(0.3, 19.6, 0.3), CFrame.new(hx - 1.85, Y + 10.9, s * 36), M.Neon, GOLD)
-		for y = 2, 19, 1.75 do
-			block(lobby, Vector3.new(0.3, 0.3, 0.3), CFrame.new(hx - 1.85, Y + y, s * 36.45), M.Neon, rgb(255, 236, 190), { Shape = Enum.PartType.Ball, CanCollide = false, CastShadow = false })
-		end
-		light(block(lobby, Vector3.new(0.4, 0.4, 0.4), CFrame.new(hx - 4, Y + 21, s * 30), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false }), { Range = 20, Brightness = 1, Color = GOLD })
-	end
+	titlePlate(CFrame.lookAt(Vector3.new(hx - 1.6, Y + 18.1, 0), Vector3.new(0, Y + 18.1, 0)), 24, "SUIT GALLERY")
 	-- a lighting bar along the gallery wall on brackets; two stage lights hang
 	-- from it over each suit (see the pedestals below)
 	local barX, barY = hx - 3.2, Y + 15.6
-	block(lobby, Vector3.new(62, 0.34, 0.34), CFrame.new(barX, barY, 0) * CFrame.Angles(0, math.rad(90), 0), M.Metal, rgb(34, 34, 38), { Shape = Enum.PartType.Cylinder })
+	block(lobby, Vector3.new(62, 0.34, 0.34), CFrame.new(barX, barY, 0) * CFrame.Angles(0, math.rad(90), 0), M.SmoothPlastic, F7.SteelDark, { Shape = Enum.PartType.Cylinder })
 	for z = -30, 30, 12 do
-		block(lobby, Vector3.new(2.3, 0.3, 0.3), CFrame.new(hx - 2.1, barY + 0.3, z), M.Metal, rgb(40, 40, 46))
-		block(lobby, Vector3.new(0.2, 1.2, 0.6), CFrame.new(hx - 1.1, barY + 0.3, z), M.Metal, rgb(40, 40, 46))
+		block(lobby, Vector3.new(2.3, 0.3, 0.3), CFrame.new(hx - 2.1, barY + 0.3, z), M.SmoothPlastic, F7.Steel)
+		block(lobby, Vector3.new(0.2, 1.2, 0.6), CFrame.new(hx - 1.1, barY + 0.3, z), M.SmoothPlastic, F7.SteelDark)
 	end
 	local pedestals = Instance.new("Folder")
 	pedestals.Name = "Pedestals"
@@ -2632,25 +2401,20 @@ function MapBuilder.BuildLobby()
 	for i, id in skinOrder do
 		local z = -24 + (i - 1) * 16
 		local base = CFrame.new(gx + 3, Y + 1, z)
-		block(lobby, Vector3.new(1.6, 8, 8), base * CFrame.new(0, 0.8, 0) * CFrame.Angles(0, 0, math.rad(90)), M.Marble, rgb(40, 40, 46), { Shape = Enum.PartType.Cylinder })
-		block(lobby, Vector3.new(0.3, 8.4, 8.4), base * CFrame.new(0, 1.2, 0) * CFrame.Angles(0, 0, math.rad(90)), M.Neon, swatches[i], { Shape = Enum.PartType.Cylinder })
+		plinth(base.Position, 8, 1.6, swatches[i])
 		local spot = block(pedestals, Vector3.new(1, 1, 1), base * CFrame.new(0, 1.6, 0) * CFrame.Angles(0, math.rad(90), 0), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false })
 		spot.Name = "Pedestal_" .. id
 		spot:SetAttribute("Skin", id)
-		local lamp = block(lobby, Vector3.new(1.6, 1, 1.6), CFrame.new(gx - 4, Y + H - 2, z), M.Metal, C.DarkMetal)
-		make("SpotLight", lamp, { Face = Enum.NormalId.Bottom, Range = 34, Angle = 40, Brightness = 5, Color = swatches[i]:Lerp(Color3.new(1, 1, 1), 0.6), Shadows = true })
+		downlight(gx - 4, z, swatches[i]:Lerp(Color3.new(1, 1, 1), 0.6), 34, 40, 5)
 		for _, dz in { -3.2, 3.2 } do -- stage lights crossing on the suit
 			stageLight(lobby, Vector3.new(barX, barY - 0.17, z + dz), Vector3.new(gx + 3, Y + 6, z - dz * 0.3), swatches[i]:Lerp(Color3.new(1, 1, 1), 0.55), 18, 3.2)
 		end
-		local plaque = block(lobby, Vector3.new(6, 2.2, 0.3), CFrame.new(gx - 4, Y + 1.9, z) * CFrame.Angles(0, math.rad(90), 0) * CFrame.Angles(math.rad(25), 0, 0), M.Metal, rgb(24, 24, 28))
-		-- the suit's display name and price (Skins), scaled to fit the plaque
+		-- the suit's name and price (Skins) on a lectern plaque
 		local suit = require(ReplicatedStorage.Shared.Skins).List[id]
-		local _, label = surfaceText(plaque, Enum.NormalId.Front, {
-			Name = "PlaqueText", TextColor3 = swatches[i], Font = Enum.Font.GothamBlack,
-			Text = suit.Name .. (suit.Price > 0 and ("\n" .. suit.Price .. " " .. Config.CoinName:upper()) or "\nFREE"),
-		})
-		make("UIPadding", label, { PaddingLeft = UDim.new(0.06, 0), PaddingRight = UDim.new(0.06, 0), PaddingTop = UDim.new(0.08, 0), PaddingBottom = UDim.new(0.08, 0) })
-		block(lobby, Vector3.new(0.4, 1.4, 0.4), CFrame.new(gx - 4, Y + 0.7, z), M.Metal, C.DarkMetal)
+		local lectern = CFrame.new(gx - 4, Y + 2.15, z) * CFrame.Angles(0, math.rad(90), 0) * CFrame.Angles(math.rad(25), 0, 0)
+		plaque(lectern, 5.4, 2, suit.Name, suit.Price, swatches[i])
+		block(lobby, Vector3.new(0.36, 1.15, 0.36), CFrame.new(gx - 3.75, Y + 1.575, z), M.SmoothPlastic, F7.SteelDark)
+		block(lobby, Vector3.new(1.4, 0.1, 1.4), CFrame.new(gx - 4 + 0.25, Y + 1.05, z), M.SmoothPlastic, F7.Steel)
 	end
 
 	-- CLAW COLLECTION (south wall): one lit glass case per claw set --------
@@ -2664,9 +2428,10 @@ function MapBuilder.BuildLobby()
 		-- centred under the CLAW COLLECTION sign, clear of the suit gallery
 		local x = 17.5 + (i - (#Skins.ClawOrder + 1) / 2) * 5.6
 		local base = CFrame.new(x, Y, cz)
-		block(lobby, Vector3.new(3.4, 3.2, 3.4), base * CFrame.new(0, 1.6, 0), M.Marble, rgb(30, 30, 34))
-		block(lobby, Vector3.new(3.6, 0.25, 3.6), base * CFrame.new(0, 3.3, 0), M.Metal, rgb(70, 72, 78), { Reflectance = 0.2 })
-		block(lobby, Vector3.new(3.5, 0.15, 3.5), base * CFrame.new(0, 0.1, 0), M.Neon, item.Glow)
+		block(lobby, Vector3.new(3.4, 3.2, 3.4), base * CFrame.new(0, 1.6, 0), M.SmoothPlastic, rgb(30, 31, 36))
+		block(lobby, Vector3.new(3.6, 0.25, 3.6), base * CFrame.new(0, 3.3, 0), M.SmoothPlastic, F7.SteelLight)
+		block(lobby, Vector3.new(3.56, 0.3, 3.56), base * CFrame.new(0, 0.15, 0), M.SmoothPlastic, F7.SteelDark) -- kick
+		block(lobby, Vector3.new(3.46, 0.1, 3.46), base * CFrame.new(0, 2.9, 0), M.SmoothPlastic, item.Glow) -- a band of the claws' colour
 		-- not M.Glass: Roblox won't draw SurfaceGuis (the Verity faces) behind Glass
 		block(lobby, Vector3.new(3.2, 5.2, 3.2), base * CFrame.new(0, 6, 0), M.SmoothPlastic, rgb(200, 225, 240), { Transparency = 0.88, Reflectance = 0.2 })
 		for _, cx in { -1.6, 1.6 } do
@@ -2678,8 +2443,7 @@ function MapBuilder.BuildLobby()
 		-- a stage light hung in the top back corner, aimed at the claws
 		stageLight(lobby, (base * CFrame.new(0.95, 8.6, 0.95)).Position, (base * CFrame.new(0, 5, 0)).Position, item.Glow:Lerp(Color3.new(1, 1, 1), 0.55))
 		Costumes.ClawDisplay(lobby, base * CFrame.new(0, 4.35, 0) * CFrame.Angles(0, math.rad(90 + 18), math.rad(6)), item)
-		local plaque = block(lobby, Vector3.new(3.2, 0.9, 0.1), base * CFrame.new(0, 2.2, -1.75) * CFrame.Angles(math.rad(12), 0, 0), M.Metal, rgb(22, 22, 26))
-		surfaceText(plaque, Enum.NormalId.Front, { Text = item.Name .. (item.Price > 0 and ("\n" .. item.Price .. " " .. Config.CoinName:upper()) or "  FREE"), TextColor3 = item.Glow, Font = Enum.Font.GothamBold })
+		plaque(base * CFrame.new(0, 1.7, -1.83), 2.9, 1.4, item.Name, item.Price, item.Glow)
 	end
 
 	-- SENTINEL BAY (west wall, north end): every Sentinel suit on a lit
@@ -2692,40 +2456,94 @@ function MapBuilder.BuildLobby()
 		local z = -36 + (i - 1) * 14
 		local px = -hx + 7.5
 		local faceIn = CFrame.Angles(0, math.rad(-90), 0) -- facing +X, into the room
-		block(lobby, Vector3.new(1.2, 10, 10), CFrame.new(px, Y + 0.6, z) * CFrame.Angles(0, 0, math.rad(90)), M.Marble, rgb(34, 32, 40), { Shape = Enum.PartType.Cylinder })
-		block(lobby, Vector3.new(0.25, 10.4, 10.4), CFrame.new(px, Y + 1.1, z) * CFrame.Angles(0, 0, math.rad(90)), M.Neon, item.Swatch, { Shape = Enum.PartType.Cylinder })
+		plinth(Vector3.new(px, Y, z), 10, 1.25, item.Swatch)
 		Costumes.SentinelStatue(lobby, CFrame.new(px, Y + 1.25, z) * faceIn, Config.Sentinel.Scale, id)
-		local lamp = block(lobby, Vector3.new(1.6, 1, 1.6), CFrame.new(px + 4, Y + H - 2, z), M.Metal, C.DarkMetal)
-		make("SpotLight", lamp, { Face = Enum.NormalId.Bottom, Range = 34, Angle = 45, Brightness = 5, Color = item.Swatch:Lerp(Color3.new(1, 1, 1), 0.6), Shadows = true })
-		local plaque = block(lobby, Vector3.new(7, 2.2, 0.3), CFrame.new(px + 6.8, Y + 1.9, z) * faceIn * CFrame.Angles(math.rad(25), 0, 0), M.Metal, rgb(24, 24, 28))
-		surfaceText(plaque, Enum.NormalId.Front, { Text = item.Name .. (item.Price > 0 and ("\n" .. item.Price .. " " .. Config.CoinName:upper()) or "\nFREE"), TextColor3 = item.Swatch, Font = Enum.Font.GothamBlack })
-		block(lobby, Vector3.new(0.4, 1.4, 0.4), CFrame.new(px + 6.8, Y + 0.7, z), M.Metal, C.DarkMetal)
+		downlight(px + 4, z, item.Swatch:Lerp(Color3.new(1, 1, 1), 0.6), 34, 45, 5)
+		plaque(CFrame.new(px + 6.8, Y + 1.9, z) * faceIn * CFrame.Angles(math.rad(25), 0, 0), 6, 2, item.Name, item.Price, item.Swatch)
+		block(lobby, Vector3.new(0.36, 1.6, 0.36), CFrame.new(px + 6.55, Y + 0.8, z), M.SmoothPlastic, F7.SteelDark)
+		block(lobby, Vector3.new(1.4, 0.1, 1.4), CFrame.new(px + 6.55, Y + 0.05, z), M.SmoothPlastic, F7.Steel)
 	end
 
-	-- BRIEFING TABLE: holographic mini-map of the arena --------------------
-	local bt = Vector3.new(-6, Y, -22)
-	block(lobby, Vector3.new(1.2, 3, 3), CFrame.new(bt + Vector3.new(0, 1.5, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, rgb(40, 42, 48), { Shape = Enum.PartType.Cylinder })
-	block(lobby, Vector3.new(0.6, 14, 14), CFrame.new(bt + Vector3.new(0, 3.2, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, rgb(30, 32, 38), { Shape = Enum.PartType.Cylinder })
-	block(lobby, Vector3.new(0.2, 14.4, 14.4), CFrame.new(bt + Vector3.new(0, 3.2, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.Neon, rgb(60, 170, 255), { Shape = Enum.PartType.Cylinder })
-	local holoBase = block(lobby, Vector3.new(0.1, 12, 12), CFrame.new(bt + Vector3.new(0, 3.55, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.Neon, rgb(40, 140, 255), { Shape = Enum.PartType.Cylinder, Transparency = 0.55 })
-	light(holoBase, { Range = 16, Brightness = 1.4, Color = rgb(80, 170, 255) })
-	local HOLO = rgb(90, 200, 255)
-	local mini = 12 / 380 -- arena scaled onto the table
-	for _, b in { { 0, 0, 90, 70, 16 }, { 120, -118, 56, 40, 17 }, { 118, 100, 36, 22, 11 }, { -125, -112, 22, 16, 9 }, { -42, 140, 22, 16, 9 }, { 38, -148, 22, 16, 9 }, { 152, 30, 22, 16, 9 } } do
-		local h = b[5] * mini * 3
-		block(lobby, Vector3.new(b[3] * mini, h, b[4] * mini), CFrame.new(bt + Vector3.new(b[1] * mini, 3.6 + h / 2, b[2] * mini)), M.Neon, HOLO, { Transparency = 0.45, CanCollide = false })
-	end
-	for _, r in { { 0, -56, 136, 12 }, { 0, 56, 136, 12 }, { -62, 0, 12, 100 }, { 62, 0, 12, 100 }, { 0, 121, 12, 118 }, { 0, -121, 12, 118 }, { 124, 0, 112, 12 }, { -124, 0, 112, 12 } } do
-		block(lobby, Vector3.new(r[3] * mini, 0.03, r[4] * mini), CFrame.new(bt + Vector3.new(r[1] * mini, 3.62, r[2] * mini)), M.Neon, rgb(60, 140, 220), { Transparency = 0.5, CanCollide = false })
-	end
-	local blip = block(lobby, Vector3.new(0.35, 0.35, 0.35), CFrame.new(bt + Vector3.new(0, 4.2, 0)), M.Neon, rgb(255, 60, 40), { Shape = Enum.PartType.Ball, CanCollide = false })
-	light(blip, { Range = 6, Brightness = 2, Color = rgb(255, 60, 40) })
-	CollectionService:AddTag(blip, "Flicker")
-	for k = 0, 5 do -- stools around the table
-		local a = k / 6 * math.pi * 2
-		local sp = bt + Vector3.new(math.cos(a) * 9.5, 0, math.sin(a) * 9.5)
-		block(lobby, Vector3.new(1.8, 0.4, 1.8), CFrame.new(sp + Vector3.new(0, 1.2, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, rgb(46, 48, 54), { Shape = Enum.PartType.Cylinder })
-		block(lobby, Vector3.new(0.3, 2.2, 2.2), CFrame.new(sp + Vector3.new(0, 2.4, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.Leather, rgb(60, 24, 24), { Shape = Enum.PartType.Cylinder })
+	-- BRIEFING TABLE: a holographic mini-map of the arena ------------------
+	-- A stepped steel drum with ribbed, vented sides and a lit edge under a
+	-- dark glass top; a projector in the middle throws the facility up as
+	-- lit wireframe blocks. Six drafting stools round it.
+	do
+		local bt = Vector3.new(-6, Y, -22)
+		local UP = CFrame.Angles(0, 0, math.rad(90)) -- a cylinder standing upright
+		local HOLO = rgb(96, 190, 255)
+		local function disc(dia, y0, h, color, extra)
+			local p = block(lobby, Vector3.new(h, dia, dia), CFrame.new(bt + Vector3.new(0, y0 + h / 2, 0)) * UP, M.SmoothPlastic, color, extra)
+			p.Shape = Enum.PartType.Cylinder
+			return p
+		end
+		disc(10.4, 0, 0.3, F7.SteelDark) -- floor ring
+		disc(9.2, 0.3, 0.25, F7.Steel)
+		disc(8.4, 0.55, 2.2, F7.Steel) -- the drum
+		for k = 0, 11 do -- ribs, with a vent slot between each pair
+			local a = k / 12 * math.pi * 2
+			local cf = CFrame.new(bt) * CFrame.Angles(0, a, 0)
+			block(lobby, Vector3.new(0.3, 2.2, 0.5), cf * CFrame.new(0, 1.65, -4.3), M.SmoothPlastic, F7.SteelDark)
+			block(lobby, Vector3.new(0.9, 1.3, 0.06), cf * CFrame.Angles(0, math.rad(15), 0) * CFrame.new(0, 1.7, -4.2), M.SmoothPlastic, rgb(16, 17, 20))
+		end
+		disc(13.6, 2.75, 0.3, F7.SteelDark) -- the top's rim
+		for k = 0, 23 do -- the lit edge round the rim (flat lit segments: a SurfaceGui can't wrap a round side)
+			local seg = fitting(lobby, Vector3.new(1.84, 0.14, 0.06), CFrame.new(bt + Vector3.new(0, 2.9, 0)) * CFrame.Angles(0, k / 24 * math.pi * 2, 0) * CFrame.new(0, 0, -6.86), M.SmoothPlastic, HOLO)
+			glowFace(seg, Enum.NormalId.Front, HOLO)
+		end
+		disc(13.6, 3.05, 0.14, F7.SteelLight) -- lip
+		disc(12.6, 3.1, 0.12, rgb(10, 14, 22), { Reflectance = 0.08 }) -- dark glass top
+		-- the projector: a lens in a steel collar in the middle
+		disc(2.2, 3.18, 0.14, F7.SteelDark)
+		local lens = disc(1.4, 3.3, 0.06, HOLO)
+		glowFace(lens, Enum.NormalId.Right, HOLO, true)
+		light(lens, { Range = 16, Brightness = 1.2, Color = HOLO })
+		-- the facility, drawn as lit wireframe blocks and floor outlines
+		local mini = 12 / 380 -- arena scaled onto the table
+		local function holo(size, pos, fill)
+			local p = block(lobby, size, CFrame.new(pos), M.SmoothPlastic, HOLO, { Transparency = fill, CanCollide = false, CastShadow = false })
+			for _, face in { Enum.NormalId.Top, Enum.NormalId.Front, Enum.NormalId.Back, Enum.NormalId.Left, Enum.NormalId.Right } do
+				local g = make("SurfaceGui", p, { Face = face, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 60, LightInfluence = 0 })
+				local f = make("Frame", g, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = HOLO, BackgroundTransparency = 0.82, BorderSizePixel = 0 })
+				make("UIStroke", f, { Color = rgb(190, 232, 255), Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
+			end
+			return p
+		end
+		for _, b in { { 0, 0, 90, 70, 16 }, { 120, -118, 56, 40, 17 }, { 118, 100, 36, 22, 11 }, { -125, -112, 22, 16, 9 }, { -42, 140, 22, 16, 9 }, { 38, -148, 22, 16, 9 }, { 152, 30, 22, 16, 9 } } do
+			local h = b[5] * mini * 3
+			holo(Vector3.new(b[3] * mini, h, b[4] * mini), bt + Vector3.new(b[1] * mini, 3.23 + h / 2, b[2] * mini), 0.9)
+		end
+		for _, r in { { 0, -56, 136, 12 }, { 0, 56, 136, 12 }, { -62, 0, 12, 100 }, { 62, 0, 12, 100 }, { 0, 121, 12, 118 }, { 0, -121, 12, 118 }, { 124, 0, 112, 12 }, { -124, 0, 112, 12 } } do
+			holo(Vector3.new(r[3] * mini, 0.02, r[4] * mini), bt + Vector3.new(r[1] * mini, 3.24, r[2] * mini), 0.95)
+		end
+		local blip = block(lobby, Vector3.new(0.3, 0.3, 0.3), CFrame.new(bt + Vector3.new(0, 4.1, 0)), M.Neon, rgb(255, 60, 40), { Shape = Enum.PartType.Ball, CanCollide = false })
+		light(blip, { Range = 6, Brightness = 2, Color = rgb(255, 60, 40) })
+		CollectionService:AddTag(blip, "Flicker")
+		-- drafting stools: a five-star base on glides, a gas column, a foot
+		-- ring and a padded seat on a steel pan
+		for k = 0, 5 do
+			local a = k / 6 * math.pi * 2 + math.pi / 6
+			local sp = bt + Vector3.new(math.cos(a) * 9.4, 0, math.sin(a) * 9.4)
+			local base = CFrame.new(sp) * CFrame.Angles(0, a, 0)
+			for leg = 0, 4 do
+				local la = CFrame.Angles(0, leg / 5 * math.pi * 2, 0)
+				block(lobby, Vector3.new(0.18, 0.14, 1.1), base * la * CFrame.new(0, 0.28, -0.55) * CFrame.Angles(math.rad(-8), 0, 0), M.SmoothPlastic, F7.SteelDark)
+				block(lobby, Vector3.new(0.12, 0.26, 0.26), base * la * CFrame.new(0, 0.13, -1.05) * UP, M.SmoothPlastic, rgb(24, 24, 28), { Shape = Enum.PartType.Cylinder })
+			end
+			block(lobby, Vector3.new(0.3, 0.44, 0.44), base * CFrame.new(0, 0.38, 0) * UP, M.SmoothPlastic, F7.Steel, { Shape = Enum.PartType.Cylinder }) -- hub
+			block(lobby, Vector3.new(2, 0.2, 0.2), base * CFrame.new(0, 1.5, 0) * UP, M.SmoothPlastic, F7.SteelLight, { Shape = Enum.PartType.Cylinder }) -- column
+			block(lobby, Vector3.new(0.9, 0.3, 0.3), base * CFrame.new(0, 0.95, 0) * UP, M.SmoothPlastic, F7.SteelDark, { Shape = Enum.PartType.Cylinder }) -- gas sleeve
+			for seg = 0, 9 do -- the foot ring
+				local ra = CFrame.Angles(0, seg / 10 * math.pi * 2, 0)
+				block(lobby, Vector3.new(0.52, 0.08, 0.08), base * ra * CFrame.new(0, 1.35, -0.8), M.SmoothPlastic, F7.SteelLight)
+			end
+			for spoke = 0, 2 do
+				block(lobby, Vector3.new(0.06, 0.06, 0.8), base * CFrame.Angles(0, spoke / 3 * math.pi * 2, 0) * CFrame.new(0, 1.35, -0.4), M.SmoothPlastic, F7.SteelDark)
+			end
+			block(lobby, Vector3.new(0.12, 1.7, 1.7), base * CFrame.new(0, 2.5, 0) * UP, M.SmoothPlastic, F7.SteelDark, { Shape = Enum.PartType.Cylinder }) -- seat pan
+			block(lobby, Vector3.new(0.34, 1.9, 1.9), base * CFrame.new(0, 2.72, 0) * UP, M.SmoothPlastic, rgb(46, 48, 56), { Shape = Enum.PartType.Cylinder }) -- cushion
+			block(lobby, Vector3.new(0.06, 1.96, 1.96), base * CFrame.new(0, 2.62, 0) * UP, M.SmoothPlastic, rgb(28, 29, 34), { Shape = Enum.PartType.Cylinder }) -- piping
+		end
 	end
 
 	-- Vending machines in the south-east corner, standing off the plinth: a
@@ -2977,40 +2795,63 @@ function MapBuilder.BuildLobby()
 		end
 	end
 
-	-- LEADERBOARD (west wall, south end) ---------------------------------
-	-- south of the bookcase (the north end is the Sentinel bay), clear of the
-	-- corner column (z > hz - 3.6)
-	local lb = block(lobby, Vector3.new(0.4, 11, 12.4), CFrame.new(-hx + 2.9, Y + 9, 34.7), M.SmoothPlastic, rgb(14, 14, 18))
-	for _, y in { 5, 13 } do -- stand-off arms back to the wall
-		for _, dz in { -5, 5 } do
-			block(lobby, Vector3.new(1.6, 0.26, 0.26), CFrame.new(-hx + 1.9, Y + y, 34.7 + dz), M.SmoothPlastic, rgb(54, 58, 66))
-			block(lobby, Vector3.new(0.12, 0.7, 0.7), CFrame.new(-hx + 1.21, Y + y, 34.7 + dz), M.SmoothPlastic, rgb(34, 36, 42))
+	-- TOP HUNTERS (west wall, south end): a display in the same hardware as
+	-- the rules screen. GameManager fills Rows.Row1..6 (Rank / Player /
+	-- Kills / Wins). Clear of the corner pier and the shelving.
+	do
+		local wx0, lz, ly = -hx + 1, 34.7, 9
+		local LW, LH = 11.6, 9.6
+		local function onWest(z, y, out)
+			local p = Vector3.new(wx0 + out, Y + y, z)
+			return CFrame.lookAt(p, p + Vector3.xAxis)
+		end
+		block(lobby, Vector3.new(LW + 1.4, LH + 1.4, 0.6), onWest(lz, ly, 0.3), M.SmoothPlastic, F7.SteelDark)
+		block(lobby, Vector3.new(LW + 0.6, LH + 0.6, 0.14), onWest(lz, ly, 0.67), M.SmoothPlastic, F7.Steel)
+		local lb = block(lobby, Vector3.new(LW, LH, 0.06), onWest(lz, ly, 0.76), M.SmoothPlastic, rgb(8, 10, 14))
+		lb.Name = "TopHunters"
+		for _, a in { -1, 1 } do
+			for _, b in { -1, 1 } do
+				bolt(onWest(lz + a * (LW / 2 + 0.4), ly + b * (LH / 2 + 0.4), 0.6))
+			end
+		end
+		make("SurfaceLight", lb, { Face = Enum.NormalId.Front, Range = 9, Angle = 80, Brightness = 0.4, Color = rgb(176, 204, 255) })
+		local g = make("SurfaceGui", lb, { Name = "Leaderboard", Face = Enum.NormalId.Front, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 40, LightInfluence = 0 })
+		local bg = make("Frame", g, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0 })
+		make("UIGradient", bg, { Rotation = 90, Color = ColorSequence.new(rgb(16, 20, 28), rgb(9, 11, 16)) })
+		local CREAM, DIM, LINE = rgb(232, 228, 218), rgb(128, 136, 152), rgb(40, 46, 58)
+		local MONO = Font.new("rbxasset://fonts/families/RobotoMono.json")
+		local function txt(parent, props)
+			local t = make("TextLabel", parent, { BackgroundTransparency = 1, BorderSizePixel = 0, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd })
+			for k, v in props do
+				t[k] = v
+			end
+			return t
+		end
+		local pad = make("Frame", bg, { Position = UDim2.fromOffset(24, 18), Size = UDim2.new(1, -48, 1, -36), BackgroundTransparency = 1 })
+		txt(pad, { Size = UDim2.fromOffset(260, 44), Text = "TOP HUNTERS", FontFace = OSWALD, TextSize = 36, TextColor3 = F7.Amber })
+		txt(pad, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 16), Size = UDim2.fromOffset(110, 22), Text = "THIS SERVER", FontFace = MONO, TextSize = 13, TextColor3 = DIM, TextXAlignment = Enum.TextXAlignment.Right })
+		make("Frame", pad, { Position = UDim2.fromOffset(0, 50), Size = UDim2.new(1, 0, 0, 2), BackgroundColor3 = LINE, BorderSizePixel = 0 })
+		-- columns: rank, name, kills, wins
+		local COLS = { Rank = { 0, 36 }, Player = { 44, 206 }, Kills = { 258, 80 }, Wins = { 346, 70 } }
+		for key, head in { Rank = "#", Player = "HUNTER", Kills = "KILLS", Wins = "WINS" } do
+			local c = COLS[key]
+			txt(pad, { Position = UDim2.fromOffset(c[1], 58), Size = UDim2.fromOffset(c[2], 22), Text = head, FontFace = MONO, TextSize = 14, TextColor3 = DIM,
+				TextXAlignment = (key == "Kills" or key == "Wins") and Enum.TextXAlignment.Right or Enum.TextXAlignment.Left })
+		end
+		local rowsFrame = make("Frame", pad, { Name = "Rows", Position = UDim2.fromOffset(0, 84), Size = UDim2.new(1, 0, 1, -84), BackgroundTransparency = 1 })
+		for i = 1, 6 do
+			local row = make("Frame", rowsFrame, { Name = "Row" .. i, Position = UDim2.fromOffset(0, (i - 1) * 44), Size = UDim2.new(1, 0, 0, 40),
+				BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = i % 2 == 1 and 0.96 or 1, BorderSizePixel = 0 })
+			make("UICorner", row, { CornerRadius = UDim.new(0, 4) })
+			local lead = i == 1
+			txt(row, { Name = "Rank", Position = UDim2.fromOffset(COLS.Rank[1] + 6, 0), Size = UDim2.fromOffset(COLS.Rank[2], 40), Text = tostring(i), FontFace = OSWALD, TextSize = 26, TextColor3 = lead and F7.Amber or DIM })
+			txt(row, { Name = "Player", Position = UDim2.fromOffset(COLS.Player[1], 0), Size = UDim2.fromOffset(COLS.Player[2], 40), Text = "", FontFace = OSWALD_LIGHT, TextSize = 24, TextColor3 = CREAM })
+			for _, key in { "Kills", "Wins" } do
+				txt(row, { Name = key, Position = UDim2.fromOffset(COLS[key][1], 0), Size = UDim2.fromOffset(COLS[key][2], 40), Text = "", FontFace = OSWALD, TextSize = 24,
+					TextColor3 = lead and F7.Amber or CREAM, TextXAlignment = Enum.TextXAlignment.Right })
+			end
 		end
 	end
-	local lbGui = make("SurfaceGui", lb, { Name = "Leaderboard", Face = Enum.NormalId.Right, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 36, LightInfluence = 0 })
-	local lbBg = make("Frame", lbGui, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = rgb(16, 14, 18), BorderSizePixel = 0 })
-	make("UIStroke", lbBg, { Color = rgb(200, 30, 30), Thickness = 8, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
-	local lbTitle = make("TextLabel", lbBg, { Size = UDim2.fromScale(1, 0.18), BackgroundColor3 = rgb(150, 20, 20), Font = Enum.Font.LuckiestGuy, TextScaled = true, TextColor3 = rgb(255, 220, 90), Text = "TOP HUNTERS" })
-	make("UIStroke", lbTitle, { Thickness = 4 })
-	local rowsFrame = make("Frame", lbBg, { Name = "Rows", Position = UDim2.fromScale(0.05, 0.22), Size = UDim2.fromScale(0.9, 0.74), BackgroundTransparency = 1 })
-	make("UIListLayout", rowsFrame, { Padding = UDim.new(0.02, 0) })
-	for i = 1, 6 do
-		make("TextLabel", rowsFrame, {
-			Name = "Row" .. i,
-			Size = UDim2.fromScale(1, 0.14),
-			BackgroundTransparency = 1,
-			Font = Enum.Font.GothamBlack,
-			TextScaled = true,
-			TextXAlignment = Enum.TextXAlignment.Left,
-			TextColor3 = i == 1 and rgb(255, 210, 60) or rgb(220, 220, 225),
-			Text = "",
-			LayoutOrder = i,
-		})
-	end
-	-- a red light bar along the top of the board (it used to hang in mid-air
-	-- over the Sentinel bay, where the board once was)
-	local lbLight = block(lobby, Vector3.new(0.3, 0.3, 12.4), CFrame.new(-hx + 3.25, Y + 14.7, 34.7), M.Neon, rgb(200, 30, 30))
-	light(lbLight, { Range = 10, Brightness = 1, Color = rgb(255, 60, 40) })
 
 	-- STATUS TV: mounted on the chimney breast above the fireplace, facing
 	-- the sofas (GameManager writes StatusText / TimerText on "StatusScreen")

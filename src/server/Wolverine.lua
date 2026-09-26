@@ -1455,18 +1455,41 @@ function Wolverine.MakeStatue(skinId, cframe, parent)
 		end
 	end
 	CollectionService:AddTag(model, "SkinStatue")
-	-- each suit strikes its own pose (Skins.List[id].StatuePose)
+	-- each suit strikes its own pose (Skins.List[id].StatuePose). The Humanoid
+	-- rebuilds the rig's joints from its attachments a moment after ScaleTo,
+	-- which snapped the statues back to a plain standing pose live. So the
+	-- pose goes on again once that has happened, and then every part is
+	-- anchored where it stands: nothing can undo the pose after that.
+	pcall(function()
+		Util.Humanoid(model).AutomaticScalingEnabled = false
+	end)
 	local pose = Skins.List[skinId] and Skins.List[skinId].StatuePose
-	if pose then
-		for joint, a in pose do
+	local function strike()
+		for joint, a in pose or {} do
 			Posture.Set(model, joint, CFrame.new(a[4] or 0, a[5] or 0, a[6] or 0) * CFrame.Angles(math.rad(a[1]), math.rad(a[2]), math.rad(a[3])))
 		end
 	end
+	strike()
 	local root = Util.Root(model)
 	model:PivotTo(cframe * CFrame.new(0, 3.9, 0))
 	if root then
 		root.Anchored = true
 	end
+	task.spawn(function()
+		for _ = 1, 3 do
+			task.wait(0.4)
+			if not model.Parent then
+				return
+			end
+			strike()
+		end
+		RunService.Heartbeat:Wait()
+		for _, p in model:GetDescendants() do
+			if p:IsA("BasePart") then
+				p.Anchored = true
+			end
+		end
+	end)
 	return model
 end
 
