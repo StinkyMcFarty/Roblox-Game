@@ -3443,6 +3443,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Costumes = require(script.Parent.Costumes)
+local MapBuilder = require(script.Parent.MapBuilder)
 
 local Facility = {}
 Facility.DoorBoxes = {}
@@ -4367,23 +4368,92 @@ local function floorText(parent, pos, yaw, w, h, text, color)
 	stencil(p, N.Top, text, color or rgb(226, 190, 40), 20, Enum.Font.GothamBlack)
 end
 
-local function lightPanel(parent, pos, w, d, color, withLight, range)
-	D(parent, Vector3.new(w + 0.5, 0.3, d + 0.5), CFrame.new(pos + Vector3.new(0, 0.1, 0)), M.Metal, rgb(34, 36, 40))
-	local p = D(parent, Vector3.new(w, 0.1, d), CFrame.new(pos - Vector3.new(0, 0.06, 0)), M.Neon, color or rgb(226, 234, 246))
-	if withLight then
-		surfaceLight(p, N.Bottom, range or 22, 0.75, color or rgb(226, 234, 246), 115)
-	end
+-- Light fittings never cast shadows themselves: a lamp's own shade in front
+-- of its light would shadow the very floor it lights.
+local function fit(parent, size, cf, mat, color, extra)
+	local p = D(parent, size, cf, mat, color, extra)
+	p.CastShadow = false
+	p.CanCollide = false
 	return p
 end
+local UPRIGHT = CFrame.Angles(0, 0, math.rad(90)) -- a cylinder standing on end
 
-local function pendant(parent, pos, drop, color, range, shadows)
-	local top = pos + Vector3.new(0, drop, 0)
-	cyl(parent, pos + Vector3.new(0, 0.9, 0), top, 0.14, M.Metal, rgb(26, 26, 28), nil, true)
-	drum(parent, pos + Vector3.new(0, 0.5, 0), 2.6, 0.9, M.Metal, rgb(30, 30, 32), nil, true)
-	drum(parent, pos + Vector3.new(0, 1.1, 0), 1.3, 0.6, M.Metal, rgb(30, 30, 32), nil, true)
-	local bulb = drum(parent, pos + Vector3.new(0, 0.02, 0), 2.1, 0.1, M.Neon, color, nil, true)
-	spotDown(bulb, range or 44, 2.6, color, 75, shadows)
-	return bulb
+-- A 2x4 ceiling troffer centred at pos (the ceiling's underside): a painted
+-- housing, a lipped bezel and a glowing diffuser behind a louvre grid. Every
+-- one is lit, and there are few of them.
+local function troffer(parent, pos, color, range)
+	fit(parent, Vector3.new(3.6, 0.3, 7.6), CFrame.new(pos - Vector3.new(0, 0.2, 0)), M.SmoothPlastic, rgb(206, 210, 216))
+	local lens = fit(parent, Vector3.new(3, 0.06, 7), CFrame.new(pos - Vector3.new(0, 0.37, 0)), M.Neon, color)
+	for _, s in { -1, 1 } do -- the lip round the diffuser
+		fit(parent, Vector3.new(3.3, 0.08, 0.15), CFrame.new(pos + Vector3.new(0, -0.39, s * 3.575)), M.SmoothPlastic, rgb(186, 190, 198))
+		fit(parent, Vector3.new(0.15, 0.08, 7.3), CFrame.new(pos + Vector3.new(s * 1.575, -0.39, 0)), M.SmoothPlastic, rgb(186, 190, 198))
+	end
+	local g = make("SurfaceGui", lens, { Face = N.Bottom, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 20, LightInfluence = 0 })
+	local louvre = rgb(150, 156, 168)
+	fr(g, { Position = UDim2.new(0.5, -1, 0, 0), Size = UDim2.new(0, 2, 1, 0), BackgroundColor3 = louvre })
+	for k = 1, 5 do
+		fr(g, { Position = UDim2.new(0, 0, k / 6, -1), Size = UDim2.new(1, 0, 0, 2), BackgroundColor3 = louvre })
+	end
+	surfaceLight(lens, N.Bottom, range, 1.5, color, 125)
+end
+
+-- An industrial high-bay hung from the roof at `top` with its lens at lensY:
+-- a rod, a finned driver, a stepped reflector and a glowing lens. A wide spot
+-- lights the floor under it and a soft fill lights the walls round it.
+local function highBay(parent, top, lensY, color, shadows)
+	local lens = Vector3.new(top.X, lensY, top.Z)
+	local rod = top.Y - lensY - 1.9
+	if rod > 0.1 then
+		fit(parent, Vector3.new(0.18, rod, 0.18), CFrame.new(lens + Vector3.new(0, 1.9 + rod / 2, 0)), M.Metal, rgb(28, 28, 30))
+	end
+	fit(parent, Vector3.new(0.8, 1.6, 1.6), CFrame.new(lens + Vector3.new(0, 1.45, 0)) * UPRIGHT, M.Metal, rgb(46, 48, 54), { Shape = Enum.PartType.Cylinder })
+	for k = 0, 3 do -- cooling fins
+		fit(parent, Vector3.new(2, 0.62, 0.1), CFrame.new(lens + Vector3.new(0, 1.45, 0)) * CFrame.Angles(0, math.rad(k * 45), 0), M.Metal, rgb(62, 64, 70))
+	end
+	for _, r in { { 2.1, 0.42, 0.86 }, { 2.9, 0.38, 0.47 }, { 3.7, 0.3, 0.13 } } do -- reflector
+		fit(parent, Vector3.new(r[2], r[1], r[1]), CFrame.new(lens + Vector3.new(0, r[3], 0)) * UPRIGHT, M.Metal, rgb(84, 88, 96), { Shape = Enum.PartType.Cylinder, Reflectance = 0.1 })
+	end
+	fit(parent, Vector3.new(0.14, 3.9, 3.9), CFrame.new(lens + Vector3.new(0, -0.02, 0)) * UPRIGHT, M.Metal, rgb(34, 35, 40), { Shape = Enum.PartType.Cylinder })
+	fit(parent, Vector3.new(0.08, 3.3, 3.3), CFrame.new(lens + Vector3.new(0, -0.07, 0)) * UPRIGHT, M.Neon, color, { Shape = Enum.PartType.Cylinder })
+	-- the light sits just under the lens, so nothing of the fitting is in its way
+	local emit = fit(parent, Vector3.new(0.4, 0.2, 0.4), CFrame.new(lens - Vector3.new(0, 0.3, 0)), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
+	spotDown(emit, 60, 4.2, color, 120, shadows)
+	pointLight(emit, 34, 0.7, color)
+end
+
+-- A canteen pendant: an enamel dome shade on a cord over the tables, a warm
+-- bulb glowing under it.
+local function domePendant(parent, top, lensY, color)
+	local lens = Vector3.new(top.X, lensY, top.Z)
+	local shade, inner = rgb(38, 44, 40), rgb(226, 222, 206)
+	fit(parent, Vector3.new(0.1, top.Y - lensY - 1.3, 0.1), CFrame.new(lens + Vector3.new(0, (top.Y - lensY + 1.3) / 2, 0)), M.Rubber, rgb(20, 20, 22))
+	fit(parent, Vector3.new(0.5, 0.5, 0.5), CFrame.new(lens + Vector3.new(0, 1.15, 0)) * UPRIGHT, M.Metal, rgb(160, 150, 120), { Shape = Enum.PartType.Cylinder, Reflectance = 0.2 })
+	for _, r in { { 1.2, 0.3, 0.9 }, { 2.2, 0.3, 0.62 }, { 3, 0.26, 0.36 }, { 3.5, 0.2, 0.12 } } do
+		fit(parent, Vector3.new(r[2], r[1], r[1]), CFrame.new(lens + Vector3.new(0, r[3], 0)) * UPRIGHT, M.Metal, shade, { Shape = Enum.PartType.Cylinder, Reflectance = 0.08 })
+	end
+	fit(parent, Vector3.new(0.06, 3.3, 3.3), CFrame.new(lens + Vector3.new(0, 0.03, 0)) * UPRIGHT, M.SmoothPlastic, inner, { Shape = Enum.PartType.Cylinder })
+	local bulb = fit(parent, Vector3.new(0.8, 0.8, 0.8), CFrame.new(lens + Vector3.new(0, -0.05, 0)), M.Neon, color, { Shape = Enum.PartType.Ball })
+	spotDown(bulb, 40, 3.2, color, 110)
+	pointLight(bulb, 22, 0.5, color)
+end
+
+-- A caged twin-tube strip light for the corridors: a steel channel with end
+-- caps, two glowing tubes and a wire guard across them. `long` runs it along X.
+local function caged(parent, pos, long, color, shadows)
+	local cf = CFrame.new(pos) * (long and CFrame.Angles(0, math.rad(90), 0) or CFrame.new())
+	fit(parent, Vector3.new(1.3, 0.3, 4.6), cf * CFrame.new(0, 0.25, 0), M.Metal, rgb(58, 60, 66))
+	for _, z in { -2.22, 2.22 } do -- end caps, a hair bigger than the channel
+		fit(parent, Vector3.new(1.36, 0.42, 0.2), cf * CFrame.new(0, 0.1, z), M.Metal, rgb(40, 42, 46))
+	end
+	for _, x in { -0.3, 0.3 } do
+		fit(parent, Vector3.new(4.2, 0.2, 0.2), cf * CFrame.new(x, -0.02, 0) * CFrame.Angles(0, math.rad(90), 0), M.Neon, color, { Shape = Enum.PartType.Cylinder })
+	end
+	for z = -1.5, 1.5, 1 do -- wire guard
+		fit(parent, Vector3.new(1.1, 0.05, 0.05), cf * CFrame.new(0, -0.2, z), M.Metal, rgb(90, 94, 100))
+	end
+	fit(parent, Vector3.new(0.05, 0.05, 4.2), cf * CFrame.new(0, -0.22, 0), M.Metal, rgb(90, 94, 100))
+	local emit = fit(parent, Vector3.new(1, 0.1, 4), cf * CFrame.new(0, -0.3, 0), M.SmoothPlastic, Color3.new(), { Transparency = 1 })
+	surfaceLight(emit, N.Bottom, 28, 1.9, color, 130, shadows)
 end
 
 local function truss(parent, a, b, yTop, depth, color)
@@ -4443,11 +4513,11 @@ local function ceiling(parent, r, kind)
 		for z = r.z0 + band + 4, r.z1 - band - 1, 4 do
 			D(parent, Vector3.new(sx - band * 2, 0.06, 0.08), CFrame.new(cx, y - 0.235, z), M.SmoothPlastic, rgb(120, 126, 132))
 		end
-		local k = 0
+		-- troffers fill two cells of the grid, so the grid lines run clear of
+		-- their edges: one every 12 studs across and 16 along
 		for x = r.x0 + band + 6, r.x1 - band - 4, 12 do
-			for z = r.z0 + band + 6, r.z1 - band - 4, 12 do
-				k += 1
-				lightPanel(parent, Vector3.new(x, y - 0.3, z), 3.2, 3.2, rgb(206, 214, 228), k % 2 == 1, r.h + 6) -- housing clear of the grid lines
+			for z = r.z0 + band + 8, r.z1 - band - 6, 16 do
+				troffer(parent, Vector3.new(x, y, z), rgb(232, 238, 248), r.h + 14)
 			end
 		end
 	elseif kind == "Grate" then
@@ -4467,9 +4537,7 @@ local function ceiling(parent, r, kind)
 				grille(g, N.Bottom, (long and L / n or Wd) * 24, true, rgb(12, 12, 14), rgb(70, 72, 76), 14)
 				if i % 2 == 0 then
 					local lp = long and Vector3.new(mid, y - 2.2, cz) or Vector3.new(cx, y - 2.2, mid)
-					D(parent, long and Vector3.new(1.4, 0.3, 4.6) or Vector3.new(4.6, 0.3, 1.4), CFrame.new(lp + Vector3.new(0, 0.2, 0)), M.Metal, rgb(40, 42, 46))
-					local lamp = D(parent, long and Vector3.new(1, 0.1, 4) or Vector3.new(4, 0.1, 1), CFrame.new(lp), M.Neon, rgb(210, 226, 255))
-					surfaceLight(lamp, N.Bottom, 22, 1.2, rgb(210, 226, 255), 120, i % 4 == 0)
+					caged(parent, lp, long, rgb(214, 228, 255), i % 4 == 0)
 				end
 			end
 		end
@@ -4493,12 +4561,21 @@ local function ceiling(parent, r, kind)
 			local b = long and Vector3.new(t, 0, r.z1 - 1) or Vector3.new(r.x1 - 1, 0, t)
 			truss(parent, a, b, y - 0.2, 3.6, rgb(58, 56, 54))
 		end
-		-- pendants between trusses
-		local k = 0
-		for x = r.x0 + 10, r.x1 - 6, 18 do
-			for z = r.z0 + 10, r.z1 - 6, 18 do
-				k += 1
-				pendant(parent, Vector3.new(x, y - 7, z), 6.5, r.Warm or rgb(255, 204, 150), r.h + 14, k % 3 == 1)
+		-- a few strong lamps rather than a crowd of weak ones: about one per
+		-- 28 studs each way, hung between the trusses (the containment tank
+		-- in the middle of the atrium keeps its own lights)
+		local nx = math.max(2, math.floor(sx / 28 + 0.5))
+		local nz = math.max(2, math.floor(sz / 28 + 0.5))
+		for i = 0, nx - 1 do
+			for j = 0, nz - 1 do
+				local x, z = r.x0 + (i + 0.5) * sx / nx, r.z0 + (j + 0.5) * sz / nz
+				if not (r.Id == "Atrium" and x * x + z * z < 14 * 14) then
+					if r.Lamp == "Dome" then
+						domePendant(parent, Vector3.new(x, y, z), y - 6.5, r.Warm or rgb(255, 204, 150))
+					else
+						highBay(parent, Vector3.new(x, y, z), y - 7.5, r.Warm or rgb(255, 232, 200), (i + j) % 2 == 0)
+					end
+				end
 			end
 		end
 	end
@@ -4711,27 +4788,81 @@ end
 -- Gameplay objects: consoles, hiding spots, spawns
 ---------------------------------------------------------------------------
 
+-- A Sentinel protocol terminal (the operator stands on the `facing` side):
+-- a steel cabinet between raised side cheeks, with a vent grille, status
+-- lamps and a warning plate; a sloped control deck with a keyboard, toggles
+-- and a red emergency stop; a hooded monitor on two posts (red OFFLINE until
+-- a survivor repairs it, then green); cables from a junction box into the
+-- floor. The parts gameplay uses are "Body" (the prompt) and "Screen" (with
+-- its light and Label).
 local function console(parent, pos, facing, name)
 	local model = Instance.new("Model")
 	model.Name = name
 	local cf = CFrame.lookAt(pos, pos + facing)
-	local body = P(model, Vector3.new(5, 3.4, 2.4), cf * CFrame.new(0, 1.7, 0), M.Metal, rgb(40, 42, 48))
+	local gun, steel, dark = rgb(50, 54, 62), rgb(84, 90, 100), rgb(26, 27, 31)
+	D(model, Vector3.new(5.4, 0.3, 3.4), cf * CFrame.new(0, 0.15, 0.1), M.Metal, dark)
+	local body = P(model, Vector3.new(4.6, 3.1, 2.4), cf * CFrame.new(0, 1.85, 0.1), M.Metal, gun)
 	body.Name = "Body"
-	D(model, Vector3.new(5.4, 0.3, 3), cf * CFrame.new(0, 3.5, -0.2) * CFrame.Angles(math.rad(14), 0, 0), M.Metal, rgb(28, 30, 34))
-	local keys = D(model, Vector3.new(3.6, 0.12, 1.2), cf * CFrame.new(0, 3.72, -0.6) * CFrame.Angles(math.rad(14), 0, 0), M.SmoothPlastic, rgb(18, 18, 20))
-	grille(keys, N.Top, 86, true, rgb(10, 10, 12), rgb(60, 62, 66), 7)
-	D(model, Vector3.new(4.9, 0.2, 0.2), cf * CFrame.new(0, 0.3, -1.25), M.Neon, rgb(255, 170, 40))
-	-- tilted display on a stand
-	D(model, Vector3.new(0.4, 2.2, 0.4), cf * CFrame.new(0, 4.6, 0.7), M.Metal, rgb(30, 30, 34))
-	D(model, Vector3.new(4.6, 3, 0.3), cf * CFrame.new(0, 6, 0.6) * CFrame.Angles(math.rad(-8), 0, 0), M.Metal, rgb(24, 25, 28))
-	local scr = P(model, Vector3.new(4.2, 2.6, 0.1), cf * CFrame.new(0, 6, 0.42) * CFrame.Angles(math.rad(-8), 0, 0), M.Neon, rgb(255, 50, 50), DECO)
+	for _, s in { -1, 1 } do -- side cheeks, standing proud of the front
+		D(model, Vector3.new(0.34, 3.6, 2.9), cf * CFrame.new(s * 2.44, 2.1, 0.05), M.Metal, steel)
+		D(model, Vector3.new(0.38, 0.5, 2.96), cf * CFrame.new(s * 2.44, 0.55, 0.05), M.DiamondPlate, dark) -- kick plate
+	end
+	-- the front: a recessed panel, a vent grille, a warning plate, status lamps
+	D(model, Vector3.new(4.1, 2.4, 0.08), cf * CFrame.new(0, 1.8, -1.12), M.SmoothPlastic, rgb(36, 39, 45))
+	local vent = D(model, Vector3.new(3.2, 0.7, 0.05), cf * CFrame.new(-0.2, 0.95, -1.18), M.Metal, dark)
+	grille(vent, N.Front, 3.2 * 24, false, rgb(10, 10, 12), rgb(72, 76, 84), 5)
+	local plate = D(model, Vector3.new(2.3, 0.42, 0.04), cf * CFrame.new(-0.6, 2.55, -1.17), M.SmoothPlastic, rgb(226, 180, 36))
+	stencil(plate, N.Front, "SENTINEL PROTOCOL", rgb(20, 18, 14), 40, Enum.Font.GothamBlack)
+	for k, c in { rgb(255, 60, 50), rgb(255, 170, 40), rgb(40, 90, 50) } do
+		D(model, Vector3.new(0.2, 0.2, 0.06), cf * CFrame.new(1.55, 2.75 - k * 0.3, -1.18), M.Neon, c)
+		D(model, Vector3.new(0.3, 0.3, 0.04), cf * CFrame.new(1.55, 2.75 - k * 0.3, -1.165), M.Metal, dark)
+	end
+	for _, x in { -1.9, 1.9 } do -- access panel handles
+		D(model, Vector3.new(0.1, 0.8, 0.1), cf * CFrame.new(x, 1.7, -1.22), M.Metal, rgb(150, 154, 162))
+	end
+	-- sloped control deck
+	local deck = cf * CFrame.new(0, 3.55, -0.5) * CFrame.Angles(math.rad(-20), 0, 0)
+	D(model, Vector3.new(4.6, 0.26, 2.1), deck, M.Metal, steel)
+	D(model, Vector3.new(4.5, 0.3, 0.2), deck * CFrame.new(0, 0.04, -1.1), M.Rubber, dark) -- padded front lip
+	local kb = D(model, Vector3.new(2.5, 0.06, 0.95), deck * CFrame.new(-0.55, 0.15, 0.1), M.SmoothPlastic, rgb(20, 20, 24))
+	local kg = sgui(kb, N.Top, 40)
+	for row = 0, 3 do
+		for col = 0, 11 do
+			local key = fr(kg, { Position = UDim2.fromScale(0.02 + col * 0.081, 0.08 + row * 0.23), Size = UDim2.fromScale(0.07, 0.18), BackgroundColor3 = row == 3 and col > 3 and col < 8 and rgb(150, 154, 162) or rgb(92, 96, 106) })
+			make("UICorner", key, { CornerRadius = UDim.new(0.2, 0) })
+		end
+	end
+	for k = 0, 4 do -- a row of toggles
+		D(model, Vector3.new(0.22, 0.12, 0.22), deck * CFrame.new(-1.75 + k * 0.5, 0.18, -0.65), M.Metal, dark)
+		D(model, Vector3.new(0.07, 0.3, 0.07), deck * CFrame.new(-1.75 + k * 0.5, 0.3, -0.68) * CFrame.Angles(math.rad(k % 2 == 0 and 25 or -25), 0, 0), M.Metal, rgb(190, 194, 202))
+	end
+	-- the emergency stop: a red mushroom in a yellow collar
+	D(model, Vector3.new(0.08, 0.9, 0.9), deck * CFrame.new(1.45, 0.16, 0.05) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, rgb(230, 190, 30), { Shape = Enum.PartType.Cylinder })
+	D(model, Vector3.new(0.3, 0.36, 0.36), deck * CFrame.new(1.45, 0.3, 0.05) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, dark, { Shape = Enum.PartType.Cylinder })
+	D(model, Vector3.new(0.22, 0.6, 0.6), deck * CFrame.new(1.45, 0.52, 0.05) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, rgb(200, 24, 24), { Shape = Enum.PartType.Cylinder })
+	-- hooded monitor on two posts
+	for _, x in { -1.3, 1.3 } do
+		D(model, Vector3.new(0.26, 2, 0.26), cf * CFrame.new(x, 4.3, 0.95), M.Metal, dark)
+	end
+	local mon = cf * CFrame.new(0, 5.9, 0.85) * CFrame.Angles(math.rad(-8), 0, 0)
+	D(model, Vector3.new(4.7, 3.1, 0.4), mon, M.Metal, rgb(34, 36, 42))
+	D(model, Vector3.new(5, 0.16, 0.9), mon * CFrame.new(0, 1.62, -0.3) * CFrame.Angles(math.rad(-10), 0, 0), M.Metal, steel) -- hood
+	for _, s in { -1, 1 } do
+		D(model, Vector3.new(0.16, 3.1, 0.7), mon * CFrame.new(s * 2.43, 0, -0.2), M.Metal, steel) -- side blinkers
+	end
+	for _, c in { { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } } do
+		D(model, Vector3.new(0.34, 0.34, 0.06), mon * CFrame.new(c[1] * 2.1, c[2] * 1.3, -0.23), M.Metal, steel) -- corner plates
+	end
+	local scr = P(model, Vector3.new(3.9, 2.4, 0.1), mon * CFrame.new(0, 0, -0.2), M.Neon, rgb(255, 50, 50), DECO)
 	scr.Name = "Screen"
 	pointLight(scr, 12, 1.5, rgb(255, 50, 50))
 	local gui = make("SurfaceGui", scr, { Face = N.Front, LightInfluence = 0 })
 	tx(gui, { Name = "Label", Size = UDim2.fromScale(1, 1), Text = "SENTINEL\nPROTOCOL\nOFFLINE", Font = Enum.Font.Code, TextColor3 = Color3.new(1, 1, 1) })
-	-- cable bundle into the floor
+	-- junction box and cables down into the floor
+	D(model, Vector3.new(1.8, 1.2, 0.4), cf * CFrame.new(0, 1.9, 1.5), M.Metal, steel)
 	for i = -1, 1 do
-		cyl(model, (cf * CFrame.new(i * 0.4, 0.2, 1.3)).Position, (cf * CFrame.new(i * 0.5, 0.2, 3.5)).Position, 0.3, M.Rubber, rgb(22, 22, 24), nil, true)
+		cyl(model, (cf * CFrame.new(i * 0.45, 1.5, 1.62)).Position, (cf * CFrame.new(i * 0.5, 0.22, 2.2)).Position, 0.26, M.Rubber, rgb(22, 22, 24), nil, true)
+		cyl(model, (cf * CFrame.new(i * 0.5, 0.2, 2.2)).Position, (cf * CFrame.new(i * 0.6, 0.2, 3.6)).Position, 0.3, M.Rubber, rgb(22, 22, 24), nil, true)
 	end
 	-- floor hazard ring
 	local ring = D(model, Vector3.new(8, 0.04, 6), cf * CFrame.new(0, 0.02, -0.6), M.SmoothPlastic, rgb(222, 170, 28))
@@ -5811,44 +5942,88 @@ end
 -- CANTEEN + QUARTERS
 ---------------------------------------------------------------------------
 
-local function octaTable(parent, pos)
-	local top = rgb(150, 154, 160)
-	drum(parent, pos + Vector3.new(0, 3, 0), 6.2, 0.3, M.SmoothPlastic, top)
-	drum(parent, pos + Vector3.new(0, 2.8, 0), 6.4, 0.14, M.Metal, rgb(90, 94, 100), nil, true)
-	cyl(parent, pos + Vector3.new(0, 0.1, 0), pos + Vector3.new(0, 2.9, 0), 0.6, M.Metal, rgb(90, 94, 100), nil, true)
-	drum(parent, pos + Vector3.new(0, 0.1, 0), 2.6, 0.2, M.Metal, rgb(90, 94, 100), nil, true)
-	for k = 0, 5 do
-		local a = k / 6 * math.pi * 2
-		local s = pos + Vector3.new(math.cos(a) * 4.3, 0, math.sin(a) * 4.3)
-		drum(parent, s + Vector3.new(0, 1.9, 0), 1.6, 0.3, M.SmoothPlastic, top)
-		cyl(parent, s + Vector3.new(0, 0.1, 0), s + Vector3.new(0, 1.8, 0), 0.25, M.Metal, rgb(90, 94, 100), nil, true)
-		if rng:NextNumber() < 0.3 then
-			D(parent, Vector3.new(1.2, 0.1, 1.6), CFrame.new(pos + Vector3.new(math.cos(a) * 1.8, 3.2, math.sin(a) * 1.8)) * CFrame.Angles(0, a, 0), M.SmoothPlastic, rgb(60, 110, 150))
+-- A moulded canteen chair at cf (facing -Z): a curved shell seat and back on
+-- a tubular steel frame.
+local function canteenChair(parent, cf, color)
+	local steel = rgb(150, 154, 162)
+	for _, x in { -0.55, 0.55 } do
+		for _, z in { -0.5, 0.5 } do
+			D(parent, Vector3.new(0.1, 1.72, 0.1), cf * CFrame.new(x, 0.86, z) * CFrame.Angles(math.rad(z * 8), 0, math.rad(x * 6)), M.Metal, steel, { CanCollide = false })
+		end
+		D(parent, Vector3.new(0.1, 0.1, 1.2), cf * CFrame.new(x * 1.06, 0.06, 0), M.Metal, steel, { CanCollide = false }) -- floor runner
+	end
+	D(parent, Vector3.new(1.46, 0.16, 1.36), cf * CFrame.new(0, 1.8, 0), M.SmoothPlastic, color)
+	D(parent, Vector3.new(1.46, 0.12, 0.3), cf * CFrame.new(0, 1.84, -0.72) * CFrame.Angles(math.rad(-20), 0, 0), M.SmoothPlastic, color) -- rolled front edge
+	D(parent, Vector3.new(1.4, 1.3, 0.14), cf * CFrame.new(0, 2.58, 0.7) * CFrame.Angles(math.rad(-10), 0, 0), M.SmoothPlastic, color)
+	D(parent, Vector3.new(0.1, 0.9, 0.1), cf * CFrame.new(0, 2.3, 0.62) * CFrame.Angles(math.rad(-10), 0, 0), M.Metal, steel, { CanCollide = false }) -- back spine
+end
+
+-- A long canteen table (along Z) at pos: a laminate top with a steel edge on
+-- two pedestal legs, three chairs down each side (a few pushed back or
+-- knocked over in the panic) and whatever was left on it.
+local CHAIR_COLORS = { rgb(214, 96, 36), rgb(40, 132, 140), rgb(222, 176, 40) }
+local function canteenTable(parent, pos, seed)
+	local cf = CFrame.new(pos)
+	local steel = rgb(120, 124, 132)
+	P(parent, Vector3.new(3.4, 0.22, 8.4), cf * CFrame.new(0, 3.05, 0), M.SmoothPlastic, rgb(222, 222, 216))
+	D(parent, Vector3.new(3.5, 0.12, 8.5), cf * CFrame.new(0, 2.92, 0), M.Metal, steel)
+	for _, z in { -2.8, 2.8 } do
+		D(parent, Vector3.new(0.3, 2.8, 0.3), cf * CFrame.new(0, 1.46, z), M.Metal, steel)
+		D(parent, Vector3.new(2.8, 0.18, 0.5), cf * CFrame.new(0, 0.09, z), M.Metal, rgb(70, 72, 78))
+		D(parent, Vector3.new(2.6, 0.18, 0.3), cf * CFrame.new(0, 2.78, z), M.Metal, steel) -- top bracket
+	end
+	D(parent, Vector3.new(0.24, 0.24, 5.9), cf * CFrame.new(0, 1.2, 0), M.Metal, steel) -- stretcher
+	local color = CHAIR_COLORS[seed % #CHAIR_COLORS + 1]
+	for _, side in { -1, 1 } do
+		for k, z in { -2.6, 0, 2.6 } do
+			local roll = rng:NextNumber()
+			local chair = cf * CFrame.new(side * 2.5, 0, z) * CFrame.Angles(0, side > 0 and math.rad(90) or math.rad(-90), 0)
+			if roll < 0.12 then
+				-- knocked over on its back
+				chair = cf * CFrame.new(side * 3.6, 0.72, z) * CFrame.Angles(0, side > 0 and math.rad(90) or math.rad(-90), 0) * CFrame.Angles(math.rad(-90), 0, 0) * CFrame.new(0, -0.7, 0)
+			elseif roll < 0.4 then
+				chair = chair * CFrame.new(0, 0, rng:NextNumber(0.4, 1.1)) * CFrame.Angles(0, rng:NextNumber(-0.35, 0.35), 0) -- pushed back
+			end
+			canteenChair(parent, chair, color)
+			-- a tray, a plate and a cup in front of some seats
+			if (k + seed + (side > 0 and 1 or 0)) % 3 ~= 0 then
+				local at = cf * CFrame.new(side * 0.95, 3.17, z + rng:NextNumber(-0.3, 0.3)) * CFrame.Angles(0, rng:NextNumber(-0.25, 0.25), 0)
+				D(parent, Vector3.new(1.2, 0.06, 1.7), at, M.SmoothPlastic, rgb(60, 104, 140), { CanCollide = false })
+				D(parent, Vector3.new(0.06, 0.9, 0.9), at * CFrame.new(0, 0.06, 0.2) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, rgb(236, 236, 230), { Shape = Enum.PartType.Cylinder, CanCollide = false })
+				D(parent, Vector3.new(0.42, 0.3, 0.3), at * CFrame.new(-side * 0.3, 0.24, -0.55) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, rgb(214, 214, 208), { Shape = Enum.PartType.Cylinder, CanCollide = false })
+			end
 		end
 	end
 end
 
-local function vending(parent, cf, color)
-	local body = P(parent, Vector3.new(4, 7.5, 3), cf * CFrame.new(0, 3.75, 0), M.SmoothPlastic, color)
-	breakable(body)
-	local win = D(body, Vector3.new(2.6, 5, 0.1), cf * CFrame.new(-0.5, 4.3, -1.52), M.Glass, rgb(160, 200, 220), { Transparency = 0.4 })
-	pointLight(win, 8, 0.8, rgb(220, 240, 255))
-	for row = 0, 4 do
-		for col = 0, 3 do
-			D(body, Vector3.new(0.45, 0.6, 0.4), cf * CFrame.new(-1.4 + col * 0.6, 2.4 + row * 0.95, -1.2), M.SmoothPlastic, vary(({ rgb(220, 40, 40), rgb(40, 120, 220), rgb(240, 200, 30), rgb(60, 180, 90) })[(row + col) % 4 + 1], 0.2))
+-- The lobby's vending machines (MapBuilder.VendingMachine), stood with their
+-- backs to a wall at cf. The cabinet is what breaks; everything on it goes
+-- with it.
+local function vending(parent, cf, kind)
+	local tmp = Instance.new("Model")
+	local cab = MapBuilder.VendingMachine(tmp, cf, kind)
+	for _, d in tmp:GetChildren() do
+		if d ~= cab and d:IsA("BasePart") then
+			d.CanQuery, d.CanTouch = false, false
+			d.Parent = cab
 		end
 	end
-	D(body, Vector3.new(0.8, 2.2, 0.1), cf * CFrame.new(1.4, 4.6, -1.52), M.SmoothPlastic, rgb(20, 20, 22))
-	D(body, Vector3.new(2.6, 0.8, 0.1), cf * CFrame.new(-0.5, 1, -1.52), M.SmoothPlastic, rgb(20, 20, 22))
+	cab.Parent = parent
+	breakable(cab)
+	tmp:Destroy()
 end
 
 local function buildCanteen(parent)
 	local r = ROOM.Canteen
+	r.Lamp = "Dome"
 	floorTiles(parent, r, "Checker")
 	ceiling(parent, r, "Truss")
-	for _, x in { 70, 84, 97 } do
-		for _, z in { 72, 88, 104, 120 } do
-			octaTable(parent, Vector3.new(x, F, z))
+	-- six long tables, each under a lamp
+	local seed = 0
+	for _, x in { 69, 95 } do
+		for _, z in { 70, 98, 124 } do
+			seed += 1
+			canteenTable(parent, Vector3.new(x, F, z), seed)
 		end
 	end
 	-- serving line along the south wall
@@ -5864,8 +6039,8 @@ local function buildCanteen(parent)
 		local lamp = D(parent, Vector3.new(4, 0.2, 1.2), line * CFrame.new(x, 7.4, 0), M.Neon, rgb(255, 214, 160))
 		surfaceLight(lamp, N.Bottom, 10, 1, rgb(255, 214, 160))
 	end
-	vending(parent, CFrame.new(104.8, F, 92) * CFrame.Angles(0, math.rad(90), 0), rgb(160, 20, 24))
-	vending(parent, CFrame.new(104.8, F, 100) * CFrame.Angles(0, math.rad(90), 0), rgb(24, 70, 150))
+	vending(parent, CFrame.new(106, F, 90) * CFrame.Angles(0, math.rad(90), 0), "Cola")
+	vending(parent, CFrame.new(106, F, 94.2) * CFrame.Angles(0, math.rad(90), 0), "Snacks")
 	local menu = D(parent, Vector3.new(10, 3, 0.2), CFrame.new(81, F + 10, 139), M.SmoothPlastic, rgb(20, 20, 22))
 	local g = sgui(menu, N.Front, 30, true)
 	tx(g, { Size = UDim2.fromScale(1, 1), Text = "CANTEEN — TODAY: MEATLOAF · 06:00–22:00", TextColor3 = rgb(255, 200, 80), Font = Enum.Font.Code })
@@ -6244,19 +6419,37 @@ local function leak(parent, x, z, top, size)
 	})
 end
 
--- Three claw gashes torn into a wall by Subject X. cf sits on the wall face
--- facing into the room (-Z out); `out` clears that wall's trim.
+-- Three claw gashes torn into a wall by Subject X, painted on a clear plate
+-- just proud of the wall (a SurfaceGui, so they lie flat on it from every
+-- angle): tapered, bowed dark cuts with bright torn-steel rims. cf sits on the
+-- wall face facing into the room (-Z out); `out` clears that wall's trim.
 local function wallGashes(parent, cf, len, out)
+	local W, H, PPS = 8, len + 2, 30
+	local plate = D(parent, Vector3.new(W, H, 0.05), cf * CFrame.new(0, 0, -out), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false })
+	local g = sgui(plate, N.Front, PPS)
+	local tilt = math.rad(-18)
+	local function gui(x, y) -- wall studs (X along cf's right, Y up) to canvas pixels
+		local X = x * math.cos(tilt) - y * math.sin(tilt)
+		local Y = x * math.sin(tilt) + y * math.cos(tilt)
+		return (W / 2 - X) * PPS, (H / 2 - Y) * PPS
+	end
 	for i = -1, 1 do
-		local base = cf * CFrame.Angles(0, 0, math.rad(-18)) * CFrame.new(i * 1.1, i == 0 and 0.3 or 0, -out)
-		local n = 6
+		local n = 8
+		local function at(t)
+			return i * 1.1 + 2 * t * (1 - t), (t - 0.5) * len + (i == 0 and 0.3 or 0)
+		end
 		for k = 0, n - 1 do
-			local t = (k + 0.5) / n
-			local w = 0.12 + 0.42 * math.sin(math.pi * t) ^ 0.7
-			local seg = base * CFrame.new(0.5 * 4 * t * (1 - t), (t - 0.5) * len, 0)
-			D(parent, Vector3.new(w, len / n + 0.04, 0.3), seg * CFrame.new(0, 0, 0.12), M.Slate, rgb(10, 9, 9), { CanCollide = false })
-			for _, s in { -1, 1 } do -- the torn bright edges
-				D(parent, Vector3.new(0.08, len / n + 0.04, 0.34), seg * CFrame.new(s * (w / 2 + 0.03), 0, 0.08), M.Metal, rgb(196, 198, 204), { CanCollide = false, Reflectance = 0.2 })
+			local t0, t1 = k / n, (k + 1) / n
+			local ax, ay = gui(at(t0))
+			local bx, by = gui(at(t1))
+			local w = (0.12 + 0.42 * math.sin(math.pi * (t0 + t1) / 2) ^ 0.7) * PPS
+			local seg = math.sqrt((bx - ax) ^ 2 + (by - ay) ^ 2) + 6 -- overlap, so the cut runs smooth
+			local rot = math.deg(math.atan2(-(bx - ax), by - ay))
+			for layer, c in { { w + 5, rgb(190, 192, 198) }, { w, rgb(12, 10, 10) } } do
+				fr(g, {
+					AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset((ax + bx) / 2, (ay + by) / 2),
+					Size = UDim2.fromOffset(c[1], seg + (layer == 1 and 2 or 0)), Rotation = rot, BackgroundColor3 = c[2], ZIndex = layer,
+				})
 			end
 		end
 	end
@@ -6379,7 +6572,7 @@ local function lifeAndWear(parent, keepClear)
 	for _, v in {
 		{ Vector3.new(-26, F + 5.5, -55.3), Vector3.new(0, 0, 1), CONCRETE, true }, -- Ring N
 		{ Vector3.new(18, F + 5.5, 55.3), Vector3.new(0, 0, -1), CONCRETE, true }, -- Ring S
-		{ Vector3.new(107.4, F + 5, 100), Vector3.new(-1, 0, 0), OFFICE, true }, -- Canteen
+		{ Vector3.new(107.4, F + 5, 129), Vector3.new(-1, 0, 0), OFFICE, true }, -- Canteen
 		{ Vector3.new(-130, F + 5, -140), Vector3.new(0, 0, 1), OFFICE, false }, -- Archive
 		{ Vector3.new(-160, F + 5, 92), Vector3.new(1, 0, 0), OFFICE, true }, -- Surgery
 		{ Vector3.new(107.4, F + 5, -48), Vector3.new(-1, 0, 0), OFFICE, false }, -- Genetics
@@ -6394,10 +6587,11 @@ local function lifeAndWear(parent, keepClear)
 			stain(parent, drag.X, drag.Z, 1.2, 6, math.atan2(v[2].X, v[2].Z) + rng:NextNumber(-0.4, 0.4), rgb(70, 6, 6), 0.35)
 		end
 	end
-	-- oil, rust and grime ground into the floors
+	-- oil and rust on the industrial floors (only there: on clean floors a
+	-- dark blot reads as a hole)
 	for _, r in ROOMS do
 		local industrial = r.Id == "Foundry" or r.Id == "Reactor" or r.Id == "Hangar"
-		local n = math.floor((r.x1 - r.x0) * (r.z1 - r.z0) / 230)
+		local n = industrial and math.floor((r.x1 - r.x0) * (r.z1 - r.z0) / 500) or 0
 		for _ = 1, n do
 			local x, z = rng:NextNumber(r.x0 + 2, r.x1 - 2), rng:NextNumber(r.z0 + 2, r.z1 - 2)
 			local wet = false
@@ -6409,12 +6603,10 @@ local function lifeAndWear(parent, keepClear)
 			if not wet and clearAt(x, z, 0) then
 				local roll = rng:NextNumber()
 				local s = rng:NextNumber(1.6, industrial and 5.5 or 3.5)
-				if industrial and roll < 0.55 then
-					stain(parent, x, z, s, s * rng:NextNumber(0.5, 0.9), rng:NextNumber(0, 3), rgb(20, 16, 12), 0.42) -- oil
-				elseif industrial and roll < 0.75 then
-					stain(parent, x, z, s, s * 0.7, rng:NextNumber(0, 3), rgb(86, 48, 22), 0.6) -- rust
+				if roll < 0.6 then
+					stain(parent, x, z, s, s * rng:NextNumber(0.5, 0.9), rng:NextNumber(0, 3), rgb(24, 20, 16), 0.66) -- oil
 				else
-					stain(parent, x, z, s, s * 0.8, rng:NextNumber(0, 3), rgb(26, 26, 30), 0.66) -- grime
+					stain(parent, x, z, s, s * 0.7, rng:NextNumber(0, 3), rgb(96, 54, 26), 0.72) -- rust
 				end
 			end
 		end
@@ -8977,8 +9169,8 @@ function MapBuilder.SetupLighting()
 	-- the facility is lit by its own lamps: a blue-grey ambient lets them (and
 	-- every glowing prop) shape the rooms, but is high enough that corners
 	-- between lamps stay readable (players tune it with the brightness setting)
-	Lighting.Ambient = rgb(96, 106, 128)
-	Lighting.OutdoorAmbient = rgb(118, 128, 160)
+	Lighting.Ambient = rgb(110, 118, 138)
+	Lighting.OutdoorAmbient = rgb(126, 136, 166)
 	pcall(function()
 		Lighting.LightingStyle = Enum.LightingStyle.Realistic
 	end)
@@ -8987,7 +9179,7 @@ function MapBuilder.SetupLighting()
 	Lighting.GlobalShadows = true
 	Lighting.ShadowSoftness = 1
 	Lighting.GeographicLatitude = 48
-	Lighting.ExposureCompensation = 0.15
+	Lighting.ExposureCompensation = 0.3
 	local customSky = Lighting:FindFirstChildOfClass("Sky") -- a sky set up in Studio is kept
 	for _, c in Lighting:GetChildren() do
 		if c:IsA("PostEffect") or c:IsA("Atmosphere") or (c:IsA("Sky") and c ~= customSky) then
@@ -9516,7 +9708,10 @@ local function vendingMachine(parent, cf, kind)
 		})
 		make("UIStroke", t, { Thickness = 3 })
 	end
+	return cab
 end
+-- the facility's canteen stocks the same machines (Facility.lua)
+MapBuilder.VendingMachine = vendingMachine
 
 local function couch(parent, cf, color)
 	block(parent, Vector3.new(10, 1.6, 4), cf * CFrame.new(0, 1.2, 0), M.Fabric, color)
