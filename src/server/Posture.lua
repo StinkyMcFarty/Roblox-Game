@@ -12,6 +12,13 @@ local MOTORS = {
 	LShoulder = { "LeftUpperArm", "LeftShoulder" },
 	RHip = { "RightUpperLeg", "RightHip" },
 	LHip = { "LeftUpperLeg", "LeftHip" },
+	-- (the lobby statues pose these too)
+	RElbow = { "RightLowerArm", "RightElbow" },
+	LElbow = { "LeftLowerArm", "LeftElbow" },
+	RWrist = { "RightHand", "RightWrist" },
+	LWrist = { "LeftHand", "LeftWrist" },
+	RKnee = { "RightLowerLeg", "RightKnee" },
+	LKnee = { "LeftLowerLeg", "LeftKnee" },
 }
 
 local originals = setmetatable({}, { __mode = "k" }) -- [Motor6D] = CFrame

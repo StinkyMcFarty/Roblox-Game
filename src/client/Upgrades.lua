@@ -9,6 +9,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local UIKit = require(script.Parent:WaitForChild("UIKit"))
 local Shop = require(script.Parent:WaitForChild("Shop"))
+local Interface = require(script.Parent:WaitForChild("Interface"))
 local ShopRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Shop")
 
 local player = Players.LocalPlayer
@@ -60,15 +61,28 @@ for id, up in Config.Upgrades do
 	corner(card, 12)
 	gradient(card, Color3.fromRGB(40, 48, 30), Color3.fromRGB(20, 24, 16))
 	stroke(card, GREEN, 1.5, 0.3)
-	new("TextLabel", {
-		Position = UDim2.fromOffset(12, 14),
-		Size = UDim2.fromOffset(64, 64),
-		BackgroundTransparency = 1,
-		Text = up.Icon or "⬆",
-		TextScaled = true,
-		Font = Enum.Font.GothamBold,
-		ZIndex = 32,
-	}, card)
+	local art = Interface.IconArt[id]
+	if art then
+		-- the same drawing as the power's button on the ability bar
+		local tile = new("Frame", { Position = UDim2.fromOffset(12, 14), Size = UDim2.fromOffset(64, 64), BackgroundColor3 = Color3.fromRGB(30, 50, 62), ClipsDescendants = true, ZIndex = 32 }, card)
+		corner(tile, 10)
+		art(tile)
+		for _, d in tile:GetDescendants() do
+			if d:IsA("GuiObject") then
+				d.ZIndex += 32
+			end
+		end
+	else
+		new("TextLabel", {
+			Position = UDim2.fromOffset(12, 14),
+			Size = UDim2.fromOffset(64, 64),
+			BackgroundTransparency = 1,
+			Text = up.Icon or "⬆",
+			TextScaled = true,
+			Font = Enum.Font.GothamBold,
+			ZIndex = 32,
+		}, card)
+	end
 	new("TextLabel", {
 		Position = UDim2.fromOffset(88, 10),
 		Size = UDim2.new(1, -250, 0, 26),

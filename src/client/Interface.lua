@@ -54,12 +54,16 @@ local flash = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = K.
 -- Top: timer plate + Wolverine health + terminals
 ---------------------------------------------------------------------------
 
+-- drawn at 1.5x (TOP_SCALE), and well down from the top edge so it's easy to see
+local TOP_SCALE = 1.5
+local TOP_Y = 88
 local top = new("Frame", {
 	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 44),
+	Position = UDim2.new(0.5, 0, 0, TOP_Y),
 	Size = UDim2.fromOffset(300, 70),
 	BackgroundColor3 = Color3.new(1, 1, 1),
 }, gui)
+new("UIScale", { Scale = TOP_SCALE }, top)
 corner(top, 14)
 gradient(top, Color3.fromRGB(38, 30, 34), Color3.fromRGB(12, 10, 14))
 local topStroke = stroke(top, Color3.fromRGB(120, 30, 30), 2)
@@ -97,11 +101,12 @@ new("UIStroke", { Thickness = 2, Transparency = 0.2 }, timerLabel)
 
 local wHealth = new("Frame", {
 	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 122),
+	Position = UDim2.new(0.5, 0, 0, TOP_Y + (70 + 8) * TOP_SCALE),
 	Size = UDim2.fromOffset(300, 20),
 	BackgroundColor3 = K.Ink,
 	Visible = false,
 }, gui)
+new("UIScale", { Scale = TOP_SCALE }, wHealth)
 corner(wHealth, 10)
 stroke(wHealth, Color3.fromRGB(80, 60, 10), 2)
 local wHealthLag = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(255, 255, 255), BackgroundTransparency = 0.3, BorderSizePixel = 0 }, wHealth)
@@ -229,6 +234,7 @@ end
 
 local BLOOD = Color3.fromRGB(190, 20, 20)
 local ICON_ART
+-- (also drawn by the Upgrades window: Interface.IconArt)
 ICON_ART = {
 	-- three claw gashes
 	Slash = function(tile)
@@ -256,6 +262,24 @@ ICON_ART = {
 		iconLine(tile, 0.18, 0.56, 0.08, 0.66, 4, body, 3)
 		iconLine(tile, 0.36, 0.62, 0.24, 0.76, 4, body, 3)
 		iconLine(tile, 0.24, 0.76, 0.1, 0.8, 4, body, 3)
+	end,
+	-- a blocky Roblox guy bending back out of the way as the hit whiffs past
+	-- in front of him
+	Dodge = function(tile)
+		local body = Color3.fromRGB(240, 244, 250)
+		local shade = Color3.fromRGB(170, 200, 225)
+		for i, w in { { 0.58, 0.2, 0.98, 0.3 }, { 0.6, 0.36, 0.99, 0.43 }, { 0.62, 0.52, 0.97, 0.56 } } do
+			iconLine(tile, w[1], w[2], w[3], w[4], i == 2 and 2.5 or 1.6, Color3.new(1, 1, 1), 2, true).BackgroundTransparency = 0.15 + i * 0.1
+		end
+		iconLine(tile, 0.44, 0.68, 0.3, 0.4, 12, body, 3) -- torso leaning right back
+		local head = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.23, 0.27), Size = UDim2.fromScale(0.17, 0.17), Rotation = -24, BackgroundColor3 = body, BorderSizePixel = 0, ZIndex = 4 }, tile)
+		corner(head, 3)
+		iconLine(tile, 0.33, 0.44, 0.54, 0.3, 5, body, 3) -- arms thrown forward
+		iconLine(tile, 0.35, 0.49, 0.56, 0.45, 5, shade, 2)
+		iconLine(tile, 0.44, 0.68, 0.6, 0.74, 5, body, 3) -- front leg, knee out
+		iconLine(tile, 0.6, 0.74, 0.56, 0.93, 5, body, 3)
+		iconLine(tile, 0.43, 0.7, 0.34, 0.82, 5, shade, 2) -- back leg taking the weight
+		iconLine(tile, 0.34, 0.82, 0.22, 0.92, 5, shade, 2)
 	end,
 	-- three claws punched up through a body, blood running down
 	Stab = function(tile)
@@ -502,6 +526,8 @@ local function makeCard(a, order, isHold)
 		Hold = isHold, Attr = a.Attr, Bar = bar,
 	}
 end
+
+Interface.IconArt = ICON_ART
 
 function Interface.SetAbilities(list, holds, title, color)
 	for _, s in slots do

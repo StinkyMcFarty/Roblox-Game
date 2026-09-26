@@ -202,6 +202,13 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
   Dumps: `run.py` (suits), `thumb_scene.py` with `FULLMAP=1 ROOMFILE=map.json` (whole facility).
   Anything at gap 0.000 is real (bar round parts, which it approximates as squares).
 - Stamina bar (`Interface.lua`): no label, just the number (100 when rested, counts down).
+- Top status/timer plate (`Interface.lua`, `TOP_SCALE` 1.5, `TOP_Y` 88) and the Wolverine health
+  bar under it are drawn 1.5x.
+- Lobby statues: each Wolverine suit strikes its own pose (`Skins.List[id].StatuePose`, AnimClips
+  joint conventions, applied by `Wolverine.MakeStatue` through `Posture`, which now also knows the
+  elbows, wrists and knees).
+- Hand-drawn icons: `ICON_ART` in `Interface.lua` (also `Interface.IconArt`, used by the Upgrades
+  window); Dodge is a blocky figure bending back from a whiffed hit.
 - Objectives panel (`src/client/Objectives.lua`, left, just under the minimap) replaces the old
   top-centre terminal counter. Survivors: repair the terminals (n/total), activate the Sentinel
   suits, then "Hunt the Berserker" once someone is in a suit; Sentinels: hunt the Berserker;

@@ -24,6 +24,12 @@ Skins.Order = { "Logan", "Comic", "WeaponX", "OldManLogan" }
 
 Skins.List = {
 	Logan = {
+		-- the SNIKT: squared up, both fists up in front of his face with the claws crossed in an X
+		StatuePose = {
+			Root = { -6, 0, 0, 0, -0.35, 0 }, Waist = { -4, 0, 0 }, Neck = { 8, 0, 0 },
+			RShoulder = { 82, 0, -42 }, RElbow = { 112, 0, 0 }, LShoulder = { 82, 0, 42 }, LElbow = { 112, 0, 0 },
+			RHip = { 26, 0, 10 }, RKnee = { -34, 0, 0 }, LHip = { -6, 0, -12 }, LKnee = { -18, 0, 0 },
+		},
 		Name = "Berserker",
 		Price = 0,
 		Description = "Leather jacket, jeans, sideburns and a bad attitude.",
@@ -39,6 +45,12 @@ Skins.List = {
 		HairAccessoryId = 0,
 	},
 	Comic = {
+		-- the comic splash page: a lunging crouch, one claw high overhead, the other thrust low
+		StatuePose = {
+			Root = { -18, 16, 0, 0, -0.75, 0 }, Waist = { -8, 14, 0 }, Neck = { 18, -14, 0 },
+			RShoulder = { 162, 0, 34 }, RElbow = { 24, 0, 0 }, LShoulder = { 72, 0, -24 }, LElbow = { 8, 0, 0 },
+			RHip = { 48, 0, 12 }, RKnee = { -76, 0, 0 }, LHip = { -34, 0, -14 }, LKnee = { -22, 0, 0 },
+		},
 		Name = "Comic Berserker",
 		Price = 2000,
 		Description = "Straight off the page. Cowl, fins, shoulder pads, tiger stripes.",
@@ -53,6 +65,12 @@ Skins.List = {
 		},
 	},
 	WeaponX = {
+		-- the escaped subject: hunched low, glaring up, arms hanging with the claws near the floor
+		StatuePose = {
+			Root = { -26, 0, 0, 0, -0.55, 0 }, Waist = { -22, 0, 0 }, Neck = { 38, 0, 0 },
+			RShoulder = { -26, 0, 24 }, RElbow = { 22, 0, 0 }, LShoulder = { -32, 0, -28 }, LElbow = { 16, 0, 0 },
+			RHip = { 34, 0, 14 }, RKnee = { -46, 0, 0 }, LHip = { 20, 0, -14 }, LKnee = { -40, 0, 0 },
+		},
 		Name = "Weapon X",
 		Price = 4000,
 		Description = "Fresh out of the tank. Visor helmet, cables, harness, scars.",
@@ -67,6 +85,12 @@ Skins.List = {
 		},
 	},
 	OldManLogan = {
+		-- the old man: standing tall and tired, weight on one leg, looking at the claws in his raised fist
+		StatuePose = {
+			Root = { 0, -8, 4 }, Waist = { 2, -6, 0 }, Neck = { -14, 18, 0 },
+			RShoulder = { 6, 0, 10 }, RElbow = { 8, 0, 0 }, LShoulder = { 82, 0, -12 }, LElbow = { 70, 0, 0 },
+			RHip = { 2, 0, 6 }, RKnee = { 0, 0, 0 }, LHip = { 12, 0, -4 }, LKnee = { -16, 0, 0 },
+		},
 		Name = "Old Man Berserker",
 		Price = 6000,
 		Description = "Grey beard, long duster coat, and a lot of anger left.",

@@ -1455,13 +1455,13 @@ function Wolverine.MakeStatue(skinId, cframe, parent)
 		end
 	end
 	CollectionService:AddTag(model, "SkinStatue")
-	-- Crouched, arms flared, claws out
-	Posture.Set(model, "Root", CFrame.new(0, -0.3, 0) * CFrame.Angles(math.rad(-14), 0, 0))
-	Posture.Set(model, "Neck", CFrame.Angles(math.rad(12), 0, 0))
-	Posture.Set(model, "RShoulder", CFrame.Angles(math.rad(45), 0, math.rad(50)))
-	Posture.Set(model, "LShoulder", CFrame.Angles(math.rad(45), 0, math.rad(-50)))
-	Posture.Set(model, "RHip", CFrame.Angles(math.rad(28), 0, math.rad(8)))
-	Posture.Set(model, "LHip", CFrame.Angles(math.rad(-12), 0, math.rad(-8)))
+	-- each suit strikes its own pose (Skins.List[id].StatuePose)
+	local pose = Skins.List[skinId] and Skins.List[skinId].StatuePose
+	if pose then
+		for joint, a in pose do
+			Posture.Set(model, joint, CFrame.new(a[4] or 0, a[5] or 0, a[6] or 0) * CFrame.Angles(math.rad(a[1]), math.rad(a[2]), math.rad(a[3])))
+		end
+	end
 	local root = Util.Root(model)
 	model:PivotTo(cframe * CFrame.new(0, 3.9, 0))
 	if root then
