@@ -438,6 +438,17 @@ local function pipe(parent, pts, d, color, mat, flangeColor)
 	end
 end
 
+-- where a pipe of diameter d goes into a wall: a bolted collar on the wall
+-- face (out = the wall's outward normal)
+local function wallCollar(parent, face, out, d)
+	cyl(parent, face - out * 0.1, face + out * 0.5, d * 1.8, M.Metal, rgb(46, 48, 52), nil, true)
+	local right = out:Cross(Vector3.yAxis).Unit
+	for k = 0, 3 do
+		local a = k / 4 * math.pi * 2 + math.pi / 4
+		ball(parent, face + out * 0.55 + (right * math.cos(a) + Vector3.yAxis * math.sin(a)) * d * 0.68, d * 0.18, M.Metal, rgb(120, 124, 130), nil, true)
+	end
+end
+
 local function valveWheel(parent, pos, facing, d, color)
 	local cf = CFrame.lookAt(pos, pos + facing)
 	cyl(parent, pos, pos + facing * 0.6, 0.35, M.Metal, rgb(40, 40, 44), nil, true)
@@ -1393,7 +1404,8 @@ local function scaffold(parent, base, w, d, h)
 	end
 end
 
-local function turbine(parent, cf)
+-- wallZ: the world z of the wall face its steam pipe runs into
+local function turbine(parent, cf, wallZ)
 	local grey = rgb(96, 102, 110)
 	local body = P(parent, Vector3.new(18, 7, 7), cf * CFrame.new(0, 4.4, 0) * CFrame.Angles(0, 0, 0), M.Metal, grey, { Shape = Enum.PartType.Cylinder })
 	for x = -7.5, 7.5, 2.5 do
@@ -1404,7 +1416,11 @@ local function turbine(parent, cf)
 	for _, x in { -6, 0, 6 } do
 		D(parent, Vector3.new(1.2, 1.4, 6.4), cf * CFrame.new(x, 1.4, 0), M.Metal, rgb(40, 40, 42))
 	end
-	pipe(parent, { (cf * CFrame.new(-4, 8, 0)).Position, (cf * CFrame.new(-4, 14, 0)).Position, (cf * CFrame.new(-4, 14, 8)).Position }, 1.2, rgb(186, 190, 196), M.Foil)
+	-- steam pipe: up off the casing, then across into the wall
+	local riser = (cf * CFrame.new(-4, 14, 0)).Position
+	local into = Vector3.new(riser.X, riser.Y, wallZ + math.sign(wallZ - riser.Z) * 0.3)
+	pipe(parent, { (cf * CFrame.new(-4, 8, 0)).Position, riser, into }, 1.2, rgb(186, 190, 196), M.Foil)
+	wallCollar(parent, Vector3.new(riser.X, riser.Y, wallZ), Vector3.new(0, 0, math.sign(riser.Z - wallZ)), 1.2)
 	local gauge = D(parent, Vector3.new(2, 1.4, 0.2), cf * CFrame.new(3, 3, -3.7), M.SmoothPlastic, rgb(20, 20, 22))
 	local g = sgui(gauge, N.Front, 40, true)
 	tx(g, { Size = UDim2.fromScale(1, 1), Text = "RPM 3600\nTEMP 412°", TextColor3 = rgb(120, 255, 160), Font = Enum.Font.Code })
@@ -2506,14 +2522,20 @@ local function buildReactor(parent)
 	end
 	drum(parent, c + Vector3.new(0, 20.2, 0), 14, 2.4, M.Metal, rgb(56, 58, 64))
 	ball(parent, c + Vector3.new(0, 21.4, 0), 9, M.Metal, rgb(66, 68, 74), nil, true)
-	-- coolant loops into the walls
+	-- coolant loops: out from the core, up, across, then straight into the
+	-- north or south wall
 	for k = 0, 3 do
 		local a = k / 4 * math.pi * 2 + math.pi / 4
 		local d = Vector3.new(math.cos(a), 0, math.sin(a))
-		local wallPt = c + d * 44
-		wallPt = Vector3.new(math.clamp(wallPt.X, 58, 158), 0, math.clamp(wallPt.Z, -138, -58))
+		local turn = c + d * 44
+		local wallZ = d.Z > 0 and -56.7 or -139.3 -- inner wall faces
+		local out = Vector3.new(0, 0, -math.sign(d.Z))
 		-- clad in dull steel (bright foil flared white under the core's light)
-		pipe(parent, { c + d * 8 + Vector3.new(0, 6, 0), c + d * 16 + Vector3.new(0, 6, 0), c + d * 16 + Vector3.new(0, 18, 0), Vector3.new(wallPt.X, F + 18, wallPt.Z) }, 2.4, rgb(118, 124, 134), M.Metal, rgb(52, 54, 60))
+		pipe(parent, {
+			c + d * 8 + Vector3.new(0, 6, 0), c + d * 16 + Vector3.new(0, 6, 0), c + d * 16 + Vector3.new(0, 18, 0),
+			Vector3.new(turn.X, F + 18, turn.Z), Vector3.new(turn.X, F + 18, wallZ - out.Z * 0.3),
+		}, 2.4, rgb(118, 124, 134), M.Metal, rgb(52, 54, 60))
+		wallCollar(parent, Vector3.new(turn.X, F + 18, wallZ), out, 2.4)
 	end
 	-- step-down transformers: a steel tank on a skid, a bolted cover with
 	-- lifting lugs, a conservator tank on top, three skirted porcelain
@@ -2567,8 +2589,8 @@ local function buildReactor(parent)
 		stencil(plate, N.Front, "WX-T" .. (i + 1), rgb(30, 30, 34), 50, Enum.Font.Code)
 	end
 	screen(parent, CFrame.new(108, F + 10, -57.2), 14, 6, "bars", rgb(90, 170, 255))
-	turbine(parent, CFrame.new(80, F, -128))
-	turbine(parent, CFrame.new(80, F, -72))
+	turbine(parent, CFrame.new(80, F, -128), -139.3)
+	turbine(parent, CFrame.new(80, F, -72), -56.7) -- the Genetics Lab wall
 	for i = -1, 1 do
 		local cf = CFrame.lookAt(Vector3.new(108 + i * 8, F, -66), Vector3.new(108, F, -98))
 		desk(parent, cf, 6, true)
