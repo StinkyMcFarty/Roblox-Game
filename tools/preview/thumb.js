@@ -21,7 +21,8 @@ document.body.appendChild(renderer.domElement);
 const pmrem = new THREE.PMREMGenerator(renderer);
 const envTex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 const chars = await (await fetch(q.get('chars') || 'chars.json')).json();
-const room = await (await fetch('hangar.json')).json();
+const room = await (await fetch(q.get('room') || 'hangar.json')).json();
+const PLAIN = !!q.get('plain');
 
 
 const loadImg = (src) => new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
@@ -166,7 +167,7 @@ function guiPlane(p, g) {
 const imgCache = {};
 async function templ(skin, kind) {
   const key = skin + kind;
-  if (!(key in imgCache)) imgCache[key] = await loadImg(`../../assets/textures/${skin}_${kind === 'shirt' ? 'Shirt' : 'Pants'}.png`);
+  if (!(key in imgCache)) imgCache[key] = await loadImg(`${q.get('assets') || '../../assets'}/textures/${skin}_${kind === 'shirt' ? 'Shirt' : 'Pants'}.png`);
   return imgCache[key];
 }
 function faceTex(p, base, layers) {
@@ -240,17 +241,35 @@ float vn(vec3 x){ vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 *
   return mix(mix(mix(hsh(i), hsh(i + vec3(1,0,0)), f.x), mix(hsh(i + vec3(0,1,0)), hsh(i + vec3(1,1,0)), f.x), f.y),
              mix(mix(hsh(i + vec3(0,0,1)), hsh(i + vec3(1,0,1)), f.x), mix(hsh(i + vec3(0,1,1)), hsh(i + vec3(1,1,1)), f.x), f.y), f.z); }
 float fbm(vec3 p){ return vn(p) * 0.5 + vn(p * 2.03) * 0.25 + vn(p * 4.1) * 0.125 + vn(p * 8.3) * 0.0625; }`;
-function grime(m, amount) {
+// Roblox's material textures, roughly: a pattern per material in world space
+// on the plane the face lies in (uv), multiplied into the albedo
+const MATTEX = {
+  DiamondPlate: `vec2 c = uv * 2.2; vec2 id = floor(c); vec2 f = fract(c) - 0.5;
+    vec2 r = mod(id.x + id.y, 2.0) > 0.5 ? vec2(f.x + f.y, f.x - f.y) : vec2(f.x - f.y, f.x + f.y);
+    float bump = 1.0 - smoothstep(0.26, 0.36, abs(r.x) * 0.8 + abs(r.y) * 2.6);
+    tex = 0.84 + 0.36 * bump;`,
+  Marble: `float v = abs(sin((uv.x * 0.6 + uv.y * 0.35) * 1.3 + fbm(vec3(uv * 0.8, 1.0)) * 6.0));
+    float sp = vn(vec3(uv * 9.0, 3.0));
+    tex = mix(0.84, 1.03, smoothstep(0.0, 0.12, v)) * (1.0 + step(0.8, sp) * 0.1 - step(sp, 0.16) * 0.08);`,
+  Fabric: `tex = 0.93 + 0.06 * sin(uv.x * 42.0) * sin(uv.y * 42.0) + (vn(vec3(uv * 14.0, 5.0)) - 0.5) * 0.14;`,
+  Concrete: `tex = 0.9 + 0.16 * vn(vec3(uv * 6.0, 2.0)) - step(0.86, vn(vec3(uv * 11.0, 8.0))) * 0.1;`,
+  Slate: `tex = 0.82 + 0.34 * fbm(vec3(uv.x * 0.7, uv.y * 2.4, 4.0));`,
+};
+function grime(m, amount, mat) {
+  const pat = MATTEX[mat];
   m.onBeforeCompile = (sh) => {
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP;')
-      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP;' + GRIME)
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vWN;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vWN = normalize(mat3(modelMatrix) * objectNormal);');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vWN;' + GRIME)
       .replace('#include <color_fragment>', `#include <color_fragment>
         float g = fbm(vWP * 0.9); float s = fbm(vWP * 0.18 + 7.0);
-        diffuseColor.rgb *= mix(1.0, 0.72 + 0.5 * g, ${amount.toFixed(2)}) * mix(1.0, 0.8 + 0.35 * s, ${amount.toFixed(2)});`)
+        diffuseColor.rgb *= mix(1.0, 0.72 + 0.5 * g, ${amount.toFixed(2)}) * mix(1.0, 0.8 + 0.35 * s, ${amount.toFixed(2)});
+        ${pat ? `{ vec3 an = abs(vWN); vec2 uv = (an.y > an.x && an.y > an.z) ? vWP.xz : (an.x > an.z ? vWP.zy : vWP.xy);
+          float tex = 1.0; ${pat} diffuseColor.rgb *= tex; }` : ''}`)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
         roughnessFactor = clamp(roughnessFactor + (fbm(vWP * 1.7) - 0.5) * ${(amount * 0.6).toFixed(2)}, 0.04, 1.0);`);
   };
+  m.customProgramCacheKey = () => 'grime' + amount.toFixed(2) + (pat ? mat : '');
   return m;
 }
 function roomMat(p) {
@@ -261,11 +280,12 @@ function roomMat(p) {
   let rough = 0.62, metal = 0.0;
   if (m === 'Metal' || m === 'DiamondPlate' || m === 'CorrodedMetal') { rough = 0.38; metal = 0.65; }
   else if (m === 'SmoothPlastic') rough = 0.4;
+  else if (m === 'Marble') rough = 0.3;
   else if (m === 'Concrete' || m === 'Slate' || m === 'Brick' || m === 'Cobblestone' || m === 'Fabric') rough = 0.85;
   else if (m === 'Glass') rough = 0.05;
   const mat = new THREE.MeshStandardMaterial({ color: c, roughness: Math.max(0.05, rough - refl * 0.6), metalness: Math.min(1, metal + refl * 0.8),
     envMap: envTex, envMapIntensity: 0.18 + refl, transparent: p.tr > 0.01, opacity: 1 - p.tr, depthWrite: p.tr < 0.5 });
-  return grime(mat, m === 'Glass' ? 0 : 0.55);
+  return grime(mat, m === 'Glass' ? 0 : 0.55, m);
 }
 function partGeo(p) {
   const [sx, sy, sz] = p.size;
@@ -281,6 +301,8 @@ const NORM = { Front: [0, 0, -1], Back: [0, 0, 1], Right: [1, 0, 0], Left: [-1, 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(q.get('bg') || '#07060c');
 const K = +(q.get('k') || 1.0);
+// lightR: only room lights this close to the camera (a whole map has too many)
+const CAMP = V3(q.get('cam') || '3.5,7.7,70.5'), LIGHT_R = +(q.get('lightR') || 1e9);
 // hide= boxes "x0,y0,z0,x1,y1,z1;..." of room parts left out of the shot
 const HIDE = (q.get('hide') || '').split(';').filter(Boolean).map((b) => b.split(',').map(Number));
 for (const p of room.parts) {
@@ -290,7 +312,7 @@ for (const p of room.parts) {
   obj.matrixAutoUpdate = false; obj.matrix.copy(cfMatrix(p.cf));
   obj.castShadow = p.tr < 0.5; obj.receiveShadow = true;
   for (const g of p.guis) if (!(g.face.includes('Top') && py < 1.3)) obj.add(guiPlane(p, g)); // floor stencils read backwards from here
-  if (!DEPTH) for (const l of p.lights) {
+  if (!DEPTH && Math.hypot(px - CAMP.x, py - CAMP.y, pz - CAMP.z) < LIGHT_R) for (const l of p.lights) {
     const col = new THREE.Color(`rgb(${l.c.join(',')})`);
     const face = l.face.replace('Enum.NormalId.', '');
     let L;
@@ -309,7 +331,7 @@ for (const p of room.parts) {
 // the characters: [x, y, z, yaw, scale] per character, feet on the deck
 const F = 0.7;
 const PLACE = {};
-for (const s of (q.get('place') || 'wolf:0,84,180,1;sd:-8,101,-16,1.8;sv:8.5,99,16,1.8').split(';')) {
+for (const s of (PLAIN ? '' : (q.get('place') || 'wolf:0,84,180,1;sd:-8,101,-16,1.8;sv:8.5,99,16,1.8')).split(';').filter(Boolean)) {
   const [k, v] = s.split(':'); const [x, z, yaw, sc] = v.split(',').map(Number); PLACE[k] = { x, z, yaw, sc };
 }
 const holders = {};
@@ -341,6 +363,16 @@ if (DEPTH) {
   });
   scene.background = new THREE.Color(1, 1, 1);
   renderer.render(scene, cam);
+  document.title = 'done';
+} else if (PLAIN) {
+  // roughly Roblox's own look: its ambient, bloom on neon, nothing added
+  const amb = (q.get('amb') || '96,106,128').split(',').map(Number);
+  scene.add(new THREE.AmbientLight(new THREE.Color(`rgb(${amb.join(',')})`), +(q.get('ambk') || 2.4)));
+  const composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, cam));
+  composer.addPass(new UnrealBloomPass(new THREE.Vector2(W, H), +(q.get('bloom') || 0.35), 0.5, 0.9));
+  composer.addPass(new OutputPass());
+  composer.render();
   document.title = 'done';
 } else {
   // -- cinematic lighting --------------------------------------------------
