@@ -280,8 +280,10 @@ Config.UploadedSounds = {
 	ClawDig = 81900803629932, -- his claws biting into the floor on all fours (4 concrete + 3 steel takes)
 	ClawStone = 79213537781413, -- his claws clashing into concrete walls
 	ClawFlesh = 137648114004971, -- his claws tearing through a survivor
-	SentinelSwing = 103865520255704, -- Sentinel punch wind-up (servos, hydraulics, the fist moving the air)
+	SentinelSwing = 103865520255704, -- Sentinel punch wind-up (motor, hydraulic ram, the fist moving the air)
 	SentinelSmash = 93700336440724, -- Sentinel fist landing (on Wolverine or through a wall)
+	SentinelWalk = 0, -- Sentinel walking: leg motor, then the steel foot clanking down (4 takes)
+	SentinelRun = 0, -- Sentinel running: the same, heavier (4 takes); until both are uploaded it's StepHeavy
 	TerminalHum = 0, -- terminals idling near you (8s loop); paste its ID here once uploaded
 }
 Config.Sounds.Snarl = Config.Sounds.Snarl or ""

@@ -1004,52 +1004,116 @@ end
 
 -- Sentinel M1: a hydraulic smash. Shock ring blasts off the fist, streaks
 -- spear forward and a heavy flare lands on contact.
+-- The Sentinel's punch: a hydraulic ram firing. A shimmering pressure disc
+-- blasts off the fist, two thick shock rings (molten, then white) tear
+-- outward, a cone of speed spikes shoots ahead, the punching arm vents steam
+-- from the elbow, and a hit throws sparks and a flare.
+local function pressureDisc(position, dir, maxRadius, life)
+	local disc = Instance.new("Part")
+	disc.Anchored, disc.CanCollide, disc.CanQuery, disc.CanTouch, disc.CastShadow = true, false, false, false, false
+	disc.Shape = Enum.PartType.Cylinder
+	disc.Material = Enum.Material.ForceField
+	disc.Color = Color3.fromRGB(255, 190, 110)
+	disc.Size = Vector3.new(0.3, 1, 1)
+	disc.Parent = workspace
+	local cf = CFrame.lookAt(position, position + dir) * CFrame.Angles(0, math.rad(90), 0) -- the cylinder's axis along dir
+	return disc, function(k)
+		local r = 1 + maxRadius * outExpo(k)
+		disc.Size = Vector3.new(0.3 + 1.2 * k, r * 2, r * 2)
+		disc.CFrame = cf + dir * (0.6 + 2.4 * outCubic(k))
+		disc.Transparency = 0.1 + 0.9 * k
+	end
+end
+
+local function steamVent(char, position)
+	-- the arm that threw it: whichever hand is nearer the fist
+	local best, bestD = nil, math.huge
+	for _, side in { "Right", "Left" } do
+		local hand = char and char:FindFirstChild(side .. "Hand")
+		if hand and (hand.Position - position).Magnitude < bestD then
+			best, bestD = side, (hand.Position - position).Magnitude
+		end
+	end
+	local lower = best and char:FindFirstChild(best .. "LowerArm")
+	if not lower then
+		return
+	end
+	local att = Instance.new("Attachment")
+	att.Position = Vector3.new(0, lower.Size.Y * 0.45, 0) -- the elbow
+	att.Parent = lower
+	local e = Instance.new("ParticleEmitter")
+	e.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	e.Color = ColorSequence.new(Color3.fromRGB(235, 240, 245))
+	e.LightEmission = 0.25
+	e.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.5), NumberSequenceKeypoint.new(1, 2.6) })
+	e.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.25), NumberSequenceKeypoint.new(1, 1) })
+	e.Lifetime = NumberRange.new(0.35, 0.7)
+	e.Speed = NumberRange.new(14, 24)
+	e.Drag = 7
+	e.SpreadAngle = Vector2.new(22, 22)
+	e.EmissionDirection = Enum.NormalId.Back
+	e.Rotation = NumberRange.new(0, 360)
+	e.RotSpeed = NumberRange.new(-90, 90)
+	e.Rate = 0
+	e.Parent = att
+	e:Emit(14)
+	task.delay(1.2, function()
+		att:Destroy()
+	end)
+end
+
 function SlashFX.Smash(char, position, dir, hit)
 	local cam = workspace.CurrentCamera
 	if not (position and dir and cam) then
 		return
 	end
 	dir = dir.Magnitude > 0.01 and dir.Unit or Vector3.new(0, 0, -1)
-	local gold = Color3.fromRGB(255, 210, 90)
+	local gold, hot = Color3.fromRGB(255, 210, 90), Color3.fromRGB(255, 120, 30)
+	local LIFE = hit and 0.42 or 0.32
 	local ribbons = {}
 	local rings = {}
-	for i = 1, 3 do
-		local r = takeRibbon(28, i == 1 and WHITE or gold, i == 1 and 6 or 3)
+	for i = 1, 2 do
+		local r = takeRibbon(32, i == 1 and hot or WHITE, i == 1 and 5 or 7)
 		table.insert(ribbons, r)
-		rings[i] = { R = r, Delay = (i - 1) * 0.04, Size = (hit and 5 or 3.5) + i }
+		rings[i] = { R = r, Delay = (i - 1) * 0.05, Size = (hit and 6.5 or 4.5) + i * 1.2, W = i == 1 and 1.1 or 0.6 }
 	end
-	local streaks = {}
-	for i = 1, 10 do
-		local r = takeRibbon(5, i % 2 == 0 and WHITE or gold, 4)
+	local side = dir:Cross(Vector3.yAxis)
+	side = side.Magnitude > 0.01 and side.Unit or Vector3.xAxis
+	local up = side:Cross(dir).Unit
+	local spikes = {}
+	for i = 1, 16 do -- a cone of speed spikes blasting ahead of the fist
+		local r = takeRibbon(5, i % 3 == 0 and WHITE or (i % 3 == 1 and gold or hot), 5)
 		table.insert(ribbons, r)
-		local side = dir:Cross(Vector3.new(0, 1, 0))
-		side = side.Magnitude > 0.01 and side.Unit or Vector3.new(1, 0, 0)
-		local up = side:Cross(dir).Unit
-		local a = math.random() * math.pi * 2
-		streaks[i] = { R = r, Off = (side * math.cos(a) + up * math.sin(a)) * (0.6 + math.random() * 1.6), L = 2 + math.random() * 3 }
+		local a = (i / 16) * math.pi * 2 + math.random() * 0.3
+		local spread = 0.25 + math.random() * 0.3
+		spikes[i] = { R = r, D = (dir + (side * math.cos(a) + up * math.sin(a)) * spread).Unit, Off = 0.4 + math.random() * 0.8, L = 3 + math.random() * 5, W = 0.16 + math.random() * 0.14 }
 	end
-	local LIFE = 0.35
+	local disc, growDisc = pressureDisc(position, dir, hit and 6 or 4.5, LIFE)
 	run(ribbons, function(t)
 		local k = t / LIFE
 		if k >= 1 then
+			disc:Destroy()
 			return false
 		end
+		growDisc(k)
 		for _, rg in rings do
 			local q = math.clamp((t - rg.Delay) / (LIFE - rg.Delay), 0, 1)
 			if q > 0 and q < 1 then
-				setRing(rg.R, position + dir * (0.5 + q * 1.5), dir, 0.5 + rg.Size * outQuad(q), 0.3 * (1 - q), q)
+				setRing(rg.R, position + dir * (0.4 + q * 2.6), dir, 0.8 + rg.Size * outExpo(q), rg.W * (1 - q) ^ 1.5, q ^ 1.5)
 			else
 				hideRibbon(rg.R)
 			end
 		end
-		for _, st in streaks do
-			local p0 = position + st.Off + dir * (1 + 6 * outQuad(k))
-			setNeedle(st.R, p0, p0 + dir * st.L * (1 - k), 0.12 * (1 - k), k)
+		for _, sp in spikes do
+			local p0 = position + sp.D * (sp.Off + 7 * outCubic(k))
+			setNeedle(sp.R, p0, p0 + sp.D * sp.L * (1 - k), sp.W * (1 - k * 0.7), k ^ 1.3)
 		end
 		return true
 	end)
+	steamVent(char, position)
 	if hit then
-		SlashFX.HitFlash(position, gold, 1.5)
+		sparks(position, 2.2, hot, 18)
+		SlashFX.HitFlash(position, gold, 2)
 	end
 end
 

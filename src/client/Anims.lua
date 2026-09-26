@@ -82,6 +82,11 @@ local STEP_LAYOUT = {
 	StepWolverine = { Slot = 0.6, Takes = 4, Range = { 8, 140 } },
 	ClawDig = { Slot = 0.4, Takes = 4, Range = { 5, 95 } },
 	ClawDigMetal = { Slot = 0.4, Takes = 3, First = 4, File = "ClawDig", Range = { 5, 95 } },
+	-- Sentinel legs: the motor drives the leg, then the steel foot clanks down
+	-- Lead seconds in (WALK_LEAD / RUN_LEAD in tools/generate_sfx.py), so each
+	-- take is started that far ahead of the heel strike
+	SentinelWalk = { Slot = 1, Takes = 4, Range = { 12, 190 }, Lead = 0.26 },
+	SentinelRun = { Slot = 0.8, Takes = 4, Range = { 12, 210 }, Lead = 0.18 },
 }
 -- Until Wolverine's files are uploaded, a stand-in plays whole instead.
 local STAND_IN = {
@@ -856,8 +861,15 @@ step:Connect(function(a, b)
 			end
 		elseif CUSTOM_STEPS and speed > 1.5 and hum.FloorMaterial ~= Enum.Material.Air and not airborne then
 			local kind = role == "Sentinel" and "StepHeavy" or (METAL_FLOORS[hum.FloorMaterial] and "StepMetal" or "Step")
+			-- a Sentinel's own leg sounds once they're uploaded (the old stomp until then)
+			local legs = role == "Sentinel" and (st.Loop == "Charge" and "SentinelRun" or "SentinelWalk") or nil
+			if legs and (Config.UploadedSounds[legs] or 0) == 0 then
+				legs = nil
+			end
 			local vol, pitch = 0.26, 1
-			if role == "Sentinel" then
+			if legs then
+				vol = st.Loop == "Charge" and 0.95 or 0.8
+			elseif role == "Sentinel" then
 				vol, pitch = st.Loop == "Charge" and 0.8 or 0.6, (Config.Sounds.StepHeavy == Config.Sounds.StepMetal and 0.6 or 1) * (st.Loop == "Charge" and 0.92 or 1)
 			elseif role == "Wolverine" then
 				vol, pitch = 0.36, 0.8 -- the boot on the floor; StepWolverine below carries his weight
@@ -866,11 +878,21 @@ step:Connect(function(a, b)
 			end
 			local stepped = false
 			local stomping = st.Loop == "Stomp" or st.Loop == "Charge"
+			local early = false -- the leg sound already started ahead of this footfall
 			if loop and st.Loop == loop and st.LoopBlend > 0.5 then
 				-- heel strike lands where the stride peaks (|sin phase| = 1); a
 				-- Sentinel's heels strike at 0 and pi (see SENTINEL LOCOMOTION)
 				local off = stomping and 0 or math.pi / 2
 				stepped = math.floor((prevPhase - off) / math.pi) ~= math.floor((st.Phase - off) / math.pi)
+				if legs and stomping then
+					-- start the leg's motor early so its clank lands on the heel strike
+					early = true
+					local rate = (st.Phase - prevPhase) / math.max(dt, 1e-3)
+					local lead = math.min(STEP_LAYOUT[legs].Lead * rate, math.pi * 0.9)
+					if math.floor((prevPhase - off + lead) / math.pi) ~= math.floor((st.Phase - off + lead) / math.pi) then
+						footstep(st, root, legs, vol, 1)
+					end
+				end
 				st.StepDist = 0
 			else
 				-- plain walk (Roblox's own walk animation): one footfall per stride
@@ -881,7 +903,9 @@ step:Connect(function(a, b)
 				end
 			end
 			if stepped then
-				footstep(st, root, kind, vol, pitch)
+				if not early then
+					footstep(st, root, legs or kind, vol, pitch)
+				end
 				if role == "Sentinel" then
 					if stomping and loop then
 						-- dust bursts out from under the foot that just landed

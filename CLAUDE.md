@@ -76,6 +76,12 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
 - Sentinel moves run one at a time (`perform`/`acting` in `Sentinel.lua`, `Acting` attribute).
   Ground Slam (`Config.Sentinel.Slam`, right mouse / L2): 1.75x punch damage within 30 studs;
   floor cracks are client-side (`SlashFX.GroundSlam`) and heal after `Config.WallRegen`.
+- Sentinel footsteps: `SentinelWalk.ogg` / `SentinelRun.ogg` (4 takes each: the leg motor, then the
+  steel foot clanking down at `Lead` seconds, then hydraulics venting). `Anims.lua` starts each take
+  `Lead` ahead of the heel strike (phase 0/pi) so the clank lands on it; dust and shake stay on the
+  strike. Until both are uploaded (`Config.UploadedSounds`) it plays the old `StepHeavy`.
+- Sentinel punch VFX (`SlashFX.Smash`): a ForceField pressure disc, two thick shock rings, a cone of
+  speed spikes, steam venting from the punching arm's elbow, sparks + flare on a hit.
 - Sentinels see Wolverine's outline through walls while they're 50+ studs from him
   (`src/client/SentinelTracker.lua`). A fart while sprinting skips the sprint build-up
   (`Movement.MaxOut`). Death ray colours live in the `BEAM` table in `SlashFX.lua`.

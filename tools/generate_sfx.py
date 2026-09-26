@@ -661,25 +661,30 @@ SMASH_AT = 0.27  # SentinelSwing: when the fist lands (the server connects the p
 
 
 def sentinel_swing():
-    """Sentinel haymaker wind-up: servos whine up as the arm cocks back,
-    hydraulics hiss as the pressure builds, a piston clacks and the huge fist
-    shoves the air aside on its way in."""
-    dur = 0.5
+    """Sentinel haymaker wind-up: the shoulder motor revs up hard as the arm
+    cocks back, the hydraulic ram builds pressure (a rising hiss and groan),
+    a valve clacks open and the piston fires the fist forward, shoving the
+    air aside. Everything chokes off as the fist lands at SMASH_AT."""
+    dur = 0.55
     t = t_axis(SMASH_AT)
-    f = 420 + 1300 * (t / SMASH_AT) ** 1.6
-    ph = 2 * np.pi * np.cumsum(f) / SR
-    whine = (np.sin(ph) + 0.35 * np.sin(2 * ph) + 0.15 * signal.sawtooth(3 * ph)) * (t / SMASH_AT) ** 1.4 * 0.16
-    hiss = bandpass(noise(SMASH_AT), 2500, 8500) * (t / SMASH_AT) ** 2 * 0.22
-    clack = ring([310, 780, 1460, 2350], 0.12, 0.02) * env(0.12, 0.0005, 0.03)
-    clack = mix(clack, highpass(noise(0.01), 2000) * env(0.01, 0.0003, 0.003) * 0.8)
-    wd = 0.24
+    k = t / SMASH_AT
+    motor = servo(SMASH_AT, 150, 520, 0.8) * 0.5
+    ph = 2 * np.pi * np.cumsum(900 + 2200 * k ** 1.6) / SR
+    whine = np.sin(ph) * k ** 1.5 * 0.12  # the motor's high whine
+    groan = bandpass(signal.sawtooth(2 * np.pi * np.cumsum(55 + 40 * k) / SR), 60, 400) * k * 0.35  # the ram straining
+    hiss = bandpass(noise(SMASH_AT), 2200, 8000) * k ** 2 * 0.32
+    clack = mix(ring([290, 740, 1390, 2280], 0.12, 0.02) * env(0.12, 0.0005, 0.03),
+                highpass(noise(0.01), 2000) * env(0.01, 0.0003, 0.003) * 0.9)
+    fire = vent(0.12, 1200, 7000, 0.003, 0.05) * 0.8  # the piston firing
+    wd = 0.2
     wt = t_axis(wd)
-    air = sweep_band(noise(wd), 160, 900, 0.9, 16) * np.sin(np.pi * wt / wd) ** 1.3 * 1.1
-    air = mix(air, lowpass(noise(wd), 220) * np.sin(np.pi * wt / wd) ** 2 * 0.6)
-    tail = np.minimum(1, (SMASH_AT - t) / 0.03)  # the build-up chokes off as the fist lands
-    x = mix(whine * tail, hiss * tail, pad(clack * 0.7, SMASH_AT - 0.1), pad(air, SMASH_AT - 0.17))
+    air = sweep_band(noise(wd), 140, 800, 0.9, 16) * np.sin(np.pi * wt / wd) ** 1.3 * 1.2
+    air = mix(air, lowpass(noise(wd), 200) * np.sin(np.pi * wt / wd) ** 2 * 0.8)
+    tail = np.minimum(1, (SMASH_AT - t) / 0.02)
+    x = mix((motor + whine + groan + hiss) * tail, pad(clack * 0.8, SMASH_AT - 0.12), pad(fire, SMASH_AT - 0.11), pad(air, SMASH_AT - 0.15))
     x = np.concatenate([x, np.zeros(max(0, int(SR * dur) - len(x)))])
-    return finish(reverb(highpass(x, 40, 2), 0.25, 0.1), 0.8, 0.06)
+    x = np.tanh(x * 1.5)
+    return finish(reverb(highpass(x, 40, 2), 0.25, 0.1), 0.85, 0.06)
 
 
 def sentinel_smash():
@@ -698,13 +703,86 @@ def sentinel_smash():
     parts.append(clang * 0.8)
     parts.append(mix(*[pad(bandpass(noise(0.02), 500, 4500) * env(0.02, 0.0004, 0.006) * rng.uniform(0.3, 0.8),
                            rng.uniform(0.0, 0.07)) for _ in range(10)]))
-    hiss = bandpass(noise(0.6), 2500, 9000) * env(0.6, 0.06, 0.22) * 0.2
-    parts.append(pad(hiss, 0.14))
-    chunk = mix(ring([260, 690, 1310], 0.15, 0.025) * env(0.15, 0.0005, 0.04),
+    # the ram venting and ka-chunking back, the motor winding down
+    parts.append(pad(vent(0.6, 2200, 9000, 0.03, 0.2) * 0.45, 0.1))
+    chunk = mix(ring([240, 650, 1260], 0.15, 0.025) * env(0.15, 0.0005, 0.04),
                 lowpass(noise(0.04), 900) * env(0.04, 0.0005, 0.01) * 0.6)
-    parts.append(pad(chunk * 0.45, 0.38))
-    x = np.tanh(mix(*parts) * 1.6)
+    parts.append(pad(chunk * 0.7, 0.34))
+    parts.append(pad(chunk * 0.45, 0.46))
+    tw = t_axis(0.45)
+    wind = bandpass(signal.sawtooth(2 * np.pi * np.cumsum(420 - 600 * tw) / SR), 90, 2500) * env(0.45, 0.02, 0.25) * 0.22
+    parts.append(pad(wind, 0.12))
+    x = np.tanh(mix(*parts) * 1.9)
     return finish(reverb(highpass(x, 28, 2), 0.55, 0.2), 0.9, 0.08)
+
+
+# Sentinel footsteps (SentinelWalk / SentinelRun): each take is the leg's
+# motor driving it through the stride, then the heavy steel foot clanking down
+# at WALK_LEAD / RUN_LEAD seconds, then the hydraulics venting. Anims.lua
+# starts each take that far ahead of the heel strike so the clank lands on it.
+WALK_SLOT, WALK_LEAD = 1.0, 0.26
+RUN_SLOT, RUN_LEAD = 0.8, 0.18
+
+
+def servo(dur, f0, f1, grit=0.5):
+    """An electric motor spinning up under load: a buzzy fundamental rising
+    from f0 to f1 with gear whine on top and a gear-tooth rattle, swelling in
+    and choked off at the end (when the foot lands)."""
+    t = t_axis(dur)
+    k = t / dur
+    f = f0 + (f1 - f0) * k ** 1.3
+    ph = 2 * np.pi * np.cumsum(f) / SR
+    body = signal.sawtooth(ph) * 0.6 + np.sign(np.sin(ph)) * 0.25 + np.sin(2 * ph) * 0.3
+    body = bandpass(body, 90, 3200)
+    gear = np.sin(6 * ph) * 0.18 + np.sin(9.5 * ph) * 0.07  # the gearbox whine
+    teeth = 1 + grit * 0.5 * signal.square(2 * np.pi * np.cumsum(f / 7) / SR)  # tooth chatter
+    swell = np.clip(k / 0.35, 0, 1) ** 1.5 * np.minimum(1, (dur - t) / 0.012)
+    return (body + gear) * teeth * swell
+
+
+def vent(dur, lo=2200, hi=8000, attack=0.02, decay=0.14):
+    """Hydraulic pressure letting go: a sharp pneumatic 'pssh'."""
+    return bandpass(noise(dur), lo, hi) * env(dur, attack, decay)
+
+
+def metal_foot(weight):
+    """A steel foot slamming onto the deck. weight 1 = walking, ~1.4 = running."""
+    parts = []
+    tb = t_axis(0.7)
+    f0 = rng.uniform(46, 52) / weight ** 0.35
+    parts.append(np.sin(2 * np.pi * f0 * tb * (1 - 0.3 * tb)) * np.exp(-tb / (0.16 * weight)) * 1.5 * weight)  # sub boom
+    parts.append(lowpass(noise(0.1), 320) * env(0.1, 0.0008, 0.04) * 1.2 * weight)  # body thud
+    parts.append(bandpass(noise(0.08), 150, 600) * env(0.08, 0.0008, 0.03) * 1.1)  # the thump small speakers can play
+    sc = rng.uniform(0.94, 1.06) / weight ** 0.25
+    clank = ring([158 * sc, 391 * sc, 707 * sc, 1133 * sc, 1712 * sc, 2604 * sc], 0.7, 0.085 * weight) * env(0.7, 0.0004, 0.16)
+    parts.append(clank * 0.85)
+    parts.append(highpass(noise(0.006), 1800) * env(0.006, 0.0002, 0.0015) * 1.2)  # the strike
+    for _ in range(int(3 + 3 * weight)):  # armour plates rattling, grit under the sole
+        parts.append(pad(bandpass(noise(0.015), 900, 6000) * env(0.015, 0.0003, 0.005) * rng.uniform(0.2, 0.55),
+                         rng.uniform(0.015, 0.14)))
+    return mix(*parts)
+
+
+def sentinel_step_take(lead, weight, f0, f1):
+    def take(k):
+        spin = servo(lead, f0 * rng.uniform(0.94, 1.06), f1 * rng.uniform(0.94, 1.06), 0.5 + 0.2 * weight)
+        press = bandpass(noise(lead), 1500, 5000) * np.linspace(0, 1, int(SR * lead)) ** 3 * 0.18  # pressure building
+        foot = metal_foot(weight)
+        hiss = pad(vent(0.3, attack=0.015, decay=0.12 / weight) * 0.35, lead + rng.uniform(0.05, 0.09))
+        tb = t_axis(0.14)
+        settle = np.sin(2 * np.pi * np.cumsum(420 - 1400 * tb) / SR) * env(0.14, 0.005, 0.05) * 0.12  # servo settling
+        x = mix(spin * 0.75, press * 1.4, pad(foot, lead), hiss, pad(settle, lead + 0.05))
+        x = np.tanh(x * (1.2 + 0.4 * weight))
+        return reverb(highpass(x, 30, 2), 0.5, 0.15)
+    return take
+
+
+def sentinel_walk():
+    return takes(sentinel_step_take(WALK_LEAD, 1.0, 130, 250), 4, WALK_SLOT)
+
+
+def sentinel_run():
+    return takes(sentinel_step_take(RUN_LEAD, 1.45, 190, 400), 4, RUN_SLOT)
 
 
 def step_wolverine():
@@ -910,6 +988,7 @@ SOUNDS = {
     "PounceLeap": pounce_leap, "Scream": scream, "Step": step, "StepMetal": step_metal, "StepHeavy": step_heavy,
     "StepWolverine": step_wolverine, "ClawDig": claw_dig, "ClawStone": claw_stone, "ClawFlesh": claw_flesh,
     "SentinelSwing": sentinel_swing, "SentinelSmash": sentinel_smash, "TerminalHum": terminal_hum,
+    "SentinelWalk": sentinel_walk, "SentinelRun": sentinel_run,
 }
 
 
