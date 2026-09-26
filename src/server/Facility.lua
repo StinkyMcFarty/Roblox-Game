@@ -27,6 +27,7 @@ local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local Finish = require(ReplicatedStorage.Shared.Finish)
 local Costumes = require(script.Parent.Costumes)
 local MapBuilder = require(script.Parent.MapBuilder)
 
@@ -59,6 +60,9 @@ local function make(class, parent, props)
 	for k, v in props do
 		inst[k] = v
 	end
+	if inst:IsA("BasePart") then
+		Finish(inst)
+	end
 	inst.Parent = parent
 	return inst
 end
@@ -77,6 +81,7 @@ local function P(parent, size, cf, mat, color, extra)
 			p[k] = v
 		end
 	end
+	Finish(p)
 	p.Parent = parent
 	return p
 end
@@ -158,6 +163,7 @@ local function wedge(parent, size, cf, mat, color, extra)
 			w[k] = v
 		end
 	end
+	Finish(w)
 	w.Parent = parent
 	return w
 end

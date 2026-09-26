@@ -19,7 +19,7 @@ lua.globals().py_src = load_src
 lua.execute('''
 local RS = game_services("ReplicatedStorage")
 local Shared = Instance.new("Folder"); Shared.Name = "Shared"; Shared.Parent = RS
-for _, n in ipairs({"Config", "Skins", "Util"}) do
+for _, n in ipairs({"Config", "Skins", "Util", "Finish"}) do
   local m = Instance.new("ModuleScript"); m.Name = n; m.Parent = Shared
   m:SetAttribute("__path", "src/shared/" .. n .. ".lua")
 end

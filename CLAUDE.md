@@ -167,11 +167,21 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
 - Currency is shown as "Berserker Coins" (`Config.CoinName`); saves still use the key `Coins`.
 - leaderstats Wins and Kills are saved (`PlayerData.AddStat`, GameManager `stat`); everyone is
   saved after each round (`PlayerData.SaveAll`).
-- Lobby shell (`BuildLobby` in `MapBuilder.lua`): walls are dressed per wall (`walls` table, `onWall`
-  places parts along each inner face; `gaps` keep the band/ring beam off the windows, notice board
-  and claw gouges). Light fittings use `fitting()` (CastShadow = false): a shadowed lamp whose own
-  bulb or shade is in front of it shadows the floor it lights (the old hanging lamps did). Nothing
-  goes across the south windows; the claw and WEAPON X signs hang above them.
+- **No stock material textures on the map** (user rule): `src/shared/Finish.lua` runs in the part
+  helpers of `MapBuilder.lua` and `Facility.lua` (`make`, `block`, `P`, `wedge`) and turns Metal,
+  Concrete, Brick, DiamondPlate, Wood etc. into SmoothPlastic (Glass/Neon/ForceField stay); the
+  detail has to be modelled. A queryable part keeps what it stood for as its `Surface` attribute
+  (Combat.Surface clash effects). No toolbox/free assets either. Costumes are not filtered yet.
+- Lobby shell ("Facility 7", `BuildLobby` in `MapBuilder.lua`): a sealed hall, no windows, one
+  house style (`F7` palette): polished slab floor (chamfered face plates, a dark runner with steel
+  inlay), walls dressed by the `walls` table (s along each wall from `a`; gaps `solid`/`posts`/
+  `rail`/`beam`): steel plinth with a guide lamp per bay, dark wainscot panel, bolted chair rail,
+  two warm concrete raised panels per bay, stepped pilasters every ~6 studs (every other one has
+  an up/down `sconce`), I-beam cornice, ribbed cladding; corner piers; roof girders sit on bearing
+  brackets. Wall titles use `titlePlate` (steel frame, amber Oswald). Fireplace = concrete chimney
+  breast with the cornice wrapped round it; archive shelving either side. Things against a wall
+  stand off the plinth (0.45+ out). Light fittings use `fitting()` (CastShadow = false) and
+  `glowFace` lenses (no Neon).
 - Lobby preview: the preview mock can build the lobby (`MapBuilder.BuildLobby`); `Color3:ToHSV` in
   `prelude.lua` returns real hues (the lobby softens its neon through HSV).
 - Facility light fittings are real lights, not Neon: the lit diffuser/lens is a `glowFace`

@@ -8,6 +8,7 @@ local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local Finish = require(ReplicatedStorage.Shared.Finish)
 
 local MapBuilder = {}
 
@@ -58,6 +59,9 @@ local function make(class, parent, props)
 	for k, v in props do
 		inst[k] = v
 	end
+	if inst:IsA("BasePart") then
+		Finish(inst)
+	end
 	inst.Parent = parent
 	return inst
 end
@@ -72,6 +76,7 @@ local function block(parent, size, cf, material, color, extra)
 		for k, v in extra do
 			p[k] = v
 		end
+		Finish(p)
 	end
 	return p
 end
@@ -1702,17 +1707,19 @@ local function fitting(parent, size, cf, material, color, extra)
 	return p
 end
 
--- Yellow/black hazard stripes painted on one face of a part.
-local function hazardStripes(p, face)
-	local gui = make("SurfaceGui", p, { Face = face, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 40 })
-	local f = make("Frame", gui, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0 })
-	local keys = {}
-	for i = 0, 9 do
-		local col = i % 2 == 0 and rgb(232, 184, 40) or rgb(17, 17, 17)
-		table.insert(keys, ColorSequenceKeypoint.new(i == 0 and 0 or i / 10 + 0.002, col))
-		table.insert(keys, ColorSequenceKeypoint.new((i + 1) / 10, col))
+-- A lens that looks lit without being a Neon brick: a SurfaceGui that
+-- ignores the scene's lighting, brightest in the middle and falling off to
+-- the edges (round for a disc).
+local function glowFace(p, face, color, round)
+	local g = make("SurfaceGui", p, { Face = face, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 24, LightInfluence = 0, Brightness = 1 })
+	local panel = make("Frame", g, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0 })
+	if round then
+		make("UICorner", panel, { CornerRadius = UDim.new(0.5, 0) })
 	end
-	make("UIGradient", f, { Rotation = 60, Color = ColorSequence.new(keys) })
+	local edge = color:Lerp(Color3.new(1, 1, 1), 0.35)
+	local mid = color:Lerp(Color3.new(1, 1, 1), 0.8)
+	make("UIGradient", panel, { Rotation = 90, Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, edge), ColorSequenceKeypoint.new(0.5, mid), ColorSequenceKeypoint.new(1, edge) }) })
+	return g
 end
 
 -- Industrial high-bay lamp hung from the roof at `top`, its lens `drop` studs
@@ -1732,38 +1739,12 @@ local function highBay(parent, top, drop)
 		fitting(parent, Vector3.new(r[2], r[1], r[1]), CFrame.new(lens + Vector3.new(0, r[3], 0)) * up, M.Metal, rgb(84, 88, 96), { Shape = Enum.PartType.Cylinder, Reflectance = 0.1 })
 	end
 	fitting(parent, Vector3.new(0.14, 3.9, 3.9), CFrame.new(lens + Vector3.new(0, -0.02, 0)) * up, M.Metal, rgb(34, 35, 40), { Shape = Enum.PartType.Cylinder })
-	fitting(parent, Vector3.new(0.08, 3.3, 3.3), CFrame.new(lens + Vector3.new(0, -0.07, 0)) * up, M.Neon, HIGH_BAY, { Shape = Enum.PartType.Cylinder })
+	local glass = fitting(parent, Vector3.new(0.08, 3.3, 3.3), CFrame.new(lens + Vector3.new(0, -0.07, 0)) * up, M.SmoothPlastic, HIGH_BAY, { Shape = Enum.PartType.Cylinder })
+	glowFace(glass, Enum.NormalId.Left, HIGH_BAY, true)
 	-- the light itself sits just under the lens, so nothing of the fitting is in its way
 	local emit = fitting(parent, Vector3.new(0.4, 0.2, 0.4), CFrame.new(lens - Vector3.new(0, 0.3, 0)), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false })
 	make("SpotLight", emit, { Face = Enum.NormalId.Bottom, Range = 60, Angle = 120, Brightness = 3.4, Color = HIGH_BAY, Shadows = true })
 	light(emit, { Range = 34, Brightness = 0.7, Color = HIGH_BAY })
-end
-
--- Caged bulkhead lamp on a wall or column: cf sits on the surface, facing
--- out. Back plate, conduit up to a junction box, a housing, a glowing glass
--- dome, a guard ring and the cage over it.
-local function cagedLamp(parent, cf, color, flicker)
-	local dark, steel = rgb(30, 31, 35), rgb(56, 58, 64)
-	local out = CFrame.Angles(0, math.rad(90), 0) -- a cylinder pointing out of the wall
-	fitting(parent, Vector3.new(1.3, 1.8, 0.16), cf * CFrame.new(0, 0, -0.08), M.Metal, steel)
-	for _, y in { -0.7, 0.7 } do
-		fitting(parent, Vector3.new(0.08, 0.2, 0.2), cf * CFrame.new(0, y, -0.2) * out, M.Metal, rgb(130, 132, 138), { Shape = Enum.PartType.Cylinder })
-	end
-	fitting(parent, Vector3.new(0.22, 1.5, 0.22), cf * CFrame.new(0, 1.65, -0.13), M.Metal, rgb(74, 76, 82))
-	fitting(parent, Vector3.new(0.7, 0.55, 0.4), cf * CFrame.new(0, 2.6, -0.2), M.Metal, steel)
-	fitting(parent, Vector3.new(0.48, 1.24, 1.24), cf * CFrame.new(0, 0, -0.4) * out, M.Metal, dark, { Shape = Enum.PartType.Cylinder })
-	local lens = fitting(parent, Vector3.new(1, 1, 1), cf * CFrame.new(0, 0, -0.64), M.Neon, color, { Shape = Enum.PartType.Ball })
-	fitting(parent, Vector3.new(0.12, 1.36, 1.36), cf * CFrame.new(0, 0, -0.66) * out, M.Metal, dark, { Shape = Enum.PartType.Cylinder })
-	fitting(parent, Vector3.new(0.09, 1.2, 0.09), cf * CFrame.new(0, 0, -1.13), M.Metal, dark)
-	fitting(parent, Vector3.new(1.2, 0.09, 0.09), cf * CFrame.new(0, 0, -1.13), M.Metal, dark)
-	for _, a in { 45, -45 } do -- diagonal cage bars back to the ring
-		fitting(parent, Vector3.new(0.07, 0.07, 0.62), cf * CFrame.Angles(0, 0, math.rad(a)) * CFrame.new(0, 0.5, -0.9) * CFrame.Angles(math.rad(-40), 0, 0), M.Metal, dark)
-		fitting(parent, Vector3.new(0.07, 0.07, 0.62), cf * CFrame.Angles(0, 0, math.rad(a + 180)) * CFrame.new(0, 0.5, -0.9) * CFrame.Angles(math.rad(-40), 0, 0), M.Metal, dark)
-	end
-	light(lens, { Range = 20, Brightness = 1, Color = color })
-	if flicker then
-		CollectionService:AddTag(lens, "Flicker")
-	end
 end
 
 -- A little theatre stage light: a can on a yoke with a glowing lens and
@@ -1781,7 +1762,8 @@ local function stageLight(parent, top, target, color, range, brightness)
 	end
 	fitting(parent, Vector3.new(0.85, 0.7, 0.7), cf * CFrame.new(0, 0, 0.12) * along, M.Metal, rgb(40, 40, 46), { Shape = Enum.PartType.Cylinder }) -- can
 	fitting(parent, Vector3.new(0.12, 0.82, 0.82), cf * CFrame.new(0, 0, -0.34) * along, M.Metal, dark, { Shape = Enum.PartType.Cylinder }) -- rim
-	fitting(parent, Vector3.new(0.04, 0.56, 0.56), cf * CFrame.new(0, 0, -0.41) * along, M.Neon, color, { Shape = Enum.PartType.Cylinder }) -- lens
+	local lens = fitting(parent, Vector3.new(0.04, 0.56, 0.56), cf * CFrame.new(0, 0, -0.41) * along, M.SmoothPlastic, color, { Shape = Enum.PartType.Cylinder })
+	glowFace(lens, Enum.NormalId.Right, color, true)
 	for _, s in { -1, 1 } do -- barn doors, swung open
 		fitting(parent, Vector3.new(0.72, 0.03, 0.34), cf * CFrame.new(0, s * 0.42, -0.52) * CFrame.Angles(math.rad(s * 38), 0, 0), M.Metal, dark)
 	end
@@ -1795,25 +1777,6 @@ local function stageLight(parent, top, target, color, range, brightness)
 		Color = ColorSequence.new(color),
 		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.55), NumberSequenceKeypoint.new(0.7, 0.85), NumberSequenceKeypoint.new(1, 1) }),
 	})
-end
-
--- Steel I-beam column standing against a wall: cf at its foot on the wall
--- face, facing into the room. Anchor-bolted base plate, a hazard-striped
--- foot and stiffener plates up the web.
-local function ibeam(parent, cf, height)
-	local steel, web = rgb(60, 64, 72), rgb(42, 45, 52)
-	block(parent, Vector3.new(0.34, height, 1.1), cf * CFrame.new(0, height / 2, -0.55), M.Metal, web)
-	block(parent, Vector3.new(1.6, height, 0.26), cf * CFrame.new(0, height / 2, -1.23), M.Metal, steel)
-	block(parent, Vector3.new(1.6, height, 0.2), cf * CFrame.new(0, height / 2, -0.1), M.Metal, steel)
-	block(parent, Vector3.new(2.4, 0.3, 2.1), cf * CFrame.new(0, 0.15, -0.9), M.Metal, web)
-	for _, x in { -0.85, 0.85 } do
-		block(parent, Vector3.new(0.34, 0.24, 0.24), cf * CFrame.new(x, 0.42, -1.65) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, rgb(130, 132, 138), { Shape = Enum.PartType.Cylinder })
-	end
-	local collar = block(parent, Vector3.new(1.64, 2.4, 0.04), cf * CFrame.new(0, 1.6, -1.38), M.SmoothPlastic, C.Hazard, { CanCollide = false })
-	hazardStripes(collar, Enum.NormalId.Front)
-	for y = 5, height - 3, 6 do
-		block(parent, Vector3.new(1.2, 0.2, 1), cf * CFrame.new(0, y, -0.66), M.Metal, steel)
-	end
 end
 
 -- A drinks or snacks machine standing at cf (facing -Z, back on the wall):
@@ -2026,67 +1989,53 @@ function MapBuilder.BuildLobby()
 	local W, D, H = 120, 90, 28
 	local hx, hz = W / 2, D / 2
 
-	-- Mountain ledge + backdrop (terrain when available)
-	local hasTerrain = terrain() ~= nil
-	local groundY = hasTerrain and Y - 4 or Y - 0.2
-	if hasTerrain then
-		block(lobby, Vector3.new(W + 2, 4.4, D + 2), CFrame.new(0, Y - 2.35, 0), M.Concrete, rgb(96, 96, 100)) -- top sits 0.15 below the floor (no z-fighting)
-		block(lobby, Vector3.new(W + 3, 0.6, D + 3), CFrame.new(0, Y - 4.1, 0), M.Concrete, rgb(80, 80, 84))
-	else
-		block(lobby, Vector3.new(420, 4, 420), CFrame.new(0, Y - 2.2, 0), M.Snow, C.Snow)
-	end
-	for _ = 1, 60 do
-		-- keep every tree (and its branches, up to 10x its scale wide) clear of the building
-		local x, z, s
-		repeat
-			local a = rng:NextNumber() * math.pi * 2
-			local r = rng:NextNumber(80, 190)
-			x, z, s = math.cos(a) * r, math.sin(a) * r, rng:NextNumber(1.3, 2.2)
-			local reach = 5 * s + 3
-		until math.abs(x) > hx + reach or math.abs(z) > hz + reach
-		tree(lobby, Vector3.new(x, groundY, z), s, true)
-	end
-	for i = 1, (hasTerrain and 0 or 10) do
-		local a = (i / 10) * math.pi * 2
-		local r = rng:NextNumber(260, 320)
-		local h = rng:NextNumber(90, 170)
-		local cf = CFrame.new(math.cos(a) * r, Y + h / 2 - 30, math.sin(a) * r) * CFrame.Angles(0, -a + math.rad(45), 0)
-		block(lobby, Vector3.new(150, h, 110), cf, M.Slate, vary(rgb(70, 74, 84), 0.2), { CanCollide = false })
-		block(lobby, Vector3.new(80, h * 0.25, 60), cf * CFrame.new(0, h * 0.42, 0), M.Snow, C.Snow, { CanCollide = false })
-	end
+	-- FACILITY 7: the lobby is one sealed hall in a single house style: dark
+	-- blued steel framing, warm cast-concrete panels, polished slab floor.
+	-- No windows and no stock material textures; every surface is
+	-- SmoothPlastic and the detail is modelled (raised panels, stepped
+	-- pilasters, bolted beams, chamfered slabs).
+	local F7 = {
+		SteelDark = rgb(34, 36, 42), Steel = rgb(54, 58, 66), SteelLight = rgb(84, 89, 98), Bolt = rgb(118, 122, 130),
+		Concrete = rgb(122, 118, 110), ConcreteLight = rgb(132, 128, 119), ConcreteDark = rgb(78, 77, 74), Seam = rgb(22, 23, 26),
+		Slab = rgb(82, 82, 85), SlabB = rgb(76, 76, 79), Runner = rgb(40, 42, 48),
+		Warm = rgb(255, 214, 160), Amber = rgb(255, 176, 70),
+	}
+	local OUT = CFrame.Angles(0, math.rad(90), 0) -- a cylinder pointing out of a wall
 
-	-- Floor: dark concrete, hazard border, steel walkway
-	-- Tiled floor (same style as the facility): dark grout under 4-stud concrete
-	-- tiles in two alternating greys, with per-tile shade variation and scuffs
-	block(lobby, Vector3.new(W, 0.88, D), CFrame.new(0, Y - 0.56, 0), M.SmoothPlastic, rgb(18, 19, 22))
+	-- the foundation the floor sits on
+	block(lobby, Vector3.new(W + 2, 4.4, D + 2), CFrame.new(0, Y - 2.35, 0), M.SmoothPlastic, rgb(40, 41, 44))
+
+	-- FLOOR: polished concrete slabs (8 x 7.5) with chamfered edges over a
+	-- dark grout bed, two barely different tones, and a dark runner down the
+	-- middle from door to emblem with steel inlay strips in its seams
+	block(lobby, Vector3.new(W, 0.88, D), CFrame.new(0, Y - 0.56, 0), M.SmoothPlastic, F7.Seam)
 	do
-		local nx, nz = math.floor(W / 4 + 0.5), math.floor(D / 4 + 0.5)
+		local nx, nz = 15, 12
 		local sx, sz = W / nx, D / nz
 		for i = 0, nx - 1 do
 			for j = 0, nz - 1 do
 				local x, z = -hx + (i + 0.5) * sx, -hz + (j + 0.5) * sz
-				local base = (i + j) % 2 == 0 and rgb(84, 87, 93) or rgb(58, 61, 67)
-				local tile = block(lobby, Vector3.new(sx - 0.22, 0.12, sz - 0.22), CFrame.new(x, Y - 0.06, z), M.Concrete, vary(base, 0.1))
-				if rng:NextNumber() < 0.05 then
-					block(tile, Vector3.new(rng:NextNumber(0.8, 1.8), 0.02, rng:NextNumber(0.2, 0.4)), CFrame.new(x + rng:NextNumber(-1, 1), Y + 0.01, z + rng:NextNumber(-1, 1)) * CFrame.Angles(0, rng:NextNumber(0, 3), 0), M.SmoothPlastic, rgb(48, 50, 54), { Transparency = 0.35, CanCollide = false })
-				end
+				local runner = i == 7
+				local tone = runner and F7.Runner or ((i + j) % 2 == 0 and F7.Slab or F7.SlabB)
+				tone = vary(tone, 0.035)
+				-- the body sits lower than the face plate, so its top edge reads as
+				-- a chamfer round the plate
+				block(lobby, Vector3.new(sx - 0.14, 0.1, sz - 0.14), CFrame.new(x, Y - 0.11, z), M.SmoothPlastic, tone:Lerp(Color3.new(), 0.2))
+				block(lobby, Vector3.new(sx - 0.42, 0.1, sz - 0.42), CFrame.new(x, Y - 0.05, z), M.SmoothPlastic, tone)
 			end
 		end
+		for _, x in { -4, 4 } do -- steel inlay in the runner's seams
+			block(lobby, Vector3.new(0.14, 0.06, D - 0.2), CFrame.new(x, Y - 0.1, 0), M.SmoothPlastic, F7.SteelLight)
+		end
 	end
-	for _, d in { { 0, -hz + 2, W - 2, 1.2 }, { 0, hz - 2, W - 2, 1.2 }, { -hx + 2, 0, 1.2, D - 2 }, { hx - 2, 0, 1.2, D - 2 } } do
-		block(lobby, Vector3.new(d[3], 0.06, d[4]), CFrame.new(d[1], Y + 0.03, d[2]), M.SmoothPlastic, C.Hazard)
-	end
-	for x = -hx + 6, hx - 6, 4 do
-		block(lobby, Vector3.new(0.9, 0.07, 1.25), CFrame.new(x, Y + 0.05, -hz + 2) * CFrame.Angles(0, math.rad(45), 0), M.SmoothPlastic, rgb(20, 20, 20))
-		block(lobby, Vector3.new(0.9, 0.07, 1.25), CFrame.new(x, Y + 0.05, hz - 2) * CFrame.Angles(0, math.rad(45), 0), M.SmoothPlastic, rgb(20, 20, 20))
-	end
-	block(lobby, Vector3.new(10, 0.1, D - 10), CFrame.new(0, Y + 0.05, 0), M.DiamondPlate, rgb(80, 84, 92))
 
-	-- X-Men logo in the floor: yellow ring broken by the X, worn paint
+	-- X-Men emblem inlaid in the floor: a steel rim, a black field, the
+	-- yellow ring broken by the X
 	local logoY = Y + 0.2
 	local LR, ringW = 10, 1.7
-	local yellow = rgb(232, 196, 58)
-	block(lobby, Vector3.new(0.08, LR * 2 + 4, LR * 2 + 4), CFrame.new(0, logoY - 0.06, 0) * CFrame.Angles(0, 0, math.rad(90)), M.Slate, rgb(20, 20, 24), { Shape = Enum.PartType.Cylinder })
+	local yellow = rgb(226, 188, 60)
+	block(lobby, Vector3.new(0.1, LR * 2 + 4.8, LR * 2 + 4.8), CFrame.new(0, Y + 0.05, 0) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, F7.SteelLight, { Shape = Enum.PartType.Cylinder })
+	block(lobby, Vector3.new(0.08, LR * 2 + 4, LR * 2 + 4), CFrame.new(0, logoY - 0.06, 0) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, rgb(20, 20, 24), { Shape = Enum.PartType.Cylinder })
 	local armW = LR * 0.36
 	local function inGap(deg)
 		for _, g in { 45, 225 } do
@@ -2104,31 +2053,32 @@ function MapBuilder.BuildLobby()
 		if not inGap(deg) then
 			local a0 = math.rad(deg)
 			local len = 2 * math.pi * rMid / segs * 1.04
-			block(lobby, Vector3.new(len, 0.06, ringW), CFrame.new(math.cos(a0) * rMid, logoY + (i % 2) * 0.008, math.sin(a0) * rMid) * CFrame.Angles(0, -a0 + math.pi / 2, 0), M.Concrete, yellow)
+			block(lobby, Vector3.new(len, 0.06, ringW), CFrame.new(math.cos(a0) * rMid, logoY + (i % 2) * 0.008, math.sin(a0) * rMid) * CFrame.Angles(0, -a0 + math.pi / 2, 0), M.SmoothPlastic, yellow)
 		end
 	end
 	-- the X: a thick stroke punching out through the ring gaps, and a thinner cross stroke
-	block(lobby, Vector3.new(armW, 0.07, LR * 2.12), CFrame.new(0, logoY + 0.03, 0) * CFrame.Angles(0, math.rad(45), 0), M.Concrete, yellow)
+	block(lobby, Vector3.new(armW, 0.07, LR * 2.12), CFrame.new(0, logoY + 0.03, 0) * CFrame.Angles(0, math.rad(45), 0), M.SmoothPlastic, yellow)
 	for _, sgn in { -1, 1 } do
-		block(lobby, Vector3.new(armW * 0.8, 0.07, LR * 0.62), CFrame.new(sgn * LR * 0.25, logoY + 0.065, -sgn * LR * 0.25) * CFrame.Angles(0, math.rad(-45), 0), M.Concrete, yellow)
+		block(lobby, Vector3.new(armW * 0.8, 0.07, LR * 0.62), CFrame.new(sgn * LR * 0.25, logoY + 0.065, -sgn * LR * 0.25) * CFrame.Angles(0, math.rad(-45), 0), M.SmoothPlastic, yellow)
 	end
 	-- black cut lines separating the X from the ring
 	for _, g in { 45, 225 } do
 		for _, off in { -1, 1 } do
 			local a0 = math.rad(g + off * 13)
-			block(lobby, Vector3.new(0.35, 0.09, ringW + 0.3), CFrame.new(math.cos(a0) * rMid, logoY + 0.06, math.sin(a0) * rMid) * CFrame.Angles(0, math.pi / 2 - a0, 0), M.Slate, rgb(20, 20, 24))
+			block(lobby, Vector3.new(0.35, 0.09, ringW + 0.3), CFrame.new(math.cos(a0) * rMid, logoY + 0.06, math.sin(a0) * rMid) * CFrame.Angles(0, math.pi / 2 - a0, 0), M.SmoothPlastic, rgb(20, 20, 24))
 		end
 	end
-	-- worn / scuffed paint specks
-	for _ = 1, 110 do
-		local r = math.sqrt(rng:NextNumber()) * LR
-		local t = rng:NextNumber() * math.pi * 2
-		block(lobby, Vector3.new(rng:NextNumber(0.12, 0.5), 0.1, rng:NextNumber(0.12, 0.4)),
-			CFrame.new(math.cos(t) * r, logoY + 0.1 + rng:NextNumber() * 0.05, math.sin(t) * r) * CFrame.Angles(0, rng:NextNumber() * 6, 0), M.Slate, rgb(24, 22, 20), { CanCollide = false, CanQuery = false })
+	-- a projector on a drop rod lights the emblem
+	do
+		local top, at = Vector3.new(0, Y + H, 8), Vector3.new(0, Y + H - 3.2, 8)
+		fitting(lobby, Vector3.new(0.16, 2.6, 0.16), CFrame.new(top - Vector3.new(0, 1.3, 0)), M.SmoothPlastic, F7.SteelDark)
+		fitting(lobby, Vector3.new(1.3, 1.1, 1.1), CFrame.new(at) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, F7.Steel, { Shape = Enum.PartType.Cylinder })
+		fitting(lobby, Vector3.new(0.14, 1.28, 1.28), CFrame.new(at - Vector3.new(0, 0.62, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, F7.SteelDark, { Shape = Enum.PartType.Cylinder })
+		local lens = fitting(lobby, Vector3.new(0.04, 0.9, 0.9), CFrame.new(at - Vector3.new(0, 0.7, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, F7.Warm, { Shape = Enum.PartType.Cylinder })
+		glowFace(lens, Enum.NormalId.Left, F7.Warm, true)
+		local emit = fitting(lobby, Vector3.new(0.3, 0.2, 0.3), CFrame.new(at - Vector3.new(0, 0.95, 0)), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false })
+		make("SpotLight", emit, { Face = Enum.NormalId.Bottom, Range = 36, Angle = 45, Brightness = 2.5, Color = rgb(255, 225, 160), Shadows = true })
 	end
-	-- warm spotlight on the emblem
-	local emblemLamp = block(lobby, Vector3.new(1.4, 0.6, 1.4), CFrame.new(0, Y + H - 2.2, 8), M.Metal, C.DarkMetal)
-	make("SpotLight", emblemLamp, { Face = Enum.NormalId.Bottom, Range = 36, Angle = 45, Brightness = 2.5, Color = rgb(255, 225, 160), Shadows = true })
 	make("SpawnLocation", lobby, {
 		Size = Vector3.new(12, 0.2, 12),
 		CFrame = CFrame.new(0, Y + 0.2, 0),
@@ -2138,186 +2088,272 @@ function MapBuilder.BuildLobby()
 		CanCollide = false,
 	})
 
-	-- Walls: painted blockwork (the window glass is kept clear), windows in
-	-- slim steel frames with nothing across the glass
-	local wallStyle = { Material = M.Brick, Color = rgb(118, 120, 127), Vary = 0.05, Breakable = false, GlassTransparency = 0.86, GlassReflectance = 0.04 }
-	wall(lobby, Vector3.new(-hx, 0, -hz + 0.5), Vector3.new(hx, 0, -hz + 0.5), Y, H, 1, wallStyle)
-	wall(lobby, Vector3.new(-hx + 0.5, 0, -hz), Vector3.new(-hx + 0.5, 0, hz), Y, H, 1, wallStyle)
-	wall(lobby, Vector3.new(hx - 0.5, 0, -hz), Vector3.new(hx - 0.5, 0, hz), Y, H, 1, wallStyle)
-	local windows = {}
-	for x = -45, 45, 18 do
-		table.insert(windows, { At = x + hx, Width = 12, Bottom = 5, Top = 20, Glass = true })
+	-- WALLS: a sealed shell (dark, it only shows in the reveals), dressed on
+	-- every wall with the same stack, floor to roof:
+	--   0 - 1.1    steel plinth, stepped cap, a recessed guide lamp per bay
+	--   1.1 - 6    dark concrete wainscot, one raised panel per bay
+	--   6 - 6.5    bolted steel chair rail
+	--   6.5 - 20   warm concrete, two raised panels per bay
+	--   20 - 22.4  cornice: a bolted I-beam ring with a stiffener per bay
+	--   22.4 - H   ribbed steel cladding up to the roof deck
+	-- Stepped steel pilasters split the walls into ~6-stud bays; every
+	-- other one carries an up/down sconce. Each wall runs from `a` along
+	-- t = n x up (n points into the room), s along it. Gaps (in s):
+	--   solid: nothing below the cornice (rules board, chimney breast)
+	--   posts: no pilaster or sconce (things standing against the wall)
+	--   rail:  the chair rail and pilasters stop (the claw gouges)
+	--   beam:  the cornice stops (board, gouges, gallery marquee, chimney)
+	for _, seg in {
+		{ Vector3.new(0, 0, -hz + 0.5), Vector3.new(W + 2, H, 1) },
+		{ Vector3.new(0, 0, hz - 0.5), Vector3.new(W + 2, H, 1) },
+		{ Vector3.new(-hx + 0.5, 0, 0), Vector3.new(1, H, D) },
+		{ Vector3.new(hx - 0.5, 0, 0), Vector3.new(1, H, D) },
+	} do
+		block(lobby, seg[2], CFrame.new(seg[1] + Vector3.new(0, Y + H / 2, 0)), M.SmoothPlastic, F7.Seam)
 	end
-	wall(lobby, Vector3.new(-hx, 0, hz - 0.5), Vector3.new(hx, 0, hz - 0.5), Y, H, 1, wallStyle, windows)
-	local southGaps = {}
-	for _, w in windows do
-		local x = w.At - hx
-		block(lobby, Vector3.new(13, 0.4, 1.9), CFrame.new(x, Y + 4.85, hz - 0.95), M.Metal, C.DarkMetal) -- sill ledge
-		block(lobby, Vector3.new(12.6, 0.45, 1.3), CFrame.new(x, Y + 20, hz - 0.5), M.Metal, C.DarkMetal) -- head
-		for _, s in { -1, 1 } do
-			block(lobby, Vector3.new(0.35, 15, 1.3), CFrame.new(x + s * 6.12, Y + 12.5, hz - 0.5), M.Metal, C.DarkMetal) -- jambs
-		end
-		table.insert(southGaps, { x + hx - 1 - 6.5, x + hx - 1 + 6.5 })
-	end
-
-	-- Wall dressing, floor to roof: a rubber kick plate, diamond-plate
-	-- wainscot under a steel cap rail, the blockwork with a concrete band, a
-	-- bolted steel ring beam, then corrugated cladding up to the roof. Each
-	-- wall runs from `a` along t = n x up (n points into the room); `gaps` are
-	-- spans the band and ring beam leave out (the windows, the notice board,
-	-- the claw gouges).
+	local CORNER = 2.6 -- the corner piers take this much of each wall's ends
 	local walls = {
-		South = { a = Vector3.new(-hx + 1, 0, hz - 1), n = Vector3.new(0, 0, -1), len = W - 2, band = southGaps, beam = {} },
-		North = { a = Vector3.new(hx - 1, 0, -hz + 1), n = Vector3.new(0, 0, 1), len = W - 2, band = { { 7.5, 20.5 } }, beam = { { 7.5, 20.5 }, { 26.3, 103.7 } } },
-		West = { a = Vector3.new(-hx + 1, 0, -hz + 1), n = Vector3.new(1, 0, 0), len = D - 2, band = {}, beam = {} },
-		East = { a = Vector3.new(hx - 1, 0, hz - 1), n = Vector3.new(-1, 0, 0), len = D - 2, band = {}, beam = { { 7.6, 80.4 } } }, -- the gallery marquee takes the ring beam's place
+		South = { a = Vector3.new(-hx + 1, 0, hz - 1), n = Vector3.new(0, 0, -1), len = W - 2,
+			solid = {}, posts = { { 109.6, 115.6 } }, rail = {}, beam = {} },
+		North = { a = Vector3.new(hx - 1, 0, -hz + 1), n = Vector3.new(0, 0, 1), len = W - 2,
+			solid = { { 25.9, 104.1 } }, posts = {}, rail = { { 8, 20 } }, beam = { { 7.5, 20.5 }, { 25.9, 104.1 } } },
+		West = { a = Vector3.new(-hx + 1, 0, -hz + 1), n = Vector3.new(1, 0, 0), len = D - 2,
+			solid = { { 45.3, 58.7 } }, posts = { { 30.4, 41.6 }, { 61.4, 72.6 }, { 72.6, 86 } }, rail = {}, beam = { { 45.3, 58.7 } } },
+		East = { a = Vector3.new(hx - 1, 0, hz - 1), n = Vector3.new(-1, 0, 0), len = D - 2,
+			solid = {}, posts = { { 3, 8.6 }, { 7, 81 } }, rail = {}, beam = { { 7.6, 80.4 } } },
 	}
 	local function onWall(w, s, y, out)
 		local p = w.a + w.t * s + w.n * out + Vector3.new(0, Y + y, 0)
 		return CFrame.lookAt(p, p + w.n)
 	end
-	local function spans(w, gaps)
-		local list, s = {}, 1.3
-		table.sort(gaps, function(p, q)
+	-- the stretches of [from, to] left between `gaps`
+	local function spans(gaps, from, to)
+		local list, s = {}, from
+		local sorted = table.clone(gaps)
+		table.sort(sorted, function(p, q)
 			return p[1] < q[1]
 		end)
-		for _, g in gaps do
+		for _, g in sorted do
 			if g[1] > s then
-				table.insert(list, { s, g[1] })
+				table.insert(list, { s, math.min(g[1], to) })
 			end
 			s = math.max(s, g[2])
 		end
-		if w.len - 1.3 > s then
-			table.insert(list, { s, w.len - 1.3 })
+		if to > s then
+			table.insert(list, { s, to })
 		end
 		return list
 	end
-	local function run(w, gaps, y, h, depth, out, material, color, inset)
+	local function within(gaps, s, pad)
+		for _, g in gaps do
+			if s > g[1] - pad and s < g[2] + pad then
+				return true
+			end
+		end
+		return false
+	end
+	-- a strip along the wall at height y (centre), h tall, `depth` out from the
+	-- wall face, over every stretch between the gaps
+	local function run(w, gaps, y, h, depth, color, inset)
 		inset = inset or 0
-		for _, sp in spans(w, gaps) do
-			if sp[2] - sp[1] > 0.2 then
-				block(lobby, Vector3.new(sp[2] - sp[1] - 2 * inset, h, depth), onWall(w, (sp[1] + sp[2]) / 2, y, out), material, color)
+		for _, sp in spans(gaps, CORNER, w.len - CORNER) do
+			local len = sp[2] - sp[1] - 2 * inset
+			if len > 0.2 then
+				block(lobby, Vector3.new(len, h, depth), onWall(w, (sp[1] + sp[2]) / 2, y, depth / 2), M.SmoothPlastic, color)
 			end
 		end
 	end
+	-- a raised panel: a back plate and, stepped out on it, a face plate
+	local function raised(w, s0, s1, y0, y1, color, face, depth)
+		local wd, ht = s1 - s0, y1 - y0
+		if wd < 0.6 then
+			return
+		end
+		local s, y = (s0 + s1) / 2, (y0 + y1) / 2
+		block(lobby, Vector3.new(wd, ht, depth), onWall(w, s, y, depth / 2), M.SmoothPlastic, color)
+		local inset = math.min(0.22, wd * 0.2)
+		block(lobby, Vector3.new(wd - 2 * inset, ht - 2 * inset, depth + 0.05), onWall(w, s, y, (depth + 0.05) / 2), M.SmoothPlastic, vary(face, 0.03))
+	end
+	local function bolt(cf)
+		block(lobby, Vector3.new(0.08, 0.2, 0.2), cf * OUT, M.SmoothPlastic, F7.Bolt, { Shape = Enum.PartType.Cylinder })
+	end
+	local function sconce(w, s)
+		local base = onWall(w, s, 9.6, 0.58) -- on the pilaster's face
+		fitting(lobby, Vector3.new(0.9, 0.5, 0.16), base * CFrame.new(0, 0, -0.08), M.SmoothPlastic, F7.SteelDark) -- wall plate
+		fitting(lobby, Vector3.new(0.3, 0.3, 0.5), base * CFrame.new(0, 0, -0.4), M.SmoothPlastic, F7.Steel) -- arm
+		local body = base * CFrame.new(0, 0, -0.95)
+		fitting(lobby, Vector3.new(1.3, 2.8, 0.62), body, M.SmoothPlastic, F7.Steel) -- housing
+		fitting(lobby, Vector3.new(1.42, 0.16, 0.72), body * CFrame.new(0, 1.4, 0), M.SmoothPlastic, F7.SteelDark) -- top bezel
+		fitting(lobby, Vector3.new(1.42, 0.16, 0.72), body * CFrame.new(0, -1.4, 0), M.SmoothPlastic, F7.SteelDark) -- bottom bezel
+		local slot = fitting(lobby, Vector3.new(0.4, 2.1, 0.04), body * CFrame.new(0, 0, -0.32), M.SmoothPlastic, F7.Warm) -- frosted front slot
+		glowFace(slot, Enum.NormalId.Front, F7.Warm)
+		for _, y in { 1.49, -1.49 } do -- the lenses in the bezels
+			local lens = fitting(lobby, Vector3.new(1.1, 0.02, 0.5), body * CFrame.new(0, y, 0), M.SmoothPlastic, F7.Warm)
+			glowFace(lens, y > 0 and Enum.NormalId.Top or Enum.NormalId.Bottom, F7.Warm)
+		end
+		for _, dir in { 1, -1 } do -- wall washes up and down, off the fitting itself
+			local emit = fitting(lobby, Vector3.new(0.3, 0.1, 0.3), body * CFrame.new(0, dir * 1.62, 0), M.SmoothPlastic, Color3.new(), { Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false })
+			make("SpotLight", emit, { Face = dir > 0 and Enum.NormalId.Top or Enum.NormalId.Bottom, Range = dir > 0 and 13 or 17, Angle = 70, Brightness = dir > 0 and 1.1 or 1.7, Color = F7.Warm })
+		end
+	end
+
 	for _, w in walls do
 		w.t = w.n:Cross(Vector3.yAxis)
-		run(w, {}, 0.3, 0.6, 0.34, 0.17, M.Rubber, rgb(24, 24, 26))
-		for s = 1.3, w.len - 1.8, 4 do
-			local width = math.min(4, w.len - 1.3 - s) - 0.12
-			block(lobby, Vector3.new(width, 4, 0.28), onWall(w, s + 0.06 + width / 2, 2.6, 0.14), M.DiamondPlate, vary(rgb(72, 75, 82), 0.06))
+		local from, to = CORNER, w.len - CORNER
+		local bays = math.max(1, math.floor((to - from) / 5.9 + 0.5))
+		local bay = (to - from) / bays
+		-- bay edges, then each stretch between the solid gaps cut at them
+		local edges = {}
+		for k = 0, bays do
+			table.insert(edges, from + k * bay)
 		end
-		run(w, {}, 4.75, 0.3, 0.4, 0.2, M.Metal, rgb(96, 100, 108))
-		run(w, w.band, 12.6, 0.8, 0.16, 0.08, M.Concrete, rgb(140, 142, 148))
-		run(w, w.beam, 21.2, 1.5, 0.22, 0.62, M.Metal, rgb(56, 60, 68), 0.02) -- web: inside the flanges, not flush with them
-		run(w, w.beam, 20.5, 0.2, 0.75, 0.375, M.Metal, rgb(68, 72, 80))
-		run(w, w.beam, 21.9, 0.2, 0.75, 0.375, M.Metal, rgb(68, 72, 80))
-		for _, sp in spans(w, w.beam) do
-			for s = sp[1] + 1, sp[2] - 0.5, 4 do
-				block(lobby, Vector3.new(0.14, 0.26, 0.26), onWall(w, s, 21.2, 0.8) * CFrame.Angles(0, math.rad(90), 0), M.Metal, rgb(140, 142, 148), { Shape = Enum.PartType.Cylinder })
+		local function eachBay(fn)
+			for _, sp in spans(w.solid, from, to) do
+				for k = 1, #edges - 1 do
+					local s0, s1 = math.max(edges[k], sp[1]), math.min(edges[k + 1], sp[2])
+					if s1 - s0 > 0.6 then
+						fn(s0 + (s0 > sp[1] + 0.01 and 0.06 or 0), s1 - (s1 < sp[2] - 0.01 and 0.06 or 0), k)
+					end
+				end
 			end
 		end
-		run(w, {}, 25, 6, 0.1, 0.05, M.Metal, rgb(58, 62, 70))
-		for s = 1.9, w.len - 1.9, 1.25 do
-			local cf = onWall(w, s, 25, 0.23)
+		-- plinth with a stepped cap
+		run(w, w.solid, 0.5, 1, 0.4, F7.SteelDark)
+		run(w, w.solid, 1.06, 0.12, 0.3, F7.Steel)
+		-- wainscot and upper panels, a guide lamp in each bay's plinth
+		eachBay(function(s0, s1)
+			raised(w, s0, s1, 1.12, 5.98, F7.ConcreteDark, F7.ConcreteDark:Lerp(Color3.new(1, 1, 1), 0.06), 0.1)
+			raised(w, s0, s1, 6.54, 13.2, F7.Concrete, F7.ConcreteLight, 0.1)
+			raised(w, s0, s1, 13.3, 19.98, F7.Concrete, F7.ConcreteLight, 0.1)
+			local mid = (s0 + s1) / 2
+			if s1 - s0 > 3 and not within(w.posts, mid, 0.6) then
+				fitting(lobby, Vector3.new(0.9, 0.3, 0.06), onWall(w, mid, 0.55, 0.43), M.SmoothPlastic, F7.SteelDark)
+				local lamp = fitting(lobby, Vector3.new(0.7, 0.14, 0.04), onWall(w, mid, 0.55, 0.47), M.SmoothPlastic, F7.Amber)
+				glowFace(lamp, Enum.NormalId.Front, F7.Amber)
+			end
+		end)
+		-- chair rail: a steel bar with a lighter top lip, bolted at every bay
+		local railGaps = table.clone(w.solid)
+		for _, g in w.rail do
+			table.insert(railGaps, g)
+		end
+		run(w, railGaps, 6.24, 0.42, 0.3, F7.Steel)
+		run(w, railGaps, 6.49, 0.08, 0.24, F7.SteelLight)
+		for _, sp in spans(railGaps, from, to) do
+			for s = sp[1] + 0.6, sp[2] - 0.4, bay / 2 do
+				bolt(onWall(w, s, 6.24, 0.3))
+			end
+		end
+		-- pilasters on the bay edges (not the ends: the corner piers are there)
+		local lit = 0
+		for k = 2, #edges - 1 do
+			local s = edges[k]
+			if not within(w.solid, s, 0.9) and not within(w.posts, s, 0.9) and not within(w.rail, s, 0.9) then
+				block(lobby, Vector3.new(1.1, 18.9, 0.5), onWall(w, s, 1.12 + 18.9 / 2, 0.25), M.SmoothPlastic, F7.Steel)
+				block(lobby, Vector3.new(0.62, 17.2, 0.58), onWall(w, s, 2.2 + 17.2 / 2, 0.29), M.SmoothPlastic, F7.SteelLight:Lerp(F7.Steel, 0.5))
+				block(lobby, Vector3.new(1.4, 2.22, 0.62), onWall(w, s, 1.11, 0.31), M.SmoothPlastic, F7.SteelDark) -- base, down to the floor
+				block(lobby, Vector3.new(1.5, 0.7, 0.7), onWall(w, s, 19.65, 0.35), M.SmoothPlastic, F7.SteelDark) -- capital
+				for _, x in { -0.42, 0.42 } do
+					bolt(onWall(w, s + x, 1.67, 0.62))
+				end
+				lit += 1
+				if lit % 2 == 1 then
+					sconce(w, s)
+				end
+			end
+		end
+		-- cornice: a bolted I-beam, a stiffener plate over every pilaster
+		run(w, w.beam, 20.1, 0.2, 0.8, F7.SteelDark, 0.02)
+		run(w, w.beam, 22.3, 0.2, 0.8, F7.SteelDark, 0.02)
+		for _, sp in spans(w.beam, from, to) do
+			if sp[2] - sp[1] > 0.3 then
+				block(lobby, Vector3.new(sp[2] - sp[1], 2, 0.2), onWall(w, (sp[1] + sp[2]) / 2, 21.2, 0.5), M.SmoothPlastic, F7.Steel)
+				for s = sp[1] + 1, sp[2] - 0.5, 2 do
+					bolt(onWall(w, s, 21.2, 0.6))
+				end
+			end
+		end
+		for k = 1, #edges do
+			if not within(w.beam, edges[k], 0.2) then
+				block(lobby, Vector3.new(0.12, 2, 0.78), onWall(w, edges[k], 21.2, 0.39), M.SmoothPlastic, F7.SteelDark)
+			end
+		end
+		-- ribbed cladding to the roof (the roof girders land between ribs)
+		run(w, {}, 25.2, 5.6, 0.1, F7.SteelDark)
+		for s = from + 0.6, to - 0.6, 1.25 do
+			local cf = onWall(w, s, 25.2, 0.23)
 			local onBeam = false
-			for _, z in { -30, -15, 0, 15, 30 } do -- the roof I-beams land here instead
-				if math.abs(w.n.Z) < 0.5 and math.abs(cf.Position.Z - z) < 0.95 then
+			for _, z in { -30, -15, 0, 15, 30 } do
+				if math.abs(w.n.Z) < 0.5 and math.abs(cf.Position.Z - z) < 1.3 then
 					onBeam = true
 				end
 			end
-			local inCorner = math.abs(cf.Position.X) > hx - 3.9 and math.abs(cf.Position.Z) > hz - 3.9 -- behind a corner column
-			if not onBeam and not inCorner then
-				block(lobby, Vector3.new(0.5, 6, 0.26), cf, M.Metal, rgb(74, 78, 88))
+			if not onBeam then
+				block(lobby, Vector3.new(0.5, 5.6, 0.26), cf, M.SmoothPlastic, F7.Steel)
 			end
 		end
 	end
-	for _, sx in { -1, 1 } do -- corner columns
+
+	-- corner piers: a dark steel core with guard angles on the room corner,
+	-- a base and a capital matching the pilasters
+	for _, sx in { -1, 1 } do
 		for _, sz in { -1, 1 } do
-			block(lobby, Vector3.new(2.6, H, 2.6), CFrame.new(sx * (hx - 2.3), Y + H / 2, sz * (hz - 2.3)), M.Metal, rgb(50, 53, 60))
+			local c = Vector3.new(sx * (hx - 1 - CORNER / 2), Y, sz * (hz - 1 - CORNER / 2))
+			block(lobby, Vector3.new(CORNER, H, CORNER), CFrame.new(c + Vector3.new(0, H / 2, 0)), M.SmoothPlastic, F7.Steel)
+			local inner = Vector3.new(-sx * CORNER / 2, 0, -sz * CORNER / 2) -- the corner facing the room
+			block(lobby, Vector3.new(0.12, 17.6, 0.9), CFrame.new(c + inner + Vector3.new(-sx * 0.06, 2.2 + 8.8, sz * 0.39)), M.SmoothPlastic, F7.SteelLight:Lerp(F7.Steel, 0.5))
+			block(lobby, Vector3.new(0.9, 17.6, 0.12), CFrame.new(c + inner + Vector3.new(sx * 0.39, 2.2 + 8.8, -sz * 0.06)), M.SmoothPlastic, F7.SteelLight:Lerp(F7.Steel, 0.5))
+			block(lobby, Vector3.new(CORNER + 0.3, 2.22, CORNER + 0.3), CFrame.new(c + Vector3.new(-sx * 0.15, 1.11, -sz * 0.15)), M.SmoothPlastic, F7.SteelDark)
+			block(lobby, Vector3.new(CORNER + 0.4, 0.7, CORNER + 0.4), CFrame.new(c + Vector3.new(-sx * 0.2, 19.65, -sz * 0.2)), M.SmoothPlastic, F7.SteelDark)
 		end
 	end
 
-	-- I-beam columns, only on bare wall (between the windows, clear of the
-	-- boards, the fireplace and the machines), each with a caged wall lamp.
-	-- The lamps on bare wall stretches (no column) sit straight on the wall.
-	local AMBER, RED = rgb(255, 196, 110), rgb(255, 60, 40)
-	local columns = {
-		{ "South", 23 }, { "South", 41 }, { "South", 59 }, { "South", 77 }, { "South", 95 },
-		{ "West", 14 }, { "West", 29 }, { "West", 43.5 }, { "West", 60.5 },
-		{ "North", 111, true },
-		{ "East", 84 },
-	}
-	for _, c in columns do
-		local w = walls[c[1]]
-		ibeam(lobby, onWall(w, c[2], 0, 0), 20.4)
-		cagedLamp(lobby, onWall(w, c[2], 10.5, 1.36), c[3] and RED or AMBER, c[3])
-	end
-	for _, l in { { "South", 4, true }, { "South", 112.6 }, { "North", 23 }, { "North", 3.5 }, { "East", 5.8 } } do
-		cagedLamp(lobby, onWall(walls[l[1]], l[2], 10.5, 0), l[3] and RED or AMBER, l[3])
-	end
-	-- knee braces from the walls up under the girder ends
-	for _, b in { { -1, -15 }, { -1, 0 }, { -1, 15 }, { -1, 30 } } do -- (none on the east wall: the gallery marquee is there)
-		local p0 = Vector3.new(b[1] * (hx - 1), Y + 22.2, b[2])
-		local p1 = Vector3.new(b[1] * (hx - 4.4), Y + H - 2.75, b[2])
-		local len = (p1 - p0).Magnitude
-		block(lobby, Vector3.new(0.45, 0.45, len), CFrame.lookAt(p0, p1) * CFrame.new(0, 0, -len / 2), M.Metal, rgb(56, 60, 68))
-	end
-	for _, y in { H - 2.2, H - 3.2 } do -- pipes up high, clear of the rules board
-		block(lobby, Vector3.new(W - 4, 0.8, 0.8), CFrame.new(0, Y + y, -hz + 2.2) * CFrame.Angles(0, math.rad(90), 0) * CFrame.Angles(0, math.rad(90), 0), M.Metal, rgb(110, 80, 50), { Shape = Enum.PartType.Cylinder })
-	end
-
-	-- Roof: corrugated deck on I-beam girders and purlins, with ductwork,
-	-- cable trays and a sprinkler main slung underneath
-	block(lobby, Vector3.new(W, 1, D), CFrame.new(0, Y + H + 0.5, 0), M.Metal, rgb(40, 42, 48))
+	-- ROOF: a ribbed deck on purlins and five I-beam girders, each girder end
+	-- sitting on a bearing bracket bolted to the cladding; two round ducts
+	-- with flanged seams and diffusers
+	block(lobby, Vector3.new(W, 1, D), CFrame.new(0, Y + H + 0.5, 0), M.SmoothPlastic, F7.SteelDark)
 	for z = -hz + 1.5, hz - 1.5, 1.5 do
-		block(lobby, Vector3.new(W - 2, 0.35, 0.6), CFrame.new(0, Y + H - 0.175, z), M.Metal, rgb(56, 59, 66))
+		block(lobby, Vector3.new(W - 2, 0.35, 0.6), CFrame.new(0, Y + H - 0.175, z), M.SmoothPlastic, F7.Steel)
 	end
 	for x = -48, 48, 12 do
-		block(lobby, Vector3.new(0.5, 0.7, D - 2), CFrame.new(x, Y + H - 0.7, 0), M.Metal, rgb(50, 53, 60))
+		block(lobby, Vector3.new(0.5, 0.7, D - 2), CFrame.new(x, Y + H - 0.7, 0), M.SmoothPlastic, F7.SteelDark)
 	end
 	for _, z in { -30, -15, 0, 15, 30 } do
-		block(lobby, Vector3.new(W - 2, 0.24, 1.3), CFrame.new(0, Y + H - 0.47, z), M.Metal, rgb(64, 68, 76))
-		block(lobby, Vector3.new(W - 2, 1.9, 0.3), CFrame.new(0, Y + H - 1.54, z), M.Metal, rgb(46, 49, 56))
-		block(lobby, Vector3.new(W - 2, 0.24, 1.3), CFrame.new(0, Y + H - 2.61, z), M.Metal, rgb(64, 68, 76))
+		block(lobby, Vector3.new(W - 2, 0.24, 1.3), CFrame.new(0, Y + H - 0.47, z), M.SmoothPlastic, F7.SteelLight)
+		block(lobby, Vector3.new(W - 2, 1.9, 0.3), CFrame.new(0, Y + H - 1.54, z), M.SmoothPlastic, F7.Steel)
+		block(lobby, Vector3.new(W - 2, 0.24, 1.3), CFrame.new(0, Y + H - 2.61, z), M.SmoothPlastic, F7.SteelLight)
 		for x = -54, 54, 9 do
-			block(lobby, Vector3.new(0.16, 1.9, 1.1), CFrame.new(x, Y + H - 1.54, z), M.Metal, rgb(64, 68, 76))
+			block(lobby, Vector3.new(0.16, 1.9, 1.1), CFrame.new(x, Y + H - 1.54, z), M.SmoothPlastic, F7.SteelLight)
+		end
+		for _, sx in { -1, 1 } do -- bearing brackets: a bolted wall block and a seat plate
+			local wallX = sx * (hx - 1)
+			block(lobby, Vector3.new(0.8, 1.4, 1.6), CFrame.new(wallX - sx * 0.4, Y + H - 3.59, z), M.SmoothPlastic, F7.SteelDark)
+			block(lobby, Vector3.new(1.3, 0.16, 1.6), CFrame.new(wallX - sx * 0.65, Y + H - 2.81, z), M.SmoothPlastic, F7.Steel)
+			for _, dz in { -0.5, 0.5 } do
+				bolt(CFrame.lookAt(Vector3.new(wallX - sx * 0.8, Y + H - 3.6, z + dz), Vector3.new(0, Y + H - 3.6, z + dz)))
+			end
 		end
 	end
-	local DUCT, SEAM = rgb(128, 132, 138), rgb(108, 112, 118)
+	local DUCT, SEAM = rgb(112, 116, 122), rgb(92, 96, 102)
 	for _, z in { -21.5, 21.5 } do
 		local y = Y + H - 5
-		block(lobby, Vector3.new(80, 2.6, 2.6), CFrame.new(0, y, z), M.Metal, DUCT, { Shape = Enum.PartType.Cylinder, Reflectance = 0.05 })
+		block(lobby, Vector3.new(80, 2.6, 2.6), CFrame.new(0, y, z), M.SmoothPlastic, DUCT, { Shape = Enum.PartType.Cylinder })
 		for x = -36, 36, 8 do
-			block(lobby, Vector3.new(0.3, 2.8, 2.8), CFrame.new(x, y, z), M.Metal, SEAM, { Shape = Enum.PartType.Cylinder })
+			block(lobby, Vector3.new(0.3, 2.8, 2.8), CFrame.new(x, y, z), M.SmoothPlastic, SEAM, { Shape = Enum.PartType.Cylinder })
 		end
 		for _, x in { -40, 40 } do -- elbows up into the roof
-			block(lobby, Vector3.new(2.9, 2.9, 2.9), CFrame.new(x, y, z), M.Metal, SEAM, { Shape = Enum.PartType.Ball })
-			block(lobby, Vector3.new(5.2, 2.6, 2.6), CFrame.new(x, y + 2.6, z) * CFrame.Angles(0, 0, math.rad(90)), M.Metal, DUCT, { Shape = Enum.PartType.Cylinder })
+			block(lobby, Vector3.new(2.9, 2.9, 2.9), CFrame.new(x, y, z), M.SmoothPlastic, SEAM, { Shape = Enum.PartType.Ball })
+			block(lobby, Vector3.new(5.2, 2.6, 2.6), CFrame.new(x, y + 2.6, z) * CFrame.Angles(0, 0, math.rad(90)), M.SmoothPlastic, DUCT, { Shape = Enum.PartType.Cylinder })
 		end
-		for x = -32, 32, 16 do
-			block(lobby, Vector3.new(0.14, 3.6, 0.14), CFrame.new(x, y + 3.1, z), M.Metal, rgb(40, 40, 44))
+		for x = -32, 32, 16 do -- hangers
+			block(lobby, Vector3.new(0.14, 3.6, 0.14), CFrame.new(x, y + 3.1, z), M.SmoothPlastic, F7.SteelDark)
 		end
 		for _, x in { -30, -10, 10, 30 } do -- diffusers
-			block(lobby, Vector3.new(2.2, 0.8, 2.2), CFrame.new(x, y - 1.5, z), M.Metal, rgb(120, 124, 130))
-			block(lobby, Vector3.new(2, 0.05, 2), CFrame.new(x, y - 1.92, z), M.Metal, rgb(30, 31, 34))
-		end
-	end
-	for _, x in { -24, 24 } do -- cable trays
-		local y = Y + H - 3.2
-		block(lobby, Vector3.new(1.8, 0.1, D - 2), CFrame.new(x, y, 0), M.Metal, rgb(92, 96, 104))
-		for _, s in { -1, 1 } do
-			block(lobby, Vector3.new(0.08, 0.45, D - 2), CFrame.new(x + s * 0.9, y + 0.2, 0), M.Metal, rgb(92, 96, 104))
-		end
-		for k, c in { rgb(30, 30, 32), rgb(140, 30, 26), rgb(30, 60, 120) } do
-			block(lobby, Vector3.new(D - 2.4, 0.22, 0.22), CFrame.new(x - 0.56 + k * 0.28, y + 0.16, 0) * CFrame.Angles(0, math.rad(90), 0), M.Rubber, c, { Shape = Enum.PartType.Cylinder })
-		end
-	end
-	for _, z in { -10, 10 } do -- sprinkler main
-		local y = Y + H - 3.6
-		block(lobby, Vector3.new(W - 4, 0.35, 0.35), CFrame.new(0, y, z), M.Metal, rgb(170, 30, 26), { Shape = Enum.PartType.Cylinder })
-		for x = -52, 52, 8 do
-			block(lobby, Vector3.new(0.16, 0.4, 0.16), CFrame.new(x, y - 0.35, z), M.Metal, rgb(200, 160, 60))
+			block(lobby, Vector3.new(2.2, 0.8, 2.2), CFrame.new(x, y - 1.5, z), M.SmoothPlastic, rgb(104, 108, 114))
+			block(lobby, Vector3.new(2, 0.05, 2), CFrame.new(x, y - 1.92, z), M.SmoothPlastic, rgb(30, 31, 34))
+			for k = -2, 2 do
+				block(lobby, Vector3.new(1.9, 0.1, 0.08), CFrame.new(x, y - 1.95, z + k * 0.36), M.SmoothPlastic, rgb(80, 84, 90))
+			end
 		end
 	end
 
@@ -2326,6 +2362,21 @@ function MapBuilder.BuildLobby()
 	for _, x in { -36, 0, 36 } do
 		for _, z in { -17, 17 } do
 			highBay(lobby, Vector3.new(x, Y + H - 1.05, z), 5.5)
+		end
+	end
+
+	-- The house style for titles on the walls: a dark steel plate in a bolted
+	-- steel frame, the name in condensed amber capitals. cf sits on the
+	-- cladding above the cornice, facing into the room.
+	local function titlePlate(cf, width, text)
+		block(lobby, Vector3.new(width + 0.9, 3.5, 0.2), cf * CFrame.new(0, 0, 0.1), M.SmoothPlastic, F7.Steel)
+		local plate = block(lobby, Vector3.new(width, 2.7, 0.1), cf * CFrame.new(0, 0, -0.04), M.SmoothPlastic, rgb(20, 21, 24))
+		local _, label = surfaceText(plate, Enum.NormalId.Front, { Name = "Title", Text = text, FontFace = OSWALD, TextColor3 = F7.Amber })
+		make("UIPadding", label, { PaddingTop = UDim.new(0.16, 0), PaddingBottom = UDim.new(0.14, 0), PaddingLeft = UDim.new(0.07, 0), PaddingRight = UDim.new(0.07, 0) })
+		for _, x in { -1, 1 } do
+			for _, y in { -1, 1 } do
+				bolt(cf * CFrame.new(x * (width / 2 + 0.24), y * 1.42, -0.02))
+			end
 		end
 	end
 
@@ -2519,11 +2570,11 @@ function MapBuilder.BuildLobby()
 		local headPos = Vector3.new(x, Y + 25.2, rz + 4.2)
 		block(lobby, Vector3.new(0.2, H - 25.6, 0.2), CFrame.new(x, Y + (H + 25.6) / 2, rz + 4.2), M.Metal, rgb(40, 40, 44))
 		local lamp = block(lobby, Vector3.new(1.4, 0.9, 1.6), CFrame.lookAt(headPos, Vector3.new(x, Y + 11, rz)), M.Metal, rgb(36, 36, 40))
-		block(lobby, Vector3.new(1.1, 0.6, 0.05), lamp.CFrame * CFrame.new(0, 0, -0.81), M.Neon, rgb(255, 236, 200))
+		glowFace(block(lobby, Vector3.new(1.1, 0.6, 0.05), lamp.CFrame * CFrame.new(0, 0, -0.81), M.SmoothPlastic, rgb(255, 236, 200)), Enum.NormalId.Front, rgb(255, 236, 200))
 		make("SpotLight", lamp, { Face = Enum.NormalId.Front, Range = 22, Angle = 62, Brightness = 2.6, Color = rgb(255, 236, 210) })
 	end
 	-- He clawed through the wall next to the board
-	clawGouge(lobby, CFrame.new(45, Y + 14, rz + 0.3) * CFrame.Angles(0, math.pi, 0), 20, 22)
+	clawGouge(lobby, CFrame.new(45, Y + 14, rz + 0.1) * CFrame.Angles(0, math.pi, 0), 20, 22)
 	for _ = 1, 10 do
 		block(lobby, Vector3.new(rng:NextNumber(0.6, 1.8), rng:NextNumber(0.4, 1.2), rng:NextNumber(0.6, 1.8)),
 			CFrame.new(45 + rng:NextNumber(-5, 5), Y + 0.5, rz + rng:NextNumber(1.5, 6)) * CFrame.Angles(rng:NextNumber(), rng:NextNumber(), rng:NextNumber()),
@@ -2606,10 +2657,8 @@ function MapBuilder.BuildLobby()
 	local Skins = require(ReplicatedStorage.Shared.Skins)
 	local Costumes = require(script.Parent.Costumes)
 	local cz = hz - 6.5
-	-- the title hangs up on the cladding, above the windows (not across them)
-	block(lobby, Vector3.new(25.2, 3.6, 0.3), CFrame.new(17.5, Y + H - 3.6, hz - 1.55), M.Metal, rgb(40, 40, 46))
-	local rackTitle = block(lobby, Vector3.new(24, 2.6, 0.2), CFrame.new(17.5, Y + H - 3.6, hz - 1.8) * CFrame.Angles(0, math.pi, 0), M.SmoothPlastic, rgb(18, 18, 22))
-	surfaceText(rackTitle, Enum.NormalId.Back, { Text = "CLAW COLLECTION", Font = Enum.Font.LuckiestGuy, TextColor3 = rgb(210, 230, 255) })
+	-- the title hangs on the cladding above the cornice
+	titlePlate(CFrame.lookAt(Vector3.new(17.5, Y + 24.6, hz - 1.6), Vector3.new(17.5, Y + 24.6, 0)), 24, "CLAW COLLECTION")
 	for i, id in Skins.ClawOrder do
 		local item = Skins.Claws[id]
 		-- centred under the CLAW COLLECTION sign, clear of the suit gallery
@@ -2636,8 +2685,8 @@ function MapBuilder.BuildLobby()
 	-- SENTINEL BAY (west wall, north end): every Sentinel suit on a lit
 	-- plinth facing into the room, with its name and price (bought in the
 	-- Armory's SENTINEL tab) --------------------------------------------
-	local bayTitle = block(lobby, Vector3.new(0.2, 2.6, 24), CFrame.new(-hx + 2.1, Y + 22.5, -29), M.SmoothPlastic, rgb(18, 16, 22))
-	surfaceText(bayTitle, Enum.NormalId.Right, { Text = "SENTINEL SUITS", Font = Enum.Font.LuckiestGuy, TextColor3 = rgb(205, 150, 255) })
+	-- (between the roof girders at z = -30 and -15, which land on this wall)
+	titlePlate(CFrame.lookAt(Vector3.new(-hx + 1.6, Y + 24.6, -22.5), Vector3.new(0, Y + 24.6, -22.5)), 11.5, "SENTINEL SUITS")
 	for i, id in Skins.SentinelOrder do
 		local item = Skins.Sentinels[id]
 		local z = -36 + (i - 1) * 14
@@ -2679,20 +2728,10 @@ function MapBuilder.BuildLobby()
 		block(lobby, Vector3.new(0.3, 2.2, 2.2), CFrame.new(sp + Vector3.new(0, 2.4, 0)) * CFrame.Angles(0, 0, math.rad(90)), M.Leather, rgb(60, 24, 24), { Shape = Enum.PartType.Cylinder })
 	end
 
-	-- Planters with small pines along the walkway
-	for _, z in { -34, 16, 30 } do
-		for _, x in { -8.5, 8.5 } do
-			local pp = Vector3.new(x, Y, z)
-			block(lobby, Vector3.new(3.4, 1.6, 3.4), CFrame.new(pp + Vector3.new(0, 0.8, 0)), M.Concrete, rgb(88, 88, 94))
-			block(lobby, Vector3.new(3, 0.2, 3), CFrame.new(pp + Vector3.new(0, 1.62, 0)), M.Ground, rgb(60, 44, 32))
-			tree(lobby, pp + Vector3.new(0, 1.5, 0), 0.32, true)
-		end
-	end
-
-	-- Vending machines in the south-east corner, clear of the windows: a
+	-- Vending machines in the south-east corner, standing off the plinth: a
 	-- cola machine against the east wall, a snack machine on the south wall
-	vendingMachine(lobby, CFrame.lookAt(Vector3.new(hx - 2.3, Y, 38.2), Vector3.new(0, Y, 38.2)), "Cola")
-	vendingMachine(lobby, CFrame.lookAt(Vector3.new(53.6, Y, hz - 2.3), Vector3.new(53.6, Y, 0)), "Snacks")
+	vendingMachine(lobby, CFrame.lookAt(Vector3.new(hx - 2.8, Y, 38.2), Vector3.new(0, Y, 38.2)), "Cola")
+	vendingMachine(lobby, CFrame.lookAt(Vector3.new(53.6, Y, hz - 2.8), Vector3.new(53.6, Y, 0)), "Snacks")
 
 	-- LOUNGE (west) ----------------------------------------------------
 	local lx = -hx + 14
@@ -2701,22 +2740,91 @@ function MapBuilder.BuildLobby()
 	couch(lobby, CFrame.new(lx + 2, Y, 18), rgb(116, 62, 36))
 	couch(lobby, CFrame.new(lx + 9, Y, 7) * CFrame.Angles(0, math.rad(90), 0), rgb(116, 62, 36))
 	coffeeTable(lobby, Vector3.new(lx + 1, Y, 8))
-	-- stone fireplace on the west wall: an open firebox (sooty back wall,
-	-- pillars either side, stone over the opening) so the fire is on show, a
-	-- raised stone hearth in front, logs on a bed of glowing embers
+	-- FIREPLACE (west wall): a cast-concrete chimney breast up to the roof,
+	-- faced in raised panels like the walls, with a steel-framed firebox, a
+	-- steel mantel shelf on brackets, a raised hearth with a steel nosing,
+	-- and the cornice wrapped round it. The fire is built in the firebox below.
 	local fz = 8
-	local stone, stone2 = rgb(88, 84, 82), rgb(78, 74, 72)
-	block(lobby, Vector3.new(1, 12, 12), CFrame.new(-hx + 1.5, Y + 6, fz), M.Cobblestone, stone2) -- back
-	block(lobby, Vector3.new(0.2, 5, 6), CFrame.new(-hx + 2.1, Y + 2.5, fz), M.Slate, rgb(22, 18, 16)) -- soot
-	for side = -1, 1, 2 do
-		block(lobby, Vector3.new(2, 12, 3), CFrame.new(-hx + 3, Y + 6, fz + side * 4.5), M.Cobblestone, stone) -- pillars
+	local wx = -hx + 1 -- the wall face
+	local bx = -hx + 3.6 -- the breast's front face
+	local bd, bh = bx - wx, 6.7 -- its depth off the wall, its half width
+	local SOOT = rgb(20, 18, 17)
+	local function brick(size, x, y, z, color) -- a block by its centre, y above the floor
+		return block(lobby, size, CFrame.new(x, Y + y, z), M.SmoothPlastic, color)
 	end
-	block(lobby, Vector3.new(2, 7, 6), CFrame.new(-hx + 3, Y + 8.5, fz), M.Cobblestone, stone) -- over the opening
-	block(lobby, Vector3.new(2.2, 0.6, 6.4), CFrame.new(-hx + 3.1, Y + 5.2, fz), M.Slate, rgb(40, 36, 34)) -- lintel
-	block(lobby, Vector3.new(2.6, H - 12, 7), CFrame.new(-hx + 2.3, Y + 12 + (H - 12) / 2, fz), M.Cobblestone, stone2) -- chimney breast
-	block(lobby, Vector3.new(3.4, 0.8, 13), CFrame.new(-hx + 2.8, Y + 12.2, fz), M.Wood, rgb(60, 38, 24)) -- mantel
-	block(lobby, Vector3.new(2, 0.3, 6), CFrame.new(-hx + 3, Y + 0.15, fz), M.Slate, rgb(26, 22, 20)) -- firebox floor
-	block(lobby, Vector3.new(1.8, 0.4, 9), CFrame.new(-hx + 4.9, Y + 0.2, fz), M.Slate, rgb(58, 54, 52)) -- hearth
+	local function facePanel(z0, z1, y0, y1) -- a raised panel on the breast's front
+		brick(Vector3.new(0.08, y1 - y0, z1 - z0), bx + 0.04, (y0 + y1) / 2, fz + (z0 + z1) / 2, F7.Concrete)
+		brick(Vector3.new(0.13, y1 - y0 - 0.4, z1 - z0 - 0.4), bx + 0.065, (y0 + y1) / 2, fz + (z0 + z1) / 2, vary(F7.ConcreteLight, 0.03))
+	end
+	-- the core round the firebox opening (6 wide, 5.3 high), sooty inside
+	brick(Vector3.new(bd, H, bh - 3), (wx + bx) / 2, H / 2, fz - (bh + 3) / 2, SOOT)
+	brick(Vector3.new(bd, H, bh - 3), (wx + bx) / 2, H / 2, fz + (bh + 3) / 2, SOOT)
+	brick(Vector3.new(bd, H - 5.3, 6), (wx + bx) / 2, 5.3 + (H - 5.3) / 2, fz, SOOT)
+	brick(Vector3.new(0.6, 5.3, 6), wx + 0.3, 2.65, fz, rgb(14, 12, 12)) -- firebox back
+	brick(Vector3.new(bd - 0.6, 0.3, 6), (wx + 0.6 + bx) / 2, 0.15, fz, rgb(34, 30, 28)) -- firebox floor
+	-- raised panels: jambs either side, a lintel panel, one tall panel above
+	-- the mantel (the status screen hangs on it)
+	for _, s in { -1, 1 } do
+		local a, b = s * 3.45, s * (bh - 0.45)
+		facePanel(math.min(a, b), math.max(a, b), 1.12, 11.9)
+	end
+	facePanel(-3.39, 3.39, 5.8, 11.9)
+	facePanel(-bh + 0.45, bh - 0.45, 12.5, 19.94)
+	local function out(x, y, z) -- a bolt on the breast's front, pointing into the room
+		return CFrame.lookAt(Vector3.new(x, Y + y, z), Vector3.new(x + 1, Y + y, z))
+	end
+	-- the steel frame round the opening
+	for _, s in { -1, 1 } do
+		brick(Vector3.new(0.24, 5.7, 0.42), bx + 0.1, 2.85, fz + s * 3.2, F7.Steel)
+	end
+	brick(Vector3.new(0.24, 0.42, 6.82), bx + 0.1, 5.5, fz, F7.Steel)
+	for _, s in { -1, 1 } do
+		for _, y in { 1.2, 4.6 } do
+			bolt(out(bx + 0.22, y, fz + s * 3.2))
+		end
+	end
+	-- plinth across the breast front beyond the hearth, and down its sides
+	for _, s in { -1, 1 } do
+		brick(Vector3.new(0.4, 1, bh - 3.41), bx + 0.2, 0.5, fz + s * (bh + 3.41) / 2, F7.SteelDark)
+		brick(Vector3.new(0.3, 0.12, bh - 3.41), bx + 0.15, 1.06, fz + s * (bh + 3.41) / 2, F7.Steel)
+		brick(Vector3.new(bd, 1, 0.4), (wx + bx) / 2, 0.5, fz + s * (bh + 0.2), F7.SteelDark)
+		brick(Vector3.new(bd, 0.12, 0.3), (wx + bx) / 2, 1.06, fz + s * (bh + 0.15), F7.Steel)
+		brick(Vector3.new(bd, 18.88, 0.08), (wx + bx) / 2, 1.12 + 18.88 / 2, fz + s * (bh + 0.04), F7.Concrete) -- side facing
+		-- guard angles on the breast's front corners
+		brick(Vector3.new(0.12, 18.8, 0.52), bx + 0.06, 1.12 + 9.4, fz + s * (bh - 0.14), F7.SteelLight:Lerp(F7.Steel, 0.5))
+		brick(Vector3.new(0.7, 18.8, 0.12), bx - 0.35, 1.12 + 9.4, fz + s * (bh + 0.06), F7.SteelLight:Lerp(F7.Steel, 0.5))
+	end
+	-- raised hearth with a steel nosing
+	brick(Vector3.new(2.2, 0.45, 9.6), bx + 1.1, 0.225, fz, F7.ConcreteDark)
+	brick(Vector3.new(0.16, 0.5, 9.7), bx + 2.16, 0.25, fz, F7.Steel)
+	-- steel mantel shelf on two knee brackets
+	brick(Vector3.new(1.3, 0.36, 2 * bh + 1), bx + 0.55, 12.18, fz, F7.Steel)
+	brick(Vector3.new(1.34, 0.08, 2 * bh + 1.04), bx + 0.55, 12.4, fz, F7.SteelLight)
+	for _, s in { -1, 1 } do
+		block(lobby, Vector3.new(0.9, 0.9, 0.2), CFrame.new(bx + 0.45, Y + 11.55, fz + s * 4.8) * CFrame.Angles(0, 0, math.rad(45)) * CFrame.new(0, 0, 0), M.SmoothPlastic, F7.SteelDark)
+	end
+	-- the cornice wraps round the breast: side returns and a front run
+	for _, y in { 20.1, 22.3 } do
+		brick(Vector3.new(bd + 0.8, 0.2, 0.8), (wx + bx + 0.8) / 2, y, fz - bh - 0.4, F7.SteelDark)
+		brick(Vector3.new(bd + 0.8, 0.2, 0.8), (wx + bx + 0.8) / 2, y, fz + bh + 0.4, F7.SteelDark)
+		brick(Vector3.new(0.8, 0.2, 2 * bh + 1.6), bx + 0.4, y, fz, F7.SteelDark)
+	end
+	for _, s in { -1, 1 } do
+		brick(Vector3.new(bd + 0.1, 2, 0.2), (wx + 0.4 + bx + 0.6) / 2, 21.2, fz + s * (bh + 0.5), F7.Steel)
+	end
+	brick(Vector3.new(0.2, 2, 2 * bh + 1.2), bx + 0.5, 21.2, fz, F7.Steel)
+	for z = -bh, bh, 2.2 do
+		bolt(out(bx + 0.6, 21.2, fz + z))
+	end
+	-- ribbed cladding above, like the walls
+	brick(Vector3.new(0.1, H - 22.4, 2 * bh), bx + 0.05, 25.2, fz, F7.SteelDark)
+	for _, s in { -1, 1 } do
+		brick(Vector3.new(bd, H - 22.4, 0.14), (wx + bx) / 2, 25.2, fz + s * (bh + 0.07), F7.SteelDark)
+	end
+	for z = -bh + 0.6, bh - 0.5, 1.25 do
+		brick(Vector3.new(0.26, H - 22.4, 0.5), bx + 0.23, 25.2, fz + z, F7.Steel)
+	end
+
 	-- the fire: an iron grate on an ash bed, a stacked log pile with glowing
 	-- cracks, embers scattered round it, and layered flames, sparks and smoke
 	local fx0 = -hx + 3 -- middle of the firebox
@@ -2814,17 +2922,57 @@ function MapBuilder.BuildLobby()
 	glow.Name = "FireGlow"
 	light(glow, { Range = 26, Brightness = 2.5, Color = rgb(255, 150, 70), Shadows = true })
 	CollectionService:AddTag(glow, "FireLight")
-	-- mounted claws trophy above the fireplace
-	for b = -1, 1 do
-		block(lobby, Vector3.new(0.15, 4, 0.4), CFrame.new(-hx + 1.6, Y + 15.5, fz + b * 0.9) * CFrame.Angles(math.rad(b * 8), 0, 0), M.Metal, rgb(210, 214, 222), { Reflectance = 0.4 })
-	end
-	block(lobby, Vector3.new(0.4, 2.6, 4), CFrame.new(-hx + 1.4, Y + 13.4, fz), M.Wood, rgb(60, 38, 24))
-	-- bookshelves
-	for _, z in { -8, 24 } do
-		block(lobby, Vector3.new(2.5, 12, 8), CFrame.new(-hx + 2.3, Y + 6, z), M.Wood, rgb(55, 36, 22))
-		for s = 0, 3 do
-			for b = 0, 9 do
-				block(lobby, Vector3.new(1.6, rng:NextNumber(1.6, 2.4), 0.6), CFrame.new(-hx + 3, Y + 1.8 + s * 2.8, z - 3.4 + b * 0.75), M.SmoothPlastic, vary(({ rgb(120, 30, 30), rgb(30, 60, 110), rgb(40, 90, 50), rgb(160, 130, 60) })[(b + s) % 4 + 1], 0.2))
+	-- ARCHIVE SHELVING either side of the fireplace: steel uprights and
+	-- shelves on a recessed kick plinth, standing off the wall's plinth,
+	-- stocked with ring binders (a label and finger hole on every spine, in
+	-- runs of one colour) and lidded archive boxes
+	local BINDERS = { rgb(58, 62, 70), rgb(96, 34, 32), rgb(38, 50, 76), rgb(72, 74, 54), rgb(128, 116, 92), rgb(30, 31, 35) }
+	for _, cz in { fz - 16, fz + 16 } do
+		local d, w, h = 1.6, 8, 11
+		local cx = -hx + 1.45 + d / 2 -- the back stands 0.45 off the wall
+		local function at(x, y, z)
+			return CFrame.new(cx + x, Y + y, cz + z)
+		end
+		block(lobby, Vector3.new(0.1, h, w - 0.1), at(-d / 2 + 0.07, h / 2, 0), M.SmoothPlastic, F7.SteelDark) -- back
+		for _, s in { -1, 1 } do
+			block(lobby, Vector3.new(d, h, 0.3), at(0, h / 2, s * (w / 2 - 0.15)), M.SmoothPlastic, F7.Steel) -- uprights
+			block(lobby, Vector3.new(0.08, h - 0.4, 0.14), at(d / 2 + 0.02, h / 2, s * (w / 2 - 0.15)), M.SmoothPlastic, F7.SteelLight) -- front edge
+		end
+		block(lobby, Vector3.new(d + 0.12, 0.3, w + 0.12), at(0, h + 0.15, 0), M.SmoothPlastic, F7.SteelDark) -- top
+		block(lobby, Vector3.new(d - 0.3, 0.6, w - 0.6), at(-0.15, 0.3, 0), M.SmoothPlastic, F7.SteelDark) -- kick plinth
+		for k = 0, 3 do
+			local y = 0.6 + k * 2.6
+			block(lobby, Vector3.new(d - 0.1, 0.14, w - 0.6), at(-0.05, y + 0.07, 0), M.SmoothPlastic, F7.Steel) -- shelf
+			block(lobby, Vector3.new(0.06, 0.26, w - 0.6), at(d / 2 - 0.03, y + 0.05, 0), M.SmoothPlastic, F7.SteelLight) -- lip
+			local floor = y + 0.14
+			local z, stop = -w / 2 + 0.36, w / 2 - 0.36
+			while z < stop - 0.5 do
+				if rng:NextNumber() < 0.24 and stop - z > 1.8 then -- archive boxes, sometimes two high
+					local stack = rng:NextNumber() < 0.5 and 2 or 1
+					for b = 0, stack - 1 do
+						local by = floor + b * 1.12
+						local box = at(-0.12, by + 0.53, z + 0.8)
+						block(lobby, Vector3.new(1.2, 1.06, 1.56), box, M.SmoothPlastic, rgb(92, 96, 102))
+						block(lobby, Vector3.new(1.26, 0.2, 1.62), box * CFrame.new(0, 0.46, 0), M.SmoothPlastic, rgb(70, 74, 80)) -- lid
+						block(lobby, Vector3.new(0.02, 0.28, 0.7), box * CFrame.new(0.61, -0.08, 0), M.SmoothPlastic, rgb(214, 208, 190)) -- label
+						block(lobby, Vector3.new(0.02, 0.1, 0.4), box * CFrame.new(0.61, 0.2, 0), M.SmoothPlastic, rgb(24, 25, 28)) -- hand slot
+					end
+					z += 1.68
+				else -- a run of binders in one colour
+					local col = BINDERS[rng:NextInteger(1, #BINDERS)]
+					for _ = 1, rng:NextInteger(3, 7) do
+						if z + 0.42 > stop then
+							break
+						end
+						local bh2 = rng:NextNumber(1.9, 2.15)
+						local cf = at(-0.08, floor + bh2 / 2, z + 0.21)
+						block(lobby, Vector3.new(1.3, bh2, 0.4), cf, M.SmoothPlastic, vary(col, 0.05))
+						block(lobby, Vector3.new(0.02, 0.5, 0.26), cf * CFrame.new(0.66, bh2 * 0.14, 0), M.SmoothPlastic, rgb(214, 208, 190)) -- spine label
+						block(lobby, Vector3.new(0.02, 0.16, 0.16), cf * CFrame.new(0.66, -bh2 * 0.3, 0), M.SmoothPlastic, rgb(20, 20, 22), { Shape = Enum.PartType.Cylinder }) -- finger hole
+						z += 0.44
+					end
+					z += 0.12
+				end
 			end
 		end
 	end
@@ -2833,6 +2981,12 @@ function MapBuilder.BuildLobby()
 	-- south of the bookcase (the north end is the Sentinel bay), clear of the
 	-- corner column (z > hz - 3.6)
 	local lb = block(lobby, Vector3.new(0.4, 11, 12.4), CFrame.new(-hx + 2.9, Y + 9, 34.7), M.SmoothPlastic, rgb(14, 14, 18))
+	for _, y in { 5, 13 } do -- stand-off arms back to the wall
+		for _, dz in { -5, 5 } do
+			block(lobby, Vector3.new(1.6, 0.26, 0.26), CFrame.new(-hx + 1.9, Y + y, 34.7 + dz), M.SmoothPlastic, rgb(54, 58, 66))
+			block(lobby, Vector3.new(0.12, 0.7, 0.7), CFrame.new(-hx + 1.21, Y + y, 34.7 + dz), M.SmoothPlastic, rgb(34, 36, 42))
+		end
+	end
 	local lbGui = make("SurfaceGui", lb, { Name = "Leaderboard", Face = Enum.NormalId.Right, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 36, LightInfluence = 0 })
 	local lbBg = make("Frame", lbGui, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = rgb(16, 14, 18), BorderSizePixel = 0 })
 	make("UIStroke", lbBg, { Color = rgb(200, 30, 30), Thickness = 8, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
@@ -2860,7 +3014,7 @@ function MapBuilder.BuildLobby()
 
 	-- STATUS TV: mounted on the chimney breast above the fireplace, facing
 	-- the sofas (GameManager writes StatusText / TimerText on "StatusScreen")
-	local tvX, tvY, tvZ = -hx + 3.6, Y + 18.2, 8
+	local tvX, tvY, tvZ = -hx + 3.6, Y + 16.9, 8
 	block(lobby, Vector3.new(0.35, 4.3, 6.8), CFrame.new(tvX + 0.18, tvY, tvZ), M.Metal, rgb(14, 14, 16)) -- bezel
 	local screen = block(lobby, Vector3.new(0.12, 3.9, 6.4), CFrame.new(tvX + 0.4, tvY, tvZ), M.SmoothPlastic, rgb(6, 6, 8))
 	screen.Name = "StatusScreen"
@@ -2878,17 +3032,37 @@ function MapBuilder.BuildLobby()
 	local t = make("TextLabel", bg, { Name = "TimerText", Position = UDim2.fromScale(0.05, 0.42), Size = UDim2.fromScale(0.9, 0.5), BackgroundTransparency = 1, Font = Enum.Font.LuckiestGuy, TextScaled = true, TextColor3 = rgb(255, 200, 30), Text = "" })
 	make("UIStroke", t, { Thickness = 4 })
 
-	-- Supply crates + barrels for detail
-	for i, p in { Vector3.new(-30, Y, -34), Vector3.new(22, Y, -36) } do
-		local yaw = rng:NextNumber() * 0.5
-		woodCrate(lobby, CFrame.new(p) * CFrame.Angles(0, yaw, 0), Vector3.new(5, 4, 4), false)
-		woodCrate(lobby, CFrame.new(p + Vector3.new(0.3, 4, 0.2)) * CFrame.Angles(0, yaw + 0.3, 0), Vector3.new(3, 3, 3), false)
-		woodCrate(lobby, CFrame.new(p + Vector3.new(5.2, 0, 0.5)) * CFrame.Angles(0, -yaw, 0), Vector3.new(3.4, 3.4, 3.4), false)
-		steelBarrel(lobby, CFrame.new(p + Vector3.new(-3.6, 0, 2.6)), i % 2 == 0 and rgb(150, 30, 30) or rgb(40, 80, 140), false)
-		steelBarrel(lobby, CFrame.new(p + Vector3.new(-4.2, 0, -0.3)), rgb(60, 110, 60), false)
+	-- Equipment cases stacked by the south wall: steel flight cases with a
+	-- lid seam, corner guards, latches, side handles and a stencilled tag
+	local function flightCase(cf, size, color, tag)
+		local edge, latch = rgb(28, 29, 33), rgb(120, 124, 132)
+		local h = size.Y
+		block(lobby, size, cf * CFrame.new(0, h / 2, 0), M.SmoothPlastic, color)
+		block(lobby, Vector3.new(size.X + 0.06, 0.12, size.Z + 0.06), cf * CFrame.new(0, h * 0.72, 0), M.SmoothPlastic, edge) -- lid seam
+		for _, x in { -1, 1 } do
+			for _, z in { -1, 1 } do
+				block(lobby, Vector3.new(0.3, h + 0.02, 0.3), cf * CFrame.new(x * (size.X / 2 - 0.1), h / 2 + 0.03, z * (size.Z / 2 - 0.1)), M.SmoothPlastic, edge)
+			end
+		end
+		for _, x in { -0.28, 0.28 } do
+			block(lobby, Vector3.new(0.34, 0.5, 0.08), cf * CFrame.new(x * size.X, h * 0.72, -size.Z / 2 - 0.04), M.SmoothPlastic, latch)
+		end
+		for _, s in { -1, 1 } do
+			block(lobby, Vector3.new(0.1, 0.16, size.Z * 0.4), cf * CFrame.new(s * (size.X / 2 + 0.05), h * 0.5, 0), M.SmoothPlastic, edge)
+		end
+		if tag then
+			local plate = block(lobby, Vector3.new(size.X * 0.42, h * 0.24, 0.04), cf * CFrame.new(0, h * 0.38, -size.Z / 2 - 0.02), M.SmoothPlastic, color)
+			local _, label = surfaceText(plate, Enum.NormalId.Front, { Text = tag, FontFace = OSWALD, TextColor3 = rgb(226, 214, 180) })
+			label.TextTransparency = 0.15
+		end
 	end
-	block(lobby, Vector3.new(32, 3.6, 0.3), CFrame.new(-30, Y + H - 3.6, hz - 1.3), M.Metal, rgb(40, 40, 46))
-	sign(lobby, CFrame.new(-30, Y + H - 3.6, hz - 1.6), Vector3.new(30, 2.6, 0.3), "WEAPON X  •  HOLDING FACILITY 7", rgb(255, 200, 30), rgb(18, 18, 22))
+	local cases = CFrame.new(-26, Y, hz - 4.4)
+	flightCase(cases * CFrame.Angles(0, 0.05, 0), Vector3.new(5, 3.2, 3.2), rgb(54, 62, 52), "WX-07  SUIT PARTS")
+	flightCase(cases * CFrame.new(0.2, 3.24, 0.1) * CFrame.Angles(0, -0.06, 0), Vector3.new(4, 2.4, 2.8), rgb(60, 64, 72), "OPTICS")
+	flightCase(cases * CFrame.new(5.5, 0, 0.3) * CFrame.Angles(0, -0.1, 0), Vector3.new(3.2, 2.6, 2.8), rgb(60, 64, 72), nil)
+	flightCase(cases * CFrame.new(-4.6, 0, 0.2) * CFrame.Angles(0, 0.14, 0), Vector3.new(3.4, 1.8, 2.6), rgb(96, 34, 32), "MEDICAL")
+
+	titlePlate(CFrame.lookAt(Vector3.new(-30, Y + 24.6, hz - 1.6), Vector3.new(-30, Y + 24.6, 0)), 30, "WEAPON X  ·  HOLDING FACILITY 7")
 
 	lobby.Parent = workspace
 	-- soften every neon light in the lobby so bloom stays crisp instead of hazy
