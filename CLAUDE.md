@@ -164,10 +164,20 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
   Dumps: `run.py` (suits), `thumb_scene.py` with `FULLMAP=1 ROOMFILE=map.json` (whole facility).
   Anything at gap 0.000 is real (bar round parts, which it approximates as squares).
 - Stamina bar (`Interface.lua`): no label, just the number (100 when rested, counts down).
+- Objectives panel (`src/client/Objectives.lua`, left, just under the minimap) replaces the old
+  top-centre terminal counter. Survivors: repair the terminals (n/total), activate the Sentinel
+  suits, then "Hunt the Berserker" once someone is in a suit; Sentinels: hunt the Berserker;
+  Wolverine: "Hunt the scientists kills/n" (ReplicatedStorage `SurvivorsTotal` / `Kills`, set by
+  GameManager at round start and on each kill).
 
 ## Monetization (IDs in `src/shared/Config.lua`)
 
-The user is re-creating these on a new experience; the IDs need replacing once made.
+A developer product only sells in the experience it was made in (a foreign ID gives Roblox's
+"something went wrong"). `checkProducts` in `PlayerData.lua` checks the IDs against the game's own
+products at server start, swaps a foreign one for this game's product with the same name (else the
+same unique price), warns `[Store] ...` in the server console with the ID to paste into Config, and
+publishes the IDs in use (ReplicatedStorage `ProductIds`, read by `Config.ProductId`). Game pass
+IDs aren't checked.
 
 | Item | Price | Config |
 | --- | --- | --- |

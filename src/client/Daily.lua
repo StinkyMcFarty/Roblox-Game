@@ -227,14 +227,15 @@ dailyButton.Activated:Connect(function()
 	window.Toggle()
 end)
 buyButton.Activated:Connect(function()
-	if Config.GuaranteedWolverineProductId == 0 then
+	local id = Config.ProductId("Wolverine", Config.GuaranteedWolverineProductId)
+	if id == 0 then
 		buyLabel.Text = "NOT SET UP"
 		task.delay(2, function()
 			buyLabel.Text = BUY_TEXT
 		end)
 		return
 	end
-	MarketplaceService:PromptProductPurchase(player, Config.GuaranteedWolverineProductId)
+	MarketplaceService:PromptProductPurchase(player, id)
 end)
 
 

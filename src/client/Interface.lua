@@ -120,18 +120,6 @@ new("TextLabel", {
 }, wHealth)
 new("UIPadding", { PaddingTop = UDim.new(0, 3), PaddingBottom = UDim.new(0, 3) }, wHealth)
 
-local terminalsLabel = new("TextLabel", {
-	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 148),
-	Size = UDim2.fromOffset(320, 20),
-	BackgroundTransparency = 1,
-	Font = BODY,
-	TextScaled = true,
-	TextColor3 = Color3.fromRGB(200, 160, 255),
-	Text = "",
-}, gui)
-new("UIStroke", { Thickness = 1.5, Transparency = 0.3 }, terminalsLabel)
-
 ---------------------------------------------------------------------------
 -- Centre: announcements & role banner
 ---------------------------------------------------------------------------
@@ -681,14 +669,6 @@ RunService.RenderStepped:Connect(function(dt)
 	else
 		wHealth.Visible = false
 		lagHealth = 1
-	end
-
-	local total = ReplicatedStorage:GetAttribute("TerminalsTotal") or 0
-	if inRound and total > 0 then
-		terminalsLabel.Text = ReplicatedStorage:GetAttribute("SuitOnline") and "⚠ SENTINEL SUIT ONLINE — SENTINEL HANGAR"
-			or ("SENTINEL TERMINALS  %d / %d"):format(ReplicatedStorage:GetAttribute("Terminals") or 0, total)
-	else
-		terminalsLabel.Text = ""
 	end
 
 	-- Stamina

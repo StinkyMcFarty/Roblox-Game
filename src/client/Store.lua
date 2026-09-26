@@ -124,12 +124,13 @@ for i, pack in Config.CoinPacks do
 	})
 	priceLabels[i] = buyLabel
 	buy.Activated:Connect(function()
-		if pack.ProductId == 0 then
-			message.Text = "This pack isn't set up yet (add its Developer Product ID in Config.CoinPacks)."
+		local id = Config.ProductId(pack.Id, pack.ProductId)
+		if id == 0 then
+			message.Text = "This pack isn't on sale yet."
 			message.TextColor3 = K.Red
 			return
 		end
-		MarketplaceService:PromptProductPurchase(player, pack.ProductId)
+		MarketplaceService:PromptProductPurchase(player, id)
 	end)
 end
 
@@ -220,25 +221,28 @@ do
 end
 
 -- show the real Robux price from the Creator Dashboard once the product exists
-task.spawn(function()
+local function showPrices()
 	for i, pack in Config.CoinPacks do
-		if pack.ProductId ~= 0 then
+		local id = Config.ProductId(pack.Id, pack.ProductId)
+		if id ~= 0 then
 			local ok, info = pcall(function()
-				return MarketplaceService:GetProductInfo(pack.ProductId, Enum.InfoType.Product)
+				return MarketplaceService:GetProductInfo(id, Enum.InfoType.Product)
 			end)
 			if ok and info and info.PriceInRobux then
 				priceLabels[i].Text = "R$ " .. info.PriceInRobux
 			end
 		end
 	end
-end)
+end
+task.spawn(showPrices)
+ReplicatedStorage:GetAttributeChangedSignal("ProductIds"):Connect(showPrices)
 
 MarketplaceService.PromptProductPurchaseFinished:Connect(function(userId, productId, purchased)
 	if userId ~= player.UserId or not purchased then
 		return
 	end
 	for _, pack in Config.CoinPacks do
-		if pack.ProductId == productId then
+		if Config.ProductId(pack.Id, pack.ProductId) == productId then
 			message.Text = ("+%s %s! Spend them in the Armory."):format(commas(pack.Coins), Config.CoinName)
 			message.TextColor3 = K.Green
 		end

@@ -206,6 +206,22 @@ Config.CoinPacks = {
 	{ Id = "Vault", Name = "Weapon X Vault", Coins = 7000, Robux = 399, Bonus = "+75% BONUS", ProductId = 3714579305 },
 }
 
+-- The ID really on sale for a coin pack's Id (or "Wolverine"): the server
+-- checks the IDs above against this game's own products when it starts
+-- (checkProducts in PlayerData.lua) and publishes the ones it uses.
+function Config.ProductId(key, fallback)
+	local json = game:GetService("ReplicatedStorage"):GetAttribute("ProductIds")
+	if json then
+		local ok, ids = pcall(function()
+			return game:GetService("HttpService"):JSONDecode(json)
+		end)
+		if ok and type(ids) == "table" and tonumber(ids[key]) then
+			return tonumber(ids[key])
+		end
+	end
+	return fallback
+end
+
 -- AFK: players marked AFK sit out matches. Roblox fires Player.Idled after
 -- ~2 minutes without input; in the lobby that marks you AFK automatically,
 -- and any input brings you back (src/client/Store.lua).

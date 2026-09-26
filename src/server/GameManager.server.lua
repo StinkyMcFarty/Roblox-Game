@@ -360,11 +360,20 @@ local function runRound()
 	if TESTING then
 		Bots.Fill(Config.BotFill, spawns)
 	end
+	-- for Wolverine's objective (client/Objectives): kills out of the
+	-- survivors who started the round
+	local survivorCount = 0
+	for _ in Round.Survivors do
+		survivorCount += 1
+	end
+	ReplicatedStorage:SetAttribute("SurvivorsTotal", survivorCount)
+	ReplicatedStorage:SetAttribute("Kills", 0)
 	announce(wolverine.DisplayName .. " is WOLVERINE!" .. (bought and "  (guaranteed pass)" or ""), RED, 4)
 	PlayerData.Progress(wolverine, "BecomeWolverine", 1)
 	Round.EndTime = os.clock() + Config.IntroLength + Config.RoundTime
 
 	local killConn = Round.Killed:Connect(function(victim, killer)
+		ReplicatedStorage:SetAttribute("Kills", (ReplicatedStorage:GetAttribute("Kills") or 0) + 1)
 		Round.EndTime += Config.KillTimeBonus
 		stat(killer, "Kills", 1)
 		PlayerData.AddCoins(killer, R.Kill, "Kill")
@@ -460,6 +469,8 @@ local function runRound()
 	Round.Survivors = {}
 	ReplicatedStorage:SetAttribute("Wolverine", nil)
 	ReplicatedStorage:SetAttribute("InRound", false)
+	ReplicatedStorage:SetAttribute("SurvivorsTotal", nil)
+	ReplicatedStorage:SetAttribute("Kills", nil)
 	for _, p in Players:GetPlayers() do
 		Hiding.Clear(p)
 		p.ReplicationFocus = nil -- stop following whoever they spectated

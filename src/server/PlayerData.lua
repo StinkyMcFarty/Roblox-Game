@@ -666,6 +666,101 @@ local function packFor(productId)
 	return nil
 end
 
+-- Roblox only sells a developer product in the experience it was made in:
+-- an ID copied from another copy of the game fails with "something went
+-- wrong". At start-up, check Config's IDs against this experience's own
+-- products; a foreign ID is swapped for this game's product with the same
+-- name (else the same price) and the ID to paste into Config is printed in
+-- the server console (F9 > Server). Clients read the IDs in use from the
+-- ReplicatedStorage attribute ProductIds.
+local function checkProducts()
+	local wanted = {}
+	for _, pack in Config.CoinPacks do
+		table.insert(wanted, { Key = pack.Id, Word = pack.Id:lower(), Price = pack.Robux, Id = pack.ProductId, Set = function(id) pack.ProductId = id end })
+	end
+	table.insert(wanted, {
+		Key = "Wolverine", Word = "wolverine", Price = 29, Id = Config.GuaranteedWolverineProductId,
+		Set = function(id) Config.GuaranteedWolverineProductId = id end,
+	})
+
+	local ok, pages = pcall(function()
+		return MarketplaceService:GetDeveloperProductsAsync()
+	end)
+	if not ok or not pages then
+		warn("[Store] Couldn't list this game's developer products:", pages)
+		return
+	end
+	local products, ids = {}, {}
+	while true do
+		for _, item in pages:GetCurrentPage() do
+			local entry = { Name = item.Name or item.name or item.displayName or "", Price = item.PriceInRobux or item.priceInRobux, Ids = {} }
+			for _, key in { "ProductId", "DeveloperProductId", "productId", "id" } do
+				if type(item[key]) == "number" then
+					table.insert(entry.Ids, item[key])
+					ids[item[key]] = true
+				end
+			end
+			table.insert(products, entry)
+		end
+		if pages.IsFinished then
+			break
+		end
+		local more = pcall(function()
+			pages:AdvanceToNextPageAsync()
+		end)
+		if not more then
+			break
+		end
+	end
+	print(("[Store] This game has %d developer products."):format(#products))
+
+	-- the ID that PromptProductPurchase takes: the one whose info has this name
+	local function idOf(entry)
+		for _, id in entry.Ids do
+			local got, info = pcall(function()
+				return MarketplaceService:GetProductInfo(id, Enum.InfoType.Product)
+			end)
+			if got and info and info.Name == entry.Name then
+				return id
+			end
+		end
+		return nil
+	end
+
+	local published = {}
+	for _, w in wanted do
+		if w.Id ~= 0 and ids[w.Id] then
+			published[w.Key] = w.Id
+			continue
+		end
+		local match
+		for _, entry in products do
+			if entry.Name:lower():find(w.Word, 1, true) then
+				match = entry
+				break
+			end
+		end
+		if not match then
+			for _, entry in products do
+				if entry.Price == w.Price then
+					match = match == nil and entry or false -- only a unique price counts
+				end
+			end
+		end
+		local id = match and idOf(match)
+		if id then
+			warn(("[Store] %s: ID %d isn't a product of this game, using \"%s\" (%d). Put %d in Config."):format(w.Key, w.Id, match.Name, id, id))
+			w.Set(id)
+			published[w.Key] = id
+		else
+			warn(("[Store] %s: ID %d isn't a product of this game and none matches it; create it under Monetization > Developer Products."):format(w.Key, w.Id))
+			published[w.Key] = w.Id
+		end
+	end
+	ReplicatedStorage:SetAttribute("ProductIds", HttpService:JSONEncode(published))
+end
+task.spawn(checkProducts)
+
 MarketplaceService.ProcessReceipt = function(receipt)
 	local player = Players:GetPlayerByUserId(receipt.PlayerId)
 	local d = player and cache[player]
