@@ -2443,7 +2443,13 @@ function MapBuilder.BuildLobby()
 		local lamp = block(lobby, Vector3.new(1.6, 1, 1.6), CFrame.new(gx - 4, Y + H - 2, z), M.Metal, C.DarkMetal)
 		make("SpotLight", lamp, { Face = Enum.NormalId.Bottom, Range = 34, Angle = 40, Brightness = 5, Color = swatches[i]:Lerp(Color3.new(1, 1, 1), 0.6), Shadows = true })
 		local plaque = block(lobby, Vector3.new(6, 2.2, 0.3), CFrame.new(gx - 4, Y + 1.9, z) * CFrame.Angles(0, math.rad(90), 0) * CFrame.Angles(math.rad(25), 0, 0), M.Metal, rgb(24, 24, 28))
-		surfaceText(plaque, Enum.NormalId.Front, { Name = "PlaqueText", Text = id, TextColor3 = swatches[i], Font = Enum.Font.GothamBlack })
+		-- the suit's display name and price (Skins), scaled to fit the plaque
+		local suit = require(ReplicatedStorage.Shared.Skins).List[id]
+		local _, label = surfaceText(plaque, Enum.NormalId.Front, {
+			Name = "PlaqueText", TextColor3 = swatches[i], Font = Enum.Font.GothamBlack,
+			Text = suit.Name .. (suit.Price > 0 and ("\n" .. suit.Price .. " " .. Config.CoinName:upper()) or "\nFREE"),
+		})
+		make("UIPadding", label, { PaddingLeft = UDim.new(0.06, 0), PaddingRight = UDim.new(0.06, 0), PaddingTop = UDim.new(0.08, 0), PaddingBottom = UDim.new(0.08, 0) })
 		block(lobby, Vector3.new(0.4, 1.4, 0.4), CFrame.new(gx - 4, Y + 0.7, z), M.Metal, C.DarkMetal)
 	end
 
