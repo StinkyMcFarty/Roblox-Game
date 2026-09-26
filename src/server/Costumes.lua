@@ -1539,32 +1539,48 @@ function Costumes.DressSentinel(char, skinId)
 		end
 	end
 
-	-- LEGS: purple thighs, round knee guards, armoured shins, heavy boots
+	-- LEGS: purple thighs, round knee guards, armoured shins, heavy boots.
+	-- The legs touch in the middle, so each piece keeps its inner edge just
+	-- short of the centre line and carries its bulk outward (armour wider
+	-- than the leg used to cut into the other leg, standing or walking).
+	local function leg(p, width) -- size X and x offset for a piece `width` legs wide
+		local side = p.Name:find("Right") and 1 or -1
+		return p.Size.X * width, side * p.Size.X * math.max(0, width / 2 - 0.42)
+	end
 	for _, n in { "RightUpperLeg", "LeftUpperLeg" } do
 		local p = char:FindFirstChild(n)
 		if p then
 			local s = p.Size
-			g(p, "Thigh", Vector3.new(s.X * 1.55, s.Y * 0.95, s.Z * 1.55), LIMB, M.Metal, CFrame.new(0, 0.02, 0))
-			g(p, "ThighPlate", Vector3.new(s.X * 1.14, s.Y * 0.62, 0.16), LIMB:Lerp(Color3.new(1, 1, 1), 0.1), M.Metal, CFrame.new(0, 0.05, -s.Z * 0.8))
+			local w, x = leg(p, 1.36)
+			g(p, "Thigh", Vector3.new(w, s.Y * 0.95, s.Z * 1.5), LIMB, M.Metal, CFrame.new(x, 0.02, 0))
+			w, x = leg(p, 1)
+			g(p, "ThighPlate", Vector3.new(w, s.Y * 0.62, 0.16), LIMB:Lerp(Color3.new(1, 1, 1), 0.1), M.Metal, CFrame.new(x, 0.05, -s.Z * 0.78))
 		end
 	end
 	for _, n in { "RightLowerLeg", "LeftLowerLeg" } do
 		local p = char:FindFirstChild(n)
 		if p then
 			local s = p.Size
-			round(p, "Knee", Vector3.new(s.X * 1.8, s.Y * 0.58, s.Z * 1.85), ARMOR, CFrame.new(0, s.Y * 0.44, -s.Z * 0.12))
-			g(p, "Shin", Vector3.new(s.X * 1.85, s.Y * 1.05, s.Z * 1.85), ARMOR, M.Metal, CFrame.new(0, -s.Y * 0.1, 0))
-			g(p, "ShinPlate", Vector3.new(s.X * 1.34, s.Y * 0.82, 0.16), EDGE, M.Metal, CFrame.new(0, -s.Y * 0.06, -s.Z * 0.95))
-			g(p, "ShinRib", Vector3.new(s.X * 1.9, s.Y * 0.06, s.Z * 1.9), ARMOR2, M.Metal, CFrame.new(0, s.Y * 0.18, 0))
+			local w, x = leg(p, 1.5)
+			round(p, "Knee", Vector3.new(w, s.Y * 0.58, s.Z * 1.8), ARMOR, CFrame.new(x, s.Y * 0.44, -s.Z * 0.12))
+			w, x = leg(p, 1.52)
+			g(p, "Shin", Vector3.new(w, s.Y * 1.05, s.Z * 1.8), ARMOR, M.Metal, CFrame.new(x, -s.Y * 0.1, 0))
+			w, x = leg(p, 1.1)
+			g(p, "ShinPlate", Vector3.new(w, s.Y * 0.82, 0.16), EDGE, M.Metal, CFrame.new(x, -s.Y * 0.06, -s.Z * 0.93))
+			w, x = leg(p, 1.58)
+			g(p, "ShinRib", Vector3.new(w, s.Y * 0.06, s.Z * 1.85), ARMOR2, M.Metal, CFrame.new(x, s.Y * 0.18, 0))
 		end
 	end
 	for _, n in { "RightFoot", "LeftFoot" } do
 		local p = char:FindFirstChild(n)
 		if p then
 			local s = p.Size
-			g(p, "Boot", Vector3.new(s.X * 2.1, s.Y * 1.9, s.Z * 1.7), ARMOR2, M.Metal, CFrame.new(0, s.Y * 0.25, -s.Z * 0.12))
-			g(p, "Toe", Vector3.new(s.X * 2, s.Y * 1.05, s.Z * 0.55), ARMOR, M.Metal, CFrame.new(0, -s.Y * 0.03, -s.Z * 0.95))
-			g(p, "Heel", Vector3.new(s.X * 1.6, s.Y * 1.1, s.Z * 0.4), MECH, M.Metal, CFrame.new(0, -s.Y * 0.03, s.Z * 0.8))
+			local w, x = leg(p, 1.64)
+			g(p, "Boot", Vector3.new(w, s.Y * 1.9, s.Z * 1.7), ARMOR2, M.Metal, CFrame.new(x, s.Y * 0.25, -s.Z * 0.12))
+			w, x = leg(p, 1.56)
+			g(p, "Toe", Vector3.new(w, s.Y * 1.05, s.Z * 0.55), ARMOR, M.Metal, CFrame.new(x, -s.Y * 0.03, -s.Z * 0.95))
+			w, x = leg(p, 1.3)
+			g(p, "Heel", Vector3.new(w, s.Y * 1.1, s.Z * 0.4), MECH, M.Metal, CFrame.new(x, -s.Y * 0.03, s.Z * 0.8))
 		end
 	end
 end
