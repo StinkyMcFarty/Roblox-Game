@@ -167,6 +167,11 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
   Foundry: cool work floods, forged-steel crucibles (one pouring into a mould).
 - Sky: `Config.SkyAssetId` loads via InsertService at server start unless a Sky is placed in
   Lighting in Studio.
+- Facility walls are dressed per face: `ROOM_STYLE` gives each room a wall style, and `sidesOf`
+  finds the room on each side of a wall spot. Same style both sides: the core is that finish and
+  trims run through it (`decorate` with no side). Different rooms: a plain core, each face skinned
+  (0.04 thick) and trimmed in its own room's style (`decorate`/`pilaster` with side = -1 / 1);
+  features and the upper wall above the breakable band follow the same split.
 - Facility floors (`FLOORS` in `Facility.lua`, keyed by the kind each room passes to `floorTiles`):
   steel deck (`Grate`), concrete slabs (`Corridor`, `Hangar`), terrazzo (`LabTile`), canteen
   linoleum (`Checker`), carpet (`Carpet`, `WarmCarpet`), raised floor with vents (`Rubber`), slate

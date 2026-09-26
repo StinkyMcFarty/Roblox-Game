@@ -202,6 +202,22 @@ local function fr(parent, props)
 	return f
 end
 
+-- A lit face on a fitting: a SurfaceGui that ignores the room's light, so
+-- the diffuser reads as switched on without being a Neon part (Neon blooms
+-- into a glowing block). round = a disc (a cylinder's end cap). The middle is
+-- a touch brighter than the edge, like a real diffuser.
+local function glowFace(part, face, color, round)
+	local g = make("SurfaceGui", part, { Face = face, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 24, LightInfluence = 0, Brightness = 1 })
+	local panel = fr(g, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1) })
+	if round then
+		make("UICorner", panel, { CornerRadius = UDim.new(0.5, 0) })
+	end
+	local edge = color:Lerp(Color3.new(1, 1, 1), 0.35)
+	local mid = color:Lerp(Color3.new(1, 1, 1), 0.8)
+	make("UIGradient", panel, { Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, edge), ColorSequenceKeypoint.new(0.5, mid), ColorSequenceKeypoint.new(1, edge) }), Rotation = 90 })
+	return g
+end
+
 local function tx(parent, props)
 	local t = Instance.new("TextLabel")
 	t.BackgroundTransparency = 1
@@ -546,17 +562,43 @@ local function sideSign(parent, cf, w, text, dark)
 end
 
 -- Decorates a breakable wall piece. `at(y)` returns the CFrame at height y on
--- the wall's centre line; X is across the wall. The trims pass through the
--- core so one part dresses both faces.
-local function decorate(core, st, at, w, y0, y1, full, idx)
-	local T = st.T
+-- the wall's centre line; X is across the wall. T is the wall's thickness.
+-- With no `side` the trims pass through the core so one part dresses both
+-- faces (both rooms share the style). With side = -1 / 1 only that face is
+-- dressed, over a thin skin of the style's wall finish: a wall between two
+-- different rooms gets each room's own style on its own face.
+local function decorate(core, st, at, w, y0, y1, full, idx, T, side)
+	T = T or st.T
+	-- a trim standing `out` studs proud of the face (through the wall, or
+	-- on the one face)
+	local function slab(out, sy, sz, cf, mat, color, extra)
+		if side then
+			return D(core, Vector3.new(out + 0.02, sy, sz), cf * CFrame.new(side * (T / 2 + out / 2 - 0.01), 0, 0), mat, color, extra)
+		end
+		return D(core, Vector3.new(T + out * 2, sy, sz), cf, mat, color, extra)
+	end
 	local function band(yA, yB, extraT, color, mat, extra)
 		local a, b = math.max(yA, y0), math.min(yB, y1)
 		if a < 0.01 then
 			a = 0.012 -- never share the floor plane with the wall core
 		end
 		if b - a > 0.02 then
-			return D(core, Vector3.new(T + extraT, b - a, w - 0.03), at((a + b) / 2), mat or M.SmoothPlastic, color, extra)
+			return slab(extraT / 2, b - a, w - 0.03, at((a + b) / 2), mat or M.SmoothPlastic, color, extra)
+		end
+	end
+	-- a lit strip: plain plastic with a glowing face toward the room(s)
+	local function lit(p, color)
+		for _, f in side and { side > 0 and N.Right or N.Left } or { N.Right, N.Left } do
+			glowFace(p, f, color)
+		end
+		return p
+	end
+	if side then
+		-- the face's own finish, 0.04 thick (every trim stands prouder than
+		-- that), its ends tucked in behind the trims' so they never share a plane
+		local a = math.max(y0, 0.012)
+		if y1 - a > 0.02 then
+			D(core, Vector3.new(0.04, y1 - a, w - 0.07), at((a + y1) / 2) * CFrame.new(side * (T / 2 + 0.02), 0, 0), st.Core, st.Kind == "Industrial" and st.Upper or vary(st.Upper, 0.03))
 		end
 	end
 	if st.Kind == "Office" then
@@ -564,12 +606,15 @@ local function decorate(core, st, at, w, y0, y1, full, idx)
 		band(0.4, st.LowerH, 0.2, st.Lower, st.LowerMat or M.SmoothPlastic)
 		band(st.LowerH, st.LowerH + 0.22, 0.32, st.Line)
 		if st.Glow then
-			band(st.LowerH + 0.22, st.LowerH + 0.3, 0.26, st.Glow, M.Neon)
+			local g = band(st.LowerH + 0.22, st.LowerH + 0.3, 0.26, st.Line)
+			if g then
+				lit(g, st.Glow)
+			end
 		end
 		if full then
 			band(y1 - 0.55, y1, 0.36, st.Cornice)
 			-- subtle panel seam
-			D(core, Vector3.new(T + 0.04, y1 - st.LowerH - 1.2, 0.07), at((st.LowerH + y1 - 0.6) / 2) * CFrame.new(0, 0, w / 2 - 0.03), M.SmoothPlastic, st.Line, { Transparency = 0.4 })
+			slab(side and 0.06 or 0.02, y1 - st.LowerH - 1.2, 0.07, at((st.LowerH + y1 - 0.6) / 2) * CFrame.new(0, 0, w / 2 - 0.03), M.SmoothPlastic, st.Line, { Transparency = 0.4 })
 		end
 	elseif st.Kind == "Concrete" then
 		band(0, 0.35, 0.3, st.Line)
@@ -599,14 +644,15 @@ local function decorate(core, st, at, w, y0, y1, full, idx)
 				-- ribs broken by the mid band
 				for _, span in { { ya, math.min(yb, 7.2) }, { math.max(ya, 7.8), yb } } do
 					if span[2] - span[1] > 0.3 then
-						D(core, Vector3.new(T + 0.44, span[2] - span[1], 0.34), at((span[1] + span[2]) / 2) * CFrame.new(0, 0, z), M.Metal, st.Rib)
+						slab(0.22, span[2] - span[1], 0.34, at((span[1] + span[2]) / 2) * CFrame.new(0, 0, z), M.Metal, st.Rib)
 					end
 				end
 			end
 		end
 		if full and idx % 3 == 1 and y1 > 10 then
-			local bar = D(core, Vector3.new(T + 0.8, 0.28, w * 0.85), at(9.6), M.Neon, st.LightBar)
-			D(core, Vector3.new(T + 0.74, 0.5, w * 0.9), at(9.6) * CFrame.new(0, 0.05, 0), M.Metal, rgb(28, 28, 30))
+			-- a wall light: a steel housing with a lit lens along its front
+			local bar = lit(slab(0.4, 0.28, w * 0.85, at(9.6), M.SmoothPlastic, rgb(236, 238, 242)), st.LightBar)
+			slab(0.37, 0.5, w * 0.9, at(9.6) * CFrame.new(0, 0.05, 0), M.Metal, rgb(28, 28, 30))
 			if idx % 6 == 1 then
 				pointLight(bar, 14, 0.7, st.LightBar)
 			end
@@ -616,10 +662,21 @@ end
 
 -- Features that break up long runs: stencils, vents, wall TVs, fire points...
 local STENCIL_CODES = { "WX-01", "WX-04", "B-07", "SEC 3", "HAZ-2", "E-12", "WX-10", "K-09" }
-local function feature(core, st, at, w, side, idx, H)
+-- wall spots kept bare for big fittings the rooms hang later: { centre, radius }
+local FEATURE_CLEAR = {
+	{ Vector3.new(108, 0, -57), 9 }, -- the Reactor's big power display
+}
+local function feature(core, st, at, w, side, idx, H, T)
+	T = T or st.T
+	local here = at(0).Position
+	for _, c in FEATURE_CLEAR do
+		if Vector3.new(here.X - c[1].X, 0, here.Z - c[1].Z).Magnitude < c[2] then
+			return
+		end
+	end
 	local r = (idx * 7919) % 11
 	local faceCF = function(y)
-		return at(y) * CFrame.new(side * (st.T / 2 + (st.Kind == "Industrial" and 0.45 or 0.25)), 0, 0) * CFrame.Angles(0, side > 0 and math.rad(-90) or math.rad(90), 0)
+		return at(y) * CFrame.new(side * (T / 2 + (st.Kind == "Industrial" and 0.45 or 0.25)), 0, 0) * CFrame.Angles(0, side > 0 and math.rad(-90) or math.rad(90), 0)
 	end
 	-- faceCF: -Z points away from the wall (front of the feature faces the room)
 	if r == 0 and H >= 9 then
@@ -653,15 +710,26 @@ local function feature(core, st, at, w, side, idx, H)
 	end
 end
 
--- Structural columns every 16 studs (not breakable)
-local function pilaster(parent, st, at, H)
-	local T = st.T
+-- Structural columns every 16 studs (not breakable). T is the wall's
+-- thickness; with a `side` only that face gets its column.
+local function pilaster(parent, st, at, H, T, side)
+	T = T or st.T
+	local sides = side and { side } or { -1, 1 }
 	if st.Kind == "Office" then
-		D(parent, Vector3.new(T + 1.2, H, 1.6), at(H / 2), M.SmoothPlastic, st.Pil, { CanCollide = true })
-		D(parent, Vector3.new(T + 1.5, 0.5, 1.9), at(0.25), M.SmoothPlastic, st.Line)
-		D(parent, Vector3.new(T + 1.5, 0.4, 1.9), at(math.min(H, BH) - 0.2), M.SmoothPlastic, st.Line)
+		if side then
+			local off = function(y, out)
+				return at(y) * CFrame.new(side * (T / 2 + out / 2 - 0.01), 0, 0)
+			end
+			D(parent, Vector3.new(0.62, H, 1.6), off(H / 2, 0.6), M.SmoothPlastic, st.Pil, { CanCollide = true })
+			D(parent, Vector3.new(0.77, 0.5, 1.9), off(0.25, 0.75), M.SmoothPlastic, st.Line)
+			D(parent, Vector3.new(0.77, 0.4, 1.9), off(math.min(H, BH) - 0.2, 0.75), M.SmoothPlastic, st.Line)
+		else
+			D(parent, Vector3.new(T + 1.2, H, 1.6), at(H / 2), M.SmoothPlastic, st.Pil, { CanCollide = true })
+			D(parent, Vector3.new(T + 1.5, 0.5, 1.9), at(0.25), M.SmoothPlastic, st.Line)
+			D(parent, Vector3.new(T + 1.5, 0.4, 1.9), at(math.min(H, BH) - 0.2), M.SmoothPlastic, st.Line)
+		end
 	elseif st.Kind == "Concrete" then
-		for _, s in { -1, 1 } do
+		for _, s in sides do
 			local x = s * (T / 2 + 0.7)
 			local a = (at(0) * CFrame.new(x, 0, 0)).Position
 			local b = (at(H) * CFrame.new(x, 0, 0)).Position
@@ -672,8 +740,12 @@ local function pilaster(parent, st, at, H)
 			cyl(parent, a, a + Vector3.new(0, 0.5, 0), 1.4, M.Metal, rgb(40, 40, 42), nil, true)
 		end
 	elseif st.Kind == "Industrial" then
-		D(parent, Vector3.new(T + 0.2, H, 0.6), at(H / 2), M.Metal, st.Pil, { CanCollide = true })
-		for _, s in { -1, 1 } do
+		if side then
+			D(parent, Vector3.new(0.12, H, 0.6), at(H / 2) * CFrame.new(side * (T / 2 + 0.05), 0, 0), M.Metal, st.Pil)
+		else
+			D(parent, Vector3.new(T + 0.2, H, 0.6), at(H / 2), M.Metal, st.Pil, { CanCollide = true })
+		end
+		for _, s in sides do
 			D(parent, Vector3.new(0.4, H, 1.9), at(H / 2) * CFrame.new(s * (T / 2 + 1.1), 0, 0), M.Metal, st.Pil)
 			D(parent, Vector3.new(1.1, H, 0.35), at(H / 2) * CFrame.new(s * (T / 2 + 0.55), 0, 0), M.Metal, st.Pil)
 			local hz = D(parent, Vector3.new(0.12, 2.4, 1.9), at(1.4) * CFrame.new(s * (T / 2 + 1.36), 0, 0), M.SmoothPlastic, rgb(222, 170, 28))
@@ -684,6 +756,30 @@ local function pilaster(parent, st, at, H)
 			end
 		end
 	end
+end
+
+-- Every room's wall style: each face of a wall is dressed for the room it
+-- faces (a wall between two rooms is half one, half the other).
+local ROOM_STYLE = {
+	Atrium = "Industrial", Foundry = "Industrial", Hangar = "Industrial", Reactor = "Industrial",
+	RingN = "Concrete", RingS = "Concrete", RingE = "Concrete", RingW = "Concrete",
+	Genetics = "Lab", Cryo = "Lab", Reception = "Lab", Surgery = "Lab",
+	Command = "Dark", Servers = "Dark",
+	Archive = "Office", Canteen = "Office", Quarters = "Office",
+}
+-- the styles of the rooms on the left (-1) and right (+1) of a spot on a
+-- wall; a side with no room (outside the building) takes the other side's,
+-- and with rooms on neither the wall keeps its own
+local function sidesOf(at, st)
+	local function on(side)
+		local p = (at(0) * CFrame.new(side * 3, 0, 0)).Position
+		local r = roomAt(p.X, p.Z)
+		return r and STYLES[ROOM_STYLE[r.Id] or ""] or nil
+	end
+	local L, R = on(-1), on(1)
+	L = L or R or st
+	R = R or L
+	return L, R
 end
 
 local function openingFrame(parent, st, frame, o, H)
@@ -838,15 +934,25 @@ local function wallRun(parent, ax, az, bx, bz, H, styleName, openings, opts)
 				else
 					spans = { { 0, breakH, true } }
 				end
+				local L, R = sidesOf(at, st)
+				local split = L ~= R
 				for _, sp in spans do
-					local core = P(model, Vector3.new(T, sp[2] - sp[1], w), at((sp[1] + sp[2]) / 2), st.Core, vary(st.Upper, 0.03))
+					-- one style both sides: the core is that finish and its trims run
+					-- through it; two: a plain core, each face skinned in its own
+					local look = split and st or L
+					local core = P(model, Vector3.new(T, sp[2] - sp[1], w), at((sp[1] + sp[2]) / 2), split and M.SmoothPlastic or look.Core, split and rgb(40, 40, 44) or vary(look.Upper, 0.03))
 					-- claws clash on painted walls like concrete (see Combat.Surface)
-					core:SetAttribute("Surface", st.Core == M.Metal and "Metal" or "Stone")
+					core:SetAttribute("Surface", look.Core == M.Metal and "Metal" or "Stone")
 					if not opts.Solid then
 						breakable(core)
 						table.insert(wallCores, core)
 					end
-					decorate(core, st, at, w, sp[1], sp[2], sp[3], idx)
+					if split then
+						decorate(core, L, at, w, sp[1], sp[2], sp[3], idx, T, -1)
+						decorate(core, R, at, w, sp[1], sp[2], sp[3], idx, T, 1)
+					else
+						decorate(core, L, at, w, sp[1], sp[2], sp[3], idx, T)
+					end
 					-- nothing hung where a door frame's trim would cut through it
 					local byFrame = false
 					for _, op in openings do
@@ -858,7 +964,7 @@ local function wallRun(parent, ax, az, bx, bz, H, styleName, openings, opts)
 						for _, side in { -1, 1 } do
 							local probe = (at(0) * CFrame.new(side * 3, 0, 0)).Position
 							if roomAt(probe.X, probe.Z) then
-								feature(core, st, at, w, side, idx * 2 + side, breakH)
+								feature(core, side < 0 and L or R, at, w, side, idx * 2 + side, breakH, T)
 							end
 						end
 					end
@@ -874,16 +980,39 @@ local function wallRun(parent, ax, az, bx, bz, H, styleName, openings, opts)
 	-- upper structure above the breakable band
 	if H > breakH + 0.05 then
 		local uh = H - breakH
-		P(model, Vector3.new(T, uh, len), frame * CFrame.new(0, breakH + uh / 2, -len / 2), st.Core, st.Kind == "Industrial" and rgb(46, 44, 42) or st.Upper)
-		if st.Kind == "Industrial" then
-			for y = breakH + 6, H - 2, 8 do
-				D(model, Vector3.new(T + 1.2, 0.9, len - 0.1), frame * CFrame.new(0, y, -len / 2), M.Metal, rgb(34, 33, 32))
+		local L, R = sidesOf(function(y)
+			return frame * CFrame.new(0, y, -len / 2)
+		end, st)
+		local function upperFinish(s2)
+			return s2.Kind == "Industrial" and rgb(46, 44, 42) or s2.Upper
+		end
+		if L == R then
+			P(model, Vector3.new(T, uh, len), frame * CFrame.new(0, breakH + uh / 2, -len / 2), L.Core, upperFinish(L))
+		else
+			P(model, Vector3.new(T, uh, len), frame * CFrame.new(0, breakH + uh / 2, -len / 2), M.SmoothPlastic, rgb(40, 40, 44))
+		end
+		-- each face's upper wall in its own room's style
+		for _, pass in L == R and { { L, nil } } or { { L, -1 }, { R, 1 } } do
+			local s2, side = pass[1], pass[2]
+			local function slab(out, sy, sz, cf, mat, color)
+				if side then
+					return D(model, Vector3.new(out + 0.02, sy, sz), cf * CFrame.new(side * (T / 2 + out / 2 - 0.01), 0, 0), mat, color)
+				end
+				return D(model, Vector3.new(T + out * 2, sy, sz), cf, mat, color)
 			end
-			for z = 2, len - 1, 2 do
-				D(model, Vector3.new(T + 0.5, uh - 0.2, 0.4), frame * CFrame.new(0, breakH + uh / 2, -z), M.Metal, rgb(70, 66, 60))
+			if side then
+				D(model, Vector3.new(0.04, uh - 0.02, len), frame * CFrame.new(side * (T / 2 + 0.02), breakH + (uh - 0.02) / 2, -len / 2), s2.Core, upperFinish(s2))
 			end
-		elseif st.Kind == "Concrete" then
-			D(model, Vector3.new(T + 0.2, 0.4, len - 0.1), frame * CFrame.new(0, breakH + 0.23, -len / 2), M.SmoothPlastic, st.Line)
+			if s2.Kind == "Industrial" then
+				for y = breakH + 6, H - 2, 8 do
+					slab(0.6, 0.9, len - 0.1, frame * CFrame.new(0, y, -len / 2), M.Metal, rgb(34, 33, 32))
+				end
+				for z = 2, len - 1, 2 do
+					slab(0.25, uh - 0.2, 0.4, frame * CFrame.new(0, breakH + uh / 2, -z), M.Metal, rgb(70, 66, 60))
+				end
+			elseif s2.Kind == "Concrete" then
+				slab(0.1, 0.4, len - 0.1, frame * CFrame.new(0, breakH + 0.23, -len / 2), M.SmoothPlastic, s2.Line)
+			end
 		end
 	end
 
@@ -891,9 +1020,16 @@ local function wallRun(parent, ax, az, bx, bz, H, styleName, openings, opts)
 	if not opts.NoPilasters then
 		for t = 8, len - 4, 16 do
 			if not openingAt(t) and not openingAt(t - 1.5) and not openingAt(t + 1.5) then
-				pilaster(model, st, function(y)
+				local at = function(y)
 					return frame * CFrame.new(0, y, -t)
-				end, H)
+				end
+				local L, R = sidesOf(at, st)
+				if L == R then
+					pilaster(model, L, at, H, T)
+				else
+					pilaster(model, L, at, H, T, -1)
+					pilaster(model, R, at, H, T, 1)
+				end
 			end
 		end
 	end
@@ -992,22 +1128,6 @@ local function fit(parent, size, cf, mat, color, extra)
 	return p
 end
 local UPRIGHT = CFrame.Angles(0, 0, math.rad(90)) -- a cylinder standing on end
-
--- A lit face on a fitting: a SurfaceGui that ignores the room's light, so
--- the diffuser reads as switched on without being a Neon part (Neon blooms
--- into a glowing block). round = a disc (a cylinder's end cap). The middle is
--- a touch brighter than the edge, like a real diffuser.
-local function glowFace(part, face, color, round)
-	local g = make("SurfaceGui", part, { Face = face, SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud, PixelsPerStud = 24, LightInfluence = 0, Brightness = 1 })
-	local panel = fr(g, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1) })
-	if round then
-		make("UICorner", panel, { CornerRadius = UDim.new(0.5, 0) })
-	end
-	local edge = color:Lerp(Color3.new(1, 1, 1), 0.35)
-	local mid = color:Lerp(Color3.new(1, 1, 1), 0.8)
-	make("UIGradient", panel, { Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, edge), ColorSequenceKeypoint.new(0.5, mid), ColorSequenceKeypoint.new(1, edge) }), Rotation = 90 })
-	return g
-end
 
 -- A recessed 2x4 LED panel centred at pos (the ceiling's underside): a slim
 -- painted flange on the tiles, a bevelled reveal stepping up into the
@@ -1470,7 +1590,7 @@ local function turbine(parent, cf, wallZ)
 	end
 	-- steam pipe: up off the casing, then across into the wall
 	local riser = (cf * CFrame.new(-4, 14, 0)).Position
-	local into = Vector3.new(riser.X, riser.Y, wallZ + math.sign(wallZ - riser.Z) * 0.3)
+	local into = Vector3.new(riser.X, riser.Y, wallZ + math.sign(wallZ - riser.Z) * 0.35)
 	pipe(parent, { (cf * CFrame.new(-4, 8, 0)).Position, riser, into }, 1.2, rgb(186, 190, 196), M.Foil)
 	wallCollar(parent, Vector3.new(riser.X, riser.Y, wallZ), Vector3.new(0, 0, math.sign(riser.Z - wallZ)), 1.2)
 	local gauge = D(parent, Vector3.new(2, 1.4, 0.2), cf * CFrame.new(3, 3, -3.7), M.SmoothPlastic, rgb(20, 20, 22))
@@ -2213,7 +2333,7 @@ local function buildHangar(parent)
 		-- stripes: they're painted on the plate under it)
 		local ring = D(pod, Vector3.new(13, 0.06, 13), CFrame.new(c + Vector3.new(0, 0.04, -1)), M.SmoothPlastic, rgb(222, 170, 28))
 		hazard(ring, N.Top, 13, 10)
-		D(pod, Vector3.new(12, 0.3, 12), CFrame.new(c + Vector3.new(0, 0.2, -1)), M.DiamondPlate, rgb(56, 54, 52))
+		D(pod, Vector3.new(12, 0.3, 11.8), CFrame.new(c + Vector3.new(0, 0.2, -1.1)), M.DiamondPlate, rgb(56, 54, 52))
 	end
 	dummy.Parent = pod
 	-- central control podium
@@ -2587,7 +2707,7 @@ local function buildReactor(parent)
 		-- clad in dull steel (bright foil flared white under the core's light)
 		pipe(parent, {
 			c + d * 8 + Vector3.new(0, 6, 0), c + d * 16 + Vector3.new(0, 6, 0), c + d * 16 + Vector3.new(0, 18, 0),
-			Vector3.new(turn.X, F + 18, turn.Z), Vector3.new(turn.X, F + 18, wallZ - out.Z * 0.3),
+			Vector3.new(turn.X, F + 18, turn.Z), Vector3.new(turn.X, F + 18, wallZ - out.Z * 0.35),
 		}, 2.4, rgb(118, 124, 134), M.Metal, rgb(52, 54, 60))
 		wallCollar(parent, Vector3.new(turn.X, F + 18, wallZ), out, 2.4)
 	end
