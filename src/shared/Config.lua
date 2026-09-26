@@ -114,6 +114,9 @@ Config.Sentinel = {
 	-- FarRangeMult: range x1.5 while he's FarAt+ studs from that suit.
 	Laser = { Cooldown = 12, Charge = 0.6, Duration = 3, DPS = 32.4, Range = 260, FarRangeMult = 1.5, FarAt = 70,
 		Slow = 1.5, WallsBurned = 8, Push = 22, CloseRange = 18, CloseMult = 3.2,
+		-- within LockWidth studs of the beam's line (seen from above) it tilts up
+		-- or down onto him, so a jump can't clear it
+		LockWidth = 4,
 		-- Wolverine mashing F while beamed: Presses/sec for full resist; past
 		-- Threshold he braces and walks into the beam at Walk x speed
 		Resist = { Presses = 7, Threshold = 0.5, Walk = 0.38 }, Recover = 3 },

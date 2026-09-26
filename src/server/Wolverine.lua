@@ -526,63 +526,241 @@ local function shatterTank(glass, liquid, dir)
 		shard.AssemblyAngularVelocity = Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5) * 30
 		Debris:AddItem(shard, 5 + math.random() * 2)
 	end
-	-- the fluid gushes out in a torrent, arcing down to the floor
-	local floorY0 = c.Y - height / 2
+	-- with the glass gone the column collapses: the fluid pours out (mostly
+	-- the way he kicked), splashes down on the plinth and the floor, runs
+	-- over the plinth's lip and floods out across the floor
+	local plinthTop = c.Y - height / 2
+	local skip = { folder }
+	for _, p in game:GetService("Players"):GetPlayers() do
+		if p.Character then
+			table.insert(skip, p.Character)
+		end
+	end
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = skip
+	local ray = workspace:Raycast(c + dir * (radius + 6), Vector3.new(0, -height * 2, 0), params)
+	local floorY = plinthTop - 1.9 -- the plinth's height when nothing is hit
+	if ray and ray.Position.Y < plinthTop - 0.3 and ray.Position.Y > plinthTop - 6 then
+		floorY = ray.Position.Y
+	end
+	local rim = radius + 1.8 -- the plinth's top reaches this far out from the centre
+	local g = workspace.Gravity
+	local base = Instance.new("Part")
+	base.Anchored, base.CanCollide, base.CanQuery, base.CanTouch, base.Transparency = true, false, false, false, 1
+	base.Size = Vector3.one * 0.2
+	base.CFrame = CFrame.new(c.X, floorY, c.Z)
+	base.Parent = folder
+	Debris:AddItem(base, 8)
+	local splashProps = {
+		Texture = "rbxasset://textures/particles/smoke_main.dds",
+		Color = ColorSequence.new(Color3.fromRGB(200, 255, 248), FLUID),
+		LightEmission = 0.35,
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.5), NumberSequenceKeypoint.new(1, 1.4) }),
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.25), NumberSequenceKeypoint.new(1, 1) }),
+		Lifetime = NumberRange.new(0.3, 0.55),
+		Speed = NumberRange.new(5, 11),
+		SpreadAngle = Vector2.new(55, 55),
+		Acceleration = Vector3.new(0, -60, 0),
+		EmissionDirection = Enum.NormalId.Top,
+	}
+	local function splash(at)
+		local att = Instance.new("Attachment")
+		att.Position = base.CFrame:PointToObjectSpace(at)
+		att.Parent = base
+		local pe = Instance.new("ParticleEmitter")
+		for k, v in splashProps do
+			pe[k] = v
+		end
+		pe.Rate = 90
+		pe.Parent = att
+		task.delay(0.08, function()
+			pe.Enabled = false
+		end)
+		Debris:AddItem(att, 1)
+	end
+	-- where (and when) a blob thrown from p0 at v comes down: on the plinth
+	-- if it's still over it, else on the floor
+	local function landing(p0, v)
+		for _, surface in { { plinthTop, rim - 0.3 }, { floorY, math.huge } } do
+			local dy = p0.Y - surface[1]
+			if dy > 0 then
+				local t = (v.Y + math.sqrt(v.Y * v.Y + 2 * g * dy)) / g
+				local at = p0 + Vector3.new(v.X, 0, v.Z) * t
+				if Vector3.new(at.X - c.X, 0, at.Z - c.Z).Magnitude <= surface[2] then
+					return t, Vector3.new(at.X, surface[1], at.Z)
+				end
+			end
+		end
+		return 1, p0
+	end
+	local ahead = math.atan2(dir.Z, dir.X)
+	local level0 = liquid and liquid.CFrame.Position.Y + liquid.Size.X / 2 or c.Y + height * 0.3
+	local POUR = 2
+	task.spawn(function()
+		local t0 = os.clock()
+		local n = 0
+		while os.clock() - t0 < POUR do
+			local u = (os.clock() - t0) / POUR
+			local level = level0 + (plinthTop - level0) * u * u -- the surface drops faster as it empties
+			for _ = 1, u < 0.5 and 3 or 2 do
+				n += 1
+				-- most of it rushes out the front, the rest all round
+				local a = math.random() < 0.65 and ahead + (math.random() - 0.5) * 2.2 or math.random() * math.pi * 2
+				local out = Vector3.new(math.cos(a), 0, math.sin(a))
+				local y = plinthTop + 0.4 + math.random() * math.max(0.3, (level - plinthTop) * 0.75)
+				local head = math.max(0.3, level - y)
+				local p0 = Vector3.new(c.X, y, c.Z) + out * (radius - 0.2)
+				local v = out * (6 + math.sqrt(head) * 5.5) + out:Cross(Vector3.yAxis) * (math.random() - 0.5) * 4 + Vector3.new(0, math.random() * 3, 0)
+				local blob = Instance.new("Part")
+				blob.Shape = Enum.PartType.Ball
+				blob.Size = Vector3.one * (0.5 + math.random() * 0.9) * (1.2 - u * 0.5)
+				blob.CanCollide, blob.CanQuery, blob.CanTouch, blob.CastShadow = false, false, false, false
+				blob.Material = Enum.Material.Glass
+				blob.Color = FLUID
+				blob.Transparency = 0.3
+				blob.Reflectance = 0.2
+				blob.CFrame = CFrame.new(p0)
+				blob.Parent = folder
+				blob:SetNetworkOwner(nil) -- the server's arc, so it lands where we splash it
+				blob.AssemblyLinearVelocity = v
+				local t, at = landing(p0, v)
+				Debris:AddItem(blob, t)
+				if n % 2 == 0 then
+					task.delay(t, splash, at)
+				end
+			end
+			task.wait(0.05)
+		end
+	end)
+	-- the spray over the top of the torrent
 	local gush = Instance.new("Part")
 	gush.Anchored, gush.CanCollide, gush.CanQuery, gush.Transparency = true, false, false, 1
-	gush.Size = Vector3.new(radius * 1.6, height * 0.5, 0.5)
-	gush.CFrame = CFrame.lookAt(c + dir * radius - Vector3.new(0, height * 0.15, 0), c + dir * (radius + 1) - Vector3.new(0, height * 0.15, 0))
+	gush.Size = Vector3.new(radius * 1.6, height * 0.4, 0.5)
+	gush.CFrame = CFrame.lookAt(c + dir * radius - Vector3.new(0, height * 0.2, 0), c + dir * (radius + 1) - Vector3.new(0, height * 0.2, 0))
 	gush.Parent = folder
 	local torrent = Instance.new("ParticleEmitter")
 	torrent.Texture = "rbxasset://textures/particles/smoke_main.dds"
 	torrent.Color = ColorSequence.new(Color3.fromRGB(200, 255, 248), FLUID)
 	torrent.LightEmission = 0.35
-	torrent.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.4), NumberSequenceKeypoint.new(1, 3.4) })
-	torrent.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(0.7, 0.5), NumberSequenceKeypoint.new(1, 1) })
-	torrent.Lifetime = NumberRange.new(0.6, 1)
-	torrent.Rate = 260
-	torrent.Speed = NumberRange.new(14, 24)
+	torrent.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.2), NumberSequenceKeypoint.new(1, 3) })
+	torrent.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(0.7, 0.55), NumberSequenceKeypoint.new(1, 1) })
+	torrent.Lifetime = NumberRange.new(0.35, 0.6)
+	torrent.Rate = 160
+	torrent.Speed = NumberRange.new(12, 20)
 	torrent.SpreadAngle = Vector2.new(25, 10)
-	torrent.Acceleration = Vector3.new(0, -70, 0)
+	torrent.Acceleration = Vector3.new(0, -g * 0.6, 0)
 	torrent.EmissionDirection = Enum.NormalId.Front
 	torrent.Shape = Enum.ParticleEmitterShape.Box
 	torrent.Parent = gush
 	local droplets = torrent:Clone()
 	droplets.Texture = "rbxasset://textures/particles/sparkles_main.dds"
 	droplets.Size = NumberSequence.new(0.35, 0.1)
-	droplets.Rate = 160
-	droplets.Speed = NumberRange.new(18, 34)
+	droplets.Rate = 120
+	droplets.Speed = NumberRange.new(16, 30)
 	droplets.SpreadAngle = Vector2.new(45, 30)
 	droplets.LightEmission = 0.8
 	droplets.Parent = gush
-	task.delay(1.1, function()
-		torrent.Rate = 70 -- the gush eases to a pour
-		droplets.Rate = 30
+	task.delay(1, function()
+		torrent.Rate = 60 -- the gush eases to a pour
+		droplets.Rate = 25
 	end)
-	task.delay(2.2, function()
+	task.delay(POUR, function()
 		torrent.Enabled = false
 		droplets.Enabled = false
 	end)
 	Debris:AddItem(gush, 4)
-	-- and spreads across the floor in a sheet, then slowly drains away
-	local puddle = Instance.new("Part")
-	puddle.Shape = Enum.PartType.Cylinder
-	puddle.Anchored, puddle.CanCollide, puddle.CanQuery, puddle.CanTouch, puddle.CastShadow = true, false, false, false, false
-	puddle.Material = Enum.Material.Glass
-	puddle.Color = FLUID
-	puddle.Transparency = 0.45
-	puddle.Reflectance = 0.35
-	puddle.Size = Vector3.new(0.06, radius * 2, radius * 2)
-	puddle.CFrame = CFrame.new(c.X, floorY0 + 0.05, c.Z) * CFrame.Angles(0, 0, math.rad(90))
-	puddle.Parent = folder
-	local spread = CFrame.new(c.X + dir.X * 7, floorY0 + 0.05, c.Z + dir.Z * 7) * CFrame.Angles(0, 0, math.rad(90))
-	TweenService:Create(puddle, TweenInfo.new(1.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = Vector3.new(0.06, 30, 30), CFrame = spread }):Play()
-	task.delay(4, function()
-		if puddle.Parent then
-			TweenService:Create(puddle, TweenInfo.new(8), { Transparency = 1, Size = Vector3.new(0.06, 34, 34) }):Play()
+	-- it runs over the plinth's lip: a skin of water down its sides and a
+	-- spill off the edge all round (heaviest at the front)
+	local skin = Instance.new("Part")
+	skin.Shape = Enum.PartType.Cylinder
+	skin.Anchored, skin.CanCollide, skin.CanQuery, skin.CanTouch, skin.CastShadow = true, false, false, false, false
+	skin.Material = Enum.Material.Glass
+	skin.Color = FLUID
+	skin.Transparency = 1
+	skin.Reflectance = 0.3
+	skin.Size = Vector3.new(plinthTop - floorY - 0.06, (rim + 1.2) * 2, (rim + 1.2) * 2)
+	skin.CFrame = CFrame.new(c.X, (plinthTop + floorY) / 2 - 0.02, c.Z) * CFrame.Angles(0, 0, math.rad(90))
+	skin.Parent = folder
+	local pool = Instance.new("Part") -- the flood on the plinth top
+	pool.Shape = Enum.PartType.Cylinder
+	pool.Anchored, pool.CanCollide, pool.CanQuery, pool.CanTouch, pool.CastShadow = true, false, false, false, false
+	pool.Material = Enum.Material.Glass
+	pool.Color = FLUID
+	pool.Transparency = 0.4
+	pool.Reflectance = 0.35
+	pool.Size = Vector3.new(0.06, radius * 2, radius * 2)
+	pool.CFrame = CFrame.new(c.X, plinthTop + 0.04, c.Z) * CFrame.Angles(0, 0, math.rad(90))
+	pool.Parent = folder
+	TweenService:Create(pool, TweenInfo.new(0.35), { Size = Vector3.new(0.06, rim * 2, rim * 2) }):Play()
+	task.delay(0.3, function()
+		TweenService:Create(skin, TweenInfo.new(0.25), { Transparency = 0.55 }):Play()
+		for k = 0, 11 do
+			local a = ahead + k / 12 * math.pi * 2
+			local out = Vector3.new(math.cos(a), 0, math.sin(a))
+			local front = math.cos(a - ahead) * 0.5 + 0.5 -- 1 at the front, 0 behind
+			local att = Instance.new("Attachment")
+			att.CFrame = base.CFrame:ToObjectSpace(CFrame.lookAt(Vector3.new(c.X, plinthTop + 0.1, c.Z) + out * rim, Vector3.new(c.X, plinthTop + 0.1, c.Z) + out * (rim + 1)))
+			att.Parent = base
+			local spill = Instance.new("ParticleEmitter")
+			for key, v in splashProps do
+				spill[key] = v
+			end
+			spill.EmissionDirection = Enum.NormalId.Front
+			spill.Speed = NumberRange.new(2, 5)
+			spill.SpreadAngle = Vector2.new(30, 10)
+			spill.Lifetime = NumberRange.new(0.3, 0.45)
+			spill.Rate = 10 + front * 40
+			spill.Parent = att
+			task.delay(POUR + 0.6, function()
+				spill.Enabled = false
+			end)
 		end
 	end)
-	Debris:AddItem(puddle, 12.5)
+	task.delay(POUR + 0.8, function()
+		TweenService:Create(skin, TweenInfo.new(2), { Transparency = 1 }):Play()
+		TweenService:Create(pool, TweenInfo.new(6), { Transparency = 1 }):Play()
+	end)
+	Debris:AddItem(skin, POUR + 3)
+	Debris:AddItem(pool, POUR + 7)
+	-- and floods out across the floor from where it came down, furthest the
+	-- way it was kicked, then slowly drains away
+	local sheets = {
+		-- { out along (radians from ahead), distance from centre, diameter, delay, grow time }
+		{ 0, rim + 4, 24, 0.25, 2 },
+		{ 0, rim + 12, 18, 0.8, 2.6 },
+		{ -1.1, rim + 3, 18, 0.45, 2.2 },
+		{ 1.1, rim + 3, 18, 0.45, 2.2 },
+		{ -2.2, rim + 1, 14, 0.7, 2.4 },
+		{ 2.2, rim + 1, 14, 0.7, 2.4 },
+		{ math.pi, rim, 12, 0.9, 2.6 },
+	}
+	for i, sh in sheets do
+		local a = ahead + sh[1]
+		local at = Vector3.new(c.X, floorY + 0.105 + i * 0.003, c.Z) + Vector3.new(math.cos(a), 0, math.sin(a)) * sh[2]
+		local sheet = Instance.new("Part")
+		sheet.Shape = Enum.PartType.Cylinder
+		sheet.Anchored, sheet.CanCollide, sheet.CanQuery, sheet.CanTouch, sheet.CastShadow = true, false, false, false, false
+		sheet.Material = Enum.Material.Glass
+		sheet.Color = FLUID
+		sheet.Transparency = 0.45
+		sheet.Reflectance = 0.35
+		-- starts at the plinth's foot and slides out as it widens
+		local foot = Vector3.new(c.X, at.Y, c.Z) + Vector3.new(math.cos(a), 0, math.sin(a)) * rim
+		sheet.Size = Vector3.new(0.02, 2, 2)
+		sheet.CFrame = CFrame.new(foot) * CFrame.Angles(0, 0, math.rad(90))
+		task.delay(sh[4], function()
+			sheet.Parent = folder
+			TweenService:Create(sheet, TweenInfo.new(sh[5], Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				Size = Vector3.new(0.02, sh[3], sh[3]),
+				CFrame = CFrame.new(at) * CFrame.Angles(0, 0, math.rad(90)),
+			}):Play()
+		end)
+		task.delay(5 + i * 0.3, function()
+			TweenService:Create(sheet, TweenInfo.new(7), { Transparency = 1, Size = Vector3.new(0.02, sh[3] * 1.12, sh[3] * 1.12) }):Play()
+		end)
+		Debris:AddItem(sheet, 13 + i * 0.3)
+	end
 	-- the fluid bursts out and drains
 	local anchor = Instance.new("Part")
 	anchor.Anchored, anchor.CanCollide, anchor.CanQuery, anchor.Transparency = true, false, false, 1

@@ -101,10 +101,8 @@ local function setStatus(text, endsAt)
 end
 
 local function stat(player, name, delta)
-	local ls = player:FindFirstChild("leaderstats")
-	local v = ls and ls:FindFirstChild(name)
-	if v then
-		v.Value += delta
+	if not player.IsBot then
+		PlayerData.AddStat(player, name, delta)
 	end
 end
 
@@ -461,6 +459,7 @@ local function runRound()
 		end
 	end
 	PlayerData.RoundPlayed(list, wolverine)
+	PlayerData.SaveAll()
 	setStatus("Round over", now() + Config.EndScreenTime)
 	task.wait(Config.EndScreenTime)
 

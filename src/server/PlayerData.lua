@@ -88,6 +88,12 @@ local function publish(player)
 	if coins then
 		coins.Value = d.Coins
 	end
+	for _, name in { "Wins", "Kills" } do
+		local v = ls and ls:FindFirstChild(name)
+		if v then
+			v.Value = d[name]
+		end
+	end
 end
 
 function PlayerData.Save(player)
@@ -102,6 +108,8 @@ function PlayerData.Save(player)
 	local ok = pcall(function()
 		store:SetAsync("p_" .. player.UserId, {
 			Coins = d.Coins,
+			Wins = d.Wins,
+			Kills = d.Kills,
 			Owned = owned,
 			Skin = d.Skin,
 			OwnedClaws = (function()
@@ -139,6 +147,21 @@ function PlayerData.Save(player)
 		})
 	end)
 	return ok
+end
+
+-- Leaderboard stats (Wins, Kills): saved with the rest of the data
+function PlayerData.AddStat(player, name, delta)
+	local d = cache[player]
+	if d then
+		d[name] += delta
+		publish(player)
+	else
+		local ls = player:FindFirstChild("leaderstats")
+		local v = ls and ls:FindFirstChild(name)
+		if v then
+			v.Value += delta
+		end
+	end
 end
 
 function PlayerData.AddCoins(player, amount, reason)
@@ -182,6 +205,8 @@ end
 function PlayerData.Load(player)
 	local data = {
 		Coins = 0,
+		Wins = 0, -- leaderboard stats
+		Kills = 0,
 		Owned = { [Skins.Default] = true },
 		Skin = Skins.Default,
 		OwnedClaws = { [Skins.DefaultClaw] = true },
@@ -213,6 +238,8 @@ function PlayerData.Load(player)
 		end
 		if ok and type(saved) == "table" then
 			data.Coins = tonumber(saved.Coins) or 0
+			data.Wins = tonumber(saved.Wins) or 0
+			data.Kills = tonumber(saved.Kills) or 0
 			for _, id in saved.Owned or {} do
 				if Skins.List[id] then
 					data.Owned[id] = true
@@ -278,6 +305,12 @@ function PlayerData.Load(player)
 	end
 	if not player.Parent then
 		return
+	end
+	-- anything won while the save was loading
+	local ls = player:FindFirstChild("leaderstats")
+	for _, name in { "Wins", "Kills" } do
+		local v = ls and ls:FindFirstChild(name)
+		data[name] += v and v.Value or 0
 	end
 	cache[player] = data
 	publish(player)
@@ -812,6 +845,16 @@ MarketplaceService.ProcessReceipt = function(receipt)
 		})
 	end
 	return Enum.ProductPurchaseDecision.PurchaseGranted
+end
+
+-- after each round (GameManager): wins, kills and coins reach the save now,
+-- not only when the player leaves
+function PlayerData.SaveAll()
+	for p in cache do
+		if p.Parent then
+			task.spawn(PlayerData.Save, p)
+		end
+	end
 end
 
 Players.PlayerRemoving:Connect(function(player)

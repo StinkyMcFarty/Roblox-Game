@@ -631,6 +631,19 @@ local function laser(player, char, root, aim)
 		if wRoot and (wRoot.Position - root.Position).Magnitude > cfg.FarAt then
 			range *= cfg.FarRangeMult
 		end
+		-- the pilot aims left/right; the suit tracks his height, so jumping
+		-- over the beam doesn't dodge it (stepping out of its line does)
+		if wRoot then
+			local to = wRoot.Position - origin
+			local flatTo, flatDir = Vector3.new(to.X, 0, to.Z), Vector3.new(dir.X, 0, dir.Z)
+			if flatDir.Magnitude > 0.05 and to.Magnitude > 0.5 then
+				flatDir = flatDir.Unit
+				local along = flatTo:Dot(flatDir)
+				if along > 0 and along < range and (flatTo - flatDir * along).Magnitude < cfg.LockWidth then
+					dir = to.Unit
+				end
+			end
+		end
 		local from, remaining = origin, range
 		local endPos = origin + dir * range
 		local burns = {}

@@ -58,7 +58,9 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
 - Sniff is on R. The death-ray resist mash is F (`Resist` action in ClientMain; with no keyboard
   the Sniff button does it). The release cutscene (5.5s) is timed by
   `Config.IntroLength` / `Config.Intro`: float, wake, two kicks crack the tank (`crackGlass`),
-  a flying kick shatters it (`shatterTank`: shards, torrent, spreading puddle).
+  a flying kick shatters it (`shatterTank`: shards; the column collapses as falling water blobs
+  (server-owned, splash where `landing()` says they come down), floods the plinth, spills over
+  its lip and spreads across the floor found by raycast, not the plinth top).
 - Impale (`stab` in `Wolverine.lua`): claws burst out their back (`SlashFX.ImpaleBurst`); a
   survivor who lives is kicked off the blades (`ImpaleKick`). A Sentinel is heaved overhead on
   both claws (`ImpaleHeavy`) and shocks him for `Config.Wolverine.ImpaleShock` (7%) of his health;
@@ -73,7 +75,8 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
   Pursuit thrusters (`Config.Sentinel.Pursuit`, `Movement.lua`): once Wolverine hasn't hit a
   suit for 2.5s (`HitGrace`; `Combat.Hit` refreshes the `PursuitHold` status) it gets +14 speed,
   cut the moment he hits it again. Death ray: 32.4 DPS, range 260, x1.5 (390) while he's
-  `Laser.FarAt` (70)+ studs from that suit.
+  `Laser.FarAt` (70)+ studs from that suit. The pilot aims left/right; within `Laser.LockWidth`
+  (4) studs of its line the beam tilts onto him, so jumping doesn't dodge it.
   Inhibitor Blast (`Config.Sentinel.Pulse`): radius 30, shatters his i-frames, and during its
   stun a punch grants i-frames only every 2nd hit (`pulseStun` in `Sentinel.lua`).
 - Sentinel walk/run: `SENTINEL LOCOMOTION` block in `Anims.lua` (`heavyLeg` stride model,
@@ -138,6 +141,8 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
 - Auto-AFK (`Config.AutoAfk`, `Store.lua`): Roblox's `Idled` marks you AFK only while in the
   lobby, and any input clears it; the AFK button's own AFK stays on.
 - Currency is shown as "Berserker Coins" (`Config.CoinName`); saves still use the key `Coins`.
+- leaderstats Wins and Kills are saved (`PlayerData.AddStat`, GameManager `stat`); everyone is
+  saved after each round (`PlayerData.SaveAll`).
 - Lobby shell (`BuildLobby` in `MapBuilder.lua`): walls are dressed per wall (`walls` table, `onWall`
   places parts along each inner face; `gaps` keep the band/ring beam off the windows, notice board
   and claw gouges). Light fittings use `fitting()` (CastShadow = false): a shadowed lamp whose own
