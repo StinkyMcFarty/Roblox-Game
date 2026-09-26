@@ -270,8 +270,8 @@ Config.Sounds = {
 -- Anything left at 0 falls back to the built-in sound above.
 Config.UploadedSounds = {
 	Snikt = 0, Slash = 117112770329180, Whoosh = 0, Stab = 0, Impact = 0, Leap = 0, Land = 0,
-	Roar = 72884290623385, Snarl = 0, Tear = 0, Gore = 0, Break = 0, Heartbeat = 94699316471373, Fart = 130496994474771,
-	Sniff = 0, Laser = 0, Punch = 0, Terminal = 0, UIHover = 0, UIClick = 0, Paw = 90700737432630,
+	Roar = 117824553133885, Snarl = 0, Tear = 0, Gore = 0, Break = 0, Heartbeat = 94699316471373, Fart = 130496994474771,
+	Sniff = 0, Laser = 0, Punch = 0, Terminal = 108435390418938, UIHover = 0, UIClick = 0, Paw = 90700737432630,
 	PounceHit = 140573962847729, Impale = 100362323212257, DeathRay = 89285816836463, Chase = 71009071343057,
 	PounceLeap = 92649317075292, -- pounce launch
 	Scream = 94756257053291, -- kill scream after ripping someone in half
@@ -280,12 +280,12 @@ Config.UploadedSounds = {
 	ClawDig = 81900803629932, -- his claws biting into the floor on all fours (4 concrete + 3 steel takes)
 	ClawStone = 79213537781413, -- his claws clashing into concrete walls
 	ClawFlesh = 137648114004971, -- his claws tearing through a survivor
-	SentinelSwing = 103865520255704, -- Sentinel punch wind-up (motor, hydraulic ram, the fist moving the air)
-	SentinelSmash = 93700336440724, -- Sentinel fist landing (on Wolverine or through a wall)
-	RageRoar = 0, -- his rage: a growl erupting into a torn scream, then ragged breaths (until uploaded: Roar pitched down)
-	SentinelWalk = 0, -- Sentinel walking: leg motor, then the steel foot clanking down (4 takes)
-	SentinelRun = 0, -- Sentinel running: the same, heavier (4 takes); until both are uploaded it's StepHeavy
-	TerminalHum = 0, -- terminals idling near you (8s loop); paste its ID here once uploaded
+	SentinelSwing = 97359869063763, -- Sentinel punch wind-up (motor, hydraulic ram, the fist moving the air)
+	SentinelSmash = 138804494341203, -- Sentinel fist landing (on Wolverine or through a wall)
+	RageRoar = 94084920690951, -- his rage: a growl erupting into a torn scream, then ragged breaths
+	SentinelWalk = 111374583353960, -- Sentinel walking: leg motor, then the steel foot clanking down (4 takes)
+	SentinelRun = 126040418055486, -- Sentinel running: the same, heavier (4 takes)
+	TerminalHum = 114385139936936, -- terminals idling near you (8s loop)
 }
 Config.Sounds.Snarl = Config.Sounds.Snarl or ""
 Config.BuiltinSounds = table.clone(Config.Sounds) -- stand-ins if an upload won't play (client/SoundCheck)

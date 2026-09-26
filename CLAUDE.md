@@ -87,7 +87,7 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
 - Sentinel footsteps: `SentinelWalk.ogg` / `SentinelRun.ogg` (4 takes each: the leg motor, then the
   steel foot clanking down at `Lead` seconds, then hydraulics venting). `Anims.lua` starts each take
   `Lead` ahead of the heel strike (phase 0/pi) so the clank lands on it; dust and shake stay on the
-  strike. Until both are uploaded (`Config.UploadedSounds`) it plays the old `StepHeavy`.
+  strike. (Both are uploaded; with either at 0 in `Config.UploadedSounds` it plays the old `StepHeavy`.)
 - Sentinel punch VFX (`SlashFX.Smash`): a ForceField pressure disc, two thick shock rings, a cone of
   speed spikes, steam venting from the punching arm's elbow, sparks + flare on a hit.
 - Sentinels see Wolverine's outline through walls while they're 50+ studs from him
@@ -99,8 +99,8 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
   (`SHORT`), the Sentinel docks as two heads (`Pod` in the JSON), rooms + floor-standing
   wall pieces published by `publishMinimap` in `Facility.lua` (ReplicatedStorage attribute
   `Minimap`, JSON). It shows only the local player - never other players or Wolverine.
-- Terminal ambience (`src/client/TerminalSounds.lua`): beeps now; the hum needs
-  `assets/sfx/TerminalHum.ogg` uploaded and its ID in `Config.UploadedSounds.TerminalHum`.
+- Terminal ambience (`src/client/TerminalSounds.lua`): beeps (`Terminal`) and an idle hum
+  (`TerminalHum`), both uploaded.
 - Survivor upgrades (`Config.Upgrades`, `PlayerData.BuyUpgrade`/`HasUpgrade`, saved as `Upgrades`,
   UI `src/client/Upgrades.lua` on the lobby dock). They're powers on G and only ONE is equipped
   (`PlayerData.Power`/`EquipUpgrade`, saved + attribute `Power`, "" = plain fart; buying equips).
