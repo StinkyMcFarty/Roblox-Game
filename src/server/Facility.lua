@@ -507,9 +507,12 @@ end
 
 local STYLES = {
 	-- clean two-tone office/lab walls: dark wainscot, chair rail, light plaster
-	Office = { T = 1.2, Core = M.Plaster, Upper = rgb(150, 156, 162), Lower = rgb(62, 70, 80), Line = rgb(34, 37, 42), Cornice = rgb(46, 50, 56), Pil = rgb(70, 76, 84), LowerH = 3.4, Kind = "Office" },
-	Lab = { T = 1.2, Core = M.Plaster, Upper = rgb(160, 166, 170), Lower = rgb(84, 104, 110), Line = rgb(38, 44, 48), Cornice = rgb(52, 58, 62), Pil = rgb(92, 100, 106), LowerH = 3.4, Kind = "Office" },
-	Dark = { T = 1.2, Core = M.SmoothPlastic, Upper = rgb(64, 68, 76), Lower = rgb(30, 32, 38), Line = rgb(18, 20, 24), Cornice = rgb(24, 26, 30), Pil = rgb(40, 44, 50), LowerH = 3.4, Kind = "Office", Glow = rgb(60, 190, 255) },
+	-- offices: plaster over dark wood panelling
+	Office = { T = 1.2, Core = M.Plaster, Upper = rgb(170, 168, 160), Lower = rgb(84, 60, 42), LowerMat = M.WoodPlanks, Line = rgb(44, 32, 24), Cornice = rgb(58, 46, 36), Pil = rgb(96, 92, 86), LowerH = 3.4, Kind = "Office" },
+	-- labs, canteen and medical: white ceramic tile over a teal tiled band
+	Lab = { T = 1.2, Core = M.CeramicTiles, Upper = rgb(206, 212, 216), Lower = rgb(70, 128, 134), LowerMat = M.CeramicTiles, Line = rgb(38, 44, 48), Cornice = rgb(52, 58, 62), Pil = rgb(150, 158, 164), LowerH = 3.4, Kind = "Office" },
+	-- command and servers: steel panels over a diamond-plate kick band
+	Dark = { T = 1.2, Core = M.Metal, Upper = rgb(70, 74, 84), Lower = rgb(36, 38, 44), LowerMat = M.DiamondPlate, Line = rgb(18, 20, 24), Cornice = rgb(24, 26, 30), Pil = rgb(44, 48, 56), LowerH = 3.4, Kind = "Office", Glow = rgb(60, 190, 255) },
 	-- bunker corridor: painted concrete, blue-grey dado, orange stripe, red pipe pilasters
 	Concrete = { T = 1.4, Core = M.Concrete, Upper = rgb(176, 178, 180), Lower = rgb(64, 76, 90), Line = rgb(40, 44, 50), Stripe = rgb(226, 118, 32), Pil = rgb(142, 26, 22), LowerH = 2.6, Kind = "Concrete" },
 	-- heavy industrial: ribbed steel, amber light bars, I-beam columns
@@ -547,7 +550,7 @@ local function decorate(core, st, at, w, y0, y1, full, idx)
 	end
 	if st.Kind == "Office" then
 		band(0, 0.4, 0.36, st.Line)
-		band(0.4, st.LowerH, 0.2, st.Lower, M.SmoothPlastic)
+		band(0.4, st.LowerH, 0.2, st.Lower, st.LowerMat or M.SmoothPlastic)
 		band(st.LowerH, st.LowerH + 0.22, 0.32, st.Line)
 		if st.Glow then
 			band(st.LowerH + 0.22, st.LowerH + 0.3, 0.26, st.Glow, M.Neon)
@@ -1081,7 +1084,7 @@ local function ceiling(parent, r, kind)
 	if kind == "Coffered" then
 		-- dropped soffit around the room, recessed light grid inside
 		local band = 4
-		local c = rgb(110, 116, 122)
+		local c = rgb(182, 186, 190)
 		D(parent, Vector3.new(sx, 1.4, band), CFrame.new(cx, y - 0.7, r.z0 + band / 2), M.SmoothPlastic, c)
 		D(parent, Vector3.new(sx, 1.4, band), CFrame.new(cx, y - 0.7, r.z1 - band / 2), M.SmoothPlastic, c)
 		D(parent, Vector3.new(band, 1.4, sz - band * 2), CFrame.new(r.x0 + band / 2, y - 0.7, cz), M.SmoothPlastic, c)
@@ -1090,13 +1093,13 @@ local function ceiling(parent, r, kind)
 		for _, e in { { cx, r.z0 + band + 0.1, sx - band * 2, 0.15 }, { cx, r.z1 - band - 0.1, sx - band * 2, 0.15 } } do
 			D(parent, Vector3.new(e[3], 0.12, e[4]), CFrame.new(e[1], y - 1.3, e[2]), M.Neon, rgb(120, 140, 170))
 		end
-		D(parent, Vector3.new(sx - band * 2, 0.2, sz - band * 2), CFrame.new(cx, y - 0.1, cz), M.SmoothPlastic, rgb(70, 74, 80))
+		D(parent, Vector3.new(sx - band * 2, 0.2, sz - band * 2), CFrame.new(cx, y - 0.1, cz), M.Plaster, rgb(200, 202, 204)) -- acoustic tiles
 		-- ceiling tile grid
 		for x = r.x0 + band + 4, r.x1 - band - 1, 4 do
-			D(parent, Vector3.new(0.08, 0.06, sz - band * 2), CFrame.new(x, y - 0.23, cz), M.SmoothPlastic, rgb(120, 126, 132))
+			D(parent, Vector3.new(0.08, 0.06, sz - band * 2), CFrame.new(x, y - 0.23, cz), M.SmoothPlastic, rgb(128, 132, 138))
 		end
 		for z = r.z0 + band + 4, r.z1 - band - 1, 4 do
-			D(parent, Vector3.new(sx - band * 2, 0.06, 0.08), CFrame.new(cx, y - 0.235, z), M.SmoothPlastic, rgb(120, 126, 132))
+			D(parent, Vector3.new(sx - band * 2, 0.06, 0.08), CFrame.new(cx, y - 0.235, z), M.SmoothPlastic, rgb(128, 132, 138))
 		end
 		-- troffers fill two cells of the grid, so the grid lines run clear of
 		-- their edges: one every 12 studs across and 16 along
