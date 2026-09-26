@@ -27,6 +27,10 @@ Config.HitsToKill = 3 -- the 3rd hit always rips the survivor in half
 Config.HitImmunity = 2.0 -- i-frames after being wounded (no infinite combos)
 Config.WolverineHitRecovery = 0.4 -- Wolverine can't attack for this long after landing a hit
 Config.Throw = { Force = 72, Up = 34, Tumble = 0.8 } -- survivors get flung on a non-lethal hit
+-- Sentinel suits are heavy: a hit shoves them back about a third as far as a
+-- survivor's throw (Force * Scale for Time seconds, barely off the ground),
+-- with no tumble
+Config.SentinelKnock = { Scale = 0.55, Up = 6, Time = 0.35 }
 Config.AdrenalineTime = 1.8 -- speed boost after being wounded
 Config.AdrenalineBonus = 8
 

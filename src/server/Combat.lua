@@ -610,7 +610,10 @@ function Combat.Wound(killer, victim, opts)
 	VFX.Impact(torso.Position, kChar and kChar:GetAttribute("ClawGlow") or Color3.fromRGB(255, 60, 50), 1, char, true)
 	VFX.WoundMarks(char)
 	VFX.IFrames(char, Config.HitImmunity)
-	VFX.ThrowTrail(char, Config.Throw.Tumble + 0.3)
+	local sentinel = victim:GetAttribute("Role") == "Sentinel"
+	if not sentinel then
+		VFX.ThrowTrail(char, Config.Throw.Tumble + 0.3)
+	end
 	VFX.Anim(char, "HitReact")
 	Fx:FireAllClients("HitStop", { Attacker = killer.Character, Victim = char, Duration = 0.08 })
 	Fx:FireAllClients("Shake", { Position = root.Position, Intensity = 0.5, Radius = 35 })
@@ -618,6 +621,18 @@ function Combat.Wound(killer, victim, opts)
 	-- Throw them away from Wolverine
 	local kRoot = Util.Root(killer.Character)
 	local dir = opts.Dir or (kRoot and Util.Flat(root.Position - kRoot.Position) or Util.Flat(-root.CFrame.LookVector))
+	if sentinel then
+		-- a suit is too heavy to fling: it's shoved back a few steps and stays on its feet
+		local k = Config.SentinelKnock
+		local shove = dir * (opts.Force or Config.Throw.Force) * k.Scale + Vector3.new(0, k.Up, 0)
+		if typeof(victim) ~= "Instance" then
+			root.AssemblyLinearVelocity = shove
+		end
+		Util.FireClient(Fx, victim, "Knock", { Velocity = shove, Duration = k.Time })
+		Util.FireClient(Fx, victim, "Hurt", {})
+		Util.FireClient(Fx, killer, "HitConfirm", {})
+		return
+	end
 	local throw = dir * (opts.Force or Config.Throw.Force) + Vector3.new(0, opts.Up or Config.Throw.Up, 0)
 	if typeof(victim) ~= "Instance" then -- a bot (Bots.lua): the server throws it
 		local hum2 = Util.Humanoid(char)
