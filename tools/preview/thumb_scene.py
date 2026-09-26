@@ -70,9 +70,12 @@ def dump(model, box=None):
         parts.append(dump_part(d))
     return parts
 
-hangar = dump(lua.eval('workspace.Map'), (-60, -2, 50, 60, 40, 146))
-json.dump({'parts': hangar}, open(os.path.join(OUT, 'hangar.json'), 'w'))
-print('hangar', len(hangar), 'parts', sum(len(p['lights']) for p in hangar), 'lights')
+# FULLMAP=1 dumps the whole facility (views: thumb.html?room=<file>&plain=1&cam=..&look=..&lightR=75),
+# ROOMFILE names the output (default hangar.json)
+box = (-400, -50, -400, 400, 200, 400) if os.environ.get('FULLMAP') else (-60, -2, 50, 60, 40, 146)
+hangar = dump(lua.eval('workspace.Map'), box)
+json.dump({'parts': hangar}, open(os.path.join(OUT, os.environ.get('ROOMFILE', 'hangar.json')), 'w'))
+print('room', len(hangar), 'parts', sum(len(p['lights']) for p in hangar), 'lights')
 
 # poses for the thumbnail (degrees, AnimClips conventions; see run.py POSES)
 lua.execute('''

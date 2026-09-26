@@ -148,6 +148,20 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
   Foundry: cool work floods, forged-steel crucibles (one pouring into a mould).
 - Sky: `Config.SkyAssetId` loads via InsertService at server start unless a Sky is placed in
   Lighting in Studio.
+- Facility floors (`FLOORS` in `Facility.lua`, keyed by the kind each room passes to `floorTiles`):
+  steel deck (`Grate`), concrete slabs (`Corridor`, `Hangar`), terrazzo (`LabTile`), canteen
+  linoleum (`Checker`), carpet (`Carpet`, `WarmCarpet`), raised floor with vents (`Rubber`), slate
+  (`DarkTile`).
+- LIFE & WEAR (`lifeAndWear` in `Facility.lua`): steam vents, sparking torn cables, wall fans,
+  leaks + puddles, stains, claw gashes with blood, paperwork, flickering tubes, lockdown beacons
+  (spinning amber lamp + Beam shaft). `src/client/MapLife.lua` animates tags `Spin` (Model about
+  its pivot's Z, or Y with attribute `Axis = "Y"`), `Sparks` and `SteamBurst` near the camera.
+  Floor layers have fixed heights (see the section comment); keep new floor decals off them.
+- Z-fighting: `python3 tools/preview/zfight.py <dump.json> --detail --floor <floorY>` lists
+  coplanar overlapping faces/SurfaceGuis that are visible and look different, with the gap.
+  Dumps: `run.py` (suits), `thumb_scene.py` with `FULLMAP=1 ROOMFILE=map.json` (whole facility).
+  Anything at gap 0.000 is real (bar round parts, which it approximates as squares).
+- Stamina bar (`Interface.lua`): no label, just the number (100 when rested, counts down).
 
 ## Monetization (IDs in `src/shared/Config.lua`)
 
