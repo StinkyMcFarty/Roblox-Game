@@ -1,4 +1,5 @@
--- Lobby dock: STORE (buy coin packs with Robux) and AFK (sit out matches).
+-- Lobby dock: STORE (coin packs and the 2x chance pass, bought with Robux)
+-- and AFK (sit out matches).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -28,10 +29,10 @@ local function commas(n)
 end
 
 ---------------------------------------------------------------------------
--- Store window: four coin packs
+-- Store window: four coin packs and the 2x Wolverine chance game pass
 ---------------------------------------------------------------------------
 
-local window = UIKit.Window(gui, Config.CoinName:gsub("s$", ""):upper() .. " STORE", UDim2.fromOffset(720, 400), K.Yellow)
+local window = UIKit.Window(gui, Config.CoinName:gsub("s$", ""):upper() .. " STORE", UDim2.fromOffset(880, 400), K.Yellow)
 local w = window.Frame
 
 local row = new("Frame", { Position = UDim2.fromOffset(20, 72), Size = UDim2.new(1, -40, 0, 270), BackgroundTransparency = 1, ZIndex = 31 }, w)
@@ -129,6 +130,92 @@ for i, pack in Config.CoinPacks do
 			return
 		end
 		MarketplaceService:PromptProductPurchase(player, pack.ProductId)
+	end)
+end
+
+-- 2x Wolverine chance game pass: the last card in the row
+do
+	local card = new("Frame", { Size = UDim2.fromOffset(152, 262), BackgroundColor3 = Color3.new(1, 1, 1), LayoutOrder = #Config.CoinPacks + 1, ZIndex = 32 }, row)
+	corner(card, 14)
+	gradient(card, Color3.fromRGB(46, 28, 72), Color3.fromRGB(18, 12, 28))
+	local cardStroke = stroke(card, K.Purple, 2.5)
+	local ribbon = new("TextLabel", {
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, -10),
+		Size = UDim2.fromOffset(112, 22),
+		BackgroundColor3 = K.Purple,
+		Font = Enum.Font.GothamBlack,
+		TextScaled = true,
+		TextColor3 = Color3.new(1, 1, 1),
+		Text = "GAME PASS",
+		ZIndex = 40,
+	}, card)
+	corner(ribbon, 11)
+	new("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4) }, ribbon)
+	new("TextLabel", {
+		Position = UDim2.fromOffset(0, 26),
+		Size = UDim2.new(1, 0, 0, 76),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamBlack,
+		TextScaled = true,
+		Text = "🎲",
+		ZIndex = 33,
+	}, card)
+	local title = new("TextLabel", {
+		Position = UDim2.fromOffset(8, 116),
+		Size = UDim2.new(1, -16, 0, 34),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.LuckiestGuy,
+		TextScaled = true,
+		TextColor3 = Color3.fromRGB(215, 175, 255),
+		Text = "2X CHANCE",
+		ZIndex = 33,
+	}, card)
+	new("UIStroke", { Thickness = 2 }, title)
+	new("TextLabel", {
+		Position = UDim2.fromOffset(8, 152),
+		Size = UDim2.new(1, -16, 0, 32),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamBold,
+		TextScaled = true,
+		TextWrapped = true,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextColor3 = Color3.fromRGB(210, 200, 225),
+		Text = "Double your Wolverine odds every round. Forever.",
+		ZIndex = 33,
+	}, card)
+	local buy, buyLabel = UIKit.Button(card, {
+		Text = "BUY PASS",
+		Color = K.Purple,
+		Size = UDim2.new(1, -20, 0, 46),
+		Position = UDim2.new(0, 10, 1, -58),
+		ZIndex = 34,
+	})
+	local function showOwned()
+		if player:GetAttribute("DoubleChance") then
+			buyLabel.Text = "OWNED"
+			UIKit.Recolor(buy, K.Green)
+			cardStroke.Color = K.Green
+		end
+	end
+	player:GetAttributeChangedSignal("DoubleChance"):Connect(showOwned)
+	showOwned()
+	buy.Activated:Connect(function()
+		if player:GetAttribute("DoubleChance") then
+			return
+		end
+		if Config.DoubleChanceGamepassId == 0 then
+			message.Text = "The 2x chance pass isn't set up yet (add its ID in Config.DoubleChanceGamepassId)."
+			message.TextColor3 = K.Red
+			return
+		end
+		MarketplaceService:PromptGamePassPurchase(player, Config.DoubleChanceGamepassId)
+	end)
+	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(who, passId, purchased)
+		if who == player and purchased and passId == Config.DoubleChanceGamepassId then
+			message.Text = "2x Wolverine chance unlocked! Your odds are doubled every round."
+			message.TextColor3 = K.Green
+		end
 	end)
 end
 

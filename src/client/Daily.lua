@@ -1,4 +1,4 @@
--- Daily challenges, login streak, Wolverine odds and the Robux pass.
+-- Daily challenges, login streak, Wolverine odds and Become Wolverine.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
@@ -19,7 +19,6 @@ local gui = new("ScreenGui", { Name = "DailyUI", ResetOnSpawn = false, ZIndexBeh
 
 local dailyButton = Shop.DockButton("DAILY", "🎁", K.Green, 2)
 local buyButton, buyLabel = Shop.DockButton("BECOME WOLVERINE", "👑", K.Red, 3)
-local passButton, passLabel = Shop.DockButton("2X CHANCE  R$250", "🎲", K.Purple, 4)
 -- no price on the button: Roblox's purchase prompt shows the real one
 local BUY_TEXT = "BECOME WOLVERINE"
 buyLabel.Text = BUY_TEXT
@@ -59,10 +58,22 @@ new("UIStroke", { Thickness = 1.5 }, oddsText)
 -- Challenges window
 ---------------------------------------------------------------------------
 
-local window = UIKit.Window(gui, "DAILY CHALLENGES", UDim2.fromOffset(520, 400), K.Green)
+local window = UIKit.Window(gui, "DAILY CHALLENGES", UDim2.fromOffset(520, 436), K.Green)
 local w = window.Frame
 
-local list = new("Frame", { Position = UDim2.fromOffset(20, 72), Size = UDim2.new(1, -40, 0, 260), BackgroundTransparency = 1, ZIndex = 31 }, w)
+-- everyone's dailies reset together at 00:00 UTC (server clock)
+local resetText = new("TextLabel", {
+	Position = UDim2.fromOffset(20, 66),
+	Size = UDim2.new(1, -40, 0, 22),
+	BackgroundTransparency = 1,
+	Font = Enum.Font.GothamBlack,
+	TextScaled = true,
+	TextColor3 = Color3.fromRGB(170, 235, 190),
+	Text = "",
+	ZIndex = 31,
+}, w)
+
+local list = new("Frame", { Position = UDim2.fromOffset(20, 100), Size = UDim2.new(1, -40, 0, 260), BackgroundTransparency = 1, ZIndex = 31 }, w)
 new("UIListLayout", { Padding = UDim.new(0, 10) }, list)
 
 local streak = new("Frame", {
@@ -146,6 +157,26 @@ for i, c in Config.DailyChallenges do
 	rows[c.Id] = { Fill = fill, Count = count, Goal = c.Goal, Stroke = rowStroke, Reward = reward, Tile = tile }
 end
 
+local DAY = 24 * 60 * 60
+-- coins for a login on streak day n (same formula as PlayerData.LoginReward)
+local function loginReward(n)
+	local r = Config.DailyReward
+	return r.Base + r.PerStreakDay * (math.clamp(n, 1, r.MaxStreak) - 1)
+end
+
+local function showReset()
+	local left = math.max(0, DAY - math.floor(workspace:GetServerTimeNow()) % DAY)
+	resetText.Text = ("⏱ NEW CHALLENGES + LOGIN REWARD IN %dh %02dm %02ds"):format(left // 3600, left % 3600 // 60, left % 60)
+end
+task.spawn(function()
+	while true do
+		if w.Visible then
+			showReset()
+		end
+		task.wait(0.5)
+	end
+end)
+
 local function refresh()
 	local ok, data = pcall(function()
 		return HttpService:JSONDecode(player:GetAttribute("Challenges") or "{}")
@@ -170,7 +201,7 @@ local function refresh()
 		end
 	end
 	local s = player:GetAttribute("LoginStreak") or 0
-	streakText.Text = ("🔥 LOGIN STREAK: %d DAY%s — COME BACK TOMORROW FOR MORE"):format(s, s == 1 and "" or "S")
+	streakText.Text = ("🔥 LOGIN STREAK: DAY %d — TOMORROW +%d COINS"):format(math.max(s, 1), loginReward(s + 1))
 
 	local tokens = player:GetAttribute("GuaranteedTokens") or 0
 	local chance = player:GetAttribute("WolverineChance") or 0
@@ -192,6 +223,7 @@ end
 
 dailyButton.Activated:Connect(function()
 	refresh()
+	showReset()
 	window.Toggle()
 end)
 buyButton.Activated:Connect(function()
@@ -205,38 +237,6 @@ buyButton.Activated:Connect(function()
 	MarketplaceService:PromptProductPurchase(player, Config.GuaranteedWolverineProductId)
 end)
 
--- 2x Wolverine chance game pass
-local function showPass()
-	if player:GetAttribute("DoubleChance") then
-		passLabel.Text = "2X CHANCE  OWNED"
-		UIKit.Recolor(passButton, K.Green)
-	end
-end
-player:GetAttributeChangedSignal("DoubleChance"):Connect(showPass)
-showPass()
-task.spawn(function()
-	if Config.DoubleChanceGamepassId ~= 0 and not player:GetAttribute("DoubleChance") then
-		local ok, info = pcall(function()
-			return MarketplaceService:GetProductInfo(Config.DoubleChanceGamepassId, Enum.InfoType.GamePass)
-		end)
-		if ok and info and info.PriceInRobux and not player:GetAttribute("DoubleChance") then
-			passLabel.Text = "2X CHANCE  R$" .. info.PriceInRobux
-		end
-	end
-end)
-passButton.Activated:Connect(function()
-	if player:GetAttribute("DoubleChance") then
-		return
-	end
-	if Config.DoubleChanceGamepassId == 0 then
-		passLabel.Text = "NOT SET UP"
-		task.delay(2, function()
-			passLabel.Text = "2X CHANCE  R$250"
-		end)
-		return
-	end
-	MarketplaceService:PromptGamePassPurchase(player, Config.DoubleChanceGamepassId)
-end)
 
 for _, attr in { "Challenges", "LoginStreak", "WolverineChance", "GuaranteedTokens", "WolverineQueue" } do
 	player:GetAttributeChangedSignal(attr):Connect(refresh)
@@ -310,7 +310,8 @@ function Daily.ShowReward(amount, days)
 		Font = Enum.Font.GothamBold,
 		TextScaled = true,
 		TextColor3 = K.Green,
-		Text = ("🔥 Day %d streak — rewards grow every day"):format(days),
+		Text = days >= Config.DailyReward.MaxStreak and ("🔥 Day %d streak — max reward! Log in daily to keep it"):format(days)
+			or ("🔥 Day %d streak — tomorrow +%d coins"):format(days, loginReward(days + 1)),
 		ZIndex = 43,
 	}, holder)
 	local ok = UIKit.Button(holder, {

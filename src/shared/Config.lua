@@ -211,7 +211,8 @@ Config.AutoAfk = true
 -- your odds (everyone starts at weight 1).
 Config.WolverinePityWeight = 1
 
--- Daily challenges (reset every 24 hours per player). Rewards are coins.
+-- Daily challenges: everyone's reset together at 00:00 UTC (the DAILY window
+-- counts down to it). Rewards are coins.
 Config.DailyChallenges = {
 	{ Id = "BecomeWolverine", Text = "Become Wolverine", Goal = 1, Reward = 100 },
 	{ Id = "WolverineKills", Text = "Rip apart 5 survivors as Wolverine", Goal = 5, Reward = 150 },
@@ -219,14 +220,16 @@ Config.DailyChallenges = {
 	{ Id = "PlayMatches", Text = "Play 3 matches", Goal = 3, Reward = 80 },
 }
 
--- Daily login reward: Base + PerStreakDay * (streak - 1), capped at MaxStreak days
+-- Daily login reward, once per UTC day: Base + PerStreakDay * (day - 1). It
+-- grows to MaxStreak days (50, 75 ... 275) and then pays that every day; miss
+-- a day and the streak starts again at day 1.
 Config.WallRegen = 10 -- seconds before shredded walls/props grow back
 
 -- Skybox: a Creator Store sky model, loaded into Lighting when the server
 -- starts. It has to be in the game owner's inventory (Roblox only lets a game
 -- load assets its owner has). 0 = the built-in starry night sky.
 Config.SkyAssetId = 10594688909
-Config.DailyReward = { Base = 50, PerStreakDay = 25, MaxStreak = 7 }
+Config.DailyReward = { Base = 50, PerStreakDay = 25, MaxStreak = 10 }
 
 -- Sounds ----------------------------------------------------------------
 -- rbxasset:// sounds ship with Roblox. Leave "" to skip a sound.

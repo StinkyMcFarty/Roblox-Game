@@ -109,8 +109,9 @@ To remake only some sounds, name them: `python3 tools/generate_sfx.py ClawStone 
 - **Suits** (saved): Logan (free), Comic Wolverine (1000), Weapon X (2000), Old Man Logan (3000).
 - **Claws** (saved): Adamantium (free), Bone (400), Gold (900), Blood-Soaked (1100, drips), Obsidian (1400), Cosmic (2200, glows).
 - Both are sold in the **Armory** (left dock).
-- **Daily challenges:** become Wolverine, 5 kills as Wolverine, survive 5 min total, play 3 matches.
-- **Daily login reward** that grows with your streak.
+- **Daily challenges:** become Wolverine, 5 kills as Wolverine, survive 5 min total, play 3 matches. They reset for everyone at 00:00 UTC; the DAILY window counts down to it.
+- **Daily login reward:** 50 coins on day 1, +25 each day in a row up to day 10 (275), then 275 every day. Miss a day and it starts again at day 1.
+- **Brightness:** the sun button (top left) lets each player pick how bright the map looks (5 levels, saved).
 - **Wolverine odds:** every round you play without being Wolverine raises your chance (shown on screen). The 80 R$ pass guarantees it next round.
 
 ## Lobby
@@ -179,11 +180,11 @@ src/shared/   Config, Skins, Util
 - **Kill scream** after every rip-in-half. **Molten sparks** fly when his claws tear through metal or hit a Sentinel.
 
 ### Lobby menu & spectating
-- The left menu (Berserker Coins, Armory, Daily, Become Wolverine, 2x chance, Store, AFK) is hidden while you're alive in a round. It comes back as soon as you die or the round ends, and any open window closes when a round starts.
+- The left menu (Berserker Coins, Armory, Daily, Become Wolverine, Store, AFK) is hidden while you're alive in a round. It comes back as soon as you die or the round ends, and any open window closes when a round starts.
 - **SPECTATE** appears at the top of that menu while a round is on and you're out of it (killed, or waiting in the lobby). It starts on Wolverine, and **◀ / ▶** (or Q / E, L1 / R1 on a gamepad) switch between him and every survivor and Sentinel still alive. If the player you're watching dies it moves on by itself, and it stops when the round ends.
 
 ### Store & AFK
-- **STORE** (lobby dock): four packs of Berserker Coins — 500 (R$49), 1,200 (R$99, +20%), 3,000 (R$199, +50%), 7,000 (R$399, +75%).
+- **STORE** (lobby dock): four packs of Berserker Coins — 500 (R$49), 1,200 (R$99, +20%), 3,000 (R$199, +50%), 7,000 (R$399, +75%) — and the 2x Wolverine chance game pass.
   Create a Developer Product for each at that price (Creator Dashboard > your experience > Monetization > Developer Products)
   and paste the IDs into `Config.CoinPacks` (`ProductId`). Purchases are recorded in the player's save so they're never granted twice.
 - **AFK** (lobby dock): toggles sitting out. AFK players aren't put in matches, don't count toward the player minimum and have 0% Wolverine chance.

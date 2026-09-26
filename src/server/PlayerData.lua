@@ -33,10 +33,21 @@ local function fx(player, kind, data)
 	ReplicatedStorage.Remotes.Fx:FireClient(player, kind, data)
 end
 
-local DAY = 24 * 60 * 60 -- dailies and the login reward run on a rolling 24 hours
+-- Dailies and the login reward run on universal days: everyone's roll over
+-- together at 00:00 UTC (the DAILY window counts down to it).
+local DAY = 24 * 60 * 60
+local function today()
+	return os.time() // DAY
+end
 
 local function freshDaily()
-	return { Started = os.time(), Progress = {}, Done = {} }
+	return { Day = today(), Progress = {}, Done = {} }
+end
+
+-- Coins for a login on streak day n (Config.DailyReward).
+function PlayerData.LoginReward(n)
+	local r = Config.DailyReward
+	return r.Base + r.PerStreakDay * (math.clamp(n, 1, r.MaxStreak) - 1)
 end
 
 local function publish(player)
@@ -121,6 +132,7 @@ function PlayerData.Save(player)
 			Tokens = d.Tokens,
 			LastLogin = d.LastLogin,
 			LastClaim = d.LastClaim,
+			LoginDay = d.LoginDay,
 			Streak = d.Streak,
 			Daily = d.Daily,
 			Receipts = d.Receipts,
@@ -140,9 +152,31 @@ function PlayerData.AddCoins(player, amount, reason)
 end
 
 local function checkDay(d)
-	if os.time() - (d.Daily.Started or 0) >= DAY then
+	if d.Daily.Day ~= today() then
 		d.Daily = freshDaily()
 	end
+end
+
+-- Daily login reward: once per UTC day. Logging in the day after the last
+-- one keeps the streak going (the reward grows to its cap, then stays there);
+-- missing a day starts it again at day 1.
+local function claimLogin(player, popupDelay)
+	local d = cache[player]
+	local day = today()
+	if not d or d.LoginDay >= day then
+		return
+	end
+	d.Streak = (d.LoginDay == day - 1) and d.Streak + 1 or 1
+	d.LoginDay = day
+	d.LastClaim = os.time()
+	local reward = PlayerData.LoginReward(d.Streak)
+	PlayerData.AddCoins(player, reward, ("Daily reward — day %d streak"):format(d.Streak))
+	task.delay(popupDelay, function()
+		if player.Parent then
+			fx(player, "DailyReward", { Amount = reward, Streak = d.Streak })
+		end
+	end)
+	task.spawn(PlayerData.Save, player)
 end
 
 function PlayerData.Load(player)
@@ -162,6 +196,7 @@ function PlayerData.Load(player)
 		TokenTie = math.random(),
 		LastLogin = "",
 		LastClaim = 0, -- os.time() of the last daily login reward
+		LoginDay = -1, -- UTC day (os.time() // DAY) of the last login reward
 		Streak = 0,
 		Daily = freshDaily(),
 		Pity = 0, -- rounds played in a row without being Wolverine (this session)
@@ -228,10 +263,13 @@ function PlayerData.Load(player)
 			end
 			data.LastLogin = saved.LastLogin or ""
 			data.LastClaim = tonumber(saved.LastClaim) or 0
+			-- saves from before universal days only have LastClaim
+			data.LoginDay = tonumber(saved.LoginDay) or (data.LastClaim > 0 and data.LastClaim // DAY or -1)
 			data.Streak = tonumber(saved.Streak) or 0
-			if type(saved.Daily) == "table" and os.time() - (tonumber(saved.Daily.Started) or 0) < DAY then
+			local savedDay = type(saved.Daily) == "table" and (tonumber(saved.Daily.Day) or (tonumber(saved.Daily.Started) or 0) // DAY)
+			if savedDay == today() then
 				data.Daily = {
-					Started = tonumber(saved.Daily.Started),
+					Day = savedDay,
 					Progress = saved.Daily.Progress or {},
 					Done = saved.Daily.Done or {},
 				}
@@ -245,24 +283,27 @@ function PlayerData.Load(player)
 	publish(player)
 	task.spawn(PlayerData.CheckPasses, player)
 
-	-- Daily login reward
-	local since = os.time() - data.LastClaim
-	if since >= DAY then
-		-- claimed again within 48 hours keeps the streak going
-		data.Streak = (since < DAY * 2) and data.Streak + 1 or 1
-		data.LastClaim = os.time()
-		local r = Config.DailyReward
-		local reward = r.Base + r.PerStreakDay * (math.min(data.Streak, r.MaxStreak) - 1)
-		PlayerData.AddCoins(player, reward, ("Daily reward — day %d streak"):format(data.Streak))
-		-- give the client a moment to load its UI before showing the popup
-		task.delay(4, function()
-			if player.Parent then
-				fx(player, "DailyReward", { Amount = reward, Streak = data.Streak })
-			end
-		end)
-		task.spawn(PlayerData.Save, player)
-	end
+	claimLogin(player, 4) -- give the client a moment to load its UI before the popup
 end
+
+-- A new UTC day while people are in a server: fresh challenges and today's
+-- login reward, without having to rejoin.
+task.spawn(function()
+	local last = today()
+	while true do
+		task.wait(10)
+		if today() ~= last then
+			last = today()
+			for player, d in cache do
+				if player.Parent then
+					checkDay(d)
+					publish(player)
+					claimLogin(player, 0)
+				end
+			end
+		end
+	end
+end)
 
 ---------------------------------------------------------------------------
 -- Daily challenges
