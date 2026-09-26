@@ -703,6 +703,345 @@ Clips.GuardBreak = {
 }
 
 ---------------------------------------------------------------------------
+-- RIDING A SENTINEL (server/Ride.lua). He's pinned to its back facing the
+-- same way: pitched into it, legs locked round its waist, left claws hooked
+-- over its shoulder, right arm up. Stabs cock the arm high behind the head
+-- and drive it down into the power pack on the strike frame (0.11s, when the
+-- server's hit lands and freezes the frame), dig in, then back to the cling.
+---------------------------------------------------------------------------
+local CLING = {
+	Root = { -18, 0, 0 }, Waist = { -8, 0, 0 }, Neck = { 22, 0, 0 },
+	LShoulder = { 150, 0, -16 }, LElbow = { 58, 0, 0 },
+	RShoulder = { 164, 0, 30 }, RElbow = { 72, 0, 0 },
+	RHip = { 88, 0, 32 }, RKnee = { -96, 0, 0 }, LHip = { 88, 0, -32 }, LKnee = { -96, 0, 0 },
+}
+Clips.RideMount = {
+	Hold = true,
+	Keys = {
+		{ T = 0, Pose = REST },
+		-- slammed flat onto its back, arms and legs thrown wide to grab on
+		{ T = 0.07, Ease = "Out", Pose = {
+			Root = { -38, 0, 0, 0, 0, -0.35 }, Waist = { -14, 0, 0 }, Neck = { 34, 0, 0 },
+			RShoulder = { 118, 0, 58 }, LShoulder = { 118, 0, -58 }, RElbow = { 38, 0, 0 }, LElbow = { 38, 0, 0 },
+			RHip = { 70, 0, 42 }, RKnee = { -70, 0, 0 }, LHip = { 70, 0, -42 }, LKnee = { -70, 0, 0 },
+		} },
+		{ T = 0.24, Ease = "InOut", Pose = CLING },
+	},
+}
+Clips.RideStabR = {
+	Group = "RideStab",
+	Hold = true,
+	Keys = {
+		{ T = 0, Pose = CLING },
+		-- cocked right back over the head, torso wound up
+		{ T = 0.07, Ease = "Out", Pose = {
+			Root = { -12, 0, 0 }, Waist = { 8, -20, 0 }, Neck = { 28, -8, 0 },
+			LShoulder = { 146, 0, -20 }, LElbow = { 64, 0, 0 },
+			RShoulder = { 186, 0, 42 }, RElbow = { 112, 0, 0 },
+			RHip = { 88, 0, 32 }, RKnee = { -96, 0, 0 }, LHip = { 88, 0, -32 }, LKnee = { -96, 0, 0 },
+		} },
+		-- STRIKE: the whole body drops into it and the claws go in to the knuckles
+		{ T = 0.11, Ease = "In", Pose = {
+			Root = { -32, 0, 0, 0, 0, -0.28 }, Waist = { -24, 22, 0 }, Neck = { 6, 12, 0 },
+			LShoulder = { 138, 0, -22 }, LElbow = { 72, 0, 0 },
+			RShoulder = { 46, 0, -16 }, RElbow = { 4, 0, 0 }, RWrist = { -18, 0, 0 },
+			RHip = { 92, 0, 30 }, RKnee = { -100, 0, 0 }, LHip = { 92, 0, -30 }, LKnee = { -100, 0, 0 },
+		} },
+		-- dig in and wrench
+		{ T = 0.26, Ease = "Linear", Pose = {
+			Root = { -34, 3, 0, 0, 0, -0.3 }, Waist = { -27, 26, 0 }, Neck = { 4, 14, 0 },
+			LShoulder = { 138, 0, -22 }, LElbow = { 72, 0, 0 },
+			RShoulder = { 42, 0, -18 }, RElbow = { 2, 0, 0 }, RWrist = { -24, 0, 0 },
+			RHip = { 92, 0, 30 }, RKnee = { -100, 0, 0 }, LHip = { 92, 0, -30 }, LKnee = { -100, 0, 0 },
+		} },
+		{ T = 0.44, Ease = "InOut", Pose = CLING },
+	},
+}
+-- every third: both hands, driven in together, then twisted in the wound
+local BOTH_IN = {
+	Root = { -36, 0, 0, 0, 0, -0.32 }, Waist = { -28, 0, 0 }, Neck = { 2, 0, 0 },
+	RShoulder = { 50, 0, -18 }, LShoulder = { 50, 0, 18 }, RElbow = { 6, 0, 0 }, LElbow = { 6, 0, 0 },
+	RHip = { 92, 0, 30 }, RKnee = { -100, 0, 0 }, LHip = { 92, 0, -30 }, LKnee = { -100, 0, 0 },
+}
+local function twisted(yaw)
+	local p = table.clone(BOTH_IN)
+	p.Waist = { -28, yaw, 0 }
+	p.Root = { -36, yaw * 0.4, 0, 0, 0, -0.32 }
+	return p
+end
+Clips.RideTwist = {
+	-- (its own group: the server's twist replaces the stab he predicted)
+	Hold = true,
+	Keys = {
+		{ T = 0, Pose = CLING },
+		{ T = 0.1, Ease = "Out", Pose = {
+			Root = { -6, 0, 0 }, Waist = { 12, 0, 0 }, Neck = { 32, 0, 0 },
+			RShoulder = { 184, 0, 38 }, LShoulder = { 184, 0, -38 }, RElbow = { 116, 0, 0 }, LElbow = { 116, 0, 0 },
+			RHip = { 88, 0, 32 }, RKnee = { -96, 0, 0 }, LHip = { 88, 0, -32 }, LKnee = { -96, 0, 0 },
+		} },
+		{ T = 0.15, Ease = "In", Pose = BOTH_IN },
+		{ T = 0.3, Ease = "Out", Pose = twisted(26) },
+		{ T = 0.42, Ease = "InOut", Pose = twisted(-24) },
+		{ T = 0.54, Ease = "InOut", Pose = twisted(18) },
+		{ T = 0.78, Ease = "InOut", Pose = CLING },
+	},
+}
+-- both boots into its back and a backflip off
+Clips.RideLeapOff = {
+	Keys = {
+		{ T = 0, Pose = CLING },
+		{ T = 0.09, Ease = "Out", Pose = {
+			Root = { 28, 0, 0 }, Waist = { 14, 0, 0 }, Neck = { 36, 0, 0 },
+			RShoulder = { 172, 0, 34 }, LShoulder = { 172, 0, -34 }, RElbow = { 20, 0, 0 }, LElbow = { 20, 0, 0 },
+			RHip = { -48, 0, 10 }, RKnee = { -4, 0, 0 }, LHip = { -48, 0, -10 }, LKnee = { -4, 0, 0 },
+		} },
+		{ T = 0.32, Ease = "InOut", Pose = {
+			Root = { 50, 0, 0 }, Waist = { -10, 0, 0 }, Neck = { 10, 0, 0 },
+			RShoulder = { 90, 0, 24 }, LShoulder = { 90, 0, -24 }, RElbow = { 60, 0, 0 }, LElbow = { 60, 0, 0 },
+			RHip = { 84, 0, 8 }, RKnee = { -112, 0, 0 }, LHip = { 84, 0, -8 }, LKnee = { -112, 0, 0 },
+		} },
+		{ T = 0.7, Ease = "InOut", Pose = REST },
+	},
+}
+-- thrown or punched off: splayed out in the air
+local SPLAYED = {
+	Waist = { 16, 0, 0 }, Neck = { 40, 0, 0 },
+	RShoulder = { 100, 0, 95 }, LShoulder = { 100, 0, -95 }, RElbow = { 30, 0, 0 }, LElbow = { 30, 0, 0 },
+	RHip = { 40, 0, 30 }, RKnee = { -40, 0, 0 }, LHip = { -30, 0, -30 }, LKnee = { -40, 0, 0 },
+}
+Clips.Flung = {
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.08, Ease = "Out", Pose = SPLAYED },
+		{ T = 0.9, Pose = SPLAYED },
+		{ T = 1.2, Ease = "InOut", Pose = REST },
+	},
+}
+-- crushed between the suit and the wall: whiplash, then he sags to the floor
+local SAG = {
+	Root = { -20, 0, 0, 0, -0.8, 0 }, Waist = { -35, 0, 0 }, Neck = { -30, 0, 0 },
+	RShoulder = { 20, 0, 15 }, LShoulder = { 20, 0, -15 }, RElbow = { 20, 0, 0 }, LElbow = { 20, 0, 0 },
+	RHip = { 60, 0, 0 }, RKnee = { -80, 0, 0 }, LHip = { 60, 0, 0 }, LKnee = { -80, 0, 0 },
+}
+Clips.Crushed = {
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.05, Ease = "Out", Pose = {
+			Root = { 12, 0, 0, 0, -0.2, 0.3 }, Waist = { -20, 0, 0 }, Neck = { -40, 0, 0 },
+			RShoulder = { 95, 0, 20 }, LShoulder = { 95, 0, -20 }, RElbow = { 10, 0, 0 }, LElbow = { 10, 0, 0 },
+			RHip = { 30, 0, 0 }, RKnee = { -30, 0, 0 }, LHip = { 30, 0, 0 }, LKnee = { -30, 0, 0 },
+		} },
+		{ T = 0.28, Ease = "InOut", Pose = SAG },
+		{ T = 1.4, Pose = SAG },
+		{ T = 1.8, Ease = "InOut", Pose = REST },
+	},
+}
+-- held up by the throat: chin forced up, both hands clawing at the fist,
+-- legs kicking
+local CHOKE_A = {
+	Waist = { 6, 0, 0 }, Neck = { 28, 0, 0 },
+	RShoulder = { 150, 0, -8 }, RElbow = { 118, 0, 0 }, LShoulder = { 150, 0, 8 }, LElbow = { 118, 0, 0 },
+	RHip = { 30, 0, 0 }, RKnee = { -50, 0, 0 }, LHip = { -12, 0, 0 }, LKnee = { -20, 0, 0 },
+}
+local CHOKE_B = table.clone(CHOKE_A)
+CHOKE_B.RHip, CHOKE_B.RKnee, CHOKE_B.LHip, CHOKE_B.LKnee = { -10, 0, 0 }, { -15, 0, 0 }, { 36, 0, 0 }, { -62, 0, 0 }
+CHOKE_B.Waist = { 10, 0, 6 }
+Clips.Choked = {
+	Hold = true,
+	Tremble = true,
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.08, Ease = "Out", Pose = CHOKE_A },
+		{ T = 0.26, Ease = "InOut", Pose = CHOKE_B },
+		{ T = 0.44, Ease = "InOut", Pose = CHOKE_A },
+		{ T = 0.62, Ease = "InOut", Pose = CHOKE_B },
+		{ T = 0.8, Ease = "InOut", Pose = CHOKE_A },
+	},
+}
+-- hurled: a full flip splayed out, then he rights himself
+local function flip(deg)
+	local p = table.clone(SPLAYED)
+	p.Root = { deg, 0, 0 }
+	return p
+end
+Clips.Tumble = {
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.12, Ease = "Linear", Pose = flip(-100) },
+		{ T = 0.3, Ease = "Linear", Pose = flip(-200) },
+		{ T = 0.48, Ease = "Linear", Pose = flip(-290) },
+		{ T = 0.66, Ease = "Out", Pose = flip(-360) },
+		{ T = 0.9, Ease = "InOut", Pose = REST },
+	},
+}
+
+---------------------------------------------------------------------------
+-- The suit with him on its back, and the grab
+---------------------------------------------------------------------------
+-- he slams onto its back: it lurches forward, arms flung
+Clips.RiddenHit = {
+	LegsWhenMoving = true,
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.08, Ease = "Out", Pose = {
+			Root = { -14, 0, 0, 0, -0.2, -0.5 }, Waist = { -12, 0, 0 }, Neck = { -10, 0, 0 },
+			RShoulder = { -25, 0, 35 }, LShoulder = { -25, 0, -35 }, RElbow = { 30, 0, 0 }, LElbow = { 30, 0, 0 },
+		} },
+		{ T = 0.5, Ease = "InOut", Pose = REST },
+	},
+}
+-- bucking: a violent twist, one arm flung out, the other clawing back over
+-- its shoulder for him (BuckL mirrors it)
+Clips.BuckR = {
+	Group = "Buck",
+	LegsWhenMoving = true,
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.09, Ease = "Out", Pose = {
+			Root = { 6, -24, 10, 0, -0.3, 0 }, Waist = { 10, -36, 0 }, Neck = { -8, 28, 0 },
+			RShoulder = { -30, 0, 85 }, RElbow = { 40, 0, 0 }, LShoulder = { 124, 0, -30 }, LElbow = { 110, 0, 0 },
+			RHip = { -12, 0, 10 }, LHip = { 20, 0, -10 }, RKnee = { -20, 0, 0 }, LKnee = { -34, 0, 0 },
+		} },
+		{ T = 0.2, Ease = "InOut", Pose = {
+			Root = { -4, 14, -6, 0, -0.2, 0 }, Waist = { -6, 20, 0 }, Neck = { 4, -14, 0 },
+			RShoulder = { 20, 0, 40 }, RElbow = { 30, 0, 0 }, LShoulder = { 40, 0, -30 }, LElbow = { 50, 0, 0 },
+		} },
+		{ T = 0.42, Ease = "InOut", Pose = REST },
+	},
+}
+-- the last buck: it coils, reaches back over its shoulder, and heaves him off
+Clips.BuckThrow = {
+	Group = "Buck",
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.1, Ease = "Out", Pose = {
+			Root = { 10, 30, 0, 0, -0.6, 0 }, Waist = { 12, 40, 0 }, Neck = { 14, 30, 0 },
+			RShoulder = { 165, 0, 20 }, RElbow = { 60, 0, 0 }, LShoulder = { 150, 0, -10 }, LElbow = { 80, 0, 0 },
+			RHip = { 30, 0, 10 }, RKnee = { -50, 0, 0 }, LHip = { 10, 0, -10 }, LKnee = { -40, 0, 0 },
+		} },
+		{ T = 0.19, Ease = "In", Pose = {
+			Root = { -22, -35, 0, 0, -0.4, -0.5 }, Waist = { -20, -45, 0 }, Neck = { 10, -30, 0 },
+			RShoulder = { 60, 0, 70 }, RElbow = { 10, 0, 0 }, LShoulder = { 40, 0, -80 }, LElbow = { 20, 0, 0 },
+			RHip = { -20, 0, 10 }, RKnee = { -10, 0, 0 }, LHip = { 40, 0, -10 }, LKnee = { -50, 0, 0 },
+		} },
+		{ T = 0.36, Pose = {
+			Root = { -20, -34, 0, 0, -0.4, -0.5 }, Waist = { -18, -42, 0 }, Neck = { 8, -28, 0 },
+			RShoulder = { 56, 0, 66 }, RElbow = { 14, 0, 0 }, LShoulder = { 36, 0, -76 }, LElbow = { 24, 0, 0 },
+			RHip = { -20, 0, 10 }, RKnee = { -10, 0, 0 }, LHip = { 40, 0, -10 }, LKnee = { -50, 0, 0 },
+		} },
+		{ T = 0.85, Ease = "InOut", Pose = REST },
+	},
+}
+-- backing him into a wall: it throws itself back, the impact holds, it
+-- rocks forward off the wall
+Clips.SlamBack = {
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.08, Ease = "In", Pose = {
+			Root = { 16, 0, 0, 0, -0.2, 0.9 }, Waist = { 14, 0, 0 }, Neck = { 18, 0, 0 },
+			RShoulder = { 100, 0, 40 }, LShoulder = { 100, 0, -40 }, RElbow = { 20, 0, 0 }, LElbow = { 20, 0, 0 },
+			RHip = { 30, 0, 8 }, RKnee = { -40, 0, 0 }, LHip = { 30, 0, -8 }, LKnee = { -40, 0, 0 },
+		} },
+		{ T = 0.2, Pose = {
+			Root = { 18, 0, 0, 0, -0.25, 1 }, Waist = { 16, 0, 0 }, Neck = { 22, 0, 0 },
+			RShoulder = { 104, 0, 44 }, LShoulder = { 104, 0, -44 }, RElbow = { 16, 0, 0 }, LElbow = { 16, 0, 0 },
+			RHip = { 32, 0, 8 }, RKnee = { -44, 0, 0 }, LHip = { 32, 0, -8 }, LKnee = { -44, 0, 0 },
+		} },
+		{ T = 0.42, Ease = "Out", Pose = {
+			Root = { -10, 0, 0, 0, -0.3, -0.3 }, Waist = { -12, 0, 0 }, Neck = { -6, 0, 0 },
+			RShoulder = { 30, 0, 30 }, LShoulder = { 30, 0, -30 }, RElbow = { 40, 0, 0 }, LElbow = { 40, 0, 0 },
+		} },
+		{ T = 0.9, Ease = "InOut", Pose = REST },
+	},
+}
+-- the reach: it lunges, the right arm shooting out, fingers splayed
+local REACH = {
+	Root = { -12, -12, 0, 0, -0.45, -0.7 }, Waist = { -8, -20, 0 }, Neck = { -6, 16, 0 },
+	RShoulder = { 98, 0, 14 }, RElbow = { 6, 0, 0 }, RWrist = { -20, 0, 0 },
+	LShoulder = { -30, 0, -35 }, LElbow = { 50, 0, 0 },
+	RHip = { -28, 0, 4 }, RKnee = { -12, 0, 0 }, LHip = { 48, 0, -4 }, LKnee = { -55, 0, 0 },
+}
+Clips.GrabReach = {
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.1, Ease = "Out", Pose = {
+			Root = { 4, 10, 0, 0, -0.3, 0.2 }, Waist = { 6, 16, 0 }, Neck = { -4, -10, 0 },
+			RShoulder = { 30, 0, 50 }, RElbow = { 90, 0, 0 }, LShoulder = { 30, 0, -30 }, LElbow = { 40, 0, 0 },
+		} },
+		{ T = 0.3, Ease = "In", Pose = REACH },
+		{ T = 0.5, Pose = REACH },
+		{ T = 0.9, Ease = "InOut", Pose = REST },
+	},
+}
+-- holding him up at arm's length out in front, leaning back under the
+-- weight, looking up at him (server/Sentinel.lua pins him in this fist)
+local HOLD_UP = {
+	Root = { 4, 8, 0, 0, -0.2, 0 }, Waist = { 8, 12, 0 }, Neck = { 18, 10, 0 },
+	RShoulder = { 118, 0, 8 }, RElbow = { 10, 0, 0 }, LShoulder = { 35, 0, -40 }, LElbow = { 70, 0, 0 },
+	RHip = { 18, 0, 8 }, RKnee = { -24, 0, 0 }, LHip = { -12, 0, -8 }, LKnee = { -10, 0, 0 },
+}
+Clips.GrabHold = {
+	Hold = true,
+	LegsWhenMoving = true,
+	Tremble = true,
+	Keys = {
+		{ T = 0, Pose = REACH },
+		{ T = 0.14, Ease = "Out", Pose = HOLD_UP },
+	},
+}
+-- the throw: cocked back over the shoulder, then the whole body whips
+-- round and the arm fires him off (release at 0.15s)
+Clips.GrabThrow = {
+	Keys = {
+		{ T = 0, Pose = HOLD_UP },
+		{ T = 0.13, Ease = "Out", Pose = {
+			Root = { 8, -28, 0, 0, -0.3, 0.3 }, Waist = { 14, -32, 0 }, Neck = { 10, 20, 0 },
+			RShoulder = { 178, 0, 55 }, RElbow = { 40, 0, 0 }, LShoulder = { 60, 0, -40 }, LElbow = { 60, 0, 0 },
+			RHip = { -10, 0, 8 }, RKnee = { -20, 0, 0 }, LHip = { 30, 0, -8 }, LKnee = { -40, 0, 0 },
+		} },
+		{ T = 0.2, Ease = "In", Pose = {
+			Root = { -18, 32, 0, 0, -0.45, -0.9 }, Waist = { -20, 36, 0 }, Neck = { -6, -24, 0 },
+			RShoulder = { 70, 0, -24 }, RElbow = { 6, 0, 0 }, LShoulder = { -40, 0, -50 }, LElbow = { 30, 0, 0 },
+			RHip = { 44, 0, 8 }, RKnee = { -56, 0, 0 }, LHip = { -24, 0, -8 }, LKnee = { -14, 0, 0 },
+		} },
+		{ T = 0.4, Pose = {
+			Root = { -16, 34, 0, 0, -0.45, -0.9 }, Waist = { -18, 38, 0 }, Neck = { -4, -26, 0 },
+			RShoulder = { 62, 0, -28 }, RElbow = { 10, 0, 0 }, LShoulder = { -40, 0, -50 }, LElbow = { 30, 0, 0 },
+			RHip = { 44, 0, 8 }, RKnee = { -56, 0, 0 }, LHip = { -24, 0, -8 }, LKnee = { -14, 0, 0 },
+		} },
+		{ T = 0.95, Ease = "InOut", Pose = REST },
+	},
+}
+-- closing on air: it overreaches and stumbles a step
+Clips.GrabWhiff = {
+	Keys = {
+		{ T = 0, Pose = REACH },
+		{ T = 0.22, Ease = "Out", Pose = {
+			Root = { -22, -15, 0, 0, -0.6, -1 }, Waist = { -16, -22, 0 }, Neck = { -12, 18, 0 },
+			RShoulder = { 80, 0, 10 }, RElbow = { 20, 0, 0 }, LShoulder = { -20, 0, -40 }, LElbow = { 40, 0, 0 },
+			RHip = { -34, 0, 4 }, RKnee = { -10, 0, 0 }, LHip = { 56, 0, -4 }, LKnee = { -70, 0, 0 },
+		} },
+		{ T = 0.8, Ease = "InOut", Pose = REST },
+	},
+}
+-- countered: the reaching arm's knocked aside and the suit reels back
+Clips.GrabCountered = {
+	Keys = {
+		{ T = 0, Pose = REACH },
+		{ T = 0.08, Ease = "Out", Pose = {
+			Root = { 10, 15, 0, 0, -0.2, 0.5 }, Waist = { 12, 25, 0 }, Neck = { 20, -20, 0 },
+			RShoulder = { -30, 0, 70 }, RElbow = { 60, 0, 0 }, LShoulder = { 20, 0, -30 }, LElbow = { 40, 0, 0 },
+			RHip = { -10, 0, 6 }, RKnee = { -20, 0, 0 }, LHip = { 20, 0, -6 }, LKnee = { -30, 0, 0 },
+		} },
+		{ T = 0.5, Pose = {
+			Root = { 8, 12, 0, 0, -0.25, 0.4 }, Waist = { 10, 20, 0 }, Neck = { 14, -14, 0 },
+			RShoulder = { -20, 0, 60 }, RElbow = { 50, 0, 0 }, LShoulder = { 16, 0, -26 }, LElbow = { 36, 0, 0 },
+		} },
+		{ T = 0.9, Ease = "InOut", Pose = REST },
+	},
+}
+
+---------------------------------------------------------------------------
 -- Mirroring (makes SlashL from SlashR)
 ---------------------------------------------------------------------------
 local SWAP = {
@@ -711,7 +1050,7 @@ local SWAP = {
 	RKnee = "LKnee", LKnee = "RKnee", RAnkle = "LAnkle", LAnkle = "RAnkle",
 }
 local function mirror(clip)
-	local out = { Group = clip.Group, Hold = clip.Hold, Tremble = clip.Tremble, Keys = {} }
+	local out = { Group = clip.Group, Hold = clip.Hold, Tremble = clip.Tremble, LegsWhenMoving = clip.LegsWhenMoving, Keys = {} }
 	for _, k in clip.Keys do
 		local pose = {}
 		for joint, a in k.Pose do
@@ -726,5 +1065,8 @@ Clips.SlashL = mirror(Clips.SlashR)
 Clips.Punch.Group = "Punch"
 Clips.PunchR = Clips.Punch
 Clips.PunchL = mirror(Clips.Punch)
+-- riding: the left hand stabs while the right grips; bucks twist both ways
+Clips.RideStabL = mirror(Clips.RideStabR)
+Clips.BuckL = mirror(Clips.BuckR)
 
 return Clips

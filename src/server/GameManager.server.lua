@@ -396,7 +396,7 @@ local function runRound()
 			surviveClock = os.clock()
 		end
 		local remaining = Round.EndTime - os.clock()
-		setStatus(Round.Released and "SURVIVE" or "Wolverine is waking up...", now() + remaining)
+		setStatus(Round.Released and "SURVIVE" or "The Berserker is waking up...", now() + remaining)
 		if Round.WolverineLeft then
 			result = "left"
 			break

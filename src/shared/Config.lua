@@ -122,6 +122,27 @@ Config.Sentinel = {
 		Resist = { Presses = 7, Threshold = 0.5, Walk = 0.38 }, Recover = 3 },
 	-- Inhibitor Blast: a 2s charge, then a shockwave that stuns him for 3s.
 	Pulse = { Cooldown = 18, Charge = 2, Radius = 30, Stun = 3, Damage = 12, CancelCooldown = 3 },
+	-- Grab & Throw (R): the suit lunges and reaches (WindUp); if he's in the
+	-- Range x Width box it catches him by the throat (Squeeze damage), holds him
+	-- up HoldTime (the pilot turns to aim), then hurls him the way it faces at
+	-- Speed studs/s (Height up, AirTime long) straight through walls: Damage x
+	-- power, stunned Stun on landing. A slash on the suit during the reach
+	-- counters it (the suit staggers CounterStun). A grab breaks a block.
+	Grab = { Cooldown = 10, WindUp = 0.4, Range = 9, Width = 8, HoldTime = 0.6, Squeeze = 8, Damage = 50,
+		Speed = 100, Height = 5, AirTime = 0.7, Stun = 1.2, CounterStun = 0.8 },
+}
+
+-- Riding a Sentinel: a pounce that catches a suit (from any side) lands
+-- Wolverine on its back and he clings on. M1 stabs the power pack on its
+-- back (StabArmor of armour each, StabCooldown apart; every 3rd twists the
+-- claws in for Twist x). Space leaps off; after MaxTime he kicks off anyway.
+-- The pilot gets him off by bucking (Space) Jolts times (at least JoltGap
+-- apart: he's flung off, ShakeDamage), by backing him into a wall
+-- (CrushDamage x power, stunned CrushStun), and another suit's punch knocks
+-- him off for PunchMult x damage.
+Config.Ride = {
+	StabArmor = 0.35, StabCooldown = 0.45, Twist = 1.6, MaxTime = 5,
+	Jolts = 4, JoltGap = 0.25, ShakeDamage = 8, CrushDamage = 45, CrushStun = 1.5, PunchMult = 2,
 }
 
 -- Block (hold F / L1): Wolverine and the Sentinels. It stops M1s (his

@@ -16,6 +16,7 @@ local Posture = require(script.Parent.Posture)
 local Wolverine = require(script.Parent.Wolverine)
 local Combat = require(script.Parent.Combat)
 local Block = require(script.Parent.Block)
+local Ride = require(script.Parent.Ride)
 local Costumes = require(script.Parent.Costumes)
 local VFX = require(script.Parent.VFX)
 local PlayerData = require(script.Parent.PlayerData)
@@ -441,6 +442,9 @@ local function stunWolverine(duration)
 	Fx:FireAllClients("Stunned", { Name = w.Name, Duration = duration })
 end
 
+Ride.Power = power
+Ride.StunWolverine = stunWolverine
+
 -- The punch's big sounds; built-in stand-ins until the files are uploaded.
 local function smashSound(parent, pitch, volume)
 	if Config.UploadedSounds.SentinelSmash ~= 0 then
@@ -499,10 +503,18 @@ local function punch(player, char, root, side)
 				Fx:FireAllClients("Shake", { Position = wRoot.Position, Intensity = 0.5, Radius = 40 })
 			else
 				local mult = power(player)
+				local riding = Ride.IsRiding(w)
+				if riding then
+					mult *= Config.Ride.PunchMult -- punched off the other suit's back
+				end
 				Wolverine.Damage(cfg.Damage * mult, player)
 				stunWolverine(cfg.Stun * mult)
 				local dir = Util.Flat(wRoot.Position - root.Position)
-				Fx:FireClient(w, "Knock", { Velocity = dir * cfg.Knockback + Vector3.new(0, 25, 0) })
+				if riding then
+					Ride.End("punched", { Dir = dir })
+				else
+					Fx:FireClient(w, "Knock", { Velocity = dir * cfg.Knockback + Vector3.new(0, 25, 0) })
+				end
 				smashSound(wRoot)
 				-- the fist rings off his adamantium skeleton; the floor jumps
 				Util.Burst(wRoot, Util.SparkProps, 30, 1.5)
@@ -561,6 +573,10 @@ local function slam(player, char, root)
 		local off = wRoot.Position - center
 		if Vector3.new(off.X, 0, off.Z).Magnitude <= cfg.Radius and math.abs(off.Y) < 14 then
 			Block.Break(w) -- a slam is a block breaker
+			local wasRiding = Ride.IsRiding(w)
+			if wasRiding then
+				Ride.End("blasted", { Dir = off })
+			end
 			if Combat.BreakShield(w) then
 				Fx:FireAllClients("Shake", { Position = wRoot.Position, Intensity = 0.5, Radius = 40 })
 			else
@@ -570,7 +586,9 @@ local function slam(player, char, root)
 				if dir.Magnitude < 0.1 then
 					dir = root.CFrame.LookVector
 				end
-				Fx:FireClient(w, "Knock", { Velocity = Util.Flat(dir) * cfg.Knockback + Vector3.new(0, 45, 0) })
+				if not wasRiding then
+					Fx:FireClient(w, "Knock", { Velocity = Util.Flat(dir) * cfg.Knockback + Vector3.new(0, 45, 0) })
+				end
 				Util.Burst(wRoot, Util.SparkProps, 30, 1.5)
 				Fx:FireAllClients("HitStop", { Attacker = char, Victim = wChar, Duration = 0.18 })
 			end
@@ -811,11 +829,129 @@ local function pulse(player, char, root)
 		local near = (wRoot.Position - root.Position).Magnitude <= cfg.Radius
 		if near or Combat.BoxOverlap(CFrame.new(root.Position), Vector3.one * cfg.Radius * 1.4, bcf, bsize) then
 			Block.Break(Round.Wolverine) -- so is the blast
+			if Ride.IsRiding(Round.Wolverine) then
+				Ride.End("blasted", { Dir = wRoot.Position - root.Position })
+			end
 			Wolverine.Damage(cfg.Damage * power(player), player)
 			stunWolverine(cfg.Stun)
 			Combat.BreakShield(Round.Wolverine) -- the blast shatters any i-frames he had
 			Wolverine.RevealSkeleton()
 		end
+	end
+end
+
+-- Grab & Throw (Config.Sentinel.Grab): the suit lunges and reaches; catch
+-- him and it lifts him off the floor by the throat, holds him up while the
+-- pilot turns to aim, then winds back and hurls him through the walls. A
+-- slash on the suit while it's reaching knocks the arm aside: countered.
+local function grab(player, char, root)
+	local cfg = Config.Sentinel.Grab
+	local k = root.Size.Y / 2
+	VFX.Anim(char, "GrabReach")
+	Status.Apply(player, "Slowed", cfg.WindUp + 0.2)
+	Util.Sound(Config.Sounds.Whoosh, root, { Volume = 1.6, Pitch = 0.6, Range = 160 })
+	Util.FireClient(Fx, player, "Knock", { Velocity = Util.Flat(root.CFrame.LookVector) * 34, Duration = 0.16 }) -- the lunge
+	local armor0 = player:GetAttribute("Armor")
+	local t0 = os.clock()
+	while os.clock() - t0 < cfg.WindUp do
+		task.wait()
+		if not (char.Parent and Util.IsAlive(char)) or player:GetAttribute("Role") ~= "Sentinel" then
+			return
+		end
+		if player:GetAttribute("Armor") ~= armor0 or Ride.Rider(player) or Status.Has(player, "Stunned") then
+			-- he slashed the reaching arm: it's knocked aside and the suit reels
+			VFX.Anim(char, "GrabCountered")
+			Status.Apply(player, "Stunned", cfg.CounterStun)
+			Fx:FireAllClients("Stunned", { Name = player.Name, Duration = cfg.CounterStun })
+			local hand = (root.CFrame * CFrame.new(0.5 * k, 1.3 * k, -2 * k)).Position
+			Combat.MetalSparks(hand, Util.Flat(root.CFrame.LookVector))
+			Util.SoundAt(Config.Sounds.Punch, hand, { Volume = 1.8, Pitch = 1.3, Range = 180 })
+			Util.FireClient(Fx, player, "Announce", { Text = "GRAB COUNTERED", Color = Color3.fromRGB(255, 90, 60), Duration = 1.2 })
+			if Round.Wolverine then
+				Util.FireClient(Fx, Round.Wolverine, "Announce", { Text = "COUNTERED THE GRAB", Color = GLOW, Duration = 1.2 })
+			end
+			return
+		end
+	end
+	local w, wChar, wRoot = wolverineParts()
+	local caught = false
+	-- (on the other suit's back he can be plucked off; held in a fist he can't)
+	local grabbable = wRoot ~= nil and Util.IsAlive(wChar) and not Wolverine.Untouchable() and not Status.Has(w, "Frozen")
+		and (Ride.IsRiding(w) or not Ride.IsPinned(wChar))
+	if grabbable then
+		local bcf, bsize = Combat.BodyBox(wRoot)
+		caught = Combat.BoxOverlap(root.CFrame * CFrame.new(0, 1, -cfg.Range / 2), Vector3.new(cfg.Width, 13, cfg.Range), bcf, bsize)
+	end
+	if not caught then
+		-- closes on air: overreaches and stumbles
+		VFX.Anim(char, "GrabWhiff")
+		Status.Apply(player, "Slowed", 0.8)
+		return
+	end
+
+	-- CAUGHT: lifted off the floor by the throat
+	if Ride.IsRiding(w) then
+		Ride.End("grabbed") -- plucked off the other suit's back
+	end
+	Block.Break(w) -- a grab goes through a guard
+	Status.Apply(w, "Busy", cfg.HoldTime + 0.6)
+	Status.Apply(w, "Frozen", cfg.HoldTime + 0.6)
+	-- his neck in the raised right fist, at arm's length out in front of it
+	local hold = CFrame.new(1.13 * k, 1.6 * k, -2.06 * k) * CFrame.Angles(0, math.pi, 0)
+	Ride.Pin(wChar, char, hold)
+	VFX.StopAnim(wChar, nil)
+	VFX.Anim(wChar, "Choked")
+	VFX.Anim(char, "GrabHold")
+	local neck = (root.CFrame * hold).Position + Vector3.new(0, 2, 0)
+	Fx:FireAllClients("HitStop", { Attacker = char, Victim = wChar, Duration = 0.12 })
+	Fx:FireAllClients("Shake", { Position = neck, Intensity = 1, Radius = 80 })
+	smashSound(wRoot, 1.2, 1.8)
+	Util.Sound(Config.Sounds.Snarl ~= "" and Config.Sounds.Snarl or Config.Sounds.Impact, wRoot, { Volume = 1.6, Pitch = 0.9, Range = 160 })
+	Wolverine.Damage(cfg.Squeeze * power(player), player)
+	Util.FireClient(Fx, w, "Grabbed", {})
+	Util.FireClient(Fx, w, "Announce", { Text = "GRABBED!", Color = Color3.fromRGB(255, 80, 60), Duration = 1 })
+	Util.FireClient(Fx, player, "Announce", { Text = "GOT HIM! AIM THE THROW", Color = GLOW, Duration = 1 })
+	task.wait(cfg.HoldTime) -- the pilot turns to aim
+	if not (wChar.Parent and Ride.IsPinned(wChar)) then
+		return
+	end
+	if not (char.Parent and Util.IsAlive(char)) or player:GetAttribute("Role") ~= "Sentinel" then
+		Ride.Unpin(wChar, nil, w) -- the suit went down: he drops
+		Status.Clear(w, "Busy")
+		Status.Clear(w, "Frozen")
+		return
+	end
+
+	-- THROW: it winds back and hurls him the way it faces
+	VFX.Anim(char, "GrabThrow")
+	task.wait(0.15)
+	if not (wChar.Parent and Ride.IsPinned(wChar)) then
+		return
+	end
+	local dir = Util.Flat(root.CFrame.LookVector)
+	local from = (root.CFrame * CFrame.new(0.4 * k, 1.5 * k, -2.2 * k)).Position
+	Ride.Unpin(wChar, CFrame.lookAt(from, from + dir), w)
+	Status.Clear(w, "Busy")
+	Status.Clear(w, "Frozen")
+	VFX.Anim(wChar, "Tumble")
+	Wolverine.Damage(cfg.Damage * power(player), player)
+	Util.FireClient(Fx, w, "Thrown", { Velocity = dir * cfg.Speed, Height = cfg.Height, Time = cfg.AirTime })
+	Util.Sound(Config.Sounds.Whoosh, root, { Volume = 2, Pitch = 0.55, Range = 220 })
+	Fx:FireAllClients("HitStop", { Attacker = char, Duration = 0.08 })
+	Fx:FireAllClients("Shake", { Position = from, Intensity = 1.1, Radius = 90 })
+	-- he goes through every wall in his path
+	local f0 = os.clock()
+	while os.clock() - f0 < cfg.AirTime + 0.15 and wRoot.Parent do
+		Combat.SmashInBox(CFrame.lookAt(wRoot.Position, wRoot.Position + dir) * CFrame.new(0, 0, -2.5), Vector3.new(7, 9, 6), wRoot.Position, 95)
+		task.wait()
+	end
+	if wRoot.Parent then
+		local landAt = floorBelow(wRoot.Position, { wChar, char })
+		VFX.Shockwave(landAt + Vector3.new(0, 0.2, 0), 16)
+		VFX.Dust(landAt, Color3.fromRGB(160, 156, 150), 16)
+		Util.Sound(Config.Sounds.Land ~= "" and Config.Sounds.Land or Config.Sounds.Impact, wRoot, { Volume = 2.4, Pitch = 0.7, Range = 260 })
+		Fx:FireAllClients("Shake", { Position = landAt, Intensity = 1.3, Radius = 90 })
+		stunWolverine(cfg.Stun)
 	end
 end
 
@@ -843,6 +979,10 @@ function Sentinel.Handle(player, ability, arg)
 	local root = Util.Root(char)
 	if ability == "Block" then
 		Block.Set(player, arg == true)
+		return
+	end
+	if ability == "Buck" then
+		Ride.Buck(player) -- bucking him off its back (jump)
 		return
 	end
 	if not (root and Util.IsAlive(char)) or Status.Has(player, "Busy") or Status.Has(player, "Frozen") or Status.Has(player, "Stunned") then
@@ -885,6 +1025,8 @@ function Sentinel.Handle(player, ability, arg)
 		perform(player, ability, pulse, player, char, root)
 	elseif ability == "Slam" then
 		perform(player, ability, slam, player, char, root)
+	elseif ability == "Grab" then
+		perform(player, ability, grab, player, char, root)
 	end
 end
 

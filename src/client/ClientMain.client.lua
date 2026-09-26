@@ -21,6 +21,7 @@ require(script.Parent:WaitForChild("TerminalSounds"))
 require(script.Parent:WaitForChild("Minimap"))
 require(script.Parent:WaitForChild("Objectives"))
 require(script.Parent:WaitForChild("GuardMeter"))
+require(script.Parent:WaitForChild("Glue"))
 require(script.Parent:WaitForChild("Upgrades"))
 require(script.Parent:WaitForChild("Vanish"))
 require(script.Parent:WaitForChild("VerityTrail"))
@@ -56,6 +57,7 @@ local ROLE_KIT = {
 		{ Name = "Laser", Label = "Death Ray", Desc = "Melts through walls. Burns him to the adamantium", Icon = "🔴", KeyText = "Q", Key = Enum.KeyCode.Q, Cooldown = S.Laser.Cooldown, Color = Color3.fromRGB(255, 90, 60) },
 		{ Name = "Pulse", Label = "Inhibitor Blast", Desc = "Charge 2s (E again to cancel). Stuns him for 3s", Icon = "💥", KeyText = "E", Key = Enum.KeyCode.E, Cooldown = S.Pulse.Cooldown, Color = Color3.fromRGB(255, 210, 60) },
 		{ Name = "Slam", Label = "Ground Slam", Desc = ("Both fists into the floor: %.2gx damage to him within %d studs"):format(S.Slam.Damage / S.Punch.Damage, S.Slam.Radius), Icon = "🌋", KeyText = "M2", Key = Enum.KeyCode.ButtonL2, Cooldown = S.Slam.Cooldown, RightClick = true, Color = Color3.fromRGB(255, 150, 70) },
+		{ Name = "Grab", Label = "Grab & Throw", Desc = "Catch him by the throat, aim, and hurl him through the walls", Icon = "✊", KeyText = "R", Key = Enum.KeyCode.R, Cooldown = S.Grab.Cooldown, Color = Color3.fromRGB(120, 200, 255) },
 	},
 }
 
@@ -97,8 +99,8 @@ local ROLE_TITLE = {
 }
 
 local HINTS = {
-	Wolverine = "Shift: sprint   C / Ctrl: run on all fours   F: block\nClaw (M1) or pounce through walls. Hit anyone 3 times to rip them in half.",
-	Sentinel = "MUTANT-HUNTER ONLINE. M1 Hydraulic Smash · M2 Ground Slam · Q Death Ray · E Inhibitor Blast · F Block.\nLinked: " .. S.LinkedMultiplier .. "x power. Apart: " .. S.SoloMultiplier .. "x. Last suit standing: 1x. Core burns out in " .. S.Duration .. "s.",
+	Wolverine = "Shift: sprint   C / Ctrl: run on all fours   F: block\nClaw (M1) or pounce through walls. Pounce a Sentinel to ride it. Hit anyone 3 times to rip them in half.",
+	Sentinel = "MUTANT-HUNTER ONLINE. M1 Hydraulic Smash · M2 Ground Slam · Q Death Ray · E Inhibitor Blast · R Grab · F Block.\nLinked: " .. S.LinkedMultiplier .. "x power. Apart: " .. S.SoloMultiplier .. "x. Last suit standing: 1x. Core burns out in " .. S.Duration .. "s.",
 	Survivor = "Subject X is loose. Reboot the 3 Sentinel Protocol consoles (Foundry, Genetics Lab, Command Centre), then suit up in the Hangar.\nShift: sprint. G: fart (hides your scent). He tears through walls — keep moving.",
 	Lobby = "Waiting for the next round.",
 	Dead = "You were torn apart. Wait for the next round.",
@@ -108,7 +110,8 @@ local readyAt = {}
 local slashSide = 0
 local punchSide = 0 -- Sentinel M1 alternates arms (sent to the server so its echo matches)
 local lastPredictedSlash = -1
-local PREDICT = { Pounce = "Pounce", Stab = "Impale", Sniff = "Sniff", Punch = "Punch", Laser = "DeathRay", Pulse = "PulseCharge", Fart = "Fart", Slam = "Slam", Dodge = "Dodge" }
+local PREDICT = { Pounce = "Pounce", Stab = "Impale", Sniff = "Sniff", Punch = "Punch", Laser = "DeathRay", Pulse = "PulseCharge", Fart = "Fart", Slam = "Slam", Dodge = "Dodge", Grab = "GrabReach" }
+local rideSide = 0 -- stabs from a suit's back alternate hands
 local currentKit = {}
 
 local function kitEntry(name)
@@ -141,6 +144,16 @@ local function activate(name)
 		return
 	end
 	if player:GetAttribute("Role") == "Wolverine" and not ReplicatedStorage:GetAttribute("Released") then
+		return
+	end
+	-- on a suit's back: M1 stabs its power pack, nothing else works
+	if player:GetAttribute("Riding") then
+		if name == "Slash" and os.clock() >= (readyAt.RideStab or 0) then
+			readyAt.RideStab = os.clock() + Config.Ride.StabCooldown * (player:GetAttribute("Rage") and 1 / Config.Rage.AttackSpeed or 1)
+			rideSide = rideSide % 2 + 1
+			Anims.Play(char, rideSide == 1 and "RideStabR" or "RideStabL")
+			Ability:FireServer("Slash")
+		end
 		return
 	end
 	-- under a Sentinel death ray F is mashed to force through it (see the
@@ -428,6 +441,11 @@ UserInputService.JumpRequest:Connect(function()
 	if player:GetAttribute("Hidden") then
 		Ability:FireServer("Unhide")
 	end
+	if player:GetAttribute("Riding") then
+		Ability:FireServer("RideOff") -- leap off the suit's back
+	elseif player:GetAttribute("Ridden") then
+		Ability:FireServer("Buck") -- buck him off
+	end
 end)
 player:GetAttributeChangedSignal("Hidden"):Connect(function()
 	if player:GetAttribute("Hidden") then
@@ -596,6 +614,14 @@ Fx.OnClientEvent:Connect(function(kind, data)
 		Effects.RageRoar(data.Char)
 	elseif kind == "Knock" then
 		Effects.Knock(data.Velocity, data.Tumble, data.Spin, data.Duration)
+	elseif kind == "Thrown" then
+		-- hurled by a Sentinel: a set arc that keeps its speed through walls
+		local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+		if root and typeof(data.Velocity) == "Vector3" then
+			Effects.Leap(root, data.Velocity, data.Height or 5, data.Time or 0.7, (data.Time or 0.7) + 0.3)
+			Effects.Shake(0.9)
+			Interface.Flash(Color3.fromRGB(160, 0, 0), 0.3, 0.4)
+		end
 	elseif kind == "Hurt" then
 		Effects.Hurt()
 	elseif kind == "Grabbed" then

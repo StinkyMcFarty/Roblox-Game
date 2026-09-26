@@ -165,6 +165,27 @@ Config.Sentinel = {
 		Resist = { Presses = 7, Threshold = 0.5, Walk = 0.38 }, Recover = 3 },
 	-- Inhibitor Blast: a 2s charge, then a shockwave that stuns him for 3s.
 	Pulse = { Cooldown = 18, Charge = 2, Radius = 30, Stun = 3, Damage = 12, CancelCooldown = 3 },
+	-- Grab & Throw (R): the suit lunges and reaches (WindUp); if he's in the
+	-- Range x Width box it catches him by the throat (Squeeze damage), holds him
+	-- up HoldTime (the pilot turns to aim), then hurls him the way it faces at
+	-- Speed studs/s (Height up, AirTime long) straight through walls: Damage x
+	-- power, stunned Stun on landing. A slash on the suit during the reach
+	-- counters it (the suit staggers CounterStun). A grab breaks a block.
+	Grab = { Cooldown = 10, WindUp = 0.4, Range = 9, Width = 8, HoldTime = 0.6, Squeeze = 8, Damage = 50,
+		Speed = 100, Height = 5, AirTime = 0.7, Stun = 1.2, CounterStun = 0.8 },
+}
+
+-- Riding a Sentinel: a pounce that catches a suit (from any side) lands
+-- Wolverine on its back and he clings on. M1 stabs the power pack on its
+-- back (StabArmor of armour each, StabCooldown apart; every 3rd twists the
+-- claws in for Twist x). Space leaps off; after MaxTime he kicks off anyway.
+-- The pilot gets him off by bucking (Space) Jolts times (at least JoltGap
+-- apart: he's flung off, ShakeDamage), by backing him into a wall
+-- (CrushDamage x power, stunned CrushStun), and another suit's punch knocks
+-- him off for PunchMult x damage.
+Config.Ride = {
+	StabArmor = 0.35, StabCooldown = 0.45, Twist = 1.6, MaxTime = 5,
+	Jolts = 4, JoltGap = 0.25, ShakeDamage = 8, CrushDamage = 45, CrushStun = 1.5, PunchMult = 2,
 }
 
 -- Block (hold F / L1): Wolverine and the Sentinels. It stops M1s (his
@@ -8362,7 +8383,7 @@ local function runRound()
 			surviveClock = os.clock()
 		end
 		local remaining = Round.EndTime - os.clock()
-		setStatus(Round.Released and "SURVIVE" or "Wolverine is waking up...", now() + remaining)
+		setStatus(Round.Released and "SURVIVE" or "The Berserker is waking up...", now() + remaining)
 		if Round.WolverineLeft then
 			result = "left"
 			break
@@ -12841,6 +12862,434 @@ return Posture
       </Item>
       <Item class="ModuleScript" referent="25">
         <Properties>
+          <string name="Name">Ride</string>
+          <string name="Source"><![CDATA[-- Riding a Sentinel (Config.Ride): Wolverine pounces into a suit's back or
+-- side and clings on, stabbing the power pack on its back, until the pilot
+-- bucks him off, crushes him into a wall, another suit punches him off, the
+-- suit blasts or slams him clear, or he leaps off himself.
+--
+-- Pinning (also the grab's hold, Sentinel.lua): the pinned character is
+-- anchored and the server moves it with the suit every frame (so hits find
+-- him there), while every client pins it locally every render frame
+-- (client/Glue.lua) so it sticks to the suit smoothly on every screen.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Util = require(ReplicatedStorage.Shared.Util)
+local Round = require(script.Parent.Round)
+local Status = require(script.Parent.Status)
+local VFX = require(script.Parent.VFX)
+local Combat = require(script.Parent.Combat)
+local Block = require(script.Parent.Block)
+
+local Fx = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Fx")
+
+local Ride = {}
+-- filled in by Wolverine.lua and Sentinel.lua (which require this module)
+Ride.DamageWolverine = function(_amount, _by) end
+Ride.StunWolverine = function(_seconds) end
+Ride.Power = function(_suit)
+	return 1
+end
+
+local GOLD = Color3.fromRGB(255, 205, 60)
+local RED = Color3.fromRGB(255, 80, 60)
+
+---------------------------------------------------------------------------
+-- Pinning one character to another
+---------------------------------------------------------------------------
+
+local pins = {} -- [char] = { To = char, Offset = CFrame, Saved = { [part] = CanCollide } }
+
+function Ride.Pin(char, toChar, offset)
+	local root, toRoot = Util.Root(char), Util.Root(toChar)
+	if not (root and toRoot) then
+		return false
+	end
+	local saved = {}
+	for _, p in char:GetDescendants() do
+		if p:IsA("BasePart") then
+			saved[p] = p.CanCollide
+			p.CanCollide = false -- he mustn't block the suit he's on
+		end
+	end
+	root.Anchored = true
+	root.CFrame = toRoot.CFrame * offset
+	pins[char] = { To = toChar, Offset = offset, Saved = saved }
+	Fx:FireAllClients("Glue", { Char = char, To = toChar, Offset = offset })
+	return true
+end
+
+-- Let go: optionally set down at `place`, unanchored and handed back to
+-- `owner`'s client to move.
+function Ride.Unpin(char, place, owner)
+	local pinned = pins[char]
+	pins[char] = nil
+	Fx:FireAllClients("Glue", { Char = char })
+	if pinned then
+		for p, was in pinned.Saved do
+			if p.Parent then
+				p.CanCollide = was
+			end
+		end
+	end
+	local root = Util.Root(char)
+	if root and root.Parent then
+		if place then
+			root.CFrame = place
+		end
+		root.Anchored = false
+		root.AssemblyLinearVelocity = Vector3.zero
+		if owner then
+			pcall(function()
+				root:SetNetworkOwner(owner)
+			end)
+		end
+	end
+end
+
+function Ride.IsPinned(char)
+	return pins[char] ~= nil
+end
+
+---------------------------------------------------------------------------
+-- The ride
+---------------------------------------------------------------------------
+
+local ride = nil -- { W, S, WChar, SChar, Start, Jolts, LastJolt, NextStab, Stabs, Side, BuckSide }
+
+-- where he clings, in the suit's root space (it faces -Z): chest on the power
+-- pack between its shoulder blades, head just behind its head
+local function backOffset(sRoot)
+	local k = sRoot.Size.Y / 2 -- 1.8 for a suit
+	return CFrame.new(0, 0.53 * k, 1.31 * k + 0.72)
+end
+-- the power pack, and the way out of the suit's back
+local function packPoint(sRoot)
+	local k = sRoot.Size.Y / 2
+	return (sRoot.CFrame * CFrame.new(0, 0.97 * k, 1.05 * k)).Position
+end
+local function standHeight(char)
+	local hum, root = Util.Humanoid(char), Util.Root(char)
+	return (hum and hum.HipHeight or 2) + (root and root.Size.Y / 2 or 1)
+end
+local floorRay = RaycastParams.new()
+floorRay.FilterType = Enum.RaycastFilterType.Exclude
+local function groundBelow(pos, exclude)
+	floorRay.FilterDescendantsInstances = exclude
+	local hit = workspace:Raycast(pos + Vector3.new(0, 2, 0), Vector3.new(0, -30, 0), floorRay)
+	return hit and hit.Position.Y or pos.Y - 4
+end
+local function clawColor(char)
+	return char and char:GetAttribute("ClawGlow") or Color3.fromRGB(255, 60, 50)
+end
+
+function Ride.IsRiding(player)
+	return ride ~= nil and ride.W == player
+end
+-- whoever is on this suit's back (nil if nobody)
+function Ride.Rider(suit)
+	return ride ~= nil and ride.S == suit and ride.W or nil
+end
+
+-- He lands on its back. Returns false if he can't (and the pounce goes on).
+function Ride.Start(w, s)
+	if ride then
+		return false
+	end
+	local wChar, sChar = w.Character, s.Character
+	local wRoot, sRoot = Util.Root(wChar), Util.Root(sChar)
+	if not (wRoot and sRoot and Util.IsAlive(wChar) and Util.IsAlive(sChar)) then
+		return false
+	end
+	Block.Break(s) -- a pounce breaks a guard
+	ride = { W = w, S = s, WChar = wChar, SChar = sChar, Start = os.clock(), Jolts = 0, LastJolt = 0, NextStab = os.clock() + 0.25, Stabs = 0 }
+	w:SetAttribute("Riding", true)
+	s:SetAttribute("Ridden", true)
+	Status.Apply(s, "PursuitHold", Config.Sentinel.Pursuit.HitGrace) -- he's on it: its thrusters cut out
+	Ride.Pin(wChar, sChar, backOffset(sRoot))
+	VFX.StopAnim(wChar, nil)
+	VFX.Anim(wChar, "RideMount")
+	VFX.Anim(sChar, "RiddenHit")
+	-- the slam of him hitting its back: the suit lurches forward
+	local at = packPoint(sRoot)
+	local out = -Util.Flat(sRoot.CFrame.LookVector)
+	Fx:FireAllClients("HitStop", { Attacker = wChar, Victim = sChar, Duration = 0.13 })
+	Fx:FireAllClients("Shake", { Position = at, Intensity = 1.3, Radius = 90 })
+	Combat.MetalSparks(at, out)
+	VFX.Impact(at, clawColor(wChar), 1.4, sChar, true)
+	Util.SoundAt(Config.Sounds.PounceHit, at, { Volume = 2.2, Pitch = 0.8, Range = 240 })
+	Util.SoundAt(Config.Sounds.Punch, at, { Volume = 2, Pitch = 0.55, Range = 240 })
+	Util.FireClient(Fx, s, "Knock", { Velocity = -out * 26, Duration = 0.16 })
+	Util.FireClient(Fx, w, "Announce", { Text = "ON ITS BACK! M1: STAB THE CORE   SPACE: LEAP OFF", Color = GOLD, Duration = 2.5 })
+	Util.FireClient(Fx, s, "Announce", { Text = "HE'S ON YOUR BACK! MASH SPACE TO BUCK HIM. BACK TO A WALL + SPACE CRUSHES HIM", Color = RED, Duration = 2.8 })
+	return true
+end
+
+-- M1 while riding: the claws go into the power pack. Every 3rd stab he
+-- drives both in and twists (Twist x, and they burst out of its chest).
+function Ride.Stab(w)
+	local r = ride
+	if not (r and r.W == w) or os.clock() < r.NextStab then
+		return
+	end
+	local cfg = Config.Ride
+	local raging = w:GetAttribute("Rage") == true
+	r.NextStab = os.clock() + cfg.StabCooldown * (raging and 1 / Config.Rage.AttackSpeed or 1)
+	r.Stabs += 1
+	local big = r.Stabs % 3 == 0
+	r.Side = r.Side == "R" and "L" or "R"
+	VFX.Anim(r.WChar, big and "RideTwist" or (r.Side == "R" and "RideStabR" or "RideStabL"))
+	-- the strike frame of the clip: the claws go in
+	task.delay(big and 0.15 or 0.11, function()
+		if ride ~= r then
+			return
+		end
+		local sRoot, sTorso = Util.Root(r.SChar), Util.Torso(r.SChar)
+		if not (sRoot and sTorso) then
+			return
+		end
+		local at = packPoint(sRoot)
+		local out = -Util.Flat(sRoot.CFrame.LookVector)
+		local glow = clawColor(r.WChar)
+		Fx:FireAllClients("HitStop", { Attacker = r.WChar, Victim = r.SChar, Duration = big and 0.15 or 0.075 })
+		Fx:FireAllClients("Shake", { Position = at, Intensity = big and 1.3 or 0.6, Radius = 70 })
+		Combat.MetalSparks(at, (out + Vector3.new(0, 0.4, 0)).Unit)
+		VFX.Impact(at, glow, big and 1.7 or 1.05, r.SChar, true)
+		Fx:FireAllClients("Electric", { Char = r.SChar, Duration = big and 0.9 or 0.3 })
+		Util.Burst(sTorso, Util.SparkProps, big and 50 or 18, 1.3)
+		Util.SoundAt(Config.Sounds.Impale, at, { Volume = big and 2.4 or 1.7, Pitch = (big and 0.85 or 1.1) * (0.95 + math.random() * 0.1), Range = 220 })
+		Util.SoundAt(Config.Sounds.Punch, at, { Volume = 1.5, Pitch = big and 0.5 or 0.75, Range = 200 })
+		if big then
+			-- all the way through: the claws punch out of its chest
+			local front = (sRoot.CFrame * CFrame.new(0, 0.97 * sRoot.Size.Y / 2, -0.9 * sRoot.Size.Y / 2)).Position
+			Fx:FireAllClients("ImpaleBurst", { Position = front, Dir = (-out + Vector3.new(0, 0.25, 0)).Unit, Color = glow, Heavy = true })
+		end
+		Status.Apply(r.S, "PursuitHold", Config.Sentinel.Pursuit.HitGrace)
+		local armor = (r.S:GetAttribute("Armor") or 1) - cfg.StabArmor * (raging and Config.Rage.Damage or 1) * (big and cfg.Twist or 1)
+		r.S:SetAttribute("Armor", armor)
+		local hum = Util.Humanoid(r.SChar)
+		if hum then
+			hum.Health = hum.MaxHealth * math.max(0.05, armor / Config.Sentinel.Armor)
+		end
+		Util.FireClient(Fx, r.S, "Hurt", {})
+		Util.FireClient(Fx, r.W, "HitConfirm", {})
+		if armor <= 0 then
+			local s = r.S
+			Ride.End("dropped")
+			if Combat.OnSuitDestroyed then
+				Combat.OnSuitDestroyed(s) -- he tore it open from behind
+			end
+		end
+	end)
+end
+
+-- backed into a wall with him on its back
+local crushRay = RaycastParams.new()
+crushRay.FilterType = Enum.RaycastFilterType.Exclude
+local crush -- (below: it ends the ride)
+-- the wall right behind him, if the suit's back is up against one
+local function wallBehind(r, sRoot, extra)
+	local debris = Round.Map and Round.Map:FindFirstChild("Debris")
+	crushRay.FilterDescendantsInstances = debris and { r.WChar, r.SChar, debris } or { r.WChar, r.SChar }
+	local k = sRoot.Size.Y / 2
+	local look = Util.Flat(sRoot.CFrame.LookVector)
+	local reach = 1.31 * k + 0.72 + 1.1 + (extra or 0) -- past his back
+	for _, y in { 0.5 * k, 1.2 * k } do
+		local hit = workspace:Raycast(sRoot.Position + Vector3.new(0, y, 0), -look * reach, crushRay)
+		if hit and math.abs(hit.Normal.Y) < 0.5 then
+			return hit
+		end
+	end
+	return nil
+end
+crush = function(r, sRoot, hit)
+	local look = Util.Flat(sRoot.CFrame.LookVector)
+	local at = hit.Position
+	VFX.Anim(r.SChar, "SlamBack")
+	Fx:FireAllClients("HitStop", { Attacker = r.SChar, Victim = r.WChar, Duration = 0.17 })
+	Fx:FireAllClients("Shake", { Position = at, Intensity = 1.9, Radius = 130 })
+	Combat.SmashInBox(CFrame.lookAt(at, at - look) * CFrame.new(0, 0, -1), Vector3.new(8, 11, 5), sRoot.Position, 95)
+	VFX.Dust(at + look * 0.5, hit.Instance.Color:Lerp(Color3.fromRGB(200, 196, 188), 0.5), 18)
+	VFX.Shockwave(Vector3.new(at.X, groundBelow(at, { r.WChar, r.SChar }) + 0.2, at.Z), 16)
+	Util.SoundAt(Config.Sounds.SentinelSmash ~= "" and Config.Sounds.SentinelSmash or Config.Sounds.Impact, at, { Volume = 2.6, Pitch = 0.75, Range = 300 })
+	Util.SoundAt(Config.Sounds.Break, at, { Volume = 2, Pitch = 0.8, Range = 260 })
+	local w, s = r.W, r.S
+	Ride.End("crushed")
+	Ride.DamageWolverine(Config.Ride.CrushDamage * Ride.Power(s), s)
+	Ride.StunWolverine(Config.Ride.CrushStun)
+	Util.FireClient(Fx, w, "Announce", { Text = "CRUSHED!", Color = RED, Duration = 1.4 })
+	Util.FireClient(Fx, s, "Announce", { Text = "CRUSHED HIM!", Color = GOLD, Duration = 1.4 })
+end
+
+-- the suit's back thrusters fire (bucking)
+local THRUST = {
+	Texture = "rbxasset://textures/particles/smoke_main.dds",
+	Color = ColorSequence.new(Color3.fromRGB(255, 190, 110), Color3.fromRGB(90, 86, 84)),
+	LightEmission = 0.6,
+	Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.8), NumberSequenceKeypoint.new(1, 3.2) }),
+	Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(1, 1) }),
+	Lifetime = NumberRange.new(0.25, 0.5),
+	Speed = NumberRange.new(24, 36),
+	SpreadAngle = Vector2.new(14, 14),
+	EmissionDirection = Enum.NormalId.Bottom,
+}
+local function thrusterBlast(sRoot)
+	local k = sRoot.Size.Y / 2
+	for _, x in { -0.52, 0.52 } do
+		Util.Burst((sRoot.CFrame * CFrame.new(x * k, 0.4 * k, 1.1 * k)).Position, THRUST, 26, 1)
+	end
+end
+
+-- The pilot jumps while he's on its back: the suit twists violently and its
+-- thrusters fire. The Jolts-th throws him off.
+function Ride.Buck(s)
+	local r = ride
+	if not (r and r.S == s) or os.clock() - r.LastJolt < Config.Ride.JoltGap then
+		return
+	end
+	r.LastJolt = os.clock()
+	r.Jolts += 1
+	local sRoot = Util.Root(r.SChar)
+	if not sRoot then
+		return
+	end
+	-- its back to a wall: the buck throws itself back and crushes him into it
+	local wall = wallBehind(r, sRoot, 2.5)
+	if wall then
+		crush(r, sRoot, wall)
+		return
+	end
+	local last = r.Jolts >= Config.Ride.Jolts
+	r.BuckSide = r.BuckSide == "L" and "R" or "L"
+	VFX.Anim(r.SChar, last and "BuckThrow" or "Buck" .. r.BuckSide)
+	thrusterBlast(sRoot)
+	Util.Sound(Config.Sounds.Whoosh, sRoot, { Volume = 1.6, Pitch = 0.7, Range = 160 })
+	Util.Sound(Config.Sounds.Punch, sRoot, { Volume = 1.2, Pitch = 0.5, Range = 160 })
+	Fx:FireAllClients("HitStop", { Attacker = r.SChar, Victim = r.WChar, Duration = 0.05 })
+	Fx:FireAllClients("Shake", { Position = sRoot.Position, Intensity = last and 1.2 or 0.7, Radius = 70 })
+	Util.FireClient(Fx, r.W, "Announce", { Text = ("HOLD ON! %d/%d"):format(r.Jolts, Config.Ride.Jolts), Color = RED, Duration = 0.6 })
+	if last then
+		task.delay(0.16, function() -- on the heave of the throw
+			if ride == r then
+				Ride.End("shaken", { Side = r.BuckSide == "L" and -1 or 1 })
+			end
+		end)
+	end
+end
+
+-- He comes off. reason: "leap" / "timeout" (he kicks off), "shaken" (bucked
+-- off), "punched" / "blasted" (another hit flung him, opts.Dir), "crushed"
+-- (into a wall), "dropped" / "grabbed" / "gone" (just let go).
+function Ride.End(reason, opts)
+	local r = ride
+	if not r then
+		return
+	end
+	ride = nil
+	opts = opts or {}
+	r.W:SetAttribute("Riding", nil)
+	if r.S.Parent then
+		r.S:SetAttribute("Ridden", nil)
+	end
+	local wChar, sChar = r.WChar, r.SChar
+	local wRoot, sRoot = Util.Root(wChar), Util.Root(sChar)
+	VFX.StopAnim(wChar, nil)
+	if not (wRoot and wRoot.Parent) then
+		Ride.Unpin(wChar)
+		return
+	end
+	-- set down upright where he is (the fling carries him from there)
+	local look = sRoot and Util.Flat(sRoot.CFrame.LookVector) or Util.Flat(wRoot.CFrame.LookVector)
+	local out = -look -- out of the suit's back
+	local here = wRoot.Position
+	local owner = r.W.Parent and r.W or nil
+	if reason == "crushed" then
+		-- slides down between the suit and the wall, onto the floor
+		local ground = groundBelow(here, { wChar, sChar })
+		Ride.Unpin(wChar, CFrame.lookAt(Vector3.new(here.X, ground + standHeight(wChar), here.Z), Vector3.new(here.X, ground + standHeight(wChar), here.Z) + look), owner)
+		VFX.Anim(wChar, "Crushed")
+		return
+	end
+	Ride.Unpin(wChar, CFrame.lookAt(here, here + look), owner)
+	if reason == "leap" or reason == "timeout" then
+		-- both boots into its back: he flips off behind it, the suit stumbles
+		VFX.Anim(wChar, "RideLeapOff")
+		Util.FireClient(Fx, r.W, "Knock", { Velocity = out * 42 + Vector3.new(0, 34, 0), Duration = 0.22 })
+		if sRoot then
+			Util.FireClient(Fx, r.S, "Knock", { Velocity = look * 30, Duration = 0.15 })
+			local at = packPoint(sRoot)
+			Fx:FireAllClients("KickImpact", { Position = at, Dir = look })
+			Util.SoundAt(Config.Sounds.Punch, at, { Volume = 1.8, Pitch = 0.7, Range = 200 })
+			Fx:FireAllClients("Shake", { Position = at, Intensity = 0.8, Radius = 60 })
+		end
+	elseif reason == "shaken" then
+		-- thrown off over its shoulder
+		local side = look:Cross(Vector3.yAxis) * (opts.Side or 1)
+		VFX.Anim(wChar, "Flung")
+		Util.FireClient(Fx, r.W, "Knock", { Velocity = side * 58 + out * 14 + Vector3.new(0, 40, 0), Tumble = 0.9, Spin = look * 10 })
+		Ride.DamageWolverine(Config.Ride.ShakeDamage * Ride.Power(r.S), r.S)
+		Util.FireClient(Fx, r.S, "Announce", { Text = "BUCKED HIM OFF!", Color = GOLD, Duration = 1.4 })
+	elseif reason == "punched" or reason == "blasted" then
+		local dir = typeof(opts.Dir) == "Vector3" and Util.Flat(opts.Dir) or out
+		VFX.Anim(wChar, "Flung")
+		Util.FireClient(Fx, r.W, "Knock", { Velocity = dir * 78 + Vector3.new(0, 34, 0), Tumble = 1, Spin = dir:Cross(Vector3.yAxis) * -9 })
+	end
+end
+
+local nextCrushCheck = 0
+RunService.Heartbeat:Connect(function()
+	-- pinned characters ride along with whoever holds them
+	for char, pinned in pins do
+		local root, toRoot = Util.Root(char), Util.Root(pinned.To)
+		if root and toRoot and char.Parent and pinned.To.Parent then
+			root.CFrame = toRoot.CFrame * pinned.Offset
+		elseif not char.Parent then
+			pins[char] = nil -- gone (left, or the round's over)
+			Fx:FireAllClients("Glue", { Char = char })
+		end
+	end
+	local r = ride
+	if not r then
+		return
+	end
+	local ok = Round.Active and r.W.Parent ~= nil and r.S.Parent ~= nil and Round.Wolverine == r.W
+		and r.S:GetAttribute("Role") == "Sentinel" and r.W.Character == r.WChar and r.S.Character == r.SChar
+		and Util.IsAlive(r.WChar) and Util.IsAlive(r.SChar)
+	if not ok then
+		Ride.End("gone")
+		return
+	end
+	if os.clock() - r.Start > Config.Ride.MaxTime then
+		Ride.End("timeout")
+		return
+	end
+	-- the pilot backing him into a wall
+	if os.clock() < nextCrushCheck then
+		return
+	end
+	nextCrushCheck = os.clock() + 0.05
+	local sRoot = Util.Root(r.SChar)
+	if not sRoot then
+		return
+	end
+	local look = Util.Flat(sRoot.CFrame.LookVector)
+	local backing = -sRoot.AssemblyLinearVelocity:Dot(look)
+	if backing > 5 then -- (walking backwards: shift lock)
+		local hit = wallBehind(r, sRoot)
+		if hit then
+			crush(r, sRoot, hit)
+		end
+	end
+end)
+
+return Ride
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="26">
+        <Properties>
           <string name="Name">Round</string>
           <string name="Source"><![CDATA[-- Shared round state used by every server module.
 local Round = {
@@ -12866,7 +13315,7 @@ return Round
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="26">
+      <Item class="ModuleScript" referent="27">
         <Properties>
           <string name="Name">Sentinel</string>
           <string name="Source"><![CDATA[-- The counter (like the Hulkbuster): survivors reboot 3 Sentinel terminals,
@@ -12887,6 +13336,7 @@ local Posture = require(script.Parent.Posture)
 local Wolverine = require(script.Parent.Wolverine)
 local Combat = require(script.Parent.Combat)
 local Block = require(script.Parent.Block)
+local Ride = require(script.Parent.Ride)
 local Costumes = require(script.Parent.Costumes)
 local VFX = require(script.Parent.VFX)
 local PlayerData = require(script.Parent.PlayerData)
@@ -13312,6 +13762,9 @@ local function stunWolverine(duration)
 	Fx:FireAllClients("Stunned", { Name = w.Name, Duration = duration })
 end
 
+Ride.Power = power
+Ride.StunWolverine = stunWolverine
+
 -- The punch's big sounds; built-in stand-ins until the files are uploaded.
 local function smashSound(parent, pitch, volume)
 	if Config.UploadedSounds.SentinelSmash ~= 0 then
@@ -13370,10 +13823,18 @@ local function punch(player, char, root, side)
 				Fx:FireAllClients("Shake", { Position = wRoot.Position, Intensity = 0.5, Radius = 40 })
 			else
 				local mult = power(player)
+				local riding = Ride.IsRiding(w)
+				if riding then
+					mult *= Config.Ride.PunchMult -- punched off the other suit's back
+				end
 				Wolverine.Damage(cfg.Damage * mult, player)
 				stunWolverine(cfg.Stun * mult)
 				local dir = Util.Flat(wRoot.Position - root.Position)
-				Fx:FireClient(w, "Knock", { Velocity = dir * cfg.Knockback + Vector3.new(0, 25, 0) })
+				if riding then
+					Ride.End("punched", { Dir = dir })
+				else
+					Fx:FireClient(w, "Knock", { Velocity = dir * cfg.Knockback + Vector3.new(0, 25, 0) })
+				end
 				smashSound(wRoot)
 				-- the fist rings off his adamantium skeleton; the floor jumps
 				Util.Burst(wRoot, Util.SparkProps, 30, 1.5)
@@ -13432,6 +13893,10 @@ local function slam(player, char, root)
 		local off = wRoot.Position - center
 		if Vector3.new(off.X, 0, off.Z).Magnitude <= cfg.Radius and math.abs(off.Y) < 14 then
 			Block.Break(w) -- a slam is a block breaker
+			local wasRiding = Ride.IsRiding(w)
+			if wasRiding then
+				Ride.End("blasted", { Dir = off })
+			end
 			if Combat.BreakShield(w) then
 				Fx:FireAllClients("Shake", { Position = wRoot.Position, Intensity = 0.5, Radius = 40 })
 			else
@@ -13441,7 +13906,9 @@ local function slam(player, char, root)
 				if dir.Magnitude < 0.1 then
 					dir = root.CFrame.LookVector
 				end
-				Fx:FireClient(w, "Knock", { Velocity = Util.Flat(dir) * cfg.Knockback + Vector3.new(0, 45, 0) })
+				if not wasRiding then
+					Fx:FireClient(w, "Knock", { Velocity = Util.Flat(dir) * cfg.Knockback + Vector3.new(0, 45, 0) })
+				end
 				Util.Burst(wRoot, Util.SparkProps, 30, 1.5)
 				Fx:FireAllClients("HitStop", { Attacker = char, Victim = wChar, Duration = 0.18 })
 			end
@@ -13682,11 +14149,129 @@ local function pulse(player, char, root)
 		local near = (wRoot.Position - root.Position).Magnitude <= cfg.Radius
 		if near or Combat.BoxOverlap(CFrame.new(root.Position), Vector3.one * cfg.Radius * 1.4, bcf, bsize) then
 			Block.Break(Round.Wolverine) -- so is the blast
+			if Ride.IsRiding(Round.Wolverine) then
+				Ride.End("blasted", { Dir = wRoot.Position - root.Position })
+			end
 			Wolverine.Damage(cfg.Damage * power(player), player)
 			stunWolverine(cfg.Stun)
 			Combat.BreakShield(Round.Wolverine) -- the blast shatters any i-frames he had
 			Wolverine.RevealSkeleton()
 		end
+	end
+end
+
+-- Grab & Throw (Config.Sentinel.Grab): the suit lunges and reaches; catch
+-- him and it lifts him off the floor by the throat, holds him up while the
+-- pilot turns to aim, then winds back and hurls him through the walls. A
+-- slash on the suit while it's reaching knocks the arm aside: countered.
+local function grab(player, char, root)
+	local cfg = Config.Sentinel.Grab
+	local k = root.Size.Y / 2
+	VFX.Anim(char, "GrabReach")
+	Status.Apply(player, "Slowed", cfg.WindUp + 0.2)
+	Util.Sound(Config.Sounds.Whoosh, root, { Volume = 1.6, Pitch = 0.6, Range = 160 })
+	Util.FireClient(Fx, player, "Knock", { Velocity = Util.Flat(root.CFrame.LookVector) * 34, Duration = 0.16 }) -- the lunge
+	local armor0 = player:GetAttribute("Armor")
+	local t0 = os.clock()
+	while os.clock() - t0 < cfg.WindUp do
+		task.wait()
+		if not (char.Parent and Util.IsAlive(char)) or player:GetAttribute("Role") ~= "Sentinel" then
+			return
+		end
+		if player:GetAttribute("Armor") ~= armor0 or Ride.Rider(player) or Status.Has(player, "Stunned") then
+			-- he slashed the reaching arm: it's knocked aside and the suit reels
+			VFX.Anim(char, "GrabCountered")
+			Status.Apply(player, "Stunned", cfg.CounterStun)
+			Fx:FireAllClients("Stunned", { Name = player.Name, Duration = cfg.CounterStun })
+			local hand = (root.CFrame * CFrame.new(0.5 * k, 1.3 * k, -2 * k)).Position
+			Combat.MetalSparks(hand, Util.Flat(root.CFrame.LookVector))
+			Util.SoundAt(Config.Sounds.Punch, hand, { Volume = 1.8, Pitch = 1.3, Range = 180 })
+			Util.FireClient(Fx, player, "Announce", { Text = "GRAB COUNTERED", Color = Color3.fromRGB(255, 90, 60), Duration = 1.2 })
+			if Round.Wolverine then
+				Util.FireClient(Fx, Round.Wolverine, "Announce", { Text = "COUNTERED THE GRAB", Color = GLOW, Duration = 1.2 })
+			end
+			return
+		end
+	end
+	local w, wChar, wRoot = wolverineParts()
+	local caught = false
+	-- (on the other suit's back he can be plucked off; held in a fist he can't)
+	local grabbable = wRoot ~= nil and Util.IsAlive(wChar) and not Wolverine.Untouchable() and not Status.Has(w, "Frozen")
+		and (Ride.IsRiding(w) or not Ride.IsPinned(wChar))
+	if grabbable then
+		local bcf, bsize = Combat.BodyBox(wRoot)
+		caught = Combat.BoxOverlap(root.CFrame * CFrame.new(0, 1, -cfg.Range / 2), Vector3.new(cfg.Width, 13, cfg.Range), bcf, bsize)
+	end
+	if not caught then
+		-- closes on air: overreaches and stumbles
+		VFX.Anim(char, "GrabWhiff")
+		Status.Apply(player, "Slowed", 0.8)
+		return
+	end
+
+	-- CAUGHT: lifted off the floor by the throat
+	if Ride.IsRiding(w) then
+		Ride.End("grabbed") -- plucked off the other suit's back
+	end
+	Block.Break(w) -- a grab goes through a guard
+	Status.Apply(w, "Busy", cfg.HoldTime + 0.6)
+	Status.Apply(w, "Frozen", cfg.HoldTime + 0.6)
+	-- his neck in the raised right fist, at arm's length out in front of it
+	local hold = CFrame.new(1.13 * k, 1.6 * k, -2.06 * k) * CFrame.Angles(0, math.pi, 0)
+	Ride.Pin(wChar, char, hold)
+	VFX.StopAnim(wChar, nil)
+	VFX.Anim(wChar, "Choked")
+	VFX.Anim(char, "GrabHold")
+	local neck = (root.CFrame * hold).Position + Vector3.new(0, 2, 0)
+	Fx:FireAllClients("HitStop", { Attacker = char, Victim = wChar, Duration = 0.12 })
+	Fx:FireAllClients("Shake", { Position = neck, Intensity = 1, Radius = 80 })
+	smashSound(wRoot, 1.2, 1.8)
+	Util.Sound(Config.Sounds.Snarl ~= "" and Config.Sounds.Snarl or Config.Sounds.Impact, wRoot, { Volume = 1.6, Pitch = 0.9, Range = 160 })
+	Wolverine.Damage(cfg.Squeeze * power(player), player)
+	Util.FireClient(Fx, w, "Grabbed", {})
+	Util.FireClient(Fx, w, "Announce", { Text = "GRABBED!", Color = Color3.fromRGB(255, 80, 60), Duration = 1 })
+	Util.FireClient(Fx, player, "Announce", { Text = "GOT HIM! AIM THE THROW", Color = GLOW, Duration = 1 })
+	task.wait(cfg.HoldTime) -- the pilot turns to aim
+	if not (wChar.Parent and Ride.IsPinned(wChar)) then
+		return
+	end
+	if not (char.Parent and Util.IsAlive(char)) or player:GetAttribute("Role") ~= "Sentinel" then
+		Ride.Unpin(wChar, nil, w) -- the suit went down: he drops
+		Status.Clear(w, "Busy")
+		Status.Clear(w, "Frozen")
+		return
+	end
+
+	-- THROW: it winds back and hurls him the way it faces
+	VFX.Anim(char, "GrabThrow")
+	task.wait(0.15)
+	if not (wChar.Parent and Ride.IsPinned(wChar)) then
+		return
+	end
+	local dir = Util.Flat(root.CFrame.LookVector)
+	local from = (root.CFrame * CFrame.new(0.4 * k, 1.5 * k, -2.2 * k)).Position
+	Ride.Unpin(wChar, CFrame.lookAt(from, from + dir), w)
+	Status.Clear(w, "Busy")
+	Status.Clear(w, "Frozen")
+	VFX.Anim(wChar, "Tumble")
+	Wolverine.Damage(cfg.Damage * power(player), player)
+	Util.FireClient(Fx, w, "Thrown", { Velocity = dir * cfg.Speed, Height = cfg.Height, Time = cfg.AirTime })
+	Util.Sound(Config.Sounds.Whoosh, root, { Volume = 2, Pitch = 0.55, Range = 220 })
+	Fx:FireAllClients("HitStop", { Attacker = char, Duration = 0.08 })
+	Fx:FireAllClients("Shake", { Position = from, Intensity = 1.1, Radius = 90 })
+	-- he goes through every wall in his path
+	local f0 = os.clock()
+	while os.clock() - f0 < cfg.AirTime + 0.15 and wRoot.Parent do
+		Combat.SmashInBox(CFrame.lookAt(wRoot.Position, wRoot.Position + dir) * CFrame.new(0, 0, -2.5), Vector3.new(7, 9, 6), wRoot.Position, 95)
+		task.wait()
+	end
+	if wRoot.Parent then
+		local landAt = floorBelow(wRoot.Position, { wChar, char })
+		VFX.Shockwave(landAt + Vector3.new(0, 0.2, 0), 16)
+		VFX.Dust(landAt, Color3.fromRGB(160, 156, 150), 16)
+		Util.Sound(Config.Sounds.Land ~= "" and Config.Sounds.Land or Config.Sounds.Impact, wRoot, { Volume = 2.4, Pitch = 0.7, Range = 260 })
+		Fx:FireAllClients("Shake", { Position = landAt, Intensity = 1.3, Radius = 90 })
+		stunWolverine(cfg.Stun)
 	end
 end
 
@@ -13714,6 +14299,10 @@ function Sentinel.Handle(player, ability, arg)
 	local root = Util.Root(char)
 	if ability == "Block" then
 		Block.Set(player, arg == true)
+		return
+	end
+	if ability == "Buck" then
+		Ride.Buck(player) -- bucking him off its back (jump)
 		return
 	end
 	if not (root and Util.IsAlive(char)) or Status.Has(player, "Busy") or Status.Has(player, "Frozen") or Status.Has(player, "Stunned") then
@@ -13756,6 +14345,8 @@ function Sentinel.Handle(player, ability, arg)
 		perform(player, ability, pulse, player, char, root)
 	elseif ability == "Slam" then
 		perform(player, ability, slam, player, char, root)
+	elseif ability == "Grab" then
+		perform(player, ability, grab, player, char, root)
 	end
 end
 
@@ -13763,7 +14354,7 @@ return Sentinel
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="27">
+      <Item class="ModuleScript" referent="28">
         <Properties>
           <string name="Name">Status</string>
           <string name="Source"><![CDATA[-- Timed status effects: Stunned, Slowed, Frozen, Busy, Immune, Boost.
@@ -13801,7 +14392,7 @@ return Status
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="28">
+      <Item class="ModuleScript" referent="29">
         <Properties>
           <string name="Name">VFX</string>
           <string name="Source"><![CDATA[-- Crisp combat visuals, created on the server so everyone sees them.
@@ -14005,7 +14596,7 @@ return VFX
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="29">
+      <Item class="ModuleScript" referent="30">
         <Properties>
           <string name="Name">Wolverine</string>
           <string name="Source"><![CDATA[-- Wolverine: transformation, intro (SNIKT + roar), abilities, healing factor
@@ -14024,6 +14615,7 @@ local Posture = require(script.Parent.Posture)
 local Movement = require(script.Parent.Movement)
 local Combat = require(script.Parent.Combat)
 local Block = require(script.Parent.Block)
+local Ride = require(script.Parent.Ride)
 local PlayerData = require(script.Parent.PlayerData)
 local Fart = require(script.Parent.Fart)
 local VFX = require(script.Parent.VFX)
@@ -14920,6 +15512,33 @@ tankIntro = function(player, char, spawnCFrame, valid)
 	Util.Sound(Config.Sounds.Snikt, root, { Volume = 3, Range = 400 })
 	Fx:FireAllClients("Shake", { Position = to.Position, Intensity = 0.8, Radius = 80 })
 	Fx:FireAllClients("HitStop", { Attacker = char, Duration = 0.12 })
+	-- the force of the claws coming out blows the cell's front open: every
+	-- pane and post in a cone ahead of him bursts out of its frame
+	local cell = map and map:FindFirstChild("Containment", true)
+	if cell then
+		local blew = false
+		for _, p in cell:GetDescendants() do
+			if p:IsA("BasePart") and p:GetAttribute("Breakable") and not p:GetAttribute("Broken") then
+				local off = p.Position - to.Position
+				local along = off:Dot(dir)
+				local across = (Vector3.new(off.X, 0, off.Z) - dir * along).Magnitude
+				if along > 2 and along < 14 and across < 3 + along * 0.35 then
+					Combat.BreakPart(p, to.Position - dir * 4, 85)
+					blew = true
+				end
+			end
+		end
+		if blew then
+			local front = to.Position + dir * 7.5
+			local floorAt = Vector3.new(front.X, to.Position.Y - hip + 0.2, front.Z) -- he's standing on the same floor
+			VFX.Shockwave(floorAt, 22, Color3.fromRGB(200, 230, 255))
+			VFX.Dust(floorAt, Color3.fromRGB(190, 210, 220), 14)
+			Util.SoundAt(Config.Sounds.Break, front, { Volume = 3, Pitch = 1.1, Range = 400 })
+			Util.SoundAt(Config.Sounds.Break, front, { Volume = 2.4, Pitch = 0.65, Range = 400 })
+			Util.SoundAt(Config.Sounds.Impact, front, { Volume = 2.2, Pitch = 0.6, Range = 400 })
+			Fx:FireAllClients("Shake", { Position = front, Intensity = 1.3, Radius = 120 })
+		end
+	end
 
 	-- hold the X... then throw the arms wide and ROAR
 	task.wait(cfg.Roar - cfg.Cross - 0.62)
@@ -14984,7 +15603,7 @@ function Wolverine.Transform(player, spawnCFrame)
 		if valid() then
 			Round.Released = true
 			ReplicatedStorage:SetAttribute("Released", true)
-			Fx:FireAllClients("Announce", { Text = "WOLVERINE HAS BEEN RELEASED", Color = Color3.fromRGB(255, 60, 60), Duration = 3 })
+			Fx:FireAllClients("Announce", { Text = "THE BERSERKER HAS BEEN RELEASED", Color = Color3.fromRGB(255, 60, 60), Duration = 3 })
 		end
 	end)
 end
@@ -15096,6 +15715,10 @@ local function pounce(player, char, root)
 			-- (it still flies on through walls and lands, but grabs nobody)
 			blocked = true
 		elseif target then
+			-- a suit, from any side: he lands on its back and rides it (Ride.lua)
+			if target.Player:GetAttribute("Role") == "Sentinel" and Ride.Start(player, target.Player) then
+				return
+			end
 			pounceStrike(player, char, root, target)
 			return
 		end
@@ -15332,6 +15955,14 @@ function Wolverine.Handle(player, ability, arg)
 		Movement.SetInput(player, "Feral", arg == true)
 		return
 	end
+	if Ride.IsRiding(player) then
+		if ability == "Slash" then
+			Ride.Stab(player)
+		elseif ability == "RideOff" then
+			Ride.End("leap")
+		end
+		return
+	end
 	if ability == "Block" then
 		Block.Set(player, arg == true)
 		return
@@ -15458,6 +16089,12 @@ function Wolverine.Damage(amount, by)
 	end
 	Fx:FireAllClients("HitStop", { Victim = char, Duration = 0 })
 	Util.Burst(root, Util.SparkProps, 25, 1.5) -- adamantium skeleton sparks
+end
+Ride.DamageWolverine = Wolverine.Damage
+
+-- roaring into his rage: nothing can touch (or grab) him
+function Wolverine.Untouchable()
+	return os.clock() < roarUntil
 end
 
 ---------------------------------------------------------------------------
@@ -15588,18 +16225,18 @@ return Wolverine
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="30">
+  <Item class="StarterPlayer" referent="31">
     <Properties>
       <string name="Name">StarterPlayer</string>
       <token name="AvatarJointUpgrade">1</token>
       <bool name="EnableMouseLockOption">false</bool>
       <token name="GameSettingsAvatar">1</token>
     </Properties>
-    <Item class="StarterCharacterScripts" referent="31">
+    <Item class="StarterCharacterScripts" referent="32">
       <Properties>
         <string name="Name">StarterCharacterScripts</string>
       </Properties>
-      <Item class="Script" referent="32">
+      <Item class="Script" referent="33">
         <Properties>
           <string name="Name">Health</string>
           <token name="RunContext">0</token>
@@ -15610,11 +16247,11 @@ return Wolverine
         </Properties>
       </Item>
     </Item>
-    <Item class="StarterPlayerScripts" referent="33">
+    <Item class="StarterPlayerScripts" referent="34">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="34">
+      <Item class="LocalScript" referent="35">
         <Properties>
           <string name="Name">CharacterOutline</string>
           <string name="Source"><![CDATA[local Player = game.Players.LocalPlayer
@@ -15632,11 +16269,11 @@ end)
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="35">
+      <Item class="Folder" referent="36">
         <Properties>
           <string name="Name">Client</string>
         </Properties>
-        <Item class="ModuleScript" referent="36">
+        <Item class="ModuleScript" referent="37">
           <Properties>
             <string name="Name">AnimClips</string>
             <string name="Source"><![CDATA[-- Keyframed animation clips (R15). Poses are joint rotations in degrees:
@@ -16344,6 +16981,345 @@ Clips.GuardBreak = {
 }
 
 ---------------------------------------------------------------------------
+-- RIDING A SENTINEL (server/Ride.lua). He's pinned to its back facing the
+-- same way: pitched into it, legs locked round its waist, left claws hooked
+-- over its shoulder, right arm up. Stabs cock the arm high behind the head
+-- and drive it down into the power pack on the strike frame (0.11s, when the
+-- server's hit lands and freezes the frame), dig in, then back to the cling.
+---------------------------------------------------------------------------
+local CLING = {
+	Root = { -18, 0, 0 }, Waist = { -8, 0, 0 }, Neck = { 22, 0, 0 },
+	LShoulder = { 150, 0, -16 }, LElbow = { 58, 0, 0 },
+	RShoulder = { 164, 0, 30 }, RElbow = { 72, 0, 0 },
+	RHip = { 88, 0, 32 }, RKnee = { -96, 0, 0 }, LHip = { 88, 0, -32 }, LKnee = { -96, 0, 0 },
+}
+Clips.RideMount = {
+	Hold = true,
+	Keys = {
+		{ T = 0, Pose = REST },
+		-- slammed flat onto its back, arms and legs thrown wide to grab on
+		{ T = 0.07, Ease = "Out", Pose = {
+			Root = { -38, 0, 0, 0, 0, -0.35 }, Waist = { -14, 0, 0 }, Neck = { 34, 0, 0 },
+			RShoulder = { 118, 0, 58 }, LShoulder = { 118, 0, -58 }, RElbow = { 38, 0, 0 }, LElbow = { 38, 0, 0 },
+			RHip = { 70, 0, 42 }, RKnee = { -70, 0, 0 }, LHip = { 70, 0, -42 }, LKnee = { -70, 0, 0 },
+		} },
+		{ T = 0.24, Ease = "InOut", Pose = CLING },
+	},
+}
+Clips.RideStabR = {
+	Group = "RideStab",
+	Hold = true,
+	Keys = {
+		{ T = 0, Pose = CLING },
+		-- cocked right back over the head, torso wound up
+		{ T = 0.07, Ease = "Out", Pose = {
+			Root = { -12, 0, 0 }, Waist = { 8, -20, 0 }, Neck = { 28, -8, 0 },
+			LShoulder = { 146, 0, -20 }, LElbow = { 64, 0, 0 },
+			RShoulder = { 186, 0, 42 }, RElbow = { 112, 0, 0 },
+			RHip = { 88, 0, 32 }, RKnee = { -96, 0, 0 }, LHip = { 88, 0, -32 }, LKnee = { -96, 0, 0 },
+		} },
+		-- STRIKE: the whole body drops into it and the claws go in to the knuckles
+		{ T = 0.11, Ease = "In", Pose = {
+			Root = { -32, 0, 0, 0, 0, -0.28 }, Waist = { -24, 22, 0 }, Neck = { 6, 12, 0 },
+			LShoulder = { 138, 0, -22 }, LElbow = { 72, 0, 0 },
+			RShoulder = { 46, 0, -16 }, RElbow = { 4, 0, 0 }, RWrist = { -18, 0, 0 },
+			RHip = { 92, 0, 30 }, RKnee = { -100, 0, 0 }, LHip = { 92, 0, -30 }, LKnee = { -100, 0, 0 },
+		} },
+		-- dig in and wrench
+		{ T = 0.26, Ease = "Linear", Pose = {
+			Root = { -34, 3, 0, 0, 0, -0.3 }, Waist = { -27, 26, 0 }, Neck = { 4, 14, 0 },
+			LShoulder = { 138, 0, -22 }, LElbow = { 72, 0, 0 },
+			RShoulder = { 42, 0, -18 }, RElbow = { 2, 0, 0 }, RWrist = { -24, 0, 0 },
+			RHip = { 92, 0, 30 }, RKnee = { -100, 0, 0 }, LHip = { 92, 0, -30 }, LKnee = { -100, 0, 0 },
+		} },
+		{ T = 0.44, Ease = "InOut", Pose = CLING },
+	},
+}
+-- every third: both hands, driven in together, then twisted in the wound
+local BOTH_IN = {
+	Root = { -36, 0, 0, 0, 0, -0.32 }, Waist = { -28, 0, 0 }, Neck = { 2, 0, 0 },
+	RShoulder = { 50, 0, -18 }, LShoulder = { 50, 0, 18 }, RElbow = { 6, 0, 0 }, LElbow = { 6, 0, 0 },
+	RHip = { 92, 0, 30 }, RKnee = { -100, 0, 0 }, LHip = { 92, 0, -30 }, LKnee = { -100, 0, 0 },
+}
+local function twisted(yaw)
+	local p = table.clone(BOTH_IN)
+	p.Waist = { -28, yaw, 0 }
+	p.Root = { -36, yaw * 0.4, 0, 0, 0, -0.32 }
+	return p
+end
+Clips.RideTwist = {
+	-- (its own group: the server's twist replaces the stab he predicted)
+	Hold = true,
+	Keys = {
+		{ T = 0, Pose = CLING },
+		{ T = 0.1, Ease = "Out", Pose = {
+			Root = { -6, 0, 0 }, Waist = { 12, 0, 0 }, Neck = { 32, 0, 0 },
+			RShoulder = { 184, 0, 38 }, LShoulder = { 184, 0, -38 }, RElbow = { 116, 0, 0 }, LElbow = { 116, 0, 0 },
+			RHip = { 88, 0, 32 }, RKnee = { -96, 0, 0 }, LHip = { 88, 0, -32 }, LKnee = { -96, 0, 0 },
+		} },
+		{ T = 0.15, Ease = "In", Pose = BOTH_IN },
+		{ T = 0.3, Ease = "Out", Pose = twisted(26) },
+		{ T = 0.42, Ease = "InOut", Pose = twisted(-24) },
+		{ T = 0.54, Ease = "InOut", Pose = twisted(18) },
+		{ T = 0.78, Ease = "InOut", Pose = CLING },
+	},
+}
+-- both boots into its back and a backflip off
+Clips.RideLeapOff = {
+	Keys = {
+		{ T = 0, Pose = CLING },
+		{ T = 0.09, Ease = "Out", Pose = {
+			Root = { 28, 0, 0 }, Waist = { 14, 0, 0 }, Neck = { 36, 0, 0 },
+			RShoulder = { 172, 0, 34 }, LShoulder = { 172, 0, -34 }, RElbow = { 20, 0, 0 }, LElbow = { 20, 0, 0 },
+			RHip = { -48, 0, 10 }, RKnee = { -4, 0, 0 }, LHip = { -48, 0, -10 }, LKnee = { -4, 0, 0 },
+		} },
+		{ T = 0.32, Ease = "InOut", Pose = {
+			Root = { 50, 0, 0 }, Waist = { -10, 0, 0 }, Neck = { 10, 0, 0 },
+			RShoulder = { 90, 0, 24 }, LShoulder = { 90, 0, -24 }, RElbow = { 60, 0, 0 }, LElbow = { 60, 0, 0 },
+			RHip = { 84, 0, 8 }, RKnee = { -112, 0, 0 }, LHip = { 84, 0, -8 }, LKnee = { -112, 0, 0 },
+		} },
+		{ T = 0.7, Ease = "InOut", Pose = REST },
+	},
+}
+-- thrown or punched off: splayed out in the air
+local SPLAYED = {
+	Waist = { 16, 0, 0 }, Neck = { 40, 0, 0 },
+	RShoulder = { 100, 0, 95 }, LShoulder = { 100, 0, -95 }, RElbow = { 30, 0, 0 }, LElbow = { 30, 0, 0 },
+	RHip = { 40, 0, 30 }, RKnee = { -40, 0, 0 }, LHip = { -30, 0, -30 }, LKnee = { -40, 0, 0 },
+}
+Clips.Flung = {
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.08, Ease = "Out", Pose = SPLAYED },
+		{ T = 0.9, Pose = SPLAYED },
+		{ T = 1.2, Ease = "InOut", Pose = REST },
+	},
+}
+-- crushed between the suit and the wall: whiplash, then he sags to the floor
+local SAG = {
+	Root = { -20, 0, 0, 0, -0.8, 0 }, Waist = { -35, 0, 0 }, Neck = { -30, 0, 0 },
+	RShoulder = { 20, 0, 15 }, LShoulder = { 20, 0, -15 }, RElbow = { 20, 0, 0 }, LElbow = { 20, 0, 0 },
+	RHip = { 60, 0, 0 }, RKnee = { -80, 0, 0 }, LHip = { 60, 0, 0 }, LKnee = { -80, 0, 0 },
+}
+Clips.Crushed = {
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.05, Ease = "Out", Pose = {
+			Root = { 12, 0, 0, 0, -0.2, 0.3 }, Waist = { -20, 0, 0 }, Neck = { -40, 0, 0 },
+			RShoulder = { 95, 0, 20 }, LShoulder = { 95, 0, -20 }, RElbow = { 10, 0, 0 }, LElbow = { 10, 0, 0 },
+			RHip = { 30, 0, 0 }, RKnee = { -30, 0, 0 }, LHip = { 30, 0, 0 }, LKnee = { -30, 0, 0 },
+		} },
+		{ T = 0.28, Ease = "InOut", Pose = SAG },
+		{ T = 1.4, Pose = SAG },
+		{ T = 1.8, Ease = "InOut", Pose = REST },
+	},
+}
+-- held up by the throat: chin forced up, both hands clawing at the fist,
+-- legs kicking
+local CHOKE_A = {
+	Waist = { 6, 0, 0 }, Neck = { 28, 0, 0 },
+	RShoulder = { 150, 0, -8 }, RElbow = { 118, 0, 0 }, LShoulder = { 150, 0, 8 }, LElbow = { 118, 0, 0 },
+	RHip = { 30, 0, 0 }, RKnee = { -50, 0, 0 }, LHip = { -12, 0, 0 }, LKnee = { -20, 0, 0 },
+}
+local CHOKE_B = table.clone(CHOKE_A)
+CHOKE_B.RHip, CHOKE_B.RKnee, CHOKE_B.LHip, CHOKE_B.LKnee = { -10, 0, 0 }, { -15, 0, 0 }, { 36, 0, 0 }, { -62, 0, 0 }
+CHOKE_B.Waist = { 10, 0, 6 }
+Clips.Choked = {
+	Hold = true,
+	Tremble = true,
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.08, Ease = "Out", Pose = CHOKE_A },
+		{ T = 0.26, Ease = "InOut", Pose = CHOKE_B },
+		{ T = 0.44, Ease = "InOut", Pose = CHOKE_A },
+		{ T = 0.62, Ease = "InOut", Pose = CHOKE_B },
+		{ T = 0.8, Ease = "InOut", Pose = CHOKE_A },
+	},
+}
+-- hurled: a full flip splayed out, then he rights himself
+local function flip(deg)
+	local p = table.clone(SPLAYED)
+	p.Root = { deg, 0, 0 }
+	return p
+end
+Clips.Tumble = {
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.12, Ease = "Linear", Pose = flip(-100) },
+		{ T = 0.3, Ease = "Linear", Pose = flip(-200) },
+		{ T = 0.48, Ease = "Linear", Pose = flip(-290) },
+		{ T = 0.66, Ease = "Out", Pose = flip(-360) },
+		{ T = 0.9, Ease = "InOut", Pose = REST },
+	},
+}
+
+---------------------------------------------------------------------------
+-- The suit with him on its back, and the grab
+---------------------------------------------------------------------------
+-- he slams onto its back: it lurches forward, arms flung
+Clips.RiddenHit = {
+	LegsWhenMoving = true,
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.08, Ease = "Out", Pose = {
+			Root = { -14, 0, 0, 0, -0.2, -0.5 }, Waist = { -12, 0, 0 }, Neck = { -10, 0, 0 },
+			RShoulder = { -25, 0, 35 }, LShoulder = { -25, 0, -35 }, RElbow = { 30, 0, 0 }, LElbow = { 30, 0, 0 },
+		} },
+		{ T = 0.5, Ease = "InOut", Pose = REST },
+	},
+}
+-- bucking: a violent twist, one arm flung out, the other clawing back over
+-- its shoulder for him (BuckL mirrors it)
+Clips.BuckR = {
+	Group = "Buck",
+	LegsWhenMoving = true,
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.09, Ease = "Out", Pose = {
+			Root = { 6, -24, 10, 0, -0.3, 0 }, Waist = { 10, -36, 0 }, Neck = { -8, 28, 0 },
+			RShoulder = { -30, 0, 85 }, RElbow = { 40, 0, 0 }, LShoulder = { 124, 0, -30 }, LElbow = { 110, 0, 0 },
+			RHip = { -12, 0, 10 }, LHip = { 20, 0, -10 }, RKnee = { -20, 0, 0 }, LKnee = { -34, 0, 0 },
+		} },
+		{ T = 0.2, Ease = "InOut", Pose = {
+			Root = { -4, 14, -6, 0, -0.2, 0 }, Waist = { -6, 20, 0 }, Neck = { 4, -14, 0 },
+			RShoulder = { 20, 0, 40 }, RElbow = { 30, 0, 0 }, LShoulder = { 40, 0, -30 }, LElbow = { 50, 0, 0 },
+		} },
+		{ T = 0.42, Ease = "InOut", Pose = REST },
+	},
+}
+-- the last buck: it coils, reaches back over its shoulder, and heaves him off
+Clips.BuckThrow = {
+	Group = "Buck",
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.1, Ease = "Out", Pose = {
+			Root = { 10, 30, 0, 0, -0.6, 0 }, Waist = { 12, 40, 0 }, Neck = { 14, 30, 0 },
+			RShoulder = { 165, 0, 20 }, RElbow = { 60, 0, 0 }, LShoulder = { 150, 0, -10 }, LElbow = { 80, 0, 0 },
+			RHip = { 30, 0, 10 }, RKnee = { -50, 0, 0 }, LHip = { 10, 0, -10 }, LKnee = { -40, 0, 0 },
+		} },
+		{ T = 0.19, Ease = "In", Pose = {
+			Root = { -22, -35, 0, 0, -0.4, -0.5 }, Waist = { -20, -45, 0 }, Neck = { 10, -30, 0 },
+			RShoulder = { 60, 0, 70 }, RElbow = { 10, 0, 0 }, LShoulder = { 40, 0, -80 }, LElbow = { 20, 0, 0 },
+			RHip = { -20, 0, 10 }, RKnee = { -10, 0, 0 }, LHip = { 40, 0, -10 }, LKnee = { -50, 0, 0 },
+		} },
+		{ T = 0.36, Pose = {
+			Root = { -20, -34, 0, 0, -0.4, -0.5 }, Waist = { -18, -42, 0 }, Neck = { 8, -28, 0 },
+			RShoulder = { 56, 0, 66 }, RElbow = { 14, 0, 0 }, LShoulder = { 36, 0, -76 }, LElbow = { 24, 0, 0 },
+			RHip = { -20, 0, 10 }, RKnee = { -10, 0, 0 }, LHip = { 40, 0, -10 }, LKnee = { -50, 0, 0 },
+		} },
+		{ T = 0.85, Ease = "InOut", Pose = REST },
+	},
+}
+-- backing him into a wall: it throws itself back, the impact holds, it
+-- rocks forward off the wall
+Clips.SlamBack = {
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.08, Ease = "In", Pose = {
+			Root = { 16, 0, 0, 0, -0.2, 0.9 }, Waist = { 14, 0, 0 }, Neck = { 18, 0, 0 },
+			RShoulder = { 100, 0, 40 }, LShoulder = { 100, 0, -40 }, RElbow = { 20, 0, 0 }, LElbow = { 20, 0, 0 },
+			RHip = { 30, 0, 8 }, RKnee = { -40, 0, 0 }, LHip = { 30, 0, -8 }, LKnee = { -40, 0, 0 },
+		} },
+		{ T = 0.2, Pose = {
+			Root = { 18, 0, 0, 0, -0.25, 1 }, Waist = { 16, 0, 0 }, Neck = { 22, 0, 0 },
+			RShoulder = { 104, 0, 44 }, LShoulder = { 104, 0, -44 }, RElbow = { 16, 0, 0 }, LElbow = { 16, 0, 0 },
+			RHip = { 32, 0, 8 }, RKnee = { -44, 0, 0 }, LHip = { 32, 0, -8 }, LKnee = { -44, 0, 0 },
+		} },
+		{ T = 0.42, Ease = "Out", Pose = {
+			Root = { -10, 0, 0, 0, -0.3, -0.3 }, Waist = { -12, 0, 0 }, Neck = { -6, 0, 0 },
+			RShoulder = { 30, 0, 30 }, LShoulder = { 30, 0, -30 }, RElbow = { 40, 0, 0 }, LElbow = { 40, 0, 0 },
+		} },
+		{ T = 0.9, Ease = "InOut", Pose = REST },
+	},
+}
+-- the reach: it lunges, the right arm shooting out, fingers splayed
+local REACH = {
+	Root = { -12, -12, 0, 0, -0.45, -0.7 }, Waist = { -8, -20, 0 }, Neck = { -6, 16, 0 },
+	RShoulder = { 98, 0, 14 }, RElbow = { 6, 0, 0 }, RWrist = { -20, 0, 0 },
+	LShoulder = { -30, 0, -35 }, LElbow = { 50, 0, 0 },
+	RHip = { -28, 0, 4 }, RKnee = { -12, 0, 0 }, LHip = { 48, 0, -4 }, LKnee = { -55, 0, 0 },
+}
+Clips.GrabReach = {
+	Keys = {
+		{ T = 0, Pose = REST },
+		{ T = 0.1, Ease = "Out", Pose = {
+			Root = { 4, 10, 0, 0, -0.3, 0.2 }, Waist = { 6, 16, 0 }, Neck = { -4, -10, 0 },
+			RShoulder = { 30, 0, 50 }, RElbow = { 90, 0, 0 }, LShoulder = { 30, 0, -30 }, LElbow = { 40, 0, 0 },
+		} },
+		{ T = 0.3, Ease = "In", Pose = REACH },
+		{ T = 0.5, Pose = REACH },
+		{ T = 0.9, Ease = "InOut", Pose = REST },
+	},
+}
+-- holding him up at arm's length out in front, leaning back under the
+-- weight, looking up at him (server/Sentinel.lua pins him in this fist)
+local HOLD_UP = {
+	Root = { 4, 8, 0, 0, -0.2, 0 }, Waist = { 8, 12, 0 }, Neck = { 18, 10, 0 },
+	RShoulder = { 118, 0, 8 }, RElbow = { 10, 0, 0 }, LShoulder = { 35, 0, -40 }, LElbow = { 70, 0, 0 },
+	RHip = { 18, 0, 8 }, RKnee = { -24, 0, 0 }, LHip = { -12, 0, -8 }, LKnee = { -10, 0, 0 },
+}
+Clips.GrabHold = {
+	Hold = true,
+	LegsWhenMoving = true,
+	Tremble = true,
+	Keys = {
+		{ T = 0, Pose = REACH },
+		{ T = 0.14, Ease = "Out", Pose = HOLD_UP },
+	},
+}
+-- the throw: cocked back over the shoulder, then the whole body whips
+-- round and the arm fires him off (release at 0.15s)
+Clips.GrabThrow = {
+	Keys = {
+		{ T = 0, Pose = HOLD_UP },
+		{ T = 0.13, Ease = "Out", Pose = {
+			Root = { 8, -28, 0, 0, -0.3, 0.3 }, Waist = { 14, -32, 0 }, Neck = { 10, 20, 0 },
+			RShoulder = { 178, 0, 55 }, RElbow = { 40, 0, 0 }, LShoulder = { 60, 0, -40 }, LElbow = { 60, 0, 0 },
+			RHip = { -10, 0, 8 }, RKnee = { -20, 0, 0 }, LHip = { 30, 0, -8 }, LKnee = { -40, 0, 0 },
+		} },
+		{ T = 0.2, Ease = "In", Pose = {
+			Root = { -18, 32, 0, 0, -0.45, -0.9 }, Waist = { -20, 36, 0 }, Neck = { -6, -24, 0 },
+			RShoulder = { 70, 0, -24 }, RElbow = { 6, 0, 0 }, LShoulder = { -40, 0, -50 }, LElbow = { 30, 0, 0 },
+			RHip = { 44, 0, 8 }, RKnee = { -56, 0, 0 }, LHip = { -24, 0, -8 }, LKnee = { -14, 0, 0 },
+		} },
+		{ T = 0.4, Pose = {
+			Root = { -16, 34, 0, 0, -0.45, -0.9 }, Waist = { -18, 38, 0 }, Neck = { -4, -26, 0 },
+			RShoulder = { 62, 0, -28 }, RElbow = { 10, 0, 0 }, LShoulder = { -40, 0, -50 }, LElbow = { 30, 0, 0 },
+			RHip = { 44, 0, 8 }, RKnee = { -56, 0, 0 }, LHip = { -24, 0, -8 }, LKnee = { -14, 0, 0 },
+		} },
+		{ T = 0.95, Ease = "InOut", Pose = REST },
+	},
+}
+-- closing on air: it overreaches and stumbles a step
+Clips.GrabWhiff = {
+	Keys = {
+		{ T = 0, Pose = REACH },
+		{ T = 0.22, Ease = "Out", Pose = {
+			Root = { -22, -15, 0, 0, -0.6, -1 }, Waist = { -16, -22, 0 }, Neck = { -12, 18, 0 },
+			RShoulder = { 80, 0, 10 }, RElbow = { 20, 0, 0 }, LShoulder = { -20, 0, -40 }, LElbow = { 40, 0, 0 },
+			RHip = { -34, 0, 4 }, RKnee = { -10, 0, 0 }, LHip = { 56, 0, -4 }, LKnee = { -70, 0, 0 },
+		} },
+		{ T = 0.8, Ease = "InOut", Pose = REST },
+	},
+}
+-- countered: the reaching arm's knocked aside and the suit reels back
+Clips.GrabCountered = {
+	Keys = {
+		{ T = 0, Pose = REACH },
+		{ T = 0.08, Ease = "Out", Pose = {
+			Root = { 10, 15, 0, 0, -0.2, 0.5 }, Waist = { 12, 25, 0 }, Neck = { 20, -20, 0 },
+			RShoulder = { -30, 0, 70 }, RElbow = { 60, 0, 0 }, LShoulder = { 20, 0, -30 }, LElbow = { 40, 0, 0 },
+			RHip = { -10, 0, 6 }, RKnee = { -20, 0, 0 }, LHip = { 20, 0, -6 }, LKnee = { -30, 0, 0 },
+		} },
+		{ T = 0.5, Pose = {
+			Root = { 8, 12, 0, 0, -0.25, 0.4 }, Waist = { 10, 20, 0 }, Neck = { 14, -14, 0 },
+			RShoulder = { -20, 0, 60 }, RElbow = { 50, 0, 0 }, LShoulder = { 16, 0, -26 }, LElbow = { 36, 0, 0 },
+		} },
+		{ T = 0.9, Ease = "InOut", Pose = REST },
+	},
+}
+
+---------------------------------------------------------------------------
 -- Mirroring (makes SlashL from SlashR)
 ---------------------------------------------------------------------------
 local SWAP = {
@@ -16352,7 +17328,7 @@ local SWAP = {
 	RKnee = "LKnee", LKnee = "RKnee", RAnkle = "LAnkle", LAnkle = "RAnkle",
 }
 local function mirror(clip)
-	local out = { Group = clip.Group, Hold = clip.Hold, Tremble = clip.Tremble, Keys = {} }
+	local out = { Group = clip.Group, Hold = clip.Hold, Tremble = clip.Tremble, LegsWhenMoving = clip.LegsWhenMoving, Keys = {} }
 	for _, k in clip.Keys do
 		local pose = {}
 		for joint, a in k.Pose do
@@ -16367,12 +17343,15 @@ Clips.SlashL = mirror(Clips.SlashR)
 Clips.Punch.Group = "Punch"
 Clips.PunchR = Clips.Punch
 Clips.PunchL = mirror(Clips.Punch)
+-- riding: the left hand stabs while the right grips; bucks twist both ways
+Clips.RideStabL = mirror(Clips.RideStabR)
+Clips.BuckL = mirror(Clips.BuckR)
 
 return Clips
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="37">
+        <Item class="ModuleScript" referent="38">
           <Properties>
             <string name="Name">Anims</string>
             <string name="Source"><![CDATA[-- Client animation engine. Runs on every client for every character, so all
@@ -17441,7 +18420,7 @@ return Anims
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="38">
+        <Item class="ModuleScript" referent="39">
           <Properties>
             <string name="Name">Brightness</string>
             <string name="Source"><![CDATA[-- Map brightness setting: a light-bulb button (top left, above the minimap;
@@ -17642,7 +18621,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="LocalScript" referent="39">
+        <Item class="LocalScript" referent="40">
           <Properties>
             <string name="Name">ClientMain</string>
             <string name="Source"><![CDATA[-- Input + role handling. PC keys, gamepad and mobile touch buttons.
@@ -17668,6 +18647,7 @@ require(script.Parent:WaitForChild("TerminalSounds"))
 require(script.Parent:WaitForChild("Minimap"))
 require(script.Parent:WaitForChild("Objectives"))
 require(script.Parent:WaitForChild("GuardMeter"))
+require(script.Parent:WaitForChild("Glue"))
 require(script.Parent:WaitForChild("Upgrades"))
 require(script.Parent:WaitForChild("Vanish"))
 require(script.Parent:WaitForChild("VerityTrail"))
@@ -17703,6 +18683,7 @@ local ROLE_KIT = {
 		{ Name = "Laser", Label = "Death Ray", Desc = "Melts through walls. Burns him to the adamantium", Icon = "🔴", KeyText = "Q", Key = Enum.KeyCode.Q, Cooldown = S.Laser.Cooldown, Color = Color3.fromRGB(255, 90, 60) },
 		{ Name = "Pulse", Label = "Inhibitor Blast", Desc = "Charge 2s (E again to cancel). Stuns him for 3s", Icon = "💥", KeyText = "E", Key = Enum.KeyCode.E, Cooldown = S.Pulse.Cooldown, Color = Color3.fromRGB(255, 210, 60) },
 		{ Name = "Slam", Label = "Ground Slam", Desc = ("Both fists into the floor: %.2gx damage to him within %d studs"):format(S.Slam.Damage / S.Punch.Damage, S.Slam.Radius), Icon = "🌋", KeyText = "M2", Key = Enum.KeyCode.ButtonL2, Cooldown = S.Slam.Cooldown, RightClick = true, Color = Color3.fromRGB(255, 150, 70) },
+		{ Name = "Grab", Label = "Grab & Throw", Desc = "Catch him by the throat, aim, and hurl him through the walls", Icon = "✊", KeyText = "R", Key = Enum.KeyCode.R, Cooldown = S.Grab.Cooldown, Color = Color3.fromRGB(120, 200, 255) },
 	},
 }
 
@@ -17744,8 +18725,8 @@ local ROLE_TITLE = {
 }
 
 local HINTS = {
-	Wolverine = "Shift: sprint   C / Ctrl: run on all fours   F: block\nClaw (M1) or pounce through walls. Hit anyone 3 times to rip them in half.",
-	Sentinel = "MUTANT-HUNTER ONLINE. M1 Hydraulic Smash · M2 Ground Slam · Q Death Ray · E Inhibitor Blast · F Block.\nLinked: " .. S.LinkedMultiplier .. "x power. Apart: " .. S.SoloMultiplier .. "x. Last suit standing: 1x. Core burns out in " .. S.Duration .. "s.",
+	Wolverine = "Shift: sprint   C / Ctrl: run on all fours   F: block\nClaw (M1) or pounce through walls. Pounce a Sentinel to ride it. Hit anyone 3 times to rip them in half.",
+	Sentinel = "MUTANT-HUNTER ONLINE. M1 Hydraulic Smash · M2 Ground Slam · Q Death Ray · E Inhibitor Blast · R Grab · F Block.\nLinked: " .. S.LinkedMultiplier .. "x power. Apart: " .. S.SoloMultiplier .. "x. Last suit standing: 1x. Core burns out in " .. S.Duration .. "s.",
 	Survivor = "Subject X is loose. Reboot the 3 Sentinel Protocol consoles (Foundry, Genetics Lab, Command Centre), then suit up in the Hangar.\nShift: sprint. G: fart (hides your scent). He tears through walls — keep moving.",
 	Lobby = "Waiting for the next round.",
 	Dead = "You were torn apart. Wait for the next round.",
@@ -17755,7 +18736,8 @@ local readyAt = {}
 local slashSide = 0
 local punchSide = 0 -- Sentinel M1 alternates arms (sent to the server so its echo matches)
 local lastPredictedSlash = -1
-local PREDICT = { Pounce = "Pounce", Stab = "Impale", Sniff = "Sniff", Punch = "Punch", Laser = "DeathRay", Pulse = "PulseCharge", Fart = "Fart", Slam = "Slam", Dodge = "Dodge" }
+local PREDICT = { Pounce = "Pounce", Stab = "Impale", Sniff = "Sniff", Punch = "Punch", Laser = "DeathRay", Pulse = "PulseCharge", Fart = "Fart", Slam = "Slam", Dodge = "Dodge", Grab = "GrabReach" }
+local rideSide = 0 -- stabs from a suit's back alternate hands
 local currentKit = {}
 
 local function kitEntry(name)
@@ -17788,6 +18770,16 @@ local function activate(name)
 		return
 	end
 	if player:GetAttribute("Role") == "Wolverine" and not ReplicatedStorage:GetAttribute("Released") then
+		return
+	end
+	-- on a suit's back: M1 stabs its power pack, nothing else works
+	if player:GetAttribute("Riding") then
+		if name == "Slash" and os.clock() >= (readyAt.RideStab or 0) then
+			readyAt.RideStab = os.clock() + Config.Ride.StabCooldown * (player:GetAttribute("Rage") and 1 / Config.Rage.AttackSpeed or 1)
+			rideSide = rideSide % 2 + 1
+			Anims.Play(char, rideSide == 1 and "RideStabR" or "RideStabL")
+			Ability:FireServer("Slash")
+		end
 		return
 	end
 	-- under a Sentinel death ray F is mashed to force through it (see the
@@ -18075,6 +19067,11 @@ UserInputService.JumpRequest:Connect(function()
 	if player:GetAttribute("Hidden") then
 		Ability:FireServer("Unhide")
 	end
+	if player:GetAttribute("Riding") then
+		Ability:FireServer("RideOff") -- leap off the suit's back
+	elseif player:GetAttribute("Ridden") then
+		Ability:FireServer("Buck") -- buck him off
+	end
 end)
 player:GetAttributeChangedSignal("Hidden"):Connect(function()
 	if player:GetAttribute("Hidden") then
@@ -18243,6 +19240,14 @@ Fx.OnClientEvent:Connect(function(kind, data)
 		Effects.RageRoar(data.Char)
 	elseif kind == "Knock" then
 		Effects.Knock(data.Velocity, data.Tumble, data.Spin, data.Duration)
+	elseif kind == "Thrown" then
+		-- hurled by a Sentinel: a set arc that keeps its speed through walls
+		local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+		if root and typeof(data.Velocity) == "Vector3" then
+			Effects.Leap(root, data.Velocity, data.Height or 5, data.Time or 0.7, (data.Time or 0.7) + 0.3)
+			Effects.Shake(0.9)
+			Interface.Flash(Color3.fromRGB(160, 0, 0), 0.3, 0.4)
+		end
 	elseif kind == "Hurt" then
 		Effects.Hurt()
 	elseif kind == "Grabbed" then
@@ -18294,7 +19299,7 @@ end)
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="40">
+        <Item class="ModuleScript" referent="41">
           <Properties>
             <string name="Name">Daily</string>
             <string name="Source"><![CDATA[-- Daily challenges, login streak, Wolverine odds and Become Wolverine.
@@ -18640,7 +19645,7 @@ return Daily
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="41">
+        <Item class="ModuleScript" referent="42">
           <Properties>
             <string name="Name">Effects</string>
             <string name="Source"><![CDATA[-- Client-only atmosphere: camera shake, snowfall, flickering lights,
@@ -19507,7 +20512,54 @@ return Effects
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="42">
+        <Item class="ModuleScript" referent="43">
+          <Properties>
+            <string name="Name">Glue</string>
+            <string name="Source"><![CDATA[-- Pins one character to another on this screen every frame (server/Ride.lua):
+-- Wolverine clinging to a Sentinel's back, or held up in its fist. The server
+-- keeps its own anchored copy in place for hits; pinning it here, just before
+-- the camera, keeps it stuck to the suit smoothly however the suit moves.
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Effects = require(script.Parent:WaitForChild("Effects"))
+
+local player = Players.LocalPlayer
+local Fx = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Fx")
+local pins = {} -- [char] = { To = char, Offset = CFrame }
+
+Fx.OnClientEvent:Connect(function(kind, data)
+	if kind ~= "Glue" or type(data) ~= "table" or typeof(data.Char) ~= "Instance" then
+		return
+	end
+	if typeof(data.To) == "Instance" and typeof(data.Offset) == "CFrame" then
+		pins[data.Char] = { To = data.To, Offset = data.Offset }
+		if data.Char == player.Character then
+			Effects.CancelLeap() -- caught mid-pounce: the dive stops here
+		end
+	else
+		pins[data.Char] = nil
+	end
+end)
+
+RunService:BindToRenderStep("Glue", Enum.RenderPriority.Camera.Value - 1, function()
+	for char, pin in pins do
+		local root = char.Parent and char:FindFirstChild("HumanoidRootPart")
+		local to = pin.To.Parent and pin.To:FindFirstChild("HumanoidRootPart")
+		if root and to and root.Anchored then
+			root.CFrame = to.CFrame * pin.Offset
+		elseif not (root and to) then
+			pins[char] = nil
+		end
+	end
+end)
+
+return {}
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="44">
           <Properties>
             <string name="Name">GuardMeter</string>
             <string name="Source"><![CDATA[-- Guard meter for Wolverine and the Sentinels (Config.Block): one pip per
@@ -19600,7 +20652,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="43">
+        <Item class="ModuleScript" referent="45">
           <Properties>
             <string name="Name">HideGlow</string>
             <string name="Source"><![CDATA[-- A soft white glow on the hiding spots near you, so survivors can spot
@@ -19683,7 +20735,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="44">
+        <Item class="ModuleScript" referent="46">
           <Properties>
             <string name="Name">Interface</string>
             <string name="Source"><![CDATA[-- HUD built entirely from code.
@@ -20557,7 +21609,7 @@ return Interface
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="45">
+        <Item class="ModuleScript" referent="47">
           <Properties>
             <string name="Name">MapLife</string>
             <string name="Source"><![CDATA[-- The facility's moving parts, animated on each client (only near the camera):
@@ -20655,7 +21707,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="46">
+        <Item class="ModuleScript" referent="48">
           <Properties>
             <string name="Name">Minigame</string>
             <string name="Source"><![CDATA[-- Sentinel console repair minigames. Each console this round has its own
@@ -21171,7 +22223,7 @@ return Minigame
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="47">
+        <Item class="ModuleScript" referent="49">
           <Properties>
             <string name="Name">Minimap</string>
             <string name="Source"><![CDATA[-- A small north-up map of the facility (top left) with a dot for you that
@@ -21404,7 +22456,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="48">
+        <Item class="ModuleScript" referent="50">
           <Properties>
             <string name="Name">Objectives</string>
             <string name="Source"><![CDATA[-- Round objectives, down the left of the screen under the minimap, so a new
@@ -21573,7 +22625,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="49">
+        <Item class="ModuleScript" referent="51">
           <Properties>
             <string name="Name">SentinelTracker</string>
             <string name="Source"><![CDATA[-- Sentinel targeting: while you pilot a Sentinel and Wolverine is more than
@@ -21620,7 +22672,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="50">
+        <Item class="ModuleScript" referent="52">
           <Properties>
             <string name="Name">Shop</string>
             <string name="Source"><![CDATA[-- Wolverine shop: suits + claws, and the left-side menu dock.
@@ -22055,7 +23107,7 @@ return Shop
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="51">
+        <Item class="ModuleScript" referent="53">
           <Properties>
             <string name="Name">SlashFX</string>
             <string name="Source"><![CDATA[-- Crisp anime-style slash VFX, drawn on each client every frame so they stay smooth.
@@ -24100,7 +25152,7 @@ return SlashFX
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="52">
+        <Item class="ModuleScript" referent="54">
           <Properties>
             <string name="Name">SoundCheck</string>
             <string name="Source"><![CDATA[-- Checks every uploaded sound once when you join. Roblox refuses to play an
@@ -24172,7 +25224,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="53">
+        <Item class="ModuleScript" referent="55">
           <Properties>
             <string name="Name">Spectate</string>
             <string name="Source"><![CDATA[-- Spectate: once you're out of the round (killed, or waiting in the lobby) you
@@ -24413,7 +25465,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="54">
+        <Item class="ModuleScript" referent="56">
           <Properties>
             <string name="Name">Store</string>
             <string name="Source"><![CDATA[-- Lobby dock: STORE (coin packs and the 2x chance pass, bought with Robux)
@@ -24753,7 +25805,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="55">
+        <Item class="ModuleScript" referent="57">
           <Properties>
             <string name="Name">TerminalSounds</string>
             <string name="Source"><![CDATA[-- Terminals sound alive when you're near one: a looping console hum
@@ -24852,7 +25904,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="56">
+        <Item class="ModuleScript" referent="58">
           <Properties>
             <string name="Name">UIKit</string>
             <string name="Source"><![CDATA[-- Shared UI building blocks: animated buttons, panels, gradients.
@@ -25262,7 +26314,7 @@ return UIKit
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="57">
+        <Item class="ModuleScript" referent="59">
           <Properties>
             <string name="Name">Upgrades</string>
             <string name="Source"><![CDATA[-- Survivor upgrades window (lobby dock "UPGRADES"): one card per upgrade in
@@ -25411,7 +26463,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="58">
+        <Item class="ModuleScript" referent="60">
           <Properties>
             <string name="Name">Vanish</string>
             <string name="Source"><![CDATA[-- Invisibility power (Config.Upgrades.Invisible). While a character has the
@@ -25561,7 +26613,7 @@ return {}
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="59">
+        <Item class="ModuleScript" referent="61">
           <Properties>
             <string name="Name">VerityTrail</string>
             <string name="Source"><![CDATA[-- Verity claws: running with them out sheds a trail of tiny grinning faces
@@ -25717,7 +26769,7 @@ return {}
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="60">
+  <Item class="Workspace" referent="62">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>

@@ -14,6 +14,7 @@ local Posture = require(script.Parent.Posture)
 local Movement = require(script.Parent.Movement)
 local Combat = require(script.Parent.Combat)
 local Block = require(script.Parent.Block)
+local Ride = require(script.Parent.Ride)
 local PlayerData = require(script.Parent.PlayerData)
 local Fart = require(script.Parent.Fart)
 local VFX = require(script.Parent.VFX)
@@ -910,6 +911,33 @@ tankIntro = function(player, char, spawnCFrame, valid)
 	Util.Sound(Config.Sounds.Snikt, root, { Volume = 3, Range = 400 })
 	Fx:FireAllClients("Shake", { Position = to.Position, Intensity = 0.8, Radius = 80 })
 	Fx:FireAllClients("HitStop", { Attacker = char, Duration = 0.12 })
+	-- the force of the claws coming out blows the cell's front open: every
+	-- pane and post in a cone ahead of him bursts out of its frame
+	local cell = map and map:FindFirstChild("Containment", true)
+	if cell then
+		local blew = false
+		for _, p in cell:GetDescendants() do
+			if p:IsA("BasePart") and p:GetAttribute("Breakable") and not p:GetAttribute("Broken") then
+				local off = p.Position - to.Position
+				local along = off:Dot(dir)
+				local across = (Vector3.new(off.X, 0, off.Z) - dir * along).Magnitude
+				if along > 2 and along < 14 and across < 3 + along * 0.35 then
+					Combat.BreakPart(p, to.Position - dir * 4, 85)
+					blew = true
+				end
+			end
+		end
+		if blew then
+			local front = to.Position + dir * 7.5
+			local floorAt = Vector3.new(front.X, to.Position.Y - hip + 0.2, front.Z) -- he's standing on the same floor
+			VFX.Shockwave(floorAt, 22, Color3.fromRGB(200, 230, 255))
+			VFX.Dust(floorAt, Color3.fromRGB(190, 210, 220), 14)
+			Util.SoundAt(Config.Sounds.Break, front, { Volume = 3, Pitch = 1.1, Range = 400 })
+			Util.SoundAt(Config.Sounds.Break, front, { Volume = 2.4, Pitch = 0.65, Range = 400 })
+			Util.SoundAt(Config.Sounds.Impact, front, { Volume = 2.2, Pitch = 0.6, Range = 400 })
+			Fx:FireAllClients("Shake", { Position = front, Intensity = 1.3, Radius = 120 })
+		end
+	end
 
 	-- hold the X... then throw the arms wide and ROAR
 	task.wait(cfg.Roar - cfg.Cross - 0.62)
@@ -974,7 +1002,7 @@ function Wolverine.Transform(player, spawnCFrame)
 		if valid() then
 			Round.Released = true
 			ReplicatedStorage:SetAttribute("Released", true)
-			Fx:FireAllClients("Announce", { Text = "WOLVERINE HAS BEEN RELEASED", Color = Color3.fromRGB(255, 60, 60), Duration = 3 })
+			Fx:FireAllClients("Announce", { Text = "THE BERSERKER HAS BEEN RELEASED", Color = Color3.fromRGB(255, 60, 60), Duration = 3 })
 		end
 	end)
 end
@@ -1086,6 +1114,10 @@ local function pounce(player, char, root)
 			-- (it still flies on through walls and lands, but grabs nobody)
 			blocked = true
 		elseif target then
+			-- a suit, from any side: he lands on its back and rides it (Ride.lua)
+			if target.Player:GetAttribute("Role") == "Sentinel" and Ride.Start(player, target.Player) then
+				return
+			end
 			pounceStrike(player, char, root, target)
 			return
 		end
@@ -1322,6 +1354,14 @@ function Wolverine.Handle(player, ability, arg)
 		Movement.SetInput(player, "Feral", arg == true)
 		return
 	end
+	if Ride.IsRiding(player) then
+		if ability == "Slash" then
+			Ride.Stab(player)
+		elseif ability == "RideOff" then
+			Ride.End("leap")
+		end
+		return
+	end
 	if ability == "Block" then
 		Block.Set(player, arg == true)
 		return
@@ -1448,6 +1488,12 @@ function Wolverine.Damage(amount, by)
 	end
 	Fx:FireAllClients("HitStop", { Victim = char, Duration = 0 })
 	Util.Burst(root, Util.SparkProps, 25, 1.5) -- adamantium skeleton sparks
+end
+Ride.DamageWolverine = Wolverine.Damage
+
+-- roaring into his rage: nothing can touch (or grab) him
+function Wolverine.Untouchable()
+	return os.clock() < roarUntil
 end
 
 ---------------------------------------------------------------------------

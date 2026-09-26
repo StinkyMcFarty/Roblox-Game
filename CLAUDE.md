@@ -136,6 +136,22 @@ StarterPlayerScripts.CharacterOutline, `src/character/Health.server.lua` → Sta
 - Survivors see a white glow on the 6 nearest hiding spots (`src/client/HideGlow.lua`); keep the
   client's Highlight count low (Roblox caps it at 31), which is why Sniff ghosts also draw boxes.
 - Sentinel pilot exit: destroyed by Wolverine → Hits = 2 (one from death); timed out → full health.
+- Riding a Sentinel (`src/server/Ride.lua`, `Config.Ride`): a pounce that catches a suit (any
+  side) mounts it. He's pinned to its back
+  (`Ride.Pin`: anchored, moved with the suit every Heartbeat on the server, and pinned every
+  render frame on each client by `src/client/Glue.lua`). M1 stabs the power pack (0.35 armour,
+  every 3rd a two-hand twist x1.6 whose claws burst out of its chest), Space leaps off, 5s max.
+  Off: the pilot bucks (Space x4), backs him into a wall (crush: wall breaks, 45 x power, stunned),
+  the other suit punches him off (x2), a slam/blast from any suit throws him clear. Clips:
+  `RideMount`, `RideStabR/L`, `RideTwist`, `RideLeapOff`, `Flung`, `Crushed`; suit `RiddenHit`,
+  `BuckR/L`, `BuckThrow`, `SlamBack`.
+- Grab & Throw (Sentinel, R; `grab` in `Sentinel.lua`, `Config.Sentinel.Grab`): lunge and reach;
+  a slash on the suit during the reach counters it. Caught: pinned by the throat in its fist
+  (`Choked` / `GrabHold`), the pilot aims for 0.6s, then `GrabThrow` hurls him (client `Thrown`
+  Fx → `Effects.Leap`, walls smashed along the flight, stunned on landing). Breaks a block;
+  plucks him off the other suit's back.
+- Intro: when the claws pop in the X after the breakout, the containment cell's panes and posts
+  in a cone ahead of him burst out of their frame.
 - Lobby how-to-play board (`RULES WALL` in `MapBuilder.lua`, north wall): a notice board with
   pinned paperwork (staff memo = survivors, Subject X file = Wolverine, blueprint pilot card =
   Sentinels), key caps, sticky notes. Numbers come from `Config`; update the copy when controls
