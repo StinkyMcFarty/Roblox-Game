@@ -190,7 +190,8 @@ Config.CoinPacks = {
 }
 
 -- AFK: players marked AFK sit out matches. Roblox fires Player.Idled after
--- ~2 minutes without input; that marks you AFK automatically.
+-- ~2 minutes without input; in the lobby that marks you AFK automatically,
+-- and any input brings you back (src/client/Store.lua).
 Config.AutoAfk = true
 
 -- Every round you play without being Wolverine adds this much weight to

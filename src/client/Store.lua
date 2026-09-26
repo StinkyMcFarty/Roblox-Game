@@ -3,6 +3,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local MarketplaceService = game:GetService("MarketplaceService")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local UIKit = require(script.Parent:WaitForChild("UIKit"))
@@ -185,8 +186,13 @@ corner(banner, 10)
 stroke(banner, Color3.fromRGB(90, 120, 200), 1.5)
 new("UIPadding", { PaddingTop = UDim.new(0, 7), PaddingBottom = UDim.new(0, 7), PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, banner)
 
+-- true while the AFK was set by the idle timer (not the button): any input
+-- clears it again
+local autoAfk = false
+
 local function showAfk()
 	local on = player:GetAttribute("AFK") == true
+	banner.Text = autoAfk and "YOU'RE AFK — move or press any key to play again." or "YOU'RE AFK — sitting out matches. Press AFK to play again."
 	afkLabel.Text = on and "AFK: ON" or "AFK: OFF"
 	UIKit.Recolor(afkButton, on and K.Blue or Color3.fromRGB(120, 124, 140))
 	banner.Visible = on
@@ -199,14 +205,37 @@ player:GetAttributeChangedSignal("AFK"):Connect(showAfk)
 showAfk()
 
 afkButton.Activated:Connect(function()
+	autoAfk = false
 	AfkRemote:FireServer(not (player:GetAttribute("AFK") == true))
 end)
 
--- Roblox fires Idled after ~2 minutes with no input: sit them out automatically
+-- Roblox fires Idled after ~2 minutes with no input: sit them out
+-- automatically, but only while they're waiting in the lobby (hiding in a
+-- locker or spectating a match isn't being away), and the moment they touch a
+-- control again they're back in. An AFK turned on with the button stays on.
 if Config.AutoAfk then
 	player.Idled:Connect(function()
-		if not player:GetAttribute("AFK") then
+		local role = player:GetAttribute("Role")
+		if (role == nil or role == "Lobby") and not player:GetAttribute("AFK") then
+			autoAfk = true
 			AfkRemote:FireServer(true)
+		end
+	end)
+	local function back()
+		if autoAfk then
+			autoAfk = false
+			if player:GetAttribute("AFK") then
+				AfkRemote:FireServer(false)
+			else
+				showAfk()
+			end
+		end
+	end
+	UserInputService.InputBegan:Connect(back)
+	UserInputService.InputChanged:Connect(function(input)
+		local t = input.UserInputType
+		if t == Enum.UserInputType.MouseMovement or t == Enum.UserInputType.Touch or t == Enum.UserInputType.Gamepad1 then
+			back()
 		end
 	end)
 end
